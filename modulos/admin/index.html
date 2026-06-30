@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JBRETAS — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../shared/css/base.css">
+</head>
+<body>
+
+<div style="min-height:100vh;display:flex;flex-direction:column;">
+
+  <div class="topbar">
+    <div class="topbar-brand">JBRETAS</div>
+    <div class="topbar-right">
+      <div class="topbar-user">
+        <div class="avatar" id="app-avatar">--</div>
+        <div class="topbar-info">
+          <div class="topbar-name" id="app-nome">—</div>
+          <div class="topbar-posto">ADM</div>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="jbretasLogout()">SAIR</button>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;padding:2rem;text-align:center;">
+    <div style="font-size:3rem;">🚧</div>
+    <div style="font-family:var(--mono);font-size:1.2rem;color:var(--accent);">Módulo Admin em construção</div>
+    <div style="color:var(--text3);font-size:0.9rem;max-width:400px;">
+      Este painel ainda está sendo desenvolvido. Em breve aqui você terá dashboard,
+      cadastros e visão geral de todos os postos.
+    </div>
+  </div>
+
+</div>
+
+<script src="../../shared/js/config.js"></script>
+<script src="../../shared/js/api.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script>
+  const usuario = exigirSessao(['ADM']);
+  if (usuario) {
+    document.getElementById('app-nome').textContent = usuario.nome || '—';
+    const iniciais = (usuario.nome || '??').split(' ').slice(0, 2).map(p => p[0]).join('').toUpperCase();
+    document.getElementById('app-avatar').textContent = iniciais;
+  }
+</script>
+</body>
+</html>
