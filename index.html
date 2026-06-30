@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JBRETAS — Sistema</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/css/base.css">
+</head>
+<body>
+
+<div id="screen-login">
+  <div class="login-card">
+    <div class="brand">
+      <div class="brand-name">JBRETAS</div>
+      <div class="brand-sub">// Sistema Integrado</div>
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">E-mail</label>
+      <input class="field-input" type="email" id="login-email" placeholder="seu@email.com" autocomplete="email">
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">Senha</label>
+      <div class="senha-wrap">
+        <input class="field-input" type="password" id="login-senha" placeholder="••••••••" autocomplete="current-password">
+        <button class="btn-olho" type="button" onclick="toggleSenha()" title="Mostrar/ocultar senha">👁</button>
+      </div>
+    </div>
+
+    <button class="btn-primary" id="btn-entrar" onclick="fazerLogin()">ENTRAR</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<script src="shared/js/config.js"></script>
+<script src="shared/js/api.js"></script>
+<script src="shared/js/auth.js"></script>
+<script>
+  // Se já existe sessão válida, pula direto pro módulo do perfil
+  (function redirecionarSeJaLogado() {
+    const usuario = getUsuarioLogado();
+    const token = getTokenAtual();
+    if (usuario && token && !window.location.search.includes('expirado')) {
+      redirecionarPorPerfil(usuario);
+    }
+  })();
+
+  if (window.location.search.includes('expirado')) {
+    const erroEl = document.getElementById('login-error');
+    erroEl.textContent = 'Sua sessão expirou. Faça login novamente.';
+    erroEl.style.display = 'block';
+  }
+
+  function toggleSenha() {
+    const input = document.getElementById('login-senha');
+    input.type = input.type === 'password' ? 'text' : 'password';
+  }
+
+  async function fazerLogin() {
+    const email = document.getElementById('login-email').value.trim();
+    const senha = document.getElementById('login-senha').value;
+    const erroEl = document.getElementById('login-error');
+    const btn = document.getElementById('btn-entrar');
+
+    erroEl.style.display = 'none';
+    if (!email || !senha) {
+      erroEl.textContent = 'Preencha e-mail e senha.';
+      erroEl.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'ENTRANDO...';
+
+    try {
+      const resp = await jbretasLogin(email, senha);
+      redirecionarPorPerfil(resp.usuario);
+    } catch (err) {
+      erroEl.textContent = err.message || 'E-mail ou senha incorretos.';
+      erroEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'ENTRAR';
+    }
+  }
+
+  document.getElementById('login-senha').addEventListener('keydown', e => {
+    if (e.key === 'Enter') fazerLogin();
+  });
+</script>
+</body>
+</html>

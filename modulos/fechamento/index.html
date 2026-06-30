@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JBRETAS — Fechamento Diário</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../shared/css/base.css">
+<link rel="stylesheet" href="fechamento.css">
+</head>
+<body>
+
+<div id="screen-app">
+
+  <div class="topbar">
+    <div class="topbar-brand">JBRETAS</div>
+    <div class="topbar-right">
+      <div class="topbar-user">
+        <div class="avatar" id="app-avatar">--</div>
+        <div class="topbar-info">
+          <div class="topbar-name" id="app-gerente">—</div>
+          <div class="topbar-posto" id="app-posto">—</div>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="jbretasLogout()">SAIR</button>
+    </div>
+  </div>
+
+  <div class="app-main">
+
+    <div class="page-header">
+      <div>
+        <div class="page-title">📋 Fechamento Diário</div>
+        <div class="page-date" id="page-date"></div>
+      </div>
+      <div class="badge">
+        <span class="badge-dot"></span>
+        <span>Em andamento</span>
+      </div>
+    </div>
+
+    <div class="info-grid">
+      <div class="info-card">
+        <div class="info-card-label">Gerente</div>
+        <div class="info-card-value" id="card-gerente">—</div>
+      </div>
+      <div class="info-card">
+        <div class="info-card-label">Posto</div>
+        <div class="info-card-value" id="card-posto">—</div>
+      </div>
+      <div class="info-card">
+        <div class="info-card-label">📅 Data do Relatório</div>
+        <input type="date" id="card-data-input"
+          style="width:100%;background:transparent;border:none;color:var(--accent);font-size:0.95rem;font-weight:500;font-family:var(--sans);outline:none;cursor:pointer;padding:0;">
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">🛢️</span>
+        <span class="section-title">Medição de Tanques (Litros)</span>
+      </div>
+      <div class="section-body" id="tanques-body">
+        <div class="empty-state">Carregando tanques...</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">⛽</span>
+        <span class="section-title">Vendas de Combustível (Litros)</span>
+      </div>
+      <div class="section-body">
+        <div class="fuel-grid" id="vendas-body"></div>
+        <div class="total-row">
+          <span class="total-label">Total de Vendas</span>
+          <span class="total-value" id="total-vendas">0 L</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">💧</span>
+        <span class="section-title">Vendas de Lubrificantes</span>
+      </div>
+      <div class="section-body">
+        <div class="fuel-row" style="margin-bottom:10px;">
+          <span class="fuel-label">Vendas Soutag</span>
+          <input class="step-input" id="lub-soutag" value="0" type="number" min="0" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;">
+        </div>
+        <div class="fuel-row">
+          <span class="fuel-label">Venda do Dia</span>
+          <input class="step-input" id="lub-dia" value="0" type="number" min="0" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;">
+        </div>
+      </div>
+    </div>
+
+    <div class="section" id="section-carga" style="border-color:rgba(255,77,109,0.3);">
+      <div class="section-header" style="background:rgba(255,77,109,0.05);">
+        <span class="section-icon">🚚</span>
+        <span class="section-title">Recebeu Carga Hoje?</span>
+        <span style="margin-left:auto;font-family:var(--mono);font-size:0.62rem;color:var(--danger);background:rgba(255,77,109,.12);border:1px solid rgba(255,77,109,.3);border-radius:4px;padding:2px 8px;">OBRIGATÓRIO</span>
+      </div>
+      <div class="section-body">
+        <div class="toggle-carga">
+          <button class="toggle-carga-btn" id="btn-carga-sim" onclick="setCarga('sim')">✓ SIM — Recebi carga</button>
+          <button class="toggle-carga-btn" id="btn-carga-nao" onclick="setCarga('nao')">✗ NÃO — Sem carga hoje</button>
+        </div>
+        <div class="carga-campos" id="carga-campos">
+          <div style="font-size:0.68rem;color:var(--text3);font-family:var(--mono);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.75rem;">Litros recebidos por combustível</div>
+          <div id="carga-body"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="save-bar">
+    <button class="btn-save" id="btn-salvar-fechamento" disabled>🔒 RESPONDA A CARGA PARA SALVAR</button>
+    <div class="carga-status-msg" id="carga-status-msg">⚠ seção "Recebeu Carga?" obrigatória</div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast">
+  <div class="toast-title">✅ Salvo com sucesso</div>
+  <div id="toast-msg">Fechamento registrado.</div>
+</div>
+
+<script src="../../shared/js/config.js"></script>
+<script src="../../shared/js/api.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
