@@ -48,8 +48,9 @@ function montarTopbar() {
 
 function montarDataPadrao() {
   const input = document.getElementById('card-data-input');
-  const hoje = new Date();
-  input.value = hoje.toISOString().split('T')[0];
+  const ontem = new Date();
+  ontem.setDate(ontem.getDate() - 1);
+  input.value = ontem.toISOString().split('T')[0];
 }
 
 async function carregarEstruturaDoPosto(nomePosto) {
