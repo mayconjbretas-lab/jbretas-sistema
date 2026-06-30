@@ -5,7 +5,7 @@
 // ================================================================
 
 window.JBRETAS_CONFIG = {
-  API_URL: 'https://jbretas-api-server-production.up.railway.app',
+  API_URL: 'https://jbretas-api-service-production.up.railway.app',
   // Mapa de perfil → rota inicial após login.
   // Usado pelo shared/js/auth.js para redirecionar automaticamente.
   ROTAS_POR_PERFIL: {
