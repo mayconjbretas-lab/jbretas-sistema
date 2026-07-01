@@ -56,6 +56,7 @@
 .tank-fuel { font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); font-family: var(--mono); }
 .tank-name { font-size: 0.95rem; font-weight: 500; color: var(--text); margin-top: 2px; }
 .tank-cap { font-size: 0.72rem; color: var(--text3); font-family: var(--mono); margin-top: 2px; }
+.tank-vol { font-size: 0.78rem; color: var(--accent); font-family: var(--mono); text-align: right; margin-bottom: 4px; }
 
 .stepper { display: flex; align-items: center; background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px; overflow: hidden; }
 .step-input {
@@ -63,6 +64,20 @@
   color: var(--text); font-family: var(--mono); font-size: 0.9rem;
   text-align: center; height: 36px; outline: none; padding: 0 8px;
 }
+.step-btn {
+  width: 36px; height: 36px; background: transparent; border: none;
+  color: var(--accent); font-size: 1.1rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s; font-family: var(--mono);
+}
+.step-btn:hover { background: var(--accent-dim); }
+
+/* Rótulo de tipo de medição do tanque (Veeder-Root) */
+.tank-arq-label {
+  font-size: 0.7rem; color: var(--accent); margin-top: 4px;
+  text-align: center; font-family: var(--mono);
+}
+.tank-arq-pendente { color: var(--warning); }
 
 .fuel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .fuel-row { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem 1rem; gap: 12px; }
