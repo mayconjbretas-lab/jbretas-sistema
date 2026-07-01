@@ -97,9 +97,11 @@ function renderTanques() {
       inputBlock = `
         <div class="tank-vol" id="vol-${t.id}">0 L</div>
         <div class="stepper">
+          <button type="button" class="step-btn" onclick="stepCm('${t.id}','${arq}',-1)">−</button>
           <input class="step-input" type="number" min="0" max="260" step="1"
             id="tanque-${t.id}" data-combustivel="${t.combustivel}" data-arq="${arq}"
-            placeholder="0" oninput="atualizarVolTanque('${t.id}','${arq}')">
+            style="width:70px" value="0" oninput="atualizarVolTanque('${t.id}','${arq}')">
+          <button type="button" class="step-btn" onclick="stepCm('${t.id}','${arq}',1)">+</button>
         </div>
         <div class="tank-arq-label">Régua (cm) — tabela ${arq}</div>
       `;
@@ -107,8 +109,11 @@ function renderTanques() {
       // Veeder-Root, ou arq desconhecido/pendente (fallback: litros direto)
       inputBlock = `
         <div class="stepper">
-          <input class="step-input" type="number" min="0" step="0.01"
-            id="tanque-${t.id}" data-combustivel="${t.combustivel}" placeholder="0">
+          <button type="button" class="step-btn" onclick="stepMilhar('tanque-${t.id}',-1000)">−</button>
+          <input class="step-input" id="tanque-${t.id}" data-combustivel="${t.combustivel}"
+            data-val="0" value="0" type="text" inputmode="numeric"
+            style="width:90px" oninput="formatMilharInput(this)">
+          <button type="button" class="step-btn" onclick="stepMilhar('tanque-${t.id}',1000)">+</button>
         </div>
         ${isVeederRoot ? '<div class="tank-arq-label">Veeder-Root (litros)</div>' : ''}
         ${(!isVeederRoot && !isRegua) ? `<div class="tank-arq-label tank-arq-pendente">Tipo "${arq || '?'}" pendente — litros direto</div>` : ''}
@@ -136,6 +141,18 @@ function atualizarVolTanque(tanqueId, arq) {
   const vol = cmToLitros(cm, arq);
   const volEl = document.getElementById('vol-' + tanqueId);
   if (volEl) volEl.textContent = vol.toLocaleString('pt-BR') + ' L';
+}
+
+// Botões −/+ do input de cm (tanques de régua) — incremento fino de 1cm,
+// igual ao sistema antigo (litros direto usa ±1000 via stepMilhar).
+function stepCm(tanqueId, arq, delta) {
+  const input = document.getElementById('tanque-' + tanqueId);
+  if (!input) return;
+  const min = parseInt(input.min) || 0;
+  const max = input.max ? parseInt(input.max) : Infinity;
+  const val = parseInt(input.value) || 0;
+  input.value = Math.min(max, Math.max(min, val + delta));
+  atualizarVolTanque(tanqueId, arq);
 }
 
 function renderVendas() {
@@ -172,11 +189,11 @@ function renderCarga() {
     <div class="fuel-row" style="margin-bottom:8px;">
       <span class="fuel-label">${c.codigo} — ${c.nome}</span>
       <div class="stepper">
-        <button type="button" class="step-btn" onclick="stepCarga('carga-${chave}',-1000)">−</button>
+        <button type="button" class="step-btn" onclick="stepMilhar('carga-${chave}',-1000)">−</button>
         <input class="step-input" id="carga-${chave}" data-combustivel="${c.nome}"
           data-val="0" value="0" type="text" inputmode="numeric"
-          style="width:90px" oninput="formatCargaInput(this)">
-        <button type="button" class="step-btn" onclick="stepCarga('carga-${chave}',1000)">+</button>
+          style="width:90px" oninput="formatMilharInput(this)">
+        <button type="button" class="step-btn" onclick="stepMilhar('carga-${chave}',1000)">+</button>
       </div>
     </div>
   `;
@@ -184,15 +201,16 @@ function renderCarga() {
 }
 
 // Máscara de milhar (pt-BR) igual ao sistema antigo — o valor numérico puro
-// fica em data-val; o value exibido é só formatação visual.
-function formatCargaInput(el) {
+// fica em data-val; o value exibido é só formatação visual. Reutilizada
+// tanto na seção de Carga quanto nos tanques Veeder-Root (litros direto).
+function formatMilharInput(el) {
   const digits = el.value.replace(/\D/g, '');
   const num = parseInt(digits) || 0;
   el.dataset.val = num;
   el.value = num === 0 ? '0' : num.toLocaleString('pt-BR');
 }
 
-function stepCarga(id, delta) {
+function stepMilhar(id, delta) {
   const el = document.getElementById(id);
   const val = parseInt(el.dataset.val) || 0;
   const novo = Math.max(0, val + delta);
@@ -243,7 +261,7 @@ function montarStringTanques() {
       const vol = cmToLitros(cm, arq);
       return `${t.codigo} (${t.combustivel}): ${cm}cm = ${vol}L`;
     }
-    const valor = parseFloat(input?.value) || 0;
+    const valor = parseInt(input?.dataset.val) || 0;
     // Formato compatível com o parser do server.js: "TQ.X (COMBUSTIVEL): valorL"
     return `${t.codigo} (${t.combustivel}): ${valor}L`;
   }).join(' | ');
