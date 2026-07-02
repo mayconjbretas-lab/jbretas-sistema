@@ -12,6 +12,7 @@ let leafletMap = null;
 let markerCluster = null;
 let mapMarkers = [];
 let G_MAPA_SUP = 'todos';
+let coletasPorPosto = {}; // chave normalizada → { proprio: [...], concorrentes: [...] } — ver shared/js/coletas-service.js
 
 document.addEventListener('DOMContentLoaded', async () => {
   usuarioAtual = exigirSessao(['ADM']);
@@ -21,8 +22,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   const iniciais = (usuarioAtual.nome || '??').split(' ').slice(0, 2).map(p => p[0]).join('').toUpperCase();
   document.getElementById('app-avatar').textContent = iniciais;
 
+  await carregarColetas();
   initLeafletInstance();
 });
+
+async function carregarColetas() {
+  try {
+    coletasPorPosto = await buscarColetasAgrupadas({ dias: 1 });
+  } catch (err) {
+    console.error('Erro ao carregar coletas:', err);
+    coletasPorPosto = {};
+  }
+}
 
 function initLeafletInstance() {
   if (leafletMap !== null) { leafletMap.invalidateSize(); return; }
@@ -90,9 +101,7 @@ function renderMapa() {
                 <div class="info-card-value" style="font-family:var(--mono);font-size:0.78rem;">${lat.toFixed(4)}, ${lng.toFixed(4)}</div>
               </div>
             </div>
-            <div class="carga-status-msg" style="text-align:left;color:var(--text3);margin-top:0.75rem;">
-              ⏳ Comparação de preços com concorrentes ainda não conectada
-            </div>
+            ${renderPrecosHojeHtml(posto)}
           </div>
         </div>`;
     });
@@ -109,4 +118,33 @@ function renderMapa() {
     const bounds = grupo.getBounds();
     if (bounds.isValid()) leafletMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 12 });
   }
+}
+
+// Status + preço do POSTO PRÓPRIO hoje (coleta tipo "próprio" — ver
+// TODO em shared/js/coletas-service.js). Não mostra preço de
+// concorrente aqui — isso é a tela de swipe (Tarefa 2) e as abas
+// Comparar/Histórico (Fase 2).
+function renderPrecosHojeHtml(posto) {
+  const grupo = coletasPorPosto[normalizarNomePosto(posto.k)] || { proprio: [] };
+  const proprioHoje = grupo.proprio.filter(r => r.data === hojeBR());
+
+  if (!proprioHoje.length) {
+    const ultimoProprio = grupo.proprio[0]; // mais recente, de qualquer dia
+    return `<div class="carga-status-msg" style="text-align:left;color:var(--text3);margin-top:0.75rem;">
+      ⏳ Ainda não coletou o preço próprio hoje${ultimoProprio ? ` — última coleta em ${ultimoProprio.data} às ${ultimoProprio.hora}` : ''}
+    </div>`;
+  }
+
+  const ultima = proprioHoje[0]; // mais recente de hoje
+  const precos = ['GC', 'GA', 'ET', 'S10', 'S500']
+    .filter(k => ultima[k] && ultima[k] !== '-')
+    .map(k => `${k}: R$ ${Number(ultima[k]).toFixed(2).replace('.', ',')}`)
+    .join(' · ');
+
+  return `
+    <div style="margin-top:0.75rem;">
+      <div class="coleta-section-title">✅ Coletou hoje às ${ultima.hora}</div>
+      <div style="font-family:var(--mono);font-size:0.85rem;color:var(--accent);">${precos || '—'}</div>
+    </div>
+  `;
 }
