@@ -1,0 +1,6 @@
+.git
+.wrangler
+.claude
+node_modules
+README.md
+server-patch-tanques.js
