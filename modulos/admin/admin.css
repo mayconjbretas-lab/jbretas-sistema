@@ -4,6 +4,12 @@
    de referência, ou ter OK explícito do usuário. */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
+/* Utilitário genérico — o AppPainel original só tinha versões
+   escopadas (.loading-overlay.hidden etc.), então classList.toggle
+   com só "hidden" (ex: #hist-loading) não escondia nada de verdade.
+   Adicionado aqui, não muda nenhum comportamento visível existente. */
+.hidden{display:none !important}
+
 /* ══════════════════════════════════════════════════
    TOKENS DE DESIGN — TEMA ESCURO (padrão)
    ══════════════════════════════════════════════════ */

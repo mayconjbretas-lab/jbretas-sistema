@@ -181,9 +181,46 @@
       <div id="mapa-detail"></div>
     </section>
 
-    <!-- ═══ ABA: HISTÓRICO ═══ (entrega futura) -->
+    <!-- ═══ ABA: HISTÓRICO ═══ -->
     <section class="scr" id="s-hist">
-      <div class="empty">🚧 Em construção</div>
+      <div class="sdiv">Filtrar posto e período</div>
+      <div class="filtro-row" style="gap:.35rem;margin-bottom:.45rem">
+        <select class="map-sel" id="hist-posto" style="flex:1;padding:6px 8px" onchange="carregarHistorico()">
+          <option value="">Todos os postos</option>
+        </select>
+        <select class="map-sel" id="hist-dias" onchange="carregarHistorico()">
+          <option value="7">7 dias</option>
+          <option value="30" selected>30 dias</option>
+          <option value="90">Trimestre</option>
+        </select>
+        <select class="map-sel" id="hist-fuel" onchange="renderGrafico(); renderResumoHistorico();">
+          <option value="GC">G. Comum</option>
+          <option value="GA">G. Aditivada</option>
+          <option value="ET">Etanol</option>
+          <option value="S10">Diesel S10</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="chdr">
+          <div class="ctitle">Evolução de Preços</div>
+          <div class="csub" id="hist-sub">Selecione um posto</div>
+        </div>
+        <div class="cbody" style="padding:.45rem 0">
+          <div id="hist-loading" class="empty hidden"><div class="loading-spin" style="margin:0 auto"></div></div>
+          <canvas id="hist-canvas" style="width:100%;max-height:220px;display:block"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="chdr"><div class="ctitle">Resumo do Período</div></div>
+        <div class="cbody" id="hist-resumo"><div class="empty">Carregando...</div></div>
+      </div>
+      <div class="card">
+        <div class="chdr">
+          <div class="ctitle">Registros recentes</div>
+          <div class="csub" id="hist-qtd"></div>
+        </div>
+        <div class="cbody" id="hist-lista"><div class="empty">Carregando...</div></div>
+      </div>
     </section>
 
     <!-- ═══ ABA: MAIS+ ═══ (entrega futura) -->

@@ -65,6 +65,7 @@ function setTab(btn, tab) {
   if (sec) sec.classList.add('active');
   if (tab === 'mapa') setTimeout(() => { initLeafletInstance(); }, 150);
   if (tab === 'comp' && !comparaCarregado) carregarDadosComparar();
+  if (tab === 'hist') carregarHistorico();
 }
 
 function abrirMais() { document.getElementById('modal-mais').classList.add('open'); }
@@ -580,4 +581,155 @@ function renderHeatmapComparar() {
     };
     body.appendChild(cell);
   });
+}
+
+// ── HISTÓRICO (portado de AppPainel/js/app.js carregarHistorico e afins) ──
+// Fonte: GET /coletas cru (não passa pelo agrupamento do coletas-service —
+// aqui a lista plana, com `tipo` já classificado, é exatamente o formato
+// que essas funções esperam). Outliers (fora de R$2–10, erro de digitação
+// tipo "R$ 55,00" já visto na base) são filtrados SÓ no gráfico e no resumo
+// — a lista de registros mostra tudo cru, sem esconder dado real.
+let G_HISTORICO = [];
+
+function precoPlausivelHistorico(v) {
+  const n = Number(v);
+  return v !== null && v !== undefined && !isNaN(n) && n >= 2 && n <= 10;
+}
+
+function povoarHistPosto() {
+  const sel = document.getElementById('hist-posto');
+  if (!sel || sel.options.length > 1) return;
+  MAP_POSTOS.slice().sort((a, b) => a.ap.localeCompare(b.ap)).forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.ap; o.textContent = p.ap;
+    sel.appendChild(o);
+  });
+}
+
+async function carregarHistorico() {
+  povoarHistPosto();
+  const posto  = document.getElementById('hist-posto').value;
+  const dias   = document.getElementById('hist-dias').value;
+  const subEl  = document.getElementById('hist-sub');
+  const loadEl = document.getElementById('hist-loading');
+  loadEl.classList.remove('hidden');
+  subEl.textContent = 'Carregando...';
+  G_HISTORICO = [];
+  try {
+    // Sem posto selecionado + período longo pode passar de 500 linhas
+    // (37 postos × vários concorrentes × dias) — sobe o limite pra não
+    // truncar o gráfico/resumo silenciosamente.
+    const limite = (!posto && Number(dias) >= 30) ? 5000 : 500;
+    const params = new URLSearchParams({ dias, limit: limite });
+    if (posto) params.set('posto', posto);
+    const resp = await apiFetch(`/coletas?${params.toString()}`);
+    G_HISTORICO = resp.registros || [];
+    subEl.textContent = `${posto || 'Todos os postos'} — últimos ${dias} dias (${G_HISTORICO.length} registros)`;
+  } catch (err) {
+    console.error('Erro ao carregar histórico:', err);
+    subEl.textContent = 'Sem conexão com o servidor.';
+  } finally {
+    loadEl.classList.add('hidden');
+    renderGrafico();
+    renderResumoHistorico();
+    renderListaHistorico();
+  }
+}
+
+function renderGrafico() {
+  const fuel = document.getElementById('hist-fuel').value;
+  const canvas = document.getElementById('hist-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const pontos = G_HISTORICO.filter(r => r.tipo === 'Próprio' && precoPlausivelHistorico(r[fuel]));
+  if (pontos.length === 0) { ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
+  const porData = {};
+  pontos.forEach(r => { if (!porData[r.data]) porData[r.data] = []; porData[r.data].push(parseFloat(r[fuel])); });
+  const datas = Object.keys(porData).sort((a, b) => {
+    const pa = a.split('/'), pb = b.split('/');
+    return new Date(pa[2], pa[1] - 1, pa[0]) - new Date(pb[2], pb[1] - 1, pb[0]);
+  });
+  const valores = datas.map(d => { const arr = porData[d]; return arr.reduce((s, v) => s + v, 0) / arr.length; });
+  const W = canvas.offsetWidth || 340, H = 200;
+  canvas.width = W; canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+  const pad = { t: 20, r: 10, b: 30, l: 50 };
+  const gW = W - pad.l - pad.r, gH = H - pad.t - pad.b;
+  const minV = Math.min(...valores) - 0.05, maxV = Math.max(...valores) + 0.05, rV = maxV - minV || 0.1;
+  const xOf = i => pad.l + (i / (datas.length - 1 || 1)) * gW;
+  const yOf = v => pad.t + (1 - (v - minV) / rV) * gH;
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + (i / 4) * gH;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    ctx.fillStyle = '#5a6478'; ctx.font = '9px monospace'; ctx.textAlign = 'right';
+    ctx.fillText('R$' + (maxV - (i / 4) * rV).toFixed(2), pad.l - 4, y + 3);
+  }
+  ctx.strokeStyle = '#00e5a0'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  valores.forEach((v, i) => { i === 0 ? ctx.moveTo(xOf(i), yOf(v)) : ctx.lineTo(xOf(i), yOf(v)); });
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(0,229,160,0.08)'; ctx.beginPath();
+  valores.forEach((v, i) => { i === 0 ? ctx.moveTo(xOf(i), yOf(v)) : ctx.lineTo(xOf(i), yOf(v)); });
+  ctx.lineTo(xOf(valores.length - 1), pad.t + gH); ctx.lineTo(xOf(0), pad.t + gH); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#00e5a0';
+  valores.forEach((v, i) => { ctx.beginPath(); ctx.arc(xOf(i), yOf(v), 3, 0, Math.PI * 2); ctx.fill(); });
+  ctx.fillStyle = '#5a6478'; ctx.font = '8px monospace'; ctx.textAlign = 'center';
+  const step = Math.max(1, Math.floor(datas.length / 5));
+  datas.forEach((d, i) => {
+    if (i % step !== 0 && i !== datas.length - 1) return;
+    const parts = d.split('/');
+    ctx.fillText(parts[0] + '/' + parts[1], xOf(i), H - 8);
+  });
+}
+
+function renderResumoHistorico() {
+  const fuel = document.getElementById('hist-fuel').value;
+  const body = document.getElementById('hist-resumo');
+  const todosProp = G_HISTORICO.filter(r => r.tipo === 'Próprio' && r[fuel]);
+  const todosConc = G_HISTORICO.filter(r => r.tipo !== 'Próprio' && r[fuel]);
+  const prop = todosProp.filter(r => precoPlausivelHistorico(r[fuel]));
+  const conc = todosConc.filter(r => precoPlausivelHistorico(r[fuel]));
+  const ignoradosProp = todosProp.length - prop.length;
+  const ignoradosConc = todosConc.length - conc.length;
+  if (!prop.length && !conc.length) { body.innerHTML = '<div class="empty">Sem dados suficientes para resumo.</div>'; return; }
+  const media = arr => arr.length ? (arr.reduce((s, r) => s + parseFloat(r[fuel]), 0) / arr.length) : null;
+  const min_r = arr => arr.length ? Math.min(...arr.map(r => parseFloat(r[fuel]))) : null;
+  const max_r = arr => arr.length ? Math.max(...arr.map(r => parseFloat(r[fuel]))) : null;
+  const mp = media(prop), mc = media(conc);
+  const fmt = v => v !== null ? fmtPrecoBRL(v) : '--';
+  body.innerHTML = `
+    <div class="bgrid" style="grid-template-columns:1fr 1fr;gap:.5rem">
+      <div class="bbox"><div class="bbnome" style="color:var(--ac)">Nossos Postos${ignoradosProp ? ` <span style="font-size:.56rem;color:var(--tx3);font-weight:400">(${ignoradosProp} ignorados)</span>` : ''}</div>
+        <div class="dbitem"><span>Média</span><span class="dbval">${fmt(mp)}</span></div>
+        <div class="dbitem"><span>Mínimo</span><span class="dbval">${fmt(min_r(prop))}</span></div>
+        <div class="dbitem"><span>Máximo</span><span class="dbval">${fmt(max_r(prop))}</span></div>
+        <div class="dbitem"><span>Registros</span><span class="dbval">${prop.length}</span></div></div>
+      <div class="bbox"><div class="bbnome" style="color:var(--wn)">Concorrentes${ignoradosConc ? ` <span style="font-size:.56rem;color:var(--tx3);font-weight:400">(${ignoradosConc} ignorados)</span>` : ''}</div>
+        <div class="dbitem"><span>Média</span><span class="dbval">${fmt(mc)}</span></div>
+        <div class="dbitem"><span>Mínimo</span><span class="dbval">${fmt(min_r(conc))}</span></div>
+        <div class="dbitem"><span>Máximo</span><span class="dbval">${fmt(max_r(conc))}</span></div>
+        <div class="dbitem"><span>Registros</span><span class="dbval">${conc.length}</span></div></div>
+    </div>
+    ${mp && mc ? `<div style="margin-top:.5rem;padding:.6rem;background:${mp < mc ? 'rgba(0,229,160,.08)' : 'rgba(255,77,109,.08)'};border-radius:8px;font-size:.78rem">
+      ${mp < mc ? `✅ Nosso preço médio está <strong style="color:var(--ok)">${fmtPrecoBRL(mc - mp)} abaixo</strong> da concorrência.`
+               : `⚠️ Nosso preço médio está <strong style="color:var(--dg)">${fmtPrecoBRL(mp - mc)} acima</strong> da concorrência.`}
+    </div>` : ''}`;
+}
+
+function renderListaHistorico() {
+  const body = document.getElementById('hist-lista');
+  const qtd = document.getElementById('hist-qtd');
+  const fuel = document.getElementById('hist-fuel').value;
+  const lista = G_HISTORICO.filter(r => r[fuel]).slice(-50).reverse();
+  qtd.textContent = lista.length + ' registros (mais recentes)';
+  if (!lista.length) { body.innerHTML = '<div class="empty">Sem registros no período.</div>'; return; }
+  body.innerHTML = lista.map(r => {
+    const isProp = r.tipo === 'Próprio', cor = isProp ? 'var(--ac)' : 'var(--tx3)';
+    return `<div class="ritem">
+      <div class="rinfo"><div class="rnome" style="color:${cor}">${r.postoAlvo}</div>
+      <div class="rbanda">${r.data} ${r.hora ? r.hora.substring(0, 5) : ''} · ${r.tipo} · ${r.bandeira || ''}</div></div>
+      <div class="rpreco" style="color:${cor}">${fmtPrecoBRL(r[fuel])}</div>
+    </div>`;
+  }).join('');
 }
