@@ -1,0 +1,41 @@
+/* ================================================================
+   JBRETAS SISTEMA — modulos/admin/coleta-precos/coleta-precos.css
+   Tabela simples de histórico de coletas pro ADM.
+   ================================================================ */
+
+.admin-filtros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 1.25rem;
+}
+
+.admin-tabela { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.admin-tabela th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 0 0.6rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.admin-tabela td {
+  padding: 0.65rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text2);
+  white-space: nowrap;
+}
+.admin-tabela tr:last-child td { border-bottom: none; }
+.admin-tabela a { color: var(--info); text-decoration: none; }
+.admin-tabela a:hover { text-decoration: underline; }
+
+.tabela-contador {
+  margin-top: 0.75rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--text3);
+  text-align: right;
+}

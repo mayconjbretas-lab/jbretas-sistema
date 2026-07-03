@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JBRETAS — Coleta de Preços (Admin)</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../shared/css/base.css">
+<link rel="stylesheet" href="coleta-precos.css">
+</head>
+<body>
+
+<div id="screen-app">
+
+  <div class="topbar">
+    <div class="topbar-brand">JBRETAS</div>
+    <div class="topbar-right">
+      <div class="topbar-user">
+        <div class="avatar" id="app-avatar">--</div>
+        <div class="topbar-info">
+          <div class="topbar-name" id="app-gerente">—</div>
+          <div class="topbar-posto">ADM</div>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="jbretasLogout()">SAIR</button>
+    </div>
+  </div>
+
+  <div class="app-main" style="max-width:1100px;">
+
+    <div class="page-header">
+      <div>
+        <div class="page-title">💰 Coleta de Preços</div>
+        <div class="page-date">Lançamentos de todos os postos — visão bruta</div>
+      </div>
+    </div>
+
+    <div class="admin-filtros">
+      <input type="text" class="field-input" id="filtro-posto" placeholder="Filtrar por posto próprio..." oninput="renderTabela()">
+      <input type="text" class="field-input" id="filtro-concorrente" placeholder="Filtrar por concorrente..." oninput="renderTabela()">
+      <select class="field-select" id="filtro-dias" onchange="carregarColetas()">
+        <option value="7">Últimos 7 dias</option>
+        <option value="15" selected>Últimos 15 dias</option>
+        <option value="30">Últimos 30 dias</option>
+        <option value="60">Últimos 60 dias</option>
+      </select>
+    </div>
+
+    <div class="coleta-card">
+      <div id="tabela-coletas">
+        <div class="empty-state">Carregando...</div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="../../../shared/js/config.js"></script>
+<script src="../../../shared/js/api.js"></script>
+<script src="../../../shared/js/auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

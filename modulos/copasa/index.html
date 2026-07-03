@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JBRETAS — Consumo Copasa</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../shared/css/base.css">
+<link rel="stylesheet" href="copasa.css">
+</head>
+<body>
+
+<div id="screen-app">
+
+  <div class="topbar">
+    <div class="topbar-brand">JBRETAS</div>
+    <div class="topbar-right">
+      <div class="topbar-user">
+        <div class="avatar" id="app-avatar">--</div>
+        <div class="topbar-info">
+          <div class="topbar-name" id="app-gerente">—</div>
+          <div class="topbar-posto" id="app-posto">—</div>
+        </div>
+      </div>
+      <div style="position:relative;">
+        <button class="menu-dots" id="btn-menu" onclick="toggleMenu(event)">⋮</button>
+        <div class="dropdown-menu hidden" id="dropdown-menu">
+          <div class="dropdown-item" onclick="window.location.href='../fechamento/index.html'">📋 Fechamento</div>
+          <div class="dropdown-item" onclick="window.location.href='../coleta-precos/index.html'">💰 Coleta de Preços</div>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="jbretasLogout()">SAIR</button>
+    </div>
+  </div>
+
+  <div class="app-main">
+
+    <div class="page-header">
+      <div>
+        <div class="page-title">💧 Consumo Copasa</div>
+        <div class="page-date" id="page-date"></div>
+      </div>
+    </div>
+
+    <div class="copasa-tabs">
+      <button class="copasa-tab on" data-tab="resumo" onclick="setTab('resumo')">Resumo</button>
+      <button class="copasa-tab" data-tab="2dias" onclick="setTab('2dias')">2 dias</button>
+      <button class="copasa-tab" data-tab="semanal" onclick="setTab('semanal')">Semanal</button>
+      <button class="copasa-tab" data-tab="mensal" onclick="setTab('mensal')">Mensal</button>
+      <button class="copasa-tab" data-tab="trimestral" onclick="setTab('trimestral')">Trimestral</button>
+    </div>
+
+    <div id="tab-resumo" class="copasa-tab-body">
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="empty-state">Carregando...</div>
+      </div>
+      <div class="coleta-card">
+        <div class="coleta-section-title">Últimos 14 dias</div>
+        <div class="bar-chart" id="bar-chart"></div>
+        <div class="bar-chart-legenda" id="bar-chart-legenda">Toque em uma barra pra ver o valor</div>
+      </div>
+    </div>
+
+    <div id="tab-2dias" class="copasa-tab-body" style="display:none;">
+      <div class="coleta-card"><div id="tabela-2dias"></div></div>
+    </div>
+    <div id="tab-semanal" class="copasa-tab-body" style="display:none;">
+      <div class="coleta-card"><div id="tabela-semanal"></div></div>
+    </div>
+    <div id="tab-mensal" class="copasa-tab-body" style="display:none;">
+      <div class="coleta-card"><div id="tabela-mensal"></div></div>
+    </div>
+    <div id="tab-trimestral" class="copasa-tab-body" style="display:none;">
+      <div class="coleta-card"><div id="tabela-trimestral"></div></div>
+    </div>
+
+  </div>
+
+  <div class="save-bar">
+    <button class="btn-save" onclick="abrirModalRegistro()">+ REGISTRAR</button>
+  </div>
+
+</div>
+
+<div class="modal-overlay" id="modal-registro">
+  <div class="modal-card">
+    <div class="modal-title">💧 Registrar Leitura</div>
+    <div class="modal-sub" id="modal-ultima-leitura">Última leitura: —</div>
+
+    <div class="field-group">
+      <label class="field-label">Data da leitura</label>
+      <input type="date" class="field-input" id="input-data-leitura">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Leitura do hidrômetro (m³)</label>
+      <input type="number" class="field-input" id="input-leitura" step="0.001" min="0" placeholder="0,000">
+    </div>
+
+    <button class="btn-modal-send" id="btn-confirmar-leitura" onclick="salvarLeitura()">Salvar leitura</button>
+    <button class="btn-modal-cancel" onclick="fecharModalRegistro()">Cancelar</button>
+    <div class="modal-msg" id="modal-msg"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <div class="toast-title">✅ Salvo com sucesso</div>
+  <div id="toast-msg">Leitura registrada.</div>
+</div>
+
+<script src="../../shared/js/config.js"></script>
+<script src="../../shared/js/api.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
