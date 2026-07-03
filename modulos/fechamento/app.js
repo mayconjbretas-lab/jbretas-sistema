@@ -15,6 +15,7 @@ let usuarioAtual = null;
 let tanquesAtuais = [];
 let combustiveisAtuais = [];
 let cargaRespondida = null; // 'sim' | 'nao' | null
+let fechamentoBloqueado = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
   usuarioAtual = exigirSessao(['GERENTE']);
@@ -46,6 +47,17 @@ function montarTopbar() {
   });
 }
 
+function toggleMenu(event) {
+  event.stopPropagation();
+  document.getElementById('dropdown-menu').classList.toggle('hidden');
+}
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('dropdown-menu');
+  if (menu && !menu.classList.contains('hidden') && !e.target.closest('#btn-menu')) {
+    menu.classList.add('hidden');
+  }
+});
+
 function montarDataPadrao() {
   const input = document.getElementById('card-data-input');
   const ontem = new Date();
@@ -71,10 +83,106 @@ async function carregarEstruturaDoPosto(nomePosto) {
     renderTanques();
     renderVendas();
     renderCarga();
+    await carregarFechamentoDoDia(document.getElementById('card-data-input').value);
   } catch (err) {
     console.error('Erro ao carregar estrutura do posto:', err);
     document.getElementById('tanques-body').innerHTML =
       `<div class="empty-state">⚠ Erro ao carregar dados: ${err.message}</div>`;
+  }
+}
+
+// Chamado quando o gerente troca a "Data do Relatório" — zera o
+// formulário pro padrão e tenta pré-preencher de novo pra data nova.
+function onDataAlterada() {
+  renderTanques();
+  renderVendas();
+  renderCarga();
+  cargaRespondida = null;
+  aplicarModoBloqueio(false);
+  const dataISO = document.getElementById('card-data-input').value;
+  if (dataISO) carregarFechamentoDoDia(dataISO);
+}
+
+// ── Pré-preenchimento a partir de um fechamento já lançado ────────
+// tanques_raw/vendas_raw/carga_raw guardam o detalhe exato por tanque
+// (não a agregação da tabela `medicao`), então dá pra repopular a UI
+// com precisão, campo a campo, em vez de reconstruir a partir de
+// valores agregados por combustível.
+function parseTanquesRaw(raw) {
+  const mapa = {}; // codigo -> { cm } | { litros }
+  if (!raw) return mapa;
+  raw.split(' | ').forEach(seg => {
+    const mCod = seg.match(/^([^\s(]+)\s*\(/);
+    if (!mCod) return;
+    const codigo = mCod[1];
+    const mCm = seg.match(/:\s*(\d+)cm\s*=\s*\d+L/);
+    if (mCm) { mapa[codigo] = { cm: parseInt(mCm[1]) }; return; }
+    const mL = seg.match(/:\s*(\d+)L/);
+    if (mL) { mapa[codigo] = { litros: parseInt(mL[1]) }; return; }
+  });
+  return mapa;
+}
+
+function parsePorCombustivel(raw) {
+  const mapa = {}; // nome do combustível -> valor numérico
+  if (!raw) return mapa;
+  raw.split(' | ').forEach(seg => {
+    const m = seg.match(/^(.+?):\s*([\d.]+)L?$/);
+    if (m) mapa[m[1].trim()] = parseFloat(m[2]);
+  });
+  return mapa;
+}
+
+async function carregarFechamentoDoDia(dataISO) {
+  try {
+    const resp = await apiFetch(`/fechamento/${encodeURIComponent(usuarioAtual.posto.nome)}?data=${dataISO}`);
+    if (!resp.existe || !resp.fechamento) return;
+    const f = resp.fechamento;
+
+    const tanquesMapa = parseTanquesRaw(f.tanques_raw);
+    tanquesAtuais.forEach(t => {
+      const dado = tanquesMapa[t.codigo];
+      const input = document.getElementById('tanque-' + t.id);
+      if (!dado || !input) return;
+      const arq = t.tipo_medicao;
+      const isRegua = arq && arq !== 'veederroot' && arq !== 'gnv' && !!ARQUEACAO[arq];
+      if (isRegua && dado.cm !== undefined) {
+        input.value = dado.cm;
+        atualizarVolTanque(t.id, arq);
+      } else if (!isRegua && dado.litros !== undefined) {
+        input.dataset.val = dado.litros;
+        input.value = dado.litros.toLocaleString('pt-BR');
+      }
+    });
+
+    const vendasMapa = parsePorCombustivel(f.vendas_raw);
+    combustiveisAtuais.forEach(c => {
+      const valor = vendasMapa[c.nome];
+      const input = document.getElementById('venda-' + c.nome.replace(/\s+/g, '_'));
+      if (valor !== undefined && input) input.value = valor;
+    });
+    atualizarTotalVendas();
+
+    document.getElementById('lub-soutag').value = f.lub_soutag || 0;
+    document.getElementById('lub-dia').value = f.lub_dia || 0;
+
+    if (f.carga_recebida === 'sim' || f.carga_recebida === 'nao') {
+      setCarga(f.carga_recebida);
+      if (f.carga_recebida === 'sim') {
+        const cargaMapa = parsePorCombustivel(f.carga_raw);
+        combustiveisAtuais.forEach(c => {
+          const valor = cargaMapa[c.nome];
+          if (valor === undefined) return;
+          const input = document.getElementById('carga-' + c.nome.replace(/\s+/g, '_'));
+          if (input) { input.dataset.val = valor; input.value = valor.toLocaleString('pt-BR'); }
+        });
+      }
+    }
+
+    aplicarModoBloqueio(true);
+    mostrarToast('🔒 Fechamento já lançado', 'Mostrando o que foi lançado nessa data. Use "Corrigir lançamento" para editar.');
+  } catch (err) {
+    console.error('Erro ao carregar fechamento existente:', err);
   }
 }
 
@@ -317,8 +425,7 @@ async function salvarFechamento() {
       body: JSON.stringify(payload),
     });
     mostrarToast('✅ Fechamento salvo!', `${payload.posto} — ${dataBR} às ${hora}`);
-    btn.textContent = '💾 SALVAR FECHAMENTO';
-    btn.disabled = false;
+    aplicarModoBloqueio(true);
   } catch (err) {
     mostrarToast('❌ Erro ao salvar', err.message);
     btn.textContent = '💾 SALVAR FECHAMENTO';
@@ -333,3 +440,40 @@ function mostrarToast(titulo, msg) {
   toast.classList.add('show');
   setTimeout(() => toast.classList.remove('show'), 4000);
 }
+
+function aplicarModoBloqueio(bloquear) {
+  fechamentoBloqueado = bloquear;
+  const main = document.querySelector('.app-main');
+  const saveBar = document.querySelector('.save-bar');
+  const badge = document.querySelector('.page-header .badge');
+
+  main.querySelectorAll('input, button.step-btn, .toggle-carga-btn').forEach(el => {
+    if (el.closest('.info-card')) return; // mantém a data editável
+    if (bloquear) { el.setAttribute('disabled', 'disabled'); el.classList.add('campo-bloqueado'); }
+    else { el.removeAttribute('disabled'); el.classList.remove('campo-bloqueado'); }
+  });
+
+  if (badge) {
+    badge.innerHTML = bloquear
+      ? '<span class="badge-dot" style="background:var(--warning)"></span><span>🔒 Lançado</span>'
+      : '<span class="badge-dot"></span><span>Em andamento</span>';
+  }
+
+  if (saveBar) {
+    if (bloquear) {
+      saveBar.innerHTML = '<button class="btn-save" id="btn-corrigir" style="background:var(--surface3);color:var(--text);border:1px solid var(--border2);">✏️ Corrigir lançamento</button>';
+    } else {
+      saveBar.innerHTML = '<button class="btn-save" id="btn-salvar-fechamento" disabled>🔒 RESPONDA A CARGA PARA SALVAR</button><div class="carga-status-msg" id="carga-status-msg">⚠ seção "Recebeu Carga?" obrigatória</div>';
+      liberarSalvar();
+    }
+  }
+}
+
+function corrigirLancamento() {
+  aplicarModoBloqueio(false);
+  mostrarToast('✏️ Modo correção', 'Campos liberados. Ajuste e salve para sobrescrever o lançamento do dia.');
+}
+
+document.addEventListener('click', e => {
+  if (e.target.id === 'btn-corrigir') corrigirLancamento();
+});
