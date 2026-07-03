@@ -1,0 +1,134 @@
+/* ================================================================
+   JBRETAS SISTEMA — modulos/coleta-precos/coleta-precos.css
+   Estilos específicos da tela de Coleta de Preços. Componentes
+   genéricos (topbar, coleta-card, modal, dropdown) vêm de
+   shared/css/base.css.
+   ================================================================ */
+
+.preco-input {
+  width: 110px;
+  background: var(--surface3);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: right;
+  padding: 0.6rem 0.75rem;
+  outline: none;
+}
+.preco-input::before { content: 'R$ '; }
+
+.coleta-aviso {
+  display: none;
+  margin-top: 0.75rem;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: rgba(249, 199, 79, 0.1);
+  border: 1px solid rgba(249, 199, 79, 0.3);
+  color: var(--warning);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.coleta-aviso.visivel { display: block; }
+
+.btn-geo {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--info);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.btn-geo:hover { border-color: var(--info); }
+.btn-geo:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.geo-status {
+  margin-top: 0.6rem;
+  font-size: 0.75rem;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+
+.foto-preview-area {
+  border: 2px dashed var(--border2);
+  border-radius: var(--radius);
+  background: var(--surface2);
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.foto-preview-area:hover { border-color: var(--accent); }
+
+.foto-preview-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text3);
+  font-size: 0.82rem;
+  padding: 1.5rem;
+  text-align: center;
+}
+.foto-preview-icon { font-size: 2rem; }
+
+.foto-preview {
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+  display: none;
+}
+
+.foto-botoes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 0.75rem;
+}
+.btn-foto {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.btn-foto:hover { border-color: var(--accent); color: var(--accent); }
+
+.historico-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.historico-row:last-child { border-bottom: none; }
+.historico-alvo { font-size: 0.88rem; color: var(--text); font-weight: 500; }
+.historico-data { font-size: 0.7rem; color: var(--text3); font-family: var(--mono); margin-top: 2px; }
+.historico-precos {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--accent);
+  text-align: right;
+}

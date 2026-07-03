@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JBRETAS — Coleta de Preços</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../shared/css/base.css">
+<link rel="stylesheet" href="coleta-precos.css">
+</head>
+<body>
+
+<div id="screen-app">
+
+  <div class="topbar">
+    <div class="topbar-brand">JBRETAS</div>
+    <div class="topbar-right">
+      <div class="topbar-user">
+        <div class="avatar" id="app-avatar">--</div>
+        <div class="topbar-info">
+          <div class="topbar-name" id="app-gerente">—</div>
+          <div class="topbar-posto" id="app-posto">—</div>
+        </div>
+      </div>
+      <div style="position:relative;">
+        <button class="menu-dots" id="btn-menu" onclick="toggleMenu(event)">⋮</button>
+        <div class="dropdown-menu hidden" id="dropdown-menu">
+          <div class="dropdown-item" onclick="window.location.href='../fechamento/index.html'">📋 Fechamento</div>
+          <div class="dropdown-item" onclick="window.location.href='../copasa/index.html'">💧 Consumo Copasa</div>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="jbretasLogout()">SAIR</button>
+    </div>
+  </div>
+
+  <div class="app-main">
+
+    <div class="page-header">
+      <div>
+        <div class="page-title">💰 Coleta de Preços</div>
+        <div class="page-date" id="page-date"></div>
+      </div>
+    </div>
+
+    <div class="coleta-card">
+      <div class="coleta-section-title">Posto alvo (concorrente)</div>
+      <div id="concorrente-body">
+        <div class="empty-state">Carregando concorrentes...</div>
+      </div>
+    </div>
+
+    <div class="coleta-card" id="precos-card" style="display:none;">
+      <div class="coleta-section-title">Preços coletados (R$)</div>
+      <div id="precos-body"></div>
+      <div class="coleta-aviso" id="preco-aviso"></div>
+    </div>
+
+    <div class="coleta-card" id="local-card" style="display:none;">
+      <div class="coleta-section-title">Localização</div>
+      <button type="button" class="btn-geo" id="btn-geo" onclick="capturarLocalizacao()">📍 Capturar localização</button>
+      <div class="geo-status" id="geo-status">Localização não capturada</div>
+    </div>
+
+    <div class="coleta-card" id="foto-card" style="display:none;">
+      <div class="coleta-section-title">Foto obrigatória</div>
+      <div class="foto-preview-area" id="foto-preview-area" onclick="document.getElementById('input-foto-camera').click()">
+        <img id="foto-preview" class="foto-preview" style="display:none;">
+        <div class="foto-preview-placeholder" id="foto-preview-placeholder">
+          <div class="foto-preview-icon">📷</div>
+          <div>Toque para abrir a câmera</div>
+        </div>
+      </div>
+      <div class="foto-botoes">
+        <button type="button" class="btn-foto" onclick="event.stopPropagation(); document.getElementById('input-foto-camera').click()">📷 Câmera</button>
+        <button type="button" class="btn-foto" onclick="event.stopPropagation(); document.getElementById('input-foto-galeria').click()">🖼️ Galeria</button>
+      </div>
+      <input type="file" accept="image/*" capture="environment" id="input-foto-camera" style="display:none;" onchange="onFotoSelecionada(event)">
+      <input type="file" accept="image/*" id="input-foto-galeria" style="display:none;" onchange="onFotoSelecionada(event)">
+    </div>
+
+    <div class="coleta-card" id="historico-card" style="display:none;">
+      <div class="coleta-section-title">Coletas recentes deste posto</div>
+      <div id="historico-body">
+        <div class="empty-state">Carregando histórico...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="save-bar" id="save-bar" style="display:none;">
+    <button class="btn-save" id="btn-salvar-coleta" disabled>🔒 PREENCHA OS CAMPOS OBRIGATÓRIOS</button>
+  </div>
+
+</div>
+
+<div class="toast" id="toast">
+  <div class="toast-title">✅ Salvo com sucesso</div>
+  <div id="toast-msg">Coleta registrada.</div>
+</div>
+
+<script src="../../shared/js/config.js"></script>
+<script src="../../shared/js/api.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
