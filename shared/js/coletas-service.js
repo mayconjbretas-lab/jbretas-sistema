@@ -85,7 +85,64 @@ function hojeBR() {
   return new Date().toLocaleDateString('pt-BR');
 }
 
+function ontemBR() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toLocaleDateString('pt-BR');
+}
+
+// Comparação do dia por posto, com FALLBACK pro último dado conhecido
+// em vez de zerar à meia-noite (requisito crítico — o AppPainel antigo
+// zerava tudo até o primeiro gerente lançar no dia, deixando o painel
+// inútil de manhã cedo). Cada valor (próprio e por concorrente) vem
+// junto com um flag `desatualizado` quando não é de hoje, pra UI
+// mostrar o selo "dado de DD/MM" sem esconder a informação.
+//
+// { [postoNormalizado]: {
+//     proprio: registro | null, proprioDesatualizado: bool,
+//     concorrentes: [{ nome, bandeira, registro, desatualizado, registroOntem }]
+// } }
+async function buscarComparacaoDoDia({ dias = 15 } = {}) {
+  const porPosto = await buscarColetasAgrupadas({ dias });
+  const hoje = hojeBR();
+  const ontem = ontemBR();
+
+  const resultado = {};
+  Object.keys(porPosto).forEach(chave => {
+    const grupo = porPosto[chave];
+
+    const proprioHoje = grupo.proprio.find(r => r.data === hoje) || null;
+    const proprioUltimo = grupo.proprio[0] || null; // já vem desc por data/hora
+    const proprio = proprioHoje || proprioUltimo;
+    const proprioDesatualizado = !!proprio && proprio.data !== hoje;
+
+    const porConcorrente = {};
+    grupo.concorrentes.forEach(r => {
+      const nome = r.postoAlvo;
+      if (!nome || nome === '-') return;
+      if (!porConcorrente[nome]) porConcorrente[nome] = [];
+      porConcorrente[nome].push(r);
+    });
+    const concorrentes = Object.keys(porConcorrente).map(nome => {
+      const registros = porConcorrente[nome]; // desc por data/hora
+      const ultimo = registros[0];
+      return {
+        nome,
+        bandeira: (ultimo.bandeira && ultimo.bandeira !== '-') ? ultimo.bandeira : null,
+        registro: ultimo,
+        desatualizado: ultimo.data !== hoje,
+        registroOntem: registros.find(r => r.data === ontem) || null,
+      };
+    });
+
+    resultado[chave] = { proprio, proprioDesatualizado, concorrentes };
+  });
+  return resultado;
+}
+
 window.normalizarNomePosto = normalizarNomePosto;
 window.ehColetaPropria = ehColetaPropria;
 window.buscarColetasAgrupadas = buscarColetasAgrupadas;
+window.buscarComparacaoDoDia = buscarComparacaoDoDia;
 window.hojeBR = hojeBR;
+window.ontemBR = ontemBR;

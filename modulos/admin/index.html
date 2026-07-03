@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d1117">
+<title>JBRETAS — Painel de Preços</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"/>
+<!-- admin.css é o jbretas2.css do AppPainel, portado literalmente — design
+     aprovado pela diretoria. Não carrega shared/css/base.css aqui: os
+     tokens (--bg, --sf, --ac...) são de outro sistema, misturar quebraria
+     o layout. Os outros módulos (Fechamento/Coleta/Copasa) continuam em
+     base.css normalmente; só o admin usa esse visual. -->
+<link rel="stylesheet" href="admin.css">
+<script>
+  (function(){
+    var t = localStorage.getItem('jb_theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+</head>
+<body>
+
+<div id="screen-app">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:.55rem">
+      <div style="width:30px;height:30px;background:var(--acd);border:1.5px solid var(--ac);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;color:var(--ac);font-size:.7rem;box-shadow:0 0 8px var(--ac-glow)">JB</div>
+      <div>
+        <div class="tbbrand">JBRETAS</div>
+        <div class="tbsub">// Painel de Preços</div>
+      </div>
+    </div>
+    <div class="tb-right">
+      <div class="live"><span class="ldot"></span><span id="live-txt">ao vivo</span></div>
+      <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Alternar tema">
+        <i class="fa-solid fa-moon" id="theme-icon"></i>
+      </button>
+      <button class="sair-btn" onclick="jbretasLogout()">
+        <i class="fa-solid fa-right-from-bracket"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="main" id="main">
+
+    <!-- ═══ ABA: COMPARA ═══ -->
+    <section class="scr" id="s-comp">
+      <div class="kgrid">
+        <div class="kbox">
+          <div class="klbl">Lançaram hoje</div>
+          <div class="kval ac" id="kv-proprios">--</div>
+          <div class="csub" id="kv-proprios-sub" style="margin-top:2px"></div>
+        </div>
+        <div class="kbox">
+          <div class="klbl">Concorrentes</div>
+          <div class="kval" id="kv-concs">--</div>
+        </div>
+        <div class="kbox" onclick="abrirDetalheMedia()" style="cursor:pointer">
+          <div class="klbl">Média GC conc. <i class="fa-solid fa-circle-info" style="font-size:.52rem;opacity:.55"></i></div>
+          <div class="kval inf" id="kv-gc">--</div>
+        </div>
+        <div class="kbox">
+          <div class="klbl">Nosso GC médio</div>
+          <div class="kval ac" id="kv-mgc">--</div>
+        </div>
+      </div>
+      <div class="upd-row">
+        <span id="upd-txt">Carregando...</span>
+        <button class="refresh-btn" onclick="carregarDadosComparar()">↻</button>
+      </div>
+      <div class="card">
+        <div class="chdr">
+          <div class="ctitle">Monitor de Preços</div>
+          <div class="csub" id="cmp-sub">Vermelho = concorrente mais barato que você</div>
+        </div>
+        <div class="cbody">
+          <div class="fueltab-row" id="cmp-fuel-tabs"></div>
+          <div class="filtros-comp-grid">
+            <div>
+              <label class="filtro-lbl">Posto</label>
+              <select class="sel" id="cmp-posto" style="margin-bottom:0" onchange="cmpSetPosto(this.value)">
+                <option value="">Todos os postos</option>
+              </select>
+            </div>
+            <div>
+              <label class="filtro-lbl">Supervisor</label>
+              <select class="sel" id="cmp-sup" style="margin-bottom:0" onchange="cmpSetSup(this.value)">
+                <option value="">Todos supervisores</option>
+              </select>
+            </div>
+            <div>
+              <label class="filtro-lbl">Bandeira</label>
+              <select class="sel" id="cmp-band" style="margin-bottom:0" onchange="cmpSetBand(this.value)">
+                <option value="">Todas bandeiras</option>
+              </select>
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:.4rem;font-size:.74rem;color:var(--tx2);margin:.45rem 0">
+            <input type="checkbox" id="cmp-so-mudou" onchange="cmpToggleSoMudou(this)"> Só quem mudou desde ontem
+          </label>
+          <div style="display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:.55rem">
+            <button class="ftag" id="flt-abaixo" onclick="cmpSetFaixaPreco(this,'abaixo')" title="Mostrar só concorrentes mais baratos">
+              🔵 Abaixo do nosso
+            </button>
+            <button class="ftag" id="flt-acima" onclick="cmpSetFaixaPreco(this,'acima')" title="Mostrar só concorrentes mais caros">
+              🔴 Acima do nosso
+            </button>
+            <button class="ftag" id="flt-todos-preco" onclick="cmpSetFaixaPreco(this,'todos')" style="display:none">
+              ✕ Limpar filtro
+            </button>
+          </div>
+          <div class="strat-box">
+            <div class="csub" style="margin-bottom:.4rem">Estratégia de preço sugerido</div>
+            <div class="strat-row" id="cmp-strat-tabs"></div>
+            <div class="strat-desc" id="cmp-strat-desc"></div>
+          </div>
+          <div class="myavg-grid" id="cmp-myavg"></div>
+          <div id="cmp-regions"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="chdr">
+          <div class="ctitle">Mapa de calor — G. Comum</div>
+          <div class="csub">Distribuição por faixa na rede</div>
+        </div>
+        <div class="cbody">
+          <div class="hgrid" id="heatmap-body"></div>
+          <div style="display:flex;justify-content:space-between;margin-top:.45rem;font-size:.58rem;color:var(--tx3)">
+            <span style="color:var(--ok)">barato</span>
+            <span style="color:var(--wn)">médio</span>
+            <span style="color:var(--dg)">caro</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ ABA: RANKING ═══ (entrega futura) -->
+    <section class="scr" id="s-ranking">
+      <div class="empty">🚧 Em construção</div>
+    </section>
+
+    <!-- ═══ ABA: REGIONAL ═══ (entrega futura) -->
+    <section class="scr" id="s-regional">
+      <div class="empty">🚧 Em construção</div>
+    </section>
+
+    <!-- ═══ ABA: MAPA ═══ -->
+    <section class="scr active" id="s-mapa">
+      <div class="sdiv">Mapa de preços — BH / Grande BH</div>
+      <div class="map-ctrl">
+        <select class="map-sel" id="mf" onchange="mapaFuelChange(this.value)">
+          <option value="GC">G. Comum</option>
+          <option value="GA">G. Aditivada</option>
+          <option value="ET">Etanol</option>
+          <option value="S10">Diesel S10</option>
+        </select>
+        <button class="map-ftag on" id="mbtn-todos"     onclick="mapaSetSup(this,'todos')">Todos</button>
+        <button class="map-ftag"   id="mbtn-Mauricio"   onclick="mapaSetSup(this,'Mauricio')">Mauricio</button>
+        <button class="map-ftag"   id="mbtn-Paulo"      onclick="mapaSetSup(this,'Paulo')">Paulo</button>
+        <button class="map-ftag"   id="mbtn-Fabricio"   onclick="mapaSetSup(this,'Fabricio')">Fabricio</button>
+        <button class="map-ftag"   id="mbtn-Gledson"    onclick="mapaSetSup(this,'Gledson')">Gledson</button>
+        <button class="map-ftag"   id="mbtn-Rodrigo"    onclick="mapaSetSup(this,'Rodrigo')">Rodrigo</button>
+      </div>
+      <div class="map-ctrl" style="margin-top:.3rem">
+        <button class="map-ftag on" id="mfiltro-todos"     onclick="mapaSetColeta(this,'todos')">📍 Todos</button>
+        <button class="map-ftag"    id="mfiltro-coletados"  onclick="mapaSetColeta(this,'coletados')">✅ Com coleta</button>
+        <button class="map-ftag"    id="mfiltro-semcoleta"  onclick="mapaSetColeta(this,'semcoleta')">⏳ Sem coleta</button>
+        <span id="mapa-contador" style="font-size:.6rem;color:var(--tx3);font-family:var(--mono);margin-left:auto"></span>
+      </div>
+      <div class="map-wrap"><div id="leaflet-map"></div></div>
+      <div class="map-legend" id="map-legend"></div>
+      <div id="mapa-detail"></div>
+    </section>
+
+    <!-- ═══ ABA: HISTÓRICO ═══ (entrega futura) -->
+    <section class="scr" id="s-hist">
+      <div class="empty">🚧 Em construção</div>
+    </section>
+
+    <!-- ═══ ABA: MAIS+ ═══ (entrega futura) -->
+    <section class="scr" id="s-mais">
+      <div id="mais-conteudo"><div class="empty">🚧 Em construção</div></div>
+    </section>
+
+  </main>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bnav">
+    <button class="nbtn" onclick="setTab(this,'comp')">
+      <span class="ni"><i class="fa-solid fa-scale-balanced"></i></span>
+      <span class="nl">Compara</span>
+    </button>
+    <button class="nbtn" onclick="setTab(this,'ranking')">
+      <span class="ni"><i class="fa-solid fa-trophy"></i></span>
+      <span class="nl">Ranking</span>
+    </button>
+    <button class="nbtn" onclick="setTab(this,'regional')">
+      <span class="ni"><i class="fa-solid fa-map"></i></span>
+      <span class="nl">Regional</span>
+    </button>
+    <button class="nbtn active" onclick="setTab(this,'mapa')">
+      <span class="ni"><i class="fa-solid fa-map-location-dot"></i></span>
+      <span class="nl">Mapa</span>
+    </button>
+    <button class="nbtn" onclick="setTab(this,'hist')">
+      <span class="ni"><i class="fa-solid fa-chart-line"></i></span>
+      <span class="nl">Histórico</span>
+    </button>
+    <button class="nbtn" onclick="abrirMais()">
+      <span class="ni"><i class="fa-solid fa-circle-plus"></i></span>
+      <span class="nl">Mais+</span>
+    </button>
+  </nav>
+</div>
+
+<!-- ═══ MODAL MAIS+ ═══ (grid de funções entra na entrega da aba Mais+) -->
+<div class="moverlay" id="modal-mais" onclick="fecharMais(event)">
+  <div class="msheet">
+    <button class="mclose" onclick="fecharMaisBtn()">✕</button>
+    <div class="mtitle">Mais funções</div>
+    <div class="empty">🚧 Em construção</div>
+  </div>
+</div>
+
+<!-- ═══ MODAL MÉDIA ═══ -->
+<div class="moverlay" id="modal-media" onclick="fecharMedia(event)">
+  <div class="msheet">
+    <button class="mclose" onclick="fecharMediaBtn()">✕</button>
+    <div class="mtitle">Como a média é calculada</div>
+    <div class="csub" style="margin-bottom:.55rem">Posto → Regional (supervisor) → Geral. Cada nível conta 1x.</div>
+    <div id="media-detalhe-body"><div class="empty">Carregando...</div></div>
+  </div>
+</div>
+
+<!-- ═══ TOAST ═══ -->
+<div class="toast" id="toast">
+  <div class="ttitle" id="t-title"></div>
+  <div id="t-msg"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="../../shared/js/postos-mapa.js"></script>
+<script src="../../shared/js/config.js"></script>
+<script src="../../shared/js/api.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/coletas-service.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
