@@ -232,8 +232,15 @@ async function csCarregar() {
 
     CS_ESTADOS = {};
     CS_POSTOS.forEach(p => {
-      const conf = CS_REVISOES[p.key] && CS_REVISOES[p.key]['GERAL'] && CS_REVISOES[p.key]['GERAL'].status === 'conferido';
-      CS_ESTADOS[p.key] = conf ? 'ok' : 'pend'; // conferido persiste (✓ + dot + progresso) no reload
+      const rev = CS_REVISOES[p.key] || {};
+      const conferido = rev['GERAL'] && rev['GERAL'].status === 'conferido';
+      // editado = qualquer linha de combustível (não-GERAL) com preço editado ou status 'sinalizado'
+      const editado = Object.keys(rev).some(comb =>
+        comb !== 'GERAL' &&
+        ((rev[comb].preco_editado !== null && rev[comb].preco_editado !== undefined) || rev[comb].status === 'sinalizado')
+      );
+      // verde (='ok') para conferido OU editado — mesma cor pros dois (decisão do Maycon)
+      CS_ESTADOS[p.key] = (conferido || editado) ? 'ok' : 'pend';
     });
 
     csPopularFiltros();
