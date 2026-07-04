@@ -25,7 +25,7 @@
   /* Estados */
   --dg:#ff5d6c;--wn:#f0a444;--inf:#58a6e8;--ok:#00e5a0;--pu:#a78bfa;
   /* Tipografia */
-  --mono:'Space Mono',monospace;--sans:'DM Sans',sans-serif;
+  --mono:'JetBrains Mono',monospace;--sans:'Sora',sans-serif;
   /* Raios */
   --r:10px;--rl:14px;
   /* Scrollbar */
@@ -58,7 +58,7 @@ html[data-theme="light"]{
    BASE
    ══════════════════════════════════════════════════ */
 html,body{height:100%;overflow:hidden}
-body{font-family:var(--sans);background:var(--bg);color:var(--tx);
+body{font-family:var(--sans);background:var(--grad-bg);background-attachment:fixed;color:var(--tx);
   display:flex;flex-direction:column;position:relative;
   transition:background .25s,color .25s}
 
@@ -118,10 +118,10 @@ html:not([data-theme="light"]) body::before{
   padding:.75rem .9rem;cursor:pointer;font-size:.85rem;color:var(--tx2);
   display:flex;align-items:center;justify-content:center;width:42px;transition:color .15s}
 .olho-btn:hover{color:var(--ac)}
-.btn-entrar{background:var(--ac);color:var(--bg);border:none;border-radius:10px;
+.btn-entrar{background:var(--grad-gold);color:var(--bg);border:none;border-radius:10px;
   padding:.85rem;font-family:var(--mono);font-weight:700;font-size:.82rem;
   letter-spacing:.06em;cursor:pointer;transition:opacity .15s,box-shadow .15s}
-.btn-entrar:hover{opacity:.88;box-shadow:0 4px 20px var(--ac-glow)}
+.btn-entrar:hover{opacity:.88;box-shadow:0 10px 28px -6px var(--ac-glow)}
 .btn-entrar:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
 .login-hint{font-size:.62rem;color:var(--tx3);text-align:center;font-family:var(--mono)}
 
@@ -181,7 +181,7 @@ html:not([data-theme="light"]) body::before{
 /* ══════════════════════════════════════════════════
    CARDS
    ══════════════════════════════════════════════════ */
-.card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);
+.card{background:var(--grad-panel);border:1px solid var(--bd);border-radius:var(--rl);
   margin-bottom:.65rem;overflow:hidden}
 .chdr{padding:.7rem .9rem .45rem}
 .ctitle{font-family:var(--mono);font-size:.76rem;color:var(--tx);font-weight:700}
@@ -190,13 +190,13 @@ html:not([data-theme="light"]) body::before{
 
 /* ── KPI GRID ────────────────────────────────────── */
 .kgrid{display:grid;grid-template-columns:1fr 1fr;gap:.45rem;margin-bottom:.55rem}
-.kbox{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:.6rem .7rem;
+.kbox{background:var(--grad-panel);border:1px solid var(--bd);border-radius:var(--r);padding:.6rem .7rem;
   transition:border-color .15s}
 .kbox:hover{border-color:var(--bd2)}
 .klbl{font-size:.57rem;font-family:var(--mono);color:var(--tx3);letter-spacing:.08em;text-transform:uppercase}
 .kval{font-family:var(--mono);font-size:1.55rem;font-weight:700;
   color:var(--tx2);margin-top:2px;letter-spacing:-.02em}
-.kval.ac{color:var(--ac)}
+.kval.ac{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;color:transparent}
 .kval.inf{color:var(--inf)}
 
 /* ── UPDATE ROW ──────────────────────────────────── */
@@ -217,7 +217,7 @@ html:not([data-theme="light"]) body::before{
 .empty{text-align:center;padding:1.5rem;color:var(--tx3);font-size:.78rem}
 
 /* ── COMPETITOR CARDS ────────────────────────────── */
-.ccard{background:var(--sf2);border:1px solid var(--bd);border-radius:var(--r);padding:.65rem .8rem;flex:1}
+.ccard{background:var(--grad-panel);border:1px solid var(--bd);border-radius:var(--r);padding:.65rem .8rem;flex:1}
 .ccard.meu{border-color:rgba(0,229,160,.3)}
 .ccrow{display:flex;gap:.5rem;margin-bottom:.35rem}
 .cclbl{font-size:.58rem;color:var(--tx3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em}
@@ -225,7 +225,7 @@ html:not([data-theme="light"]) body::before{
 .pr{display:flex;justify-content:space-between;align-items:center;padding:2px 0}
 .prc{font-size:.72rem;color:var(--tx3);font-family:var(--mono);font-weight:500}
 .prv{font-family:var(--mono);font-size:1rem;font-weight:700}
-.prv.gc{color:var(--ac)}.prv.ga{color:var(--inf)}.prv.et{color:var(--wn)}
+.prv.gc{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;color:transparent}.prv.ga{color:var(--inf)}.prv.et{color:var(--wn)}
 .prv.s10{color:var(--pu)}.prv.nd{color:var(--tx3)}
 
 /* ── HEATMAP ─────────────────────────────────────── */
