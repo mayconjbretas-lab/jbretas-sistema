@@ -10,19 +10,19 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0d0f12;
-  --surface: #161920;
-  --surface2: #1e2229;
-  --surface3: #252b35;
-  --border: #2a3040;
-  --border2: #3a4355;
-  --accent: #00e5a0;
-  --accent2: #00c488;
-  --accent-dim: rgba(0,229,160,0.12);
-  --accent-dim2: rgba(0,229,160,0.06);
-  --text: #eef0f4;
-  --text2: #8892a4;
-  --text3: #5a6478;
+  --bg: #0a0d1c;
+  --surface: #141a33;
+  --surface2: #1a2140;
+  --surface3: #222a52;
+  --border: rgba(242,176,61,.18);
+  --border2: rgba(242,176,61,.38);
+  --accent: #f4c66a;
+  --accent2: #e0a02a;
+  --accent-dim: rgba(244,198,106,.14);
+  --accent-dim2: rgba(244,198,106,.07);
+  --text: #f5efe1;
+  --text2: #a9b0c8;
+  --text3: #6b7391;
   --danger: #ff4d6d;
   --warning: #f9c74f;
   --info: #4895ef;
@@ -30,6 +30,39 @@
   --sans: 'DM Sans', sans-serif;
   --radius: 10px;
   --radius-lg: 16px;
+  /* Gradientes + brand + ok (novos — retema Premium) */
+  --grad-bg: linear-gradient(180deg,#0e1226,#0a0d1c);
+  --grad-panel: linear-gradient(180deg,#141a33,#0f1528);
+  --grad-gold: linear-gradient(135deg,#fbe08f,#e79a1e);
+  --brand-blue: #4bb0ea;
+  --ok: #00e5a0;
+}
+
+/* ══════════════════════════════════════════════════
+   TEMA CLARO (sem uso até a Fase 3 — só define os tokens)
+   ══════════════════════════════════════════════════ */
+html[data-theme="light"] {
+  --bg: #f4f1e9;
+  --surface: #ffffff;
+  --surface2: #faf8f2;
+  --surface3: #f1ede3;
+  --border: #ebe3d3;
+  --border2: rgba(176,125,22,.35);
+  --accent: #b07d16;
+  --accent2: #8a5e0f;
+  --accent-dim: rgba(176,125,22,.12);
+  --accent-dim2: rgba(176,125,22,.06);
+  --text: #1a2340;
+  --text2: #5b6480;
+  --text3: #8a90a6;
+  --danger: #dc2626;
+  --warning: #d97706;
+  --info: #2563eb;
+  --ok: #0e7a5c;
+  --grad-bg: linear-gradient(180deg,#fbfaf5,#f4f1e9);
+  --grad-panel: #ffffff;
+  --grad-gold: linear-gradient(135deg,#d1a13a,#a5730f);
+  --brand-blue: #2088c9;
 }
 
 body {
