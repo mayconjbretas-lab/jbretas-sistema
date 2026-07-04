@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>JBRETAS — Mapa de Postos</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" sizes="48x48" href="/shared/jbretas-favicon-48.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
@@ -16,7 +18,13 @@
 <div id="screen-app">
 
   <div class="topbar">
-    <div class="topbar-brand">JBRETAS</div>
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <img src="/shared/jbretas-logo.png" alt="JBretas" style="height:34px;display:block">
+      <div>
+        <div class="topbar-brand">JBRETAS</div>
+        <div style="font-size:.62rem;color:var(--text3);letter-spacing:.2em;text-transform:uppercase;font-family:var(--mono);margin-top:2px">// Sistema Integrado</div>
+      </div>
+    </div>
     <div class="topbar-right">
       <div class="topbar-user">
         <div class="avatar" id="app-avatar">--</div>

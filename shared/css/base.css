@@ -119,12 +119,12 @@ body::before {
   background: linear-gradient(90deg, transparent, var(--accent), transparent);
 }
 
-.brand { margin-bottom: 2.5rem; }
+.brand { margin-bottom: 2.5rem; text-align: center; }
 .brand-name {
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 2rem;
   font-weight: 700;
-  color: var(--accent);
+  background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;color:transparent;
   letter-spacing: 0.08em;
   line-height: 1;
 }
