@@ -1,0 +1,138 @@
+/* ================================================================
+   JBRETAS SISTEMA — modulos/admin/coleta-revisao/coleta-revisao.css
+   Port FIEL do bloco .cs-* injetado por csInjetarCss() no AppPainel
+   (AppPainel/js/app.js, "COLETA DE PREÇOS — Visão Auditora com Swipe
+   de Fotos"). Usa as mesmas variáveis (--sf/--sf2/--bd/--ac/--tx*)
+   que admin.css (= jbretas2.css do AppPainel) já define — por isso
+   resolve sem remapear. NÃO simplificar: layout aprovado.
+   ================================================================ */
+
+#cs-shell{display:flex;flex-direction:column;height:calc(100vh - 120px);overflow:hidden}
+#cs-topbar{background:var(--sf);border-bottom:1px solid var(--bd);padding:8px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:6px;flex-wrap:wrap}
+.cs-chip{background:var(--sf2);border-radius:5px;padding:3px 8px;font-size:11px;color:var(--tx3)}
+.cs-chip b{color:var(--tx)}
+#cs-prog{height:2px;background:var(--sf2);flex-shrink:0}
+#cs-prog-fill{height:100%;background:var(--ac);transition:width .3s}
+#cs-filtros{background:var(--sf);border-bottom:1px solid var(--bd);padding:6px 10px;display:flex;align-items:center;gap:5px;overflow-x:auto;flex-shrink:0;scrollbar-width:none}
+#cs-filtros::-webkit-scrollbar{display:none}
+.cs-sel{background:var(--sf2);border:1px solid var(--bd);border-radius:5px;color:var(--tx);font-size:11px;padding:3px 6px;cursor:pointer}
+.cs-pill{background:var(--sf2);border:1px solid var(--bd);border-radius:20px;padding:3px 10px;font-size:11px;color:var(--tx3);white-space:nowrap;cursor:pointer;user-select:none}
+.cs-pill.active{background:var(--acd);border-color:var(--ac);color:var(--ac)}
+.cs-pill.danger.active{background:rgba(255,77,109,.08);border-color:#ff4d6d80;color:#ff4d6d}
+
+/* ── LISTA DE POSTOS ── */
+#cs-lista{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+.cs-posto-item{padding:11px 14px;border-bottom:1px solid var(--sf2);cursor:pointer;display:flex;align-items:center;gap:10px}
+.cs-posto-item:hover,.cs-posto-item:active{background:var(--sf)}
+.cs-posto-item.cs-ok  {border-left:3px solid var(--ac);background:rgba(0,229,160,.04)}
+.cs-posto-item.cs-flag{border-left:3px solid #ff4d6d;background:rgba(255,77,109,.04)}
+.cs-posto-icon{width:34px;height:34px;border-radius:8px;background:var(--sf2);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.cs-posto-body{flex:1;min-width:0}
+.cs-posto-nome{font-size:13px;font-weight:600;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cs-posto-sub{font-size:10px;color:var(--tx3);margin-top:2px;display:flex;align-items:center;gap:5px}
+.cs-posto-right{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.cs-qtd-badge{font-size:10px;color:var(--tx3);background:var(--sf2);border-radius:10px;padding:2px 7px}
+.cs-conf-check{font-size:9px;font-weight:700;color:var(--ac);background:var(--acd);border:1px solid var(--bd2);border-radius:10px;padding:2px 7px;white-space:nowrap}
+.cs-sd{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.cs-sd-pend{background:var(--tx3);opacity:.35}
+.cs-sd-ok{background:var(--ac)}
+.cs-sd-flag{background:#ff4d6d}
+.cs-band-pill{border-radius:3px;padding:1px 5px;font-size:9px;font-weight:600}
+
+/* ── DETALHE ── */
+#cs-detalhe{flex:1;overflow:hidden;flex-direction:column;display:none}
+#cs-detalhe.cs-on{display:flex}
+#cs-dhdr{background:var(--sf);border-bottom:1px solid var(--bd);padding:10px 12px;flex-shrink:0}
+.cs-nav-row{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.cs-btn-back{background:var(--sf2);border:none;border-radius:6px;padding:5px 10px;font-size:11px;color:var(--tx);cursor:pointer}
+.cs-counter{font-size:11px;color:var(--tx3);margin-left:auto}
+.cs-btn-nav{background:var(--sf2);border:none;border-radius:6px;padding:5px 10px;font-size:12px;color:var(--tx);cursor:pointer}
+.cs-dtitle{font-size:15px;font-weight:600;color:var(--tx);display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:3px}
+/* nome do concorrente — muda com o slide */
+#cs-d-conc-nome{font-size:13px;color:var(--ac);font-weight:600;margin-top:2px}
+.cs-badge{border-radius:4px;padding:2px 7px;font-size:10px;font-weight:600}
+.cs-badge-pend{background:var(--sf2);color:var(--tx3)}
+.cs-badge-ok{background:var(--acd);color:var(--ac);border:1px solid var(--bd2)}
+.cs-badge-flag{background:rgba(255,77,109,.1);color:#ff4d6d;border:1px solid rgba(255,77,109,.3)}
+.cs-dsub{font-size:11px;color:var(--tx3);margin-top:2px}
+.cs-dsub span{color:var(--ac);font-weight:600}
+.cs-meta-row{display:flex;gap:5px;margin-top:5px;flex-wrap:wrap}
+.cs-mc{background:var(--sf2);border-radius:5px;padding:3px 7px;font-size:10px;color:var(--tx3)}
+.cs-mc b{color:var(--tx2)}
+
+/* ── FOTOS ── */
+.cs-fotos-outer{position:relative;flex-shrink:0;background:#0a0d12;border-bottom:1px solid var(--bd)}
+.cs-fotos-wrap{overflow:hidden;height:190px;cursor:grab;user-select:none;position:relative}
+.cs-fotos-wrap:active{cursor:grabbing}
+.cs-fotos-track{display:flex;height:100%;will-change:transform}
+.cs-slide{flex-shrink:0;height:190px;display:flex;gap:2px}
+.cs-fhalf{flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#111620}
+.cs-fhalf img{width:100%;height:100%;object-fit:cover;cursor:zoom-in}
+.cs-flabel{position:absolute;bottom:0;left:0;right:0;background:#00000090;padding:4px 7px;font-size:9px;font-weight:600;display:flex;align-items:center;gap:4px}
+.cs-flabel.conc{color:#fbbf24}
+.cs-flabel.meu{color:var(--ac)}
+.cs-foto-ph{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;width:100%;height:100%}
+.cs-foto-ph svg{opacity:.2}
+.cs-foto-ph span{font-size:8px;color:var(--tx3)}
+.cs-fdrive{position:absolute;top:5px;right:5px;background:#00000080;border-radius:4px;padding:2px 6px;font-size:9px;color:#60a5fa;text-decoration:none}
+.cs-arr{position:absolute;top:50%;transform:translateY(-50%);z-index:5;background:#00000060;border:none;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;cursor:pointer}
+.cs-arr:hover{background:#00000090}
+.cs-arr-l{left:5px}
+.cs-arr-r{right:5px}
+.cs-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#00000075;border-radius:7px;padding:4px 10px;font-size:9px;color:#ffffffa0;pointer-events:none;white-space:nowrap;transition:opacity .4s}
+/* dots + nome do slide atual */
+.cs-dots-row{display:flex;align-items:center;justify-content:center;gap:6px;padding:5px 10px;background:#0a0d12;min-height:26px}
+.cs-dot{width:5px;height:5px;border-radius:50%;background:var(--sf2);transition:all .2s;cursor:pointer;flex-shrink:0}
+.cs-dot.on{background:var(--ac);width:14px;border-radius:3px}
+#cs-slide-lbl{font-size:9px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
+
+/* ── DADOS ── */
+#cs-dados{flex:1;overflow-y:auto;overflow-x:hidden}
+.cs-alerta{background:rgba(255,77,109,.07);border-bottom:1px solid rgba(255,77,109,.2);padding:7px 12px;font-size:11px;color:#fca5a5;line-height:1.5;display:flex;gap:6px}
+.cs-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-bottom:1px solid var(--bd)}
+.cs-toggle-lbl{font-size:10px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.cs-toggle-btns{display:flex;gap:4px}
+.cs-tbtn{background:var(--sf2);border:1px solid var(--bd);border-radius:5px;padding:3px 10px;font-size:10px;color:var(--tx3);cursor:pointer}
+.cs-tbtn.on{background:var(--acd);border-color:var(--ac);color:var(--ac);font-weight:600}
+.cs-preco-table{width:100%;border-collapse:collapse;font-size:12px}
+.cs-preco-table thead th{font-size:9px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:7px 10px;text-align:left;border-bottom:1px solid var(--bd);background:var(--sf);position:sticky;top:0;z-index:1;white-space:nowrap}
+.cs-preco-table thead th:last-child{text-align:right}
+.cs-preco-table td{padding:9px 10px;border-bottom:0.5px solid var(--sf2);vertical-align:middle}
+.cs-tr-ok td{background:rgba(0,229,160,.05)}
+.cs-tr-bad td{background:rgba(255,77,109,.06)}
+.cs-tr-eq td{background:rgba(233,179,65,.04)}
+.cs-fuel-nm{font-size:12px;color:var(--tx);font-weight:500}
+.cs-v-conc,.cs-v-meu{font-size:13px;font-weight:600;color:var(--tx)}
+.cs-diff-col{text-align:right}
+.cs-dif-ok{color:#4ade80;font-weight:600;font-size:12px}
+.cs-dif-bad{color:#f87171;font-weight:600;font-size:12px}
+.cs-dif-eq{color:#e3b341;font-weight:600;font-size:12px}
+.cs-dif-sub{font-size:9px;color:var(--tx3);display:block;margin-top:1px}
+.cs-delta{font-size:9px;display:block;margin-top:1px}
+.cs-delta-up{color:#4ade80}
+.cs-delta-dn{color:#f87171}
+.cs-delta-eq{color:var(--tx3)}
+
+/* ── AÇÕES ── */
+#cs-acoes{background:var(--sf);border-top:1px solid var(--bd);padding:10px 12px;display:flex;gap:8px;flex-shrink:0}
+.cs-btn-ant{background:var(--sf2);color:var(--tx);border:none;border-radius:8px;padding:10px 12px;font-size:12px;font-weight:600;cursor:pointer;flex:1}
+.cs-btn-flag{background:rgba(255,77,109,.08);color:#f85149;border:1px solid rgba(248,81,73,.3);border-radius:8px;padding:10px 12px;font-size:13px;cursor:pointer}
+.cs-btn-ok{background:var(--ac);color:#0d1117;border:none;border-radius:8px;padding:10px 0;font-size:12px;font-weight:600;cursor:pointer;flex:2}
+.cs-btn-ok:active{opacity:.85}
+
+/* zoom */
+#cs-zoom{position:fixed;inset:0;background:#000000dd;z-index:9999;align-items:center;justify-content:center;cursor:zoom-out;display:none}
+#cs-zoom img{max-width:95vw;max-height:90vh;border-radius:8px;object-fit:contain}
+
+.cs-estado{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:10px;color:var(--tx3);font-size:13px;padding:40px 0}
+.cs-spin{width:26px;height:26px;border:2px solid var(--sf2);border-top-color:var(--ac);border-radius:50%;animation:cspin .8s linear infinite}
+@keyframes cspin{to{transform:rotate(360deg)}}
+
+/* ── Edição do nosso preço (Etapa 2) ── */
+.cs-edit-pen{cursor:pointer;margin-left:6px;font-size:11px;opacity:.65;user-select:none}
+.cs-edit-pen:hover{opacity:1}
+.cs-edit-input{width:82px;background:var(--sf);border:1px solid var(--ac);border-radius:5px;color:var(--tx);font-size:13px;font-weight:600;padding:3px 6px;outline:none;font-family:var(--mono)}
+
+/* toast discreto */
+#cs-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--sf2);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:9px 16px;font-size:12px;font-weight:600;z-index:10000;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;box-shadow:0 6px 24px #00000060}
+#cs-toast.cs-toast-on{opacity:1;transform:translateX(-50%) translateY(0)}

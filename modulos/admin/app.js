@@ -66,6 +66,7 @@ function setTab(btn, tab) {
   if (tab === 'mapa') setTimeout(() => { initLeafletInstance(); }, 150);
   if (tab === 'comp' && !comparaCarregado) carregarDadosComparar();
   if (tab === 'hist') carregarHistorico();
+  if (tab === 'coleta') renderColetaRevisao(document.getElementById('s-coleta'));
 }
 
 function abrirMais() { document.getElementById('modal-mais').classList.add('open'); }

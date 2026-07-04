@@ -18,6 +18,7 @@
      o layout. Os outros módulos (Fechamento/Coleta/Copasa) continuam em
      base.css normalmente; só o admin usa esse visual. -->
 <link rel="stylesheet" href="admin.css">
+<link rel="stylesheet" href="coleta-revisao/coleta-revisao.css">
 <script>
   (function(){
     var t = localStorage.getItem('jb_theme') || 'dark';
@@ -143,9 +144,9 @@
       </div>
     </section>
 
-    <!-- ═══ ABA: RANKING ═══ (entrega futura) -->
-    <section class="scr" id="s-ranking">
-      <div class="empty">🚧 Em construção</div>
+    <!-- ═══ ABA: COLETA (revisão de preços) ═══ -->
+    <section class="scr" id="s-coleta">
+      <div class="empty">Carregando…</div>
     </section>
 
     <!-- ═══ ABA: REGIONAL ═══ (entrega futura) -->
@@ -236,9 +237,9 @@
       <span class="ni"><i class="fa-solid fa-scale-balanced"></i></span>
       <span class="nl">Compara</span>
     </button>
-    <button class="nbtn" onclick="setTab(this,'ranking')">
-      <span class="ni"><i class="fa-solid fa-trophy"></i></span>
-      <span class="nl">Ranking</span>
+    <button class="nbtn" onclick="setTab(this,'coleta')">
+      <span class="ni"><i class="fa-solid fa-clipboard-check"></i></span>
+      <span class="nl">Coleta</span>
     </button>
     <button class="nbtn" onclick="setTab(this,'regional')">
       <span class="ni"><i class="fa-solid fa-map"></i></span>
@@ -291,6 +292,7 @@
 <script src="../../shared/js/api.js"></script>
 <script src="../../shared/js/auth.js"></script>
 <script src="../../shared/js/coletas-service.js"></script>
+<script src="coleta-revisao/coleta-revisao.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
