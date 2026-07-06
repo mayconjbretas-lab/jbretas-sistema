@@ -112,9 +112,9 @@ function parseTanquesRaw(raw) {
   const mapa = {}; // codigo -> { cm } | { litros }
   if (!raw) return mapa;
   raw.split(' | ').forEach(seg => {
-    const mCod = seg.match(/^([^\s(]+)\s*\(/);
+    const mCod = seg.match(/^([^(]+)\(/);
     if (!mCod) return;
-    const codigo = mCod[1];
+    const codigo = mCod[1].trim();
     const mCm = seg.match(/:\s*(\d+)cm\s*=\s*\d+L/);
     if (mCm) { mapa[codigo] = { cm: parseInt(mCm[1]) }; return; }
     const mL = seg.match(/:\s*(\d+)L/);
