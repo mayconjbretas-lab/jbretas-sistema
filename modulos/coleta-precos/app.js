@@ -216,11 +216,13 @@ function onFotoSelecionada(event) {
 
 function atualizarEstadoSalvar() {
   const btn = document.getElementById('btn-salvar-coleta');
-  const algumPreco = combustiveisMapeados.some(
-    c => parseFloat(document.getElementById(`preco-${c.coluna}`)?.dataset.val || '0') > 0
-  );
+  // Obrigatórios: só GC (Gasolina Comum) e ET (Etanol). GA/S10/S500 opcionais.
+  const OBRIGATORIOS = ['gc', 'et'];
+  const obrigatoriosOk = combustiveisMapeados
+    .filter(c => OBRIGATORIOS.includes(c.coluna))
+    .every(c => parseFloat(document.getElementById(`preco-${c.coluna}`)?.dataset.val || '0') > 0);
   const faixaOk = validarFaixaPrecos();
-  const pronto = concorrenteSelecionado && algumPreco && faixaOk && localizacaoAtual && fotoBase64Atual;
+  const pronto = concorrenteSelecionado && obrigatoriosOk && faixaOk && localizacaoAtual && fotoBase64Atual;
   btn.disabled = !pronto;
   btn.textContent = pronto ? '💾 SALVAR COLETA' : '🔒 PREENCHA OS CAMPOS OBRIGATÓRIOS';
 }
