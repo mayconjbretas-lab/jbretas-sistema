@@ -102,6 +102,18 @@ async function carregarDados(nomePosto) {
   }
 }
 
+// Normaliza nome de posto pra comparação (sem acento/caixa/espaço).
+// Inline aqui porque a página de coleta não carrega coletas-service.js.
+function normNomePosto(s) {
+  return Array.from(String(s || '').normalize('NFD'))
+    .filter(ch => ch.charCodeAt(0) < 128)
+    .join('').toUpperCase().trim().replace(/\s+/g, ' ');
+}
+// true quando o alvo selecionado é o próprio posto do gerente.
+function ehProprioPosto(nome) {
+  return !!usuarioAtual?.posto?.nome && normNomePosto(nome) === normNomePosto(usuarioAtual.posto.nome);
+}
+
 function renderConcorrentes() {
   const body = document.getElementById('concorrente-body');
   if (!concorrentes.length) {
@@ -111,7 +123,12 @@ function renderConcorrentes() {
   body.innerHTML = `
     <select id="select-concorrente" class="field-select" onchange="onConcorrenteSelecionado()">
       <option value="">Selecione...</option>
-      ${concorrentes.map(c => `<option value="${c.id}">${c.nome}${c.bandeira ? ' — ' + c.bandeira : ''}</option>`).join('')}
+      ${concorrentes.map(c => {
+        const label = ehProprioPosto(c.nome)
+          ? `🏠 Meu posto (${c.nome})`
+          : `${c.nome}${c.bandeira ? ' — ' + c.bandeira : ''}`;
+        return `<option value="${c.id}">${label}</option>`;
+      }).join('')}
     </select>
   `;
 
@@ -240,7 +257,7 @@ async function salvarColeta() {
 
   const payload = {
     concorrenteId: concorrenteSelecionado.id,
-    tipo: 'Concorrente',
+    tipo: ehProprioPosto(concorrenteSelecionado.nome) ? 'Próprio' : 'Concorrente',
     lat: localizacaoAtual.lat,
     lng: localizacaoAtual.lng,
     fotoBase64: fotoBase64Atual,
