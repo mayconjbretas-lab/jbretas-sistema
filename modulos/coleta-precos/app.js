@@ -126,7 +126,7 @@ function renderConcorrentes() {
       ${concorrentes.map(c => {
         const label = ehProprioPosto(c.nome)
           ? `🏠 Meu posto (${c.nome})`
-          : `${c.nome}${c.bandeira ? ' — ' + c.bandeira : ''}`;
+          : `${c.nome}`;
         return `<option value="${c.id}">${label}</option>`;
       }).join('')}
     </select>
@@ -307,7 +307,7 @@ async function carregarHistorico(nomePosto) {
     body.innerHTML = registros.map(r => `
       <div class="historico-row">
         <div>
-          <div class="historico-alvo">${r.postoAlvo}${r.bandeira && r.bandeira !== '-' ? ' — ' + r.bandeira : ''}</div>
+          <div class="historico-alvo">${r.postoAlvo}</div>
           <div class="historico-data">${r.data} às ${r.hora}</div>
         </div>
         <div class="historico-precos">
