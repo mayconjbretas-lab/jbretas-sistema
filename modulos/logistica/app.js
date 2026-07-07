@@ -14,9 +14,17 @@ let DADOS_ATUAIS = null;
 let POSTO_ATUAL  = '';
 // Edições pendentes na matriz, chaveadas por "diaIdx|campo|comb".
 let EDICOES_PENDENTES = {};
+// Valores originais (do load) por "diaIdx|campo|comb" — base pra saber se uma
+// célula ainda difere do que veio do banco (some de EDICOES_PENDENTES se voltar).
+let BASELINE = {};
+// Pilha de undo desta sessão: cada alteração de célula (net, por edição).
+let HISTORICO_UNDO = [];
+// Valor da célula ao ganhar foco (pra registrar o undo no blur).
+let _valorAoFocar = null;
 
-// Categorias editáveis neste bloco (2A). Pré-pedido/Pedido virão depois.
-const EDITAVEIS = ['medicao', 'venda', 'carga'];
+// Categorias editáveis: Medição/Venda/Carga (2A) + Pedido Final (2B).
+// Pré-pedido continua SOMENTE LEITURA (virá do Painel ADM).
+const EDITAVEIS = ['medicao', 'venda', 'carga', 'pedido'];
 
 // As 7 categorias da matriz — mesma ordem/semântica do app antigo.
 // classe = cabeçalho colorido (logistica.css); chave = campo vindo do GET.
@@ -113,7 +121,10 @@ async function carregarMatriz(posto) {
   tbody.innerHTML =
     '<tr><td style="padding:2rem;color:var(--text3);text-align:center;">Conectando ao servidor…</td></tr>';
   EDICOES_PENDENTES = {};
+  BASELINE = {};
+  HISTORICO_UNDO = [];
   atualizarBotoesSalvar();
+  atualizarBotaoUndo();
   try {
     const dados = await apiFetch('/medicao/' + encodeURIComponent(posto));
     DADOS_ATUAIS = dados;
@@ -172,7 +183,8 @@ function montarLinhasMedicao(dados) {
         } else if (cat.chave === 'diferenca') {
           html += '<td class="' + grpEnd + '"><span class="cell-val cell-diff" id="diff_' + diaIdx + '_' + i + '">—</span></td>';
         } else if (EDITAVEIS.includes(cat.chave)) {
-          // Célula editável (Medição/Venda/Carga) — mesmo padrão do app antigo.
+          // Célula editável (Medição/Venda/Carga/Pedido) — mesmo padrão do app antigo.
+          BASELINE[diaIdx + '|' + cat.chave + '|' + col.comb] = (val === undefined ? null : val);
           const combAttr = String(col.comb).replace(/"/g, '&quot;');
           html += '<td class="' + grpEnd + '"><input type="text" inputmode="numeric" class="cell-in"' +
             ' data-dia="' + diaIdx + '" data-campo="' + cat.chave + '" data-comb="' + combAttr + '"' +
@@ -180,10 +192,10 @@ function montarLinhasMedicao(dados) {
             ' onfocus="onCelulaFocus(this)" oninput="onCelulaDigito(this)"' +
             ' onkeydown="onCelulaTecla(event,this)" onblur="onCelulaBlur(this)"></td>';
         } else {
-          // Pré-pedido / Pedido — read-only neste bloco.
+          // Pré-pedido — SOMENTE LEITURA (preenchido pelo Painel ADM, não aqui).
           const vazia = (val === null || val === undefined || val === '') ? ' cell-vazia' : '';
-          html += '<td class="' + grpEnd + '"><span class="cell-val' + vazia + '">' +
-            fmtL(val) + '</span></td>';
+          html += '<td class="' + grpEnd + ' td-ro" title="Somente leitura — definido no Painel ADM">' +
+            '<span class="cell-val cell-ro' + vazia + '">' + fmtL(val) + '</span></td>';
         }
       });
     });
@@ -262,9 +274,21 @@ function _atualizarDiffDia(diaIdx) {
 function onCelulaFocus(input) {
   document.querySelectorAll('#matriz-corpo tr.linha-ativa').forEach(tr => tr.classList.remove('linha-ativa'));
   input.closest('tr').classList.add('linha-ativa');
+  // Guarda o valor de modelo antes de editar (pra montar a entrada de undo no blur).
+  _valorAoFocar = _valorCelula(input);
   const raw = input.value.replace(/\./g, '').replace(/[^0-9]/g, '');
   if (!raw || raw === '0') input.value = '0';
   requestAnimationFrame(() => input.select());
+}
+
+// Lê o valor atual de modelo da célula de um input.
+function _valorCelula(input) {
+  const diaIdx = parseInt(input.dataset.dia);
+  const campo  = input.dataset.campo;
+  const comb   = input.dataset.comb;
+  const cols   = campo === 'venda' ? DADOS_ATUAIS.combustiveisVenda : DADOS_ATUAIS.grupos;
+  const idx    = cols.findIndex(c => c.comb === comb);
+  return idx === -1 ? null : DADOS_ATUAIS.dias[diaIdx][campo][idx];
 }
 
 function onCelulaDigito(input) {
@@ -319,8 +343,22 @@ function _moverCelula(input, deltaDia, deltaCampo) {
 function onCelulaBlur(input) {
   const raw = input.value.replace(/\./g, '').replace(/[^0-9]/g, '');
   const num = parseInt(raw) || 0;
+  const valorNovo = num > 0 ? num : null;
   input.value = num > 0 ? num.toLocaleString('pt-BR') : '';
-  _salvarCelula(input, num > 0 ? num : null);
+  _salvarCelula(input, valorNovo);
+  // Registra o net da edição desta célula na pilha de undo (só se mudou).
+  if (_valorAoFocar !== valorNovo) {
+    HISTORICO_UNDO.push({
+      dia:           parseInt(input.dataset.dia),
+      data:          DADOS_ATUAIS.dias[parseInt(input.dataset.dia)].data,
+      campo:         input.dataset.campo,
+      combustivel:   input.dataset.comb,
+      valorAnterior: _valorAoFocar,
+      valorNovo:     valorNovo,
+    });
+    atualizarBotaoUndo();
+  }
+  _valorAoFocar = null;
 }
 
 // Grava a edição no estado + EDICOES_PENDENTES e recalcula os dias afetados.
@@ -329,15 +367,28 @@ function _salvarCelula(input, valor) {
   const diaIdx = parseInt(input.dataset.dia);
   const campo  = input.dataset.campo;
   const comb   = input.dataset.comb;
-  input.classList.add('cell-dirty');
-  const diaObj = DADOS_ATUAIS.dias[diaIdx];
   const cols = campo === 'venda' ? DADOS_ATUAIS.combustiveisVenda : DADOS_ATUAIS.grupos;
   const idx = cols.findIndex(c => c.comb === comb);
   if (idx === -1) return;
-  diaObj[campo][idx] = valor;
-  EDICOES_PENDENTES[diaIdx + '|' + campo + '|' + comb] = { dia: diaIdx, campo, comb, valor };
+  DADOS_ATUAIS.dias[diaIdx][campo][idx] = valor;
 
-  // A medição de hoje é a "med_ontem" de amanhã → recalcula os dias afetados.
+  // Pendente só enquanto difere do valor carregado (voltar ao original limpa a pendência).
+  const key = diaIdx + '|' + campo + '|' + comb;
+  if (valor === BASELINE[key]) {
+    delete EDICOES_PENDENTES[key];
+    input.classList.remove('cell-dirty');
+  } else {
+    EDICOES_PENDENTES[key] = { dia: diaIdx, campo, comb, valor };
+    input.classList.add('cell-dirty');
+  }
+
+  _recalcAfeta(diaIdx, campo);
+  atualizarBotoesSalvar();
+}
+
+// Recalcula previsão/diferença dos dias afetados por uma mudança em (dia, campo).
+// A medição de hoje é a "med_ontem" de amanhã. Pedido não afeta previsão/diferença.
+function _recalcAfeta(diaIdx, campo) {
   if (campo === 'medicao') {
     _atualizarDiffDia(diaIdx);
     recalcularPrevisaoEDiff(diaIdx + 1);
@@ -345,7 +396,30 @@ function _salvarCelula(input, valor) {
     recalcularPrevisaoEDiff(diaIdx);
     _atualizarDiffDia(diaIdx + 1);
   }
-  atualizarBotoesSalvar();
+}
+
+// Acha o input de uma célula (data-comb pode ter espaços/aspas — busca iterando).
+function _acharInput(diaIdx, campo, comb) {
+  return Array.from(document.querySelectorAll('#matriz-corpo .cell-in')).find(el =>
+    parseInt(el.dataset.dia) === diaIdx && el.dataset.campo === campo && el.dataset.comb === comb) || null;
+}
+
+// Desfaz a última alteração da sessão (LIFO), até esgotar a pilha (estado do load).
+function desfazerUltima() {
+  const ult = HISTORICO_UNDO.pop();
+  if (!ult) { atualizarBotaoUndo(); return; }
+  const { dia, campo, combustivel, valorAnterior } = ult;
+  const input = _acharInput(dia, campo, combustivel);
+  if (input) {
+    input.value = (valorAnterior === null || valorAnterior === undefined) ? '' : Number(valorAnterior).toLocaleString('pt-BR');
+    _salvarCelula(input, valorAnterior);  // restaura modelo, ajusta pendência e recalcula
+  }
+  atualizarBotaoUndo();
+}
+
+function atualizarBotaoUndo() {
+  const btn = document.getElementById('btn-undo');
+  if (btn) btn.disabled = HISTORICO_UNDO.length === 0;
 }
 
 function limparDestaqueEdicoes() {
@@ -379,8 +453,14 @@ async function salvarAlteracoesMatriz() {
       body: JSON.stringify({ posto: POSTO_ATUAL, itens }),
     });
     if (!resp.success) throw new Error(resp.erro || 'Erro ao salvar');
+    // O estado salvo vira o novo "carregado": funde no BASELINE e zera undo.
+    Object.values(EDICOES_PENDENTES).forEach(e => {
+      BASELINE[e.dia + '|' + e.campo + '|' + e.comb] = e.valor;
+    });
     EDICOES_PENDENTES = {};
+    HISTORICO_UNDO = [];
     limparDestaqueEdicoes();
+    atualizarBotaoUndo();
     btn.textContent = '✓ Salvo!';
     setTimeout(atualizarBotoesSalvar, 1800);
   } catch (err) {
@@ -404,19 +484,29 @@ function ajustarSticky() {
   }
 }
 
-// Injeta o botão "Salvar Alterações" na barra de ações da matriz
-// (antes do #btn-refresh, que já existe no HTML — mantém index.html intacto).
-function montarBotaoSalvar() {
-  if (document.getElementById('btn-salvar-matriz')) return;
+// Injeta os botões "↶ Desfazer" e "Salvar Alterações" na barra de ações da
+// matriz (antes do #btn-refresh, que já existe no HTML — index.html intacto).
+function montarBotoesMatriz() {
   const ref = document.getElementById('btn-refresh');
   if (!ref) return;
-  const btn = document.createElement('button');
-  btn.id = 'btn-salvar-matriz';
-  btn.className = 'btn-salvar';
-  btn.disabled = true;
-  btn.textContent = '💾 Salvar Alterações';
-  btn.addEventListener('click', salvarAlteracoesMatriz);
-  ref.parentNode.insertBefore(btn, ref);
+  if (!document.getElementById('btn-undo')) {
+    const undo = document.createElement('button');
+    undo.id = 'btn-undo';
+    undo.className = 'btn-undo';
+    undo.disabled = true;
+    undo.textContent = '↶ Desfazer';
+    undo.addEventListener('click', desfazerUltima);
+    ref.parentNode.insertBefore(undo, ref);
+  }
+  if (!document.getElementById('btn-salvar-matriz')) {
+    const salvar = document.createElement('button');
+    salvar.id = 'btn-salvar-matriz';
+    salvar.className = 'btn-salvar';
+    salvar.disabled = true;
+    salvar.textContent = '💾 Salvar Alterações';
+    salvar.addEventListener('click', salvarAlteracoesMatriz);
+    ref.parentNode.insertBefore(salvar, ref);
+  }
 }
 
 // ── Init ────────────────────────────────────────────────────────
@@ -424,6 +514,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!USUARIO) return; // exigirSessao já redirecionou
   aplicarTema(localStorage.getItem('jb_theme') || 'dark');
   preencherTopbar();
-  montarBotaoSalvar();
+  montarBotoesMatriz();
   carregarPostos();
 });

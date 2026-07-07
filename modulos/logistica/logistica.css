@@ -184,5 +184,21 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
 }
 .btn-salvar:hover { opacity: .9; }
 .btn-salvar:disabled { background: var(--surface3); color: var(--text3); cursor: not-allowed; opacity: .7; }
+.btn-undo {
+  background: var(--surface2); border: 1px solid var(--border2); color: var(--text);
+  font-family: var(--mono); font-size: .72rem; font-weight: 700;
+  padding: .45rem .8rem; border-radius: 6px; cursor: pointer; white-space: nowrap;
+}
+.btn-undo:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-undo:disabled { color: var(--text3); cursor: not-allowed; opacity: .6; }
+
+/* Pré-pedido: SOMENTE LEITURA — visual distinto das editáveis (hachura + cursor). */
+.td-ro {
+  cursor: not-allowed;
+  background-image: repeating-linear-gradient(45deg,
+    transparent, transparent 5px,
+    var(--accent-dim2) 5px, var(--accent-dim2) 6px);
+}
+.cell-ro { color: var(--text3); }
 
 .matriz-erro { color: var(--danger); text-align: center; padding: 2rem; font-family: var(--mono); font-size: .8rem; }
