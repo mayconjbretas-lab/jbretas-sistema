@@ -163,9 +163,9 @@ html:not([data-theme="light"]) body::before{
 .nbtn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:3px;cursor:pointer;background:transparent;border:none;
   border-top:2px solid transparent;transition:all .15s;padding:5px 2px}
-.nbtn.active{border-top-color:var(--ac)}
-.nbtn .ni{font-size:14px;line-height:1;color:var(--tx3);transition:color .15s}
-.nbtn.active .ni{color:var(--ac)}
+.nbtn.active{border-top-color:var(--ac);background:var(--acd)}
+.nbtn .ni{font-size:17px;line-height:1;transition:filter .15s}
+.nbtn:not(.active) .ni{filter:grayscale(.35) opacity(.7)}
 .nbtn .nl{font-size:.52rem;font-family:var(--mono);color:var(--tx3);
   letter-spacing:.02em;text-transform:uppercase;transition:color .15s}
 .nbtn.active .nl{color:var(--ac)}
