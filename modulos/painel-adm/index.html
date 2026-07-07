@@ -72,7 +72,102 @@
   </div>
 
   <main class="pa-main" id="pa-main">
-    <section class="scr active" id="s-comp"><div class="em-construcao">📊 Comparação — em construção</div></section>
+    <section class="scr active" id="s-comp">
+      <div class="cmp-wrap">
+
+        <!-- KPIs em linha -->
+        <div class="kgrid">
+          <div class="kbox">
+            <div class="klbl">Lançaram hoje</div>
+            <div class="kval ac" id="kv-proprios">--</div>
+            <div class="csub" id="kv-proprios-sub"></div>
+          </div>
+          <div class="kbox">
+            <div class="klbl">Concorrentes</div>
+            <div class="kval" id="kv-concs">--</div>
+          </div>
+          <div class="kbox" onclick="abrirDetalheMedia()" style="cursor:pointer">
+            <div class="klbl">Média GC conc. ⓘ</div>
+            <div class="kval inf" id="kv-gc">--</div>
+          </div>
+          <div class="kbox">
+            <div class="klbl">Nosso GC médio</div>
+            <div class="kval ac" id="kv-mgc">--</div>
+          </div>
+        </div>
+
+        <div class="upd-row">
+          <span id="upd-txt">Carregando...</span>
+          <button class="refresh-btn" onclick="carregarDadosComparar()">↻</button>
+        </div>
+
+        <!-- Controles: monitor (fuel+filtros) à esquerda, estratégia à direita -->
+        <div class="cmp-controls">
+          <div class="card">
+            <div class="chdr">
+              <div class="ctitle">Monitor de Preços</div>
+              <div class="csub" id="cmp-sub">Vermelho = concorrente mais barato que você</div>
+            </div>
+            <div class="cbody">
+              <div class="fueltab-row" id="cmp-fuel-tabs"></div>
+              <div class="filtros-comp-grid">
+                <div>
+                  <label class="filtro-lbl">Posto</label>
+                  <select class="sel" id="cmp-posto" onchange="cmpSetPosto(this.value)"><option value="">Todos os postos</option></select>
+                </div>
+                <div>
+                  <label class="filtro-lbl">Supervisor</label>
+                  <select class="sel" id="cmp-sup" onchange="cmpSetSup(this.value)"><option value="">Todos supervisores</option></select>
+                </div>
+                <div>
+                  <label class="filtro-lbl">Bandeira</label>
+                  <select class="sel" id="cmp-band" onchange="cmpSetBand(this.value)"><option value="">Todas bandeiras</option></select>
+                </div>
+              </div>
+              <label style="display:flex;align-items:center;gap:.4rem;font-size:.76rem;color:var(--text2);margin:.35rem 0">
+                <input type="checkbox" id="cmp-so-mudou" onchange="cmpToggleSoMudou(this)"> Só quem mudou desde ontem
+              </label>
+              <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+                <button class="ftag" id="flt-abaixo" onclick="cmpSetFaixaPreco(this,'abaixo')">🔵 Abaixo do nosso</button>
+                <button class="ftag" id="flt-acima" onclick="cmpSetFaixaPreco(this,'acima')">🔴 Acima do nosso</button>
+                <button class="ftag" id="flt-todos-preco" onclick="cmpSetFaixaPreco(this,'todos')" style="display:none">✕ Limpar filtro</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="chdr"><div class="ctitle">Estratégia de preço sugerido</div></div>
+            <div class="cbody">
+              <div class="strat-box">
+                <div class="strat-row" id="cmp-strat-tabs"></div>
+                <div class="strat-desc" id="cmp-strat-desc"></div>
+              </div>
+              <div class="myavg-grid" id="cmp-myavg" style="margin-top:.8rem"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Monitor de postos (grade multi-coluna) -->
+        <div id="cmp-regions"></div>
+
+        <!-- Mapa de calor GC -->
+        <div class="card">
+          <div class="chdr">
+            <div class="ctitle">Mapa de calor — G. Comum</div>
+            <div class="csub">Distribuição por faixa na rede</div>
+          </div>
+          <div class="cbody">
+            <div class="hgrid" id="heatmap-body"></div>
+            <div style="display:flex;justify-content:space-between;margin-top:.45rem;font-size:.6rem;color:var(--text3)">
+              <span style="color:var(--ok)">barato</span>
+              <span style="color:var(--warning)">médio</span>
+              <span style="color:var(--danger)">caro</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
     <section class="scr" id="s-coleta"><div class="em-construcao">📋 Coleta — em construção</div></section>
     <section class="scr" id="s-medicao"><div class="em-construcao">🛢️ Medição — em construção</div></section>
     <section class="scr" id="s-mapa"><div class="em-construcao">🗺️ Mapa — em construção</div></section>
@@ -91,9 +186,21 @@
 
 </div>
 
+<!-- ═══ MODAL "como a média é calculada" ═══ -->
+<div class="moverlay" id="modal-media" onclick="fecharMedia(event)">
+  <div class="msheet">
+    <button class="mclose" onclick="fecharMediaBtn()">✕</button>
+    <div class="mtitle">Como a média é calculada</div>
+    <div class="csub" style="margin-bottom:.55rem">Posto → Regional (supervisor) → Geral. Cada nível conta 1x.</div>
+    <div id="media-detalhe-body"><div class="empty">Carregando...</div></div>
+  </div>
+</div>
+
 <script src="../../shared/js/config.js"></script>
 <script src="../../shared/js/api.js"></script>
 <script src="../../shared/js/auth.js"></script>
+<script src="../../shared/js/postos-mapa.js"></script>
+<script src="../../shared/js/coletas-service.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
