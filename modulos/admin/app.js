@@ -54,6 +54,13 @@ function toggleTheme() {
   aplicarTema(atual === 'dark' ? 'light' : 'dark');
 }
 
+// Vai pro Painel ADM desktop. Atualiza a preferência salva (se existir),
+// pra manter coerência com o botão "Versão Mobile" do desktop.
+function irParaDesktop() {
+  if (localStorage.getItem('jb_adm_versao')) localStorage.setItem('jb_adm_versao', 'desktop');
+  window.location.href = caminhoRaiz() + 'modulos/painel-adm/';
+}
+
 // ── TABS ────────────────────────────────────────────────────────
 let comparaCarregado = false;
 

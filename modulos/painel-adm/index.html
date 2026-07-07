@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JBRETAS — Painel ADM</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" sizes="48x48" href="/shared/jbretas-favicon-48.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
+<link rel="stylesheet" href="../../shared/css/base.css">
+<link rel="stylesheet" href="painel-adm.css">
+<script>
+  // Pre-paint: aplica o tema salvo antes de renderizar (evita flash).
+  (function(){
+    var t = localStorage.getItem('jb_theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+</head>
+<body>
+
+<!-- ═══ TELA DE ESCOLHA Desktop/Mobile (mostrada por JS se ADM sem escolha salva) ═══ -->
+<div id="tela-escolha" class="escolha-overlay">
+  <div class="login-card escolha-card">
+    <div class="brand">
+      <div class="brand-name">JBRETAS</div>
+      <div class="brand-sub">// Painel ADM</div>
+    </div>
+    <div class="escolha-titulo">Qual versão você quer abrir?</div>
+    <div class="escolha-btns">
+      <button class="escolha-btn" onclick="escolherVersao('desktop')">
+        <span class="escolha-emoji">🖥️</span>
+        <span>Desktop</span>
+        <span class="escolha-hint">Este painel completo</span>
+      </button>
+      <button class="escolha-btn" onclick="escolherVersao('mobile')">
+        <span class="escolha-emoji">📲</span>
+        <span>Mobile</span>
+        <span class="escolha-hint">Painel de bolso</span>
+      </button>
+    </div>
+    <div class="remember-row">
+      <input type="checkbox" id="chk-lembrar" class="remember-checkbox">
+      <label for="chk-lembrar" class="remember-label">Lembrar minha escolha neste dispositivo</label>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PAINEL DESKTOP (mostrado por JS ao escolher Desktop) ═══ -->
+<div id="screen-app" style="display:none">
+
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <img src="/shared/jbretas-logo.png" alt="JBretas" style="height:34px;display:block">
+      <div>
+        <div class="topbar-brand">JBRETAS</div>
+        <div style="font-size:.62rem;color:var(--text3);letter-spacing:.2em;text-transform:uppercase;font-family:var(--mono);margin-top:2px">// Painel ADM</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-user">
+        <div class="avatar" id="app-avatar">--</div>
+        <div class="topbar-info">
+          <div class="topbar-name" id="app-usuario">—</div>
+          <div class="topbar-posto" id="app-perfil">—</div>
+        </div>
+      </div>
+      <button class="btn-mobile" onclick="irParaMobile()" title="Abrir versão mobile">📲 Versão Mobile</button>
+      <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Alternar tema">🌙</button>
+      <button class="btn-logout" onclick="jbretasLogout()">SAIR</button>
+    </div>
+  </div>
+
+  <main class="pa-main" id="pa-main">
+    <section class="scr active" id="s-comp"><div class="em-construcao">📊 Comparação — em construção</div></section>
+    <section class="scr" id="s-coleta"><div class="em-construcao">📋 Coleta — em construção</div></section>
+    <section class="scr" id="s-medicao"><div class="em-construcao">🛢️ Medição — em construção</div></section>
+    <section class="scr" id="s-mapa"><div class="em-construcao">🗺️ Mapa — em construção</div></section>
+    <section class="scr" id="s-hist"><div class="em-construcao">📈 Histórico — em construção</div></section>
+    <section class="scr" id="s-mais"><div class="em-construcao">➕ Mais — em construção</div></section>
+  </main>
+
+  <nav class="bnav">
+    <button class="nbtn active" onclick="setTab(this,'comp')">    <span class="ni">⚖️</span><span class="nl">Comparação</span></button>
+    <button class="nbtn" onclick="setTab(this,'coleta')">        <span class="ni">📋</span><span class="nl">Coleta</span></button>
+    <button class="nbtn" onclick="setTab(this,'medicao')">       <span class="ni">🛢️</span><span class="nl">Medição</span></button>
+    <button class="nbtn" onclick="setTab(this,'mapa')">          <span class="ni">🗺️</span><span class="nl">Mapa</span></button>
+    <button class="nbtn" onclick="setTab(this,'hist')">          <span class="ni">📈</span><span class="nl">Histórico</span></button>
+    <button class="nbtn" onclick="setTab(this,'mais')">          <span class="ni">➕</span><span class="nl">Mais+</span></button>
+  </nav>
+
+</div>
+
+<script src="../../shared/js/config.js"></script>
+<script src="../../shared/js/api.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

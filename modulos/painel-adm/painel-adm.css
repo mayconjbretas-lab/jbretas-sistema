@@ -1,0 +1,79 @@
+/* ================================================================
+   JBRETAS SISTEMA — modulos/painel-adm/painel-adm.css
+   Painel ADM desktop. Tema Premium herdado de shared/css/base.css
+   (NÃO usa o admin.css do painel mobile). Só layout + esqueleto.
+   ================================================================ */
+
+/* Página presa: só a área de conteúdo rola. */
+html, body { height: 100%; overflow: hidden; }
+#screen-app { display: flex; flex-direction: column; height: 100vh; }
+
+/* ===== Tela de escolha Desktop/Mobile ===== */
+.escolha-overlay {
+  display: none;                 /* JS decide mostrar */
+  position: fixed; inset: 0; z-index: 999;
+  align-items: center; justify-content: center;
+  background: var(--grad-bg); padding: 1.5rem;
+}
+.escolha-card { max-width: 460px; }
+.escolha-titulo {
+  text-align: center; color: var(--text2); font-family: var(--mono);
+  font-size: .8rem; letter-spacing: .04em; margin-bottom: 1.5rem;
+}
+.escolha-btns { display: flex; gap: 1rem; margin-bottom: 1.25rem; }
+.escolha-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: .35rem;
+  background: var(--surface2); border: 1px solid var(--border2); color: var(--text);
+  border-radius: var(--radius); padding: 1.4rem 1rem; cursor: pointer;
+  font-family: var(--mono); font-size: .95rem; font-weight: 700;
+  transition: border-color .18s, transform .1s, background .18s;
+}
+.escolha-btn:hover { border-color: var(--accent); background: var(--surface3); }
+.escolha-btn:active { transform: scale(.98); }
+.escolha-emoji { font-size: 2rem; line-height: 1; }
+.escolha-hint {
+  font-family: var(--sans); font-size: .68rem; font-weight: 400; color: var(--text3);
+}
+
+/* ===== Topbar (botões extras) ===== */
+.btn-mobile {
+  background: var(--surface2); border: 1px solid var(--border2); color: var(--text);
+  font-family: var(--mono); font-size: .72rem; font-weight: 700;
+  padding: .45rem .8rem; border-radius: 8px; cursor: pointer; white-space: nowrap;
+}
+.btn-mobile:hover { border-color: var(--accent); color: var(--accent); }
+.theme-btn {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  width: 34px; height: 34px; border-radius: 8px; cursor: pointer;
+  font-size: .95rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center;
+}
+.theme-btn:hover { border-color: var(--accent); }
+
+/* ===== Área de conteúdo ===== */
+.pa-main {
+  flex: 1; min-height: 0; overflow: auto; position: relative; z-index: 1;
+  padding: 1.5rem;
+}
+.scr { display: none; height: 100%; }
+.scr.active { display: flex; }
+.em-construcao {
+  margin: auto; color: var(--text3); font-family: var(--mono);
+  font-size: 1rem; text-align: center; padding: 3rem;
+}
+
+/* ===== Barra de navegação (rodapé, 6 abas) ===== */
+.bnav {
+  flex-shrink: 0; display: flex; justify-content: center; gap: .25rem;
+  background: var(--surface); border-top: 1px solid var(--border);
+  padding: .4rem 1rem;
+}
+.nbtn {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: none; border: none; cursor: pointer; color: var(--text3);
+  font-family: var(--mono); padding: .5rem 1.1rem; border-radius: 8px;
+  transition: color .15s, background .15s; min-width: 84px;
+}
+.nbtn:hover { color: var(--text); background: var(--surface2); }
+.nbtn.active { color: var(--accent); background: var(--accent-dim); }
+.nbtn .ni { font-size: 1.1rem; line-height: 1; }
+.nbtn .nl { font-size: .66rem; font-weight: 700; letter-spacing: .02em; }
