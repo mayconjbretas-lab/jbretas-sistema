@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JBRETAS — Logística & Medição</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" sizes="48x48" href="/shared/jbretas-favicon-48.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
+<link rel="stylesheet" href="../../shared/css/base.css">
+<link rel="stylesheet" href="logistica.css">
+<script>
+  // Pre-paint: aplica o tema salvo antes de renderizar (evita flash).
+  (function(){
+    var t = localStorage.getItem('jb_theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+</head>
+<body>
+
+<div id="screen-app">
+
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <img src="/shared/jbretas-logo.png" alt="JBretas" style="height:34px;display:block">
+      <div>
+        <div class="topbar-brand">JBRETAS</div>
+        <div style="font-size:.62rem;color:var(--text3);letter-spacing:.2em;text-transform:uppercase;font-family:var(--mono);margin-top:2px">// Logística</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-user">
+        <div class="avatar" id="app-avatar">--</div>
+        <div class="topbar-info">
+          <div class="topbar-name" id="app-usuario">—</div>
+          <div class="topbar-posto" id="app-perfil">—</div>
+        </div>
+      </div>
+      <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Alternar tema">🌙</button>
+      <button class="btn-logout" onclick="jbretasLogout()">SAIR</button>
+    </div>
+  </div>
+
+  <div class="logi-layout">
+
+    <!-- SIDEBAR -->
+    <aside class="logi-sidebar">
+      <div class="sb-block">
+        <div class="sb-section-title">Posto</div>
+        <select class="sel-posto" id="sel-posto" onchange="onPostoChange()">
+          <option value="">Carregando postos...</option>
+        </select>
+      </div>
+      <nav class="sb-block" style="flex:1;">
+        <div class="sb-section-title">Módulos</div>
+        <ul class="nav-list">
+          <li class="nav-item active" data-tab="tab-matriz" onclick="switchMainTab('tab-matriz', this)">📊 Matriz / Medição</li>
+          <li class="nav-item" data-tab="tab-motorista" onclick="switchMainTab('tab-motorista', this)">🚚 Motorista / Conciliação</li>
+          <li class="nav-item" data-tab="tab-custo" onclick="switchMainTab('tab-custo', this)">💰 Custo &amp; Margem</li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- WORKSPACE -->
+    <main class="logi-workspace">
+
+      <!-- ABA 1: MATRIZ / MEDIÇÃO -->
+      <section id="tab-matriz" class="view-panel active">
+        <div class="table-actions">
+          <div class="table-title">Matriz Integrada de Suprimentos
+            <span id="matriz-subtitle">• Carregando posto...</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:1rem;">
+            <div class="scroll-indicator">↔ Scroll horizontal para ver tudo</div>
+            <button class="btn-refresh" id="btn-refresh" onclick="atualizarMatriz()" title="Atualizar dados do servidor">↻ Atualizar</button>
+          </div>
+        </div>
+        <div class="spreadsheet-frame">
+          <table class="ss-table">
+            <thead id="medicao-thead"></thead>
+            <tbody id="matriz-corpo">
+              <tr><td style="padding:2rem;color:var(--text3);text-align:center;">Selecione um posto…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ABA 2: MOTORISTA / CONCILIAÇÃO (Fase 2) -->
+      <section id="tab-motorista" class="view-panel">
+        <div class="em-construcao">🚚 Motorista / Conciliação — em construção (Fase 2)</div>
+      </section>
+
+      <!-- ABA 3: CUSTO & MARGEM (Fase 2) -->
+      <section id="tab-custo" class="view-panel">
+        <div class="em-construcao">💰 Custo &amp; Margem — em construção (Fase 2)</div>
+      </section>
+
+    </main>
+  </div>
+
+</div>
+
+<script src="../../shared/js/config.js"></script>
+<script src="../../shared/js/api.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
