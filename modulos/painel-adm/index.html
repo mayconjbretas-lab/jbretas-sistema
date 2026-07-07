@@ -8,6 +8,9 @@
 <link rel="icon" type="image/png" sizes="48x48" href="/shared/jbretas-favicon-48.png">
 <link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
 <link rel="stylesheet" href="../../shared/css/base.css">
+<!-- CSS da Coleta (revisão) — compartilhado com o painel mobile, sem fork.
+     Usa tokens --sf/--ac/--tx* resolvidos pela camada de alias em painel-adm.css. -->
+<link rel="stylesheet" href="../admin/coleta-revisao/coleta-revisao.css">
 <link rel="stylesheet" href="painel-adm.css">
 <script>
   // Pre-paint: aplica o tema salvo antes de renderizar (evita flash).
@@ -201,6 +204,8 @@
 <script src="../../shared/js/auth.js"></script>
 <script src="../../shared/js/postos-mapa.js"></script>
 <script src="../../shared/js/coletas-service.js"></script>
+<!-- Coleta (revisão) — mesmo JS do painel mobile (renderColetaRevisao em window), sem fork -->
+<script src="../admin/coleta-revisao/coleta-revisao.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

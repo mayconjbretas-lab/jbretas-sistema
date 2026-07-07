@@ -65,6 +65,8 @@ function setTab(btn, tab) {
   btn.classList.add('active');
   document.getElementById('s-' + tab)?.classList.add('active');
   if (tab === 'comp' && !comparaCarregado) carregarDadosComparar();
+  // Coleta (revisão) — mesmo render do painel mobile (coleta-revisao.js).
+  if (tab === 'coleta') renderColetaRevisao(document.getElementById('s-coleta'));
   // Demais abas (medição/mapa/histórico/mais) entram nos próximos blocos.
 }
 

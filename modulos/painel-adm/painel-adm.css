@@ -188,3 +188,74 @@ html, body { height: 100%; overflow: hidden; }
 .reg-sup-nome { font-family: var(--mono); font-size: .74rem; font-weight: 700; }
 .reg-posto-list { display: flex; flex-direction: column; gap: 3px; }
 .reg-posto { display: flex; justify-content: space-between; align-items: center; padding: .4rem .55rem; background: var(--sf2); border-radius: 6px; font-size: .78rem; }
+
+/* ================================================================
+   ABA COLETA (revisão) — adaptação desktop, SÓ CSS.
+   O JS (coleta-revisao.js) e o CSS base (coleta-revisao.css) são os
+   mesmos do painel mobile, intactos. Aqui só reflowamos pra tela larga.
+   ================================================================ */
+/* Deixa a aba fluir e a área de conteúdo (.pa-main) rolar a página normalmente,
+   em vez de prender tudo na viewport com scroll interno. display:block vence o
+   .scr.active{display:flex} por especificidade de id. */
+#s-coleta { display: block; height: auto; min-height: 100%; }
+/* Shell cresce conforme o conteúdo (sobrescreve height:calc(100vh-120px) +
+   overflow:hidden do mobile). Sem altura fixa, nada rola dentro dele. */
+#s-coleta #cs-shell {
+  height: auto; width: 100%;
+  max-width: 1400px; margin: 0 auto;
+  border: 1px solid var(--bd); border-radius: var(--rl); overflow: visible;
+}
+/* Lista e detalhe fluem (sem scroll interno) — quem rola é a .pa-main. */
+#s-coleta #cs-lista,
+#s-coleta #cs-detalhe { overflow: visible; }
+
+/* Lista dos 37 postos em grade multi-coluna. O JS força display:flex
+   inline (toggle lista/detalhe), mas direção/wrap ficam com o CSS —
+   então os itens fluem em 2–3 colunas em vez de uma coluna alta. */
+#s-coleta #cs-lista {
+  flex-direction: row; flex-wrap: wrap; align-content: flex-start;
+  gap: .55rem; padding: .8rem;
+}
+#s-coleta .cs-posto-item {
+  flex: 1 1 340px; max-width: 560px;
+  border: 1px solid var(--bd); border-radius: 10px;
+}
+#s-coleta .cs-posto-item:hover { border-color: var(--bd2); background: var(--sf); }
+/* Preserva os acentos de status (mesma especificidade do border acima) */
+#s-coleta .cs-posto-item.cs-ok   { border-left: 3px solid var(--ac); }
+#s-coleta .cs-posto-item.cs-flag { border-left: 3px solid #ff4d6d; }
+
+/* ── Detalhe do posto: mais largura útil + blocos bem espaçados ── */
+#s-coleta #cs-detalhe {
+  max-width: 1200px; margin: 0 auto; width: 100%;
+  /* altura das fotos: grande, mas com teto em vh pra tabela+ações não saírem da tela */
+  --cs-foto-h: clamp(260px, 42vh, 440px);
+}
+#s-coleta #cs-dhdr { padding: 14px 20px; }
+#s-coleta .cs-dtitle { font-size: 17px; }
+#s-coleta #cs-d-conc-nome { font-size: 15px; }
+
+/* Fotos maiores (concorrente | meu) — só altura; o swipe usa a largura, intacto.
+   wrap e slide precisam da MESMA altura pra não sobrar/cortar. */
+#s-coleta .cs-fotos-wrap,
+#s-coleta .cs-slide { height: var(--cs-foto-h); }
+#s-coleta .cs-flabel { font-size: 11px; padding: 6px 10px; }
+
+/* Dados fluem no tamanho normal — SEM scroll interno (nada de "filete"):
+   a tabela de diferença aparece inteira e a página é que rola. */
+#s-coleta #cs-dados { overflow: visible; flex: none; min-height: 0; padding: 0 12px; }
+#s-coleta .cs-preco-table { font-size: 14px; max-width: 920px; margin: 0 auto; }
+#s-coleta .cs-preco-table td { padding: 11px 12px; }
+#s-coleta .cs-toggle-row,
+#s-coleta .cs-alerta { max-width: 920px; margin-left: auto; margin-right: auto; }
+
+/* Barra de ações: fica no fim do conteúdo, mas grudada no rodapé da área
+   visível enquanto rola (sticky) — acessível sem espremer a tabela.
+   Como .pa-main é o scroller e os ancestrais agora têm overflow:visible,
+   o sticky resolve em relação a ela. */
+#s-coleta #cs-acoes {
+  position: sticky; bottom: 0; z-index: 3;
+  justify-content: center; gap: 12px; padding: 12px 20px;
+}
+#s-coleta #cs-acoes .cs-btn-ant { flex: 0 1 220px; }
+#s-coleta #cs-acoes .cs-btn-ok  { flex: 0 1 300px; }
