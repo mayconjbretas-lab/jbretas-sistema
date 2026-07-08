@@ -236,7 +236,7 @@ function atualizarEstadoSalvar() {
   // Preços TODOS opcionais: alguns concorrentes não vendem certos combustíveis
   // (ex: Rede Flex Amazonas não vende Gasolina Comum). Obrigatórios: concorrente, foto e localização.
   const faixaOk = validarFaixaPrecos();
-  const pronto = concorrenteSelecionado && faixaOk && localizacaoAtual && fotoBase64Atual;
+  const pronto = concorrenteSelecionado && faixaOk && fotoBase64Atual;
   btn.disabled = !pronto;
   btn.textContent = pronto ? '💾 SALVAR COLETA' : '🔒 PREENCHA OS CAMPOS OBRIGATÓRIOS';
 }
@@ -255,8 +255,8 @@ async function salvarColeta() {
   const payload = {
     concorrenteId: concorrenteSelecionado.id,
     tipo: ehProprioPosto(concorrenteSelecionado.nome) ? 'Próprio' : 'Concorrente',
-    lat: localizacaoAtual.lat,
-    lng: localizacaoAtual.lng,
+    lat: localizacaoAtual ? localizacaoAtual.lat : null,
+    lng: localizacaoAtual ? localizacaoAtual.lng : null,
     fotoBase64: fotoBase64Atual,
   };
   combustiveisMapeados.forEach(c => {
