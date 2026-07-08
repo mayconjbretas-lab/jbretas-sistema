@@ -1,0 +1,81 @@
+/* ================================================================
+   JBRETAS SISTEMA — modulos/painel-adm/medicao.css
+   Grade da aba Medição (ADM). Espelha a Matriz da Logística, mas
+   aqui o PRÉ-PEDIDO é o campo editável (na Logística é só leitura).
+   Tokens de tema (--surface/--accent/--mono/--text*) vêm de base.css;
+   cores de categoria definidas aqui (seguem o tema via var()).
+   ================================================================ */
+:root {
+  --c-med:   var(--info);     --c-med-d:   rgba(72,149,239,.12);
+  --c-ven:   var(--ok);       --c-ven-d:   rgba(0,229,160,.12);
+  --c-carga: #c77dff;         --c-carga-d: rgba(199,125,255,.12);
+  --c-pre:   var(--warning);  --c-pre-d:   rgba(249,199,79,.12);
+  --c-dif:   var(--danger);   --c-dif-d:   rgba(255,77,109,.12);
+}
+html[data-theme="light"] { --c-carga: #8b5cf6; --c-carga-d: rgba(139,92,246,.10); }
+
+.med-wrap { padding: 1rem; }
+
+/* Barra superior: posto + data (hoje) + salvar/desfazer */
+.med-bar { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; margin-bottom: .7rem; }
+.med-bar-left, .med-bar-right { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.med-lbl { font-size: .7rem; color: var(--text3); font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+.med-data { background: var(--accent-dim); border: 1px solid var(--accent); color: var(--accent); font-family: var(--mono); font-size: .72rem; font-weight: 700; padding: .42rem .8rem; border-radius: 8px; }
+.med-salvar { background: var(--accent); color: #1a1206; border: none; font-family: var(--mono); font-size: .72rem; font-weight: 700; padding: .5rem 1rem; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.med-salvar:hover { opacity: .9; }
+.med-salvar:disabled { background: var(--surface3); color: var(--text3); cursor: not-allowed; opacity: .7; }
+.med-undo { background: var(--surface2); border: 1px solid var(--border2); color: var(--text); font-family: var(--mono); font-size: .72rem; font-weight: 700; padding: .5rem .8rem; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.med-undo:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.med-undo:disabled { color: var(--text3); cursor: not-allowed; opacity: .6; }
+
+/* Frame que rola (só ele rola — permite o thead grudar no topo) */
+.med-frame { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: auto; position: relative; max-height: 64vh; }
+.med-msg { padding: 2rem; text-align: center; font-family: var(--mono); font-size: .8rem; color: var(--text3); }
+.med-erro { padding: 2rem; text-align: center; font-family: var(--mono); font-size: .8rem; color: var(--danger); }
+
+/* Planilha */
+.med-table { border-collapse: collapse; text-align: center; font-size: .85rem; width: max-content; min-width: 100%; }
+.med-table th, .med-table td { padding: .5rem .7rem; border: 1px solid var(--border); min-width: 70px; white-space: nowrap; }
+.med-table tbody tr:nth-child(even) { background: var(--surface2); }
+.med-table tbody tr:hover { background: var(--accent-dim2) !important; }
+
+/* Coluna DIA fixa à esquerda */
+.med-table .sticky-col { position: sticky; left: 0; background: var(--surface); z-index: 5; font-weight: 700; width: 56px; min-width: 56px; font-family: var(--mono); box-shadow: 2px 0 5px rgba(0,0,0,.25); }
+
+/* Cabeçalho fixo no topo (2 linhas, fundo sólido) */
+#med-thead th { position: sticky; background: var(--surface2); z-index: 18; height: 32px; box-sizing: border-box; }
+#med-thead tr:first-child th { top: 0; z-index: 20; font-family: var(--mono); font-size: .66rem; text-transform: uppercase; font-weight: 700; letter-spacing: .3px; }
+#med-thead tr:last-child th { top: 32px; z-index: 19; background: var(--surface2); color: var(--text2); font-family: var(--mono); font-size: .7rem; font-weight: 700; }
+#med-thead th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
+
+/* Separador entre grupos de categoria */
+.med-table .grp-end { border-right: 14px solid var(--bg) !important; }
+
+/* Cabeçalhos coloridos por categoria (tom translúcido sobre surface2 sólido) */
+.h-med   { background: linear-gradient(var(--c-med-d),   var(--c-med-d)),   var(--surface2) !important; color: var(--c-med)   !important; border-bottom: 2px solid var(--c-med)   !important; }
+.h-ven   { background: linear-gradient(var(--c-ven-d),   var(--c-ven-d)),   var(--surface2) !important; color: var(--c-ven)   !important; border-bottom: 2px solid var(--c-ven)   !important; }
+.h-carga { background: linear-gradient(var(--c-carga-d), var(--c-carga-d)), var(--surface2) !important; color: var(--c-carga) !important; border-bottom: 2px solid var(--c-carga) !important; }
+.h-pre   { background: linear-gradient(var(--c-pre-d),   var(--c-pre-d)),   var(--surface2) !important; color: var(--c-pre)   !important; border-bottom: 2px solid var(--c-pre)   !important; }
+.h-dif   { background: linear-gradient(var(--c-dif-d),   var(--c-dif-d)),   var(--surface2) !important; color: var(--c-dif)   !important; border-bottom: 2px solid var(--c-dif)   !important; }
+
+/* Células read-only */
+.cell-val   { font-family: var(--mono); font-size: .82rem; font-weight: 600; color: var(--text); }
+.cell-vazia { color: var(--text3); }
+.cell-diff  { font-weight: 700; font-family: var(--mono); }
+.m-dif-pos  { color: var(--ok); }
+.m-dif-neg  { color: var(--danger); }
+.m-dif-zero { color: var(--text3); }
+
+/* Célula do pré-pedido (EDITÁVEL) */
+.cel-pre { background: var(--c-pre-d); }
+.med-in { width: 64px; background: transparent; border: none; color: var(--text); text-align: center; font-family: var(--mono); font-size: .82rem; font-weight: 600; outline: none; padding: 3px; border-radius: 4px; }
+.med-in:focus { background: var(--surface3); box-shadow: 0 0 0 1.5px var(--accent); color: var(--text); }
+.med-in-dirty { background: var(--accent-dim); box-shadow: 0 0 0 1.5px var(--accent); color: var(--accent); }
+
+/* Linha de hoje destacada */
+.med-table tr.row-hoje { background: var(--accent-dim2) !important; }
+.med-table tr.row-hoje .sticky-col { background: var(--accent-dim) !important; color: var(--accent); box-shadow: inset 3px 0 0 var(--accent), 2px 0 5px rgba(0,0,0,.25); }
+
+/* Legenda */
+.med-legenda { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: .7rem; font-size: .66rem; font-family: var(--mono); color: var(--text3); }
+.med-legenda .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }

@@ -67,7 +67,9 @@ function setTab(btn, tab) {
   if (tab === 'comp' && !comparaCarregado) carregarDadosComparar();
   // Coleta (revisão) — mesmo render do painel mobile (coleta-revisao.js).
   if (tab === 'coleta') renderColetaRevisao(document.getElementById('s-coleta'));
-  // Demais abas (medição/mapa/histórico/mais) entram nos próximos blocos.
+  // Medição — ADM define o pré-pedido (medicao.js expõe renderMedicao em window).
+  if (tab === 'medicao') renderMedicao(document.getElementById('s-medicao'));
+  // Demais abas (mapa/histórico/mais) entram nos próximos blocos.
 }
 
 // ================================================================
