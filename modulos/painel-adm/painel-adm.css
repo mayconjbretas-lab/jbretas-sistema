@@ -195,9 +195,12 @@ html, body { height: 100%; overflow: hidden; }
    mesmos do painel mobile, intactos. Aqui só reflowamos pra tela larga.
    ================================================================ */
 /* Deixa a aba fluir e a área de conteúdo (.pa-main) rolar a página normalmente,
-   em vez de prender tudo na viewport com scroll interno. display:block vence o
-   .scr.active{display:flex} por especificidade de id. */
-#s-coleta { display: block; height: auto; min-height: 100%; }
+   em vez de prender tudo na viewport com scroll interno. O display fica no
+   estado ATIVO (#s-coleta.active) — senão o id venceria o .scr{display:none}
+   e a seção apareceria mesmo em outras abas. height/min-height são inertes
+   quando a seção está escondida. */
+#s-coleta { height: auto; min-height: 100%; }
+#s-coleta.active { display: block; }
 /* Shell cresce conforme o conteúdo (sobrescreve height:calc(100vh-120px) +
    overflow:hidden do mobile). Sem altura fixa, nada rola dentro dele. */
 #s-coleta #cs-shell {

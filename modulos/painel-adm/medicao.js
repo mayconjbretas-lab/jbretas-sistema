@@ -35,6 +35,20 @@
     return raw === '' ? null : Number(raw);
   }
 
+  // Data EXIBIDA na Medição do ADM = data real + 1 dia.
+  // O gerente grava o fechamento com a data de ONTEM; o ADM raciocina em HOJE
+  // e lança o pré-pedido pro pedido de amanhã. Então a tela mostra dia+1 (o Date
+  // resolve a virada de mês: 31/07 -> 01/08). Recebe "DD/MM/AAAA", devolve "DD/MM/AAAA".
+  function dataMais1(dataBR) {
+    const p = String(dataBR).split('/');
+    if (p.length !== 3) return dataBR;
+    const d = new Date(Number(p[2]), Number(p[1]) - 1, Number(p[0]));
+    d.setDate(d.getDate() + 1);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return dd + '/' + mm + '/' + d.getFullYear();
+  }
+
   function difClass(v) {
     if (v === null || v === undefined) return 'cell-vazia';
     return v > 0 ? 'm-dif-pos' : (v < 0 ? 'm-dif-neg' : 'm-dif-zero');
@@ -130,18 +144,22 @@
     // Corpo (uma linha por dia do mês)
     let body = '';
     d.dias.forEach(dia => {
-      const ddp = dia.data.split('/')[0];
-      const ehHoje = parseInt(ddp, 10) === h.dia;
-      body += '<tr class="' + (ehHoje ? 'row-hoje' : '') + '" id="med-row-' + ddp + '">';
-      body += '<td class="sticky-col">' + ddp + '</td>';
+      const dataExib = dataMais1(dia.data);       // data mostrada na tela = real + 1
+      const ddExib = dataExib.split('/')[0];       // dia exibido (ex.: 08)
+      const ehHoje = parseInt(ddExib, 10) === h.dia;
+      body += '<tr class="' + (ehHoje ? 'row-hoje' : '') + '" id="med-row-' + ddExib + '">';
+      body += '<td class="sticky-col">' + ddExib + '</td>';
       cats.forEach((c, ci) => {
         fuels.forEach((f, fi) => {
           const grp = (fi === fuels.length - 1 && ci < cats.length - 1) ? 'grp-end' : '';
           const val = dia[c.k] ? dia[c.k][f.idx] : null;
           if (c.edit) {
+            // Pré-pedido: SALVA na data EXIBIDA (08), não na real (07) — cai no dia do
+            // lançamento pra Logística fazer o pedido final. As demais colunas (leitura)
+            // continuam vindo do dia real; só o input do pré-pedido usa a data deslocada.
             body += '<td class="cel-pre ' + grp + '">' +
               '<input class="med-in" inputmode="decimal" value="' + (val == null ? '' : fmt(val)) + '" ' +
-              'data-data="' + dia.data + '" data-comb="' + f.comb + '" ' +
+              'data-data="' + dataExib + '" data-comb="' + f.comb + '" ' +
               'oninput="__medDirty(this)" onfocus="this.select()"></td>';
           } else if (c.k === 'diferenca') {
             body += '<td class="' + grp + '"><span class="' + difClass(val) + ' cell-diff">' + difTxt(val) + '</span></td>';
@@ -155,7 +173,7 @@
 
     frame.innerHTML = '<table class="med-table"><thead id="med-thead">' + thead + '</thead><tbody>' + body + '</tbody></table>';
 
-    // Rola até o dia de hoje
+    // Rola até o dia de hoje (usa o dia EXIBIDO)
     const rowHoje = document.getElementById('med-row-' + h.dd);
     if (rowHoje) rowHoje.scrollIntoView({ block: 'center' });
   }
