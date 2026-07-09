@@ -42,25 +42,25 @@
    TEMA CLARO (sem uso até a Fase 3 — só define os tokens)
    ══════════════════════════════════════════════════ */
 html[data-theme="light"] {
-  --bg: #f4f1e9;
-  --surface: #ffffff;
-  --surface2: #faf8f2;
-  --surface3: #f1ede3;
-  --border: #ebe3d3;
+  --bg: #ece7db;
+  --surface: #faf7f0;
+  --surface2: #f2ede1;
+  --surface3: #e8e1d1;
+  --border: #ddd3bf;
   --border2: rgba(176,125,22,.35);
   --accent: #b07d16;
   --accent2: #8a5e0f;
   --accent-dim: rgba(176,125,22,.12);
   --accent-dim2: rgba(176,125,22,.06);
-  --text: #1a2340;
-  --text2: #5b6480;
-  --text3: #8a90a6;
+  --text: #141a30;
+  --text2: #434b66;
+  --text3: #5b6480;
   --danger: #dc2626;
   --warning: #d97706;
   --info: #2563eb;
   --ok: #0e7a5c;
   --grad-bg: linear-gradient(180deg,#fbfaf5,#f4f1e9);
-  --grad-panel: #ffffff;
+  --grad-panel: #faf7f0;
   --grad-gold: linear-gradient(135deg,#d1a13a,#a5730f);
   --brand-blue: #2088c9;
 }

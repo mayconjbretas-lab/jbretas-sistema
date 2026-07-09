@@ -41,15 +41,15 @@
    TEMA CLARO
    ══════════════════════════════════════════════════ */
 html[data-theme="light"]{
-  --bg:#f4f1e9;--sf:#ffffff;--sf2:#faf8f2;--sf3:#f1ede3;
-  --bd:#ebe3d3;--bd2:rgba(176,125,22,.35);
+  --bg:#ece7db;--sf:#faf7f0;--sf2:#f2ede1;--sf3:#e8e1d1;
+  --bd:#ddd3bf;--bd2:rgba(176,125,22,.35);
   --ac:#b07d16;--ac2:#8a5e0f;--acd:rgba(176,125,22,.10);--ac-glow:rgba(176,125,22,.16);
-  --tx:#1a2340;--tx2:#5b6480;--tx3:#8a90a6;
+  --tx:#141a30;--tx2:#434b66;--tx3:#5b6480;
   --dg:#dc2626;--wn:#d97706;--inf:#2563eb;--ok:#0e7a5c;--pu:#7c3aed;
   --sb-track:#f4f1e9;--sb-thumb:#e0d6c0;--sb-thumb-h:#b07d16;
   /* Gradientes + brand (novos — retema Premium) */
-  --grad-bg:linear-gradient(180deg,#fbfaf5,#f4f1e9);
-  --grad-panel:#ffffff;
+  --grad-bg:linear-gradient(180deg,#f2ede1,#ece7db);
+  --grad-panel:#faf7f0;
   --grad-gold:linear-gradient(135deg,#d1a13a,#a5730f);
   --brand-blue:#2088c9;
 }
