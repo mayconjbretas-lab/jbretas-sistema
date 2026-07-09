@@ -230,9 +230,52 @@ function onFotoSelecionada(event) {
       preview.style.display = 'block';
       document.getElementById('foto-preview-placeholder').style.display = 'none';
       atualizarEstadoSalvar();
+      lerTotem(); // OCR automático: lê os preços da foto e preenche os campos
     });
   };
   reader.readAsDataURL(file);
+}
+
+// OCR (Etapa 2): manda a foto pra /ocr e preenche os campos de preço.
+// 3 estados por combustível: número (preenche) · 'ilegivel' (avisa) · 'ausente' (ignora).
+// Nunca quebra o fluxo — em erro, só avisa pra digitar manual.
+async function lerTotem() {
+  if (!fotoBase64Atual) return;
+  const aviso = document.getElementById('ocr-aviso');
+  const setAviso = (txt, mostrar) => {
+    if (!aviso) return;
+    aviso.textContent = txt;
+    aviso.classList.toggle('visivel', !!mostrar);
+  };
+  setAviso('Lendo preços da foto…', true);
+  try {
+    const resp = await apiFetch('/ocr', { method: 'POST', body: JSON.stringify({ fotoBase64: fotoBase64Atual }) });
+    const precos = (resp && resp.precos) || {};
+    let ilegiveis = [];
+    let lidos = 0;
+    ['gc','ga','et','s10','s500'].forEach(k => {
+      const el = document.getElementById('preco-' + k);
+      if (!el) return;
+      const v = precos[k];
+      if (typeof v === 'number' && isFinite(v)) {
+        el.value = String(Math.round(v * 100));
+        formatPrecoInput(el);
+        lidos++;
+      } else if (v === 'ilegivel') {
+        ilegiveis.push(k.toUpperCase());
+      }
+      // 'ausente' ou sem valor: deixa como está
+    });
+    if (ilegiveis.length) {
+      setAviso('Li ' + lidos + ' preço(s). Não consegui ler: ' + ilegiveis.join(', ') + ' — confira e digite.', true);
+    } else if (lidos) {
+      setAviso('Preços lidos pela IA — confira antes de salvar.', true);
+    } else {
+      setAviso('Não consegui ler os preços — digite manualmente.', true);
+    }
+  } catch (err) {
+    setAviso('Erro ao ler a foto (' + (err && err.message ? err.message : 'tente de novo') + '). Digite manualmente.', true);
+  }
 }
 
 // Redimensiona via canvas (máx. 1600px no lado maior, sem aumentar imagens
