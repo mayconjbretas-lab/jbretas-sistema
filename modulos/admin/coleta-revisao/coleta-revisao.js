@@ -226,7 +226,7 @@ async function csCarregar() {
           proprioDesatualizado,
           concs:      concs,
           qtdConcs:   concs.length,
-          temColeta:  concs.length > 0 || !!proprio,
+          temColeta:  grupo.proprio.some(r => r.data === hoje) || grupo.concorrentes.some(r => r.data === hoje),
         };
       });
 

@@ -23,6 +23,20 @@ function normalizarNomePosto(nome) {
   return String(nome).replace(/^P\.\s*/i, '').trim().toUpperCase();
 }
 
+// Mapa nome-do-banco → chave .k do MAP_POSTOS (resolve postos cujo posto_nome
+// gravado difere do .k oficial). Chave já sem "P.", sem acento, uppercase.
+const ALIAS_CHAVE_POSTO = {
+  'DUDU': 'BARBOSA - DUDU',
+  'PAIVA E PAIVA COMBUSTIVEL': 'BEATRIZ',
+};
+
+// Deriva a chave de agrupamento que casa com o .k do MAP_POSTOS:
+// tira "P.", remove acento, colapsa espaços, e resolve alias banco→.k.
+function chavePostoParaK(nome) {
+  const base = semAcentoComparacao(String(nome).replace(/^P\.\s*/i, ''));
+  return ALIAS_CHAVE_POSTO[base] || base;
+}
+
 // Remove acentos pra comparação de texto (não confundir com
 // normalizarNomePosto acima, que só tira o prefixo "P." pra casar
 // nome de exibição com chave do MAP_POSTOS).
@@ -74,7 +88,7 @@ async function buscarColetasAgrupadas({ posto = null, dias = 15 } = {}) {
 
   const porPosto = {};
   registros.forEach(r => {
-    const chave = normalizarNomePosto(r.posto);
+    const chave = chavePostoParaK(r.posto);
     if (!porPosto[chave]) porPosto[chave] = { proprio: [], concorrentes: [] };
     (ehColetaPropria(r) ? porPosto[chave].proprio : porPosto[chave].concorrentes).push(r);
   });
