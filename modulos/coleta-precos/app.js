@@ -221,14 +221,50 @@ function onFotoSelecionada(event) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
-    fotoBase64Atual = reader.result;
-    const preview = document.getElementById('foto-preview');
-    preview.src = fotoBase64Atual;
-    preview.style.display = 'block';
-    document.getElementById('foto-preview-placeholder').style.display = 'none';
-    atualizarEstadoSalvar();
+    // Comprime no cliente (cap 1600px no lado maior, JPEG 0.7) antes de usar.
+    // Reduz o tamanho do upload/OCR sem perder legibilidade do totem.
+    comprimirFoto(reader.result, (comprimida) => {
+      fotoBase64Atual = comprimida; // já cai de volta pro original se falhar
+      const preview = document.getElementById('foto-preview');
+      preview.src = fotoBase64Atual;
+      preview.style.display = 'block';
+      document.getElementById('foto-preview-placeholder').style.display = 'none';
+      atualizarEstadoSalvar();
+    });
   };
   reader.readAsDataURL(file);
+}
+
+// Redimensiona via canvas (máx. 1600px no lado maior, sem aumentar imagens
+// menores) e reexporta como JPEG qualidade 0.7. Chama cb com o dataURL
+// comprimido; em qualquer falha, chama cb com o dataURL original (não quebra
+// o fluxo do gerente).
+function comprimirFoto(dataUrlOriginal, cb) {
+  try {
+    const MAX = 1600;
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const escala = Math.min(1, MAX / Math.max(img.width, img.height));
+        const w = Math.round(img.width * escala);
+        const h = Math.round(img.height * escala);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return cb(dataUrlOriginal);
+        ctx.drawImage(img, 0, 0, w, h);
+        const comprimida = canvas.toDataURL('image/jpeg', 0.7);
+        cb(comprimida && comprimida.startsWith('data:image/jpeg') ? comprimida : dataUrlOriginal);
+      } catch (e) {
+        cb(dataUrlOriginal);
+      }
+    };
+    img.onerror = () => cb(dataUrlOriginal);
+    img.src = dataUrlOriginal;
+  } catch (e) {
+    cb(dataUrlOriginal);
+  }
 }
 
 function atualizarEstadoSalvar() {
