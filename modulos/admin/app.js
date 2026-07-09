@@ -350,6 +350,43 @@ function abrirDetalheMedia() {
 function fecharMedia(e) { if (e.target.id === 'modal-media') fecharMediaBtn(); }
 function fecharMediaBtn() { document.getElementById('modal-media').classList.remove('open'); }
 
+// ── Modal "Lançaram | Faltam" (rede toda, ignora filtros) ─────────
+function abrirFaltam() {
+  renderFaltam();
+  document.getElementById('modal-faltam').classList.add('open');
+}
+function fecharFaltam(e) { if (e.target.id === 'modal-faltam') fecharFaltamBtn(); }
+function fecharFaltamBtn() { document.getElementById('modal-faltam').classList.remove('open'); }
+
+function renderFaltam(){
+  const lancaram = [];
+  const faltam = [];
+  MAP_POSTOS.slice().sort((a,b)=>a.ap.localeCompare(b.ap)).forEach(p => {
+    const d = G_COMPARACAO[p.k];
+    const ok = d && d.proprio && !d.proprioDesatualizado;
+    if (ok) lancaram.push({ p, ger: (d.proprio && d.proprio.gerente) ? d.proprio.gerente : '' });
+    else faltam.push({ p });
+  });
+  const linha = (nome, sub) =>
+    `<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:8px;margin-bottom:5px">
+       <div style="font-size:12px;font-weight:600;color:var(--tx)">${nome}</div>
+       <div style="font-size:11px;color:var(--tx2)">${sub}</div>
+     </div>`;
+  const colL = lancaram.map(x => linha(x.p.ap, x.ger ? `${x.ger} · ${x.p.sup}` : x.p.sup)).join('') || '<div style="font-size:11px;color:var(--tx3)">nenhum</div>';
+  const colF = faltam.map(x => linha(x.p.ap, x.p.sup)).join('') || '<div style="font-size:11px;color:var(--tx3)">nenhum ✓</div>';
+  document.getElementById('faltam-body').innerHTML =
+    `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+       <div>
+         <div style="font-size:11px;font-weight:600;color:var(--ok);margin-bottom:6px">✓ LANÇARAM (${lancaram.length})</div>
+         ${colL}
+       </div>
+       <div>
+         <div style="font-size:11px;font-weight:600;color:var(--wn);margin-bottom:6px">⏳ FALTAM (${faltam.length})</div>
+         ${colF}
+       </div>
+     </div>`;
+}
+
 function renderDetalheMedia() {
   const body = document.getElementById('media-detalhe-body');
   if (!G_MEDIA_DETALHE) { body.innerHTML = '<div class="empty">Sem dados de concorrentes coletados.</div>'; return; }

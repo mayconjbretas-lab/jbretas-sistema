@@ -84,7 +84,7 @@
 
         <!-- KPIs em linha -->
         <div class="kgrid">
-          <div class="kbox">
+          <div class="kbox" onclick="abrirFaltam()" style="cursor:pointer">
             <div class="klbl">Lançaram hoje</div>
             <div class="kval ac" id="kv-proprios">--</div>
             <div class="csub" id="kv-proprios-sub"></div>
@@ -200,6 +200,15 @@
     <div class="mtitle">Como a média é calculada</div>
     <div class="csub" style="margin-bottom:.55rem">Posto → Regional (supervisor) → Geral. Cada nível conta 1x.</div>
     <div id="media-detalhe-body"><div class="empty">Carregando...</div></div>
+  </div>
+</div>
+
+<!-- ═══ MODAL LANÇARAM | FALTAM ═══ -->
+<div class="moverlay" id="modal-faltam" onclick="fecharFaltam(event)">
+  <div class="msheet">
+    <button class="mclose" onclick="fecharFaltamBtn()">✕</button>
+    <div class="mtitle">Lançamentos de hoje</div>
+    <div id="faltam-body"></div>
   </div>
 </div>
 
