@@ -139,7 +139,7 @@ function renderColetaRevisao(ctx) {
         </div>
       </div>
     </div>
-    <div id="cs-zoom"><button id="cs-zoom-close" aria-label="Fechar">✕</button><img id="cs-zoom-img" src="" alt="Zoom" draggable="false"></div>
+    <div id="cs-zoom"><button id="cs-zoom-close" aria-label="Fechar">✕</button><button id="cs-zoom-prev" aria-label="Anterior">‹</button><img id="cs-zoom-img" src="" alt="Zoom" draggable="false"><button id="cs-zoom-next" aria-label="Próxima">›</button><div id="cs-zoom-legenda"></div></div>
   `;
 
   csIniciarSwipe();
@@ -398,7 +398,9 @@ function csRenderDetalhe() {
   const badge = document.getElementById('cs-d-badge');
   if (badge) {
     badge.textContent = est === 'ok' ? '✓ ok' : est === 'flag' ? '⚠ sinalizado' : 'pendente';
-    badge.className   = 'cs-badge ' + (est === 'ok' ? 'cs-badge-ok' : est === 'flag' ? 'cs-badge-flag' : 'cs-badge-pend');
+    // "pendente": verde se a coleta é de HOJE, vermelho se é de dia anterior.
+    const pendCls = (posto.data === hojeBR()) ? 'cs-badge-pend-hoje' : 'cs-badge-pend-atrasado';
+    badge.className   = 'cs-badge ' + (est === 'ok' ? 'cs-badge-ok' : est === 'flag' ? 'cs-badge-flag' : pendCls);
   }
 
   csConstruirCarrossel(posto);
@@ -728,12 +730,33 @@ function csAtualizarProg() {
   if (el) el.style.width = tot > 0 ? Math.round(ok / tot * 100) + '%' : '0%';
 }
 
-// ── Zoom ──────────────────────────────────────────────────────────
+// ── Zoom (lightbox com navegação entre as fotos do posto) ─────────
+let CS_ZOOM_LISTA = [];
+let CS_ZOOM_IDX   = 0;
+
+// Monta a lista de fotos do posto atual: a própria (🏠) primeiro,
+// depois cada concorrente coletado (📷), só as que têm URL válida.
+function csZoomLista() {
+  const lista = [];
+  if (CS_POSTO_IDX >= 0 && CS_POSTO_IDX < CS_FILTRADOS.length) {
+    const posto = CS_FILTRADOS[CS_POSTO_IDX];
+    if (posto.fotoMeu && posto.fotoMeu !== '-') lista.push({ src: posto.fotoMeu, nome: posto.nome, tipo: 'meu', band: '' });
+    (posto.concs || []).forEach(c => {
+      if (c.Foto && c.Foto !== '-') lista.push({ src: c.Foto, nome: c.PostoAlvo || 'Concorrente', tipo: 'conc', band: c.Bandeira || '' });
+    });
+  }
+  return lista;
+}
+
 function csZoom(src) {
   const z = document.getElementById('cs-zoom');
   const i = document.getElementById('cs-zoom-img');
   if (!z || !i) return;
-  i.src = src;
+  const alvo = String(src).replace(/%27/g, "'"); // desfaz o escape do onclick
+  CS_ZOOM_LISTA = csZoomLista();
+  let idx = CS_ZOOM_LISTA.findIndex(f => f.src === alvo);
+  if (idx < 0) { CS_ZOOM_LISTA = [{ src: alvo, nome: '', tipo: '', band: '' }]; idx = 0; }
+  CS_ZOOM_IDX = idx;
   z.style.display = 'flex';
   csZoomInit(z, i);
 }
@@ -742,22 +765,52 @@ function csZoomInit(z, i) {
   // estado do zoom/pan
   let scale = 1, tx = 0, ty = 0;
   const apply = () => { i.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; };
-  const reset = () => { scale = 1; tx = 0; ty = 0; apply(); };
-  reset();
+  const resetZoom = () => { scale = 1; tx = 0; ty = 0; apply(); };
+
+  // troca a foto exibida (com wrap) + atualiza legenda e setas
+  const legenda = document.getElementById('cs-zoom-legenda');
+  const prev = document.getElementById('cs-zoom-prev');
+  const next = document.getElementById('cs-zoom-next');
+  const mostrar = (idx) => {
+    const n = CS_ZOOM_LISTA.length;
+    if (!n) return;
+    CS_ZOOM_IDX = (idx % n + n) % n;
+    const f = CS_ZOOM_LISTA[CS_ZOOM_IDX];
+    i.src = f.src;
+    if (legenda) {
+      const icon = f.tipo === 'meu' ? '🏠' : f.tipo === 'conc' ? '📷' : '';
+      legenda.innerHTML = `${icon} ${f.nome || ''}` + (f.band ? ` <span class="cs-zoom-band">${f.band}</span>` : '');
+    }
+    const disp = n > 1 ? 'flex' : 'none';
+    if (prev) prev.style.display = disp;
+    if (next) next.style.display = disp;
+    resetZoom();
+  };
+  mostrar(CS_ZOOM_IDX);
 
   // fecha só no fundo preto e no ✕ (nunca ao tocar a foto)
-  const close = () => { z.style.display = 'none'; reset(); };
+  const close = () => { z.style.display = 'none'; resetZoom(); };
   z.onclick = (e) => { if (e.target === z) close(); };
-  const btn = document.getElementById('cs-zoom-close');
-  if (btn) btn.onclick = close;
+  const btnClose = document.getElementById('cs-zoom-close');
+  if (btnClose) btnClose.onclick = (e) => { e.stopPropagation(); close(); };
+  if (prev) prev.onclick = (e) => { e.stopPropagation(); mostrar(CS_ZOOM_IDX - 1); };
+  if (next) next.onclick = (e) => { e.stopPropagation(); mostrar(CS_ZOOM_IDX + 1); };
 
-  // impede o pinch/scroll da PÁGINA dentro do overlay
-  const stop = (e) => e.preventDefault();
-
-  // ---- toque (iPhone): 1 dedo arrasta, 2 dedos dão pinça ----
+  // ---- gestos (Pointer Events: serve toque e mouse) ----
   let pts = new Map(), startDist = 0, startScale = 1, lastX = 0, lastY = 0;
-  i.onpointerdown = (e) => { i.setPointerCapture(e.pointerId); pts.set(e.pointerId, e); lastX = e.clientX; lastY = e.clientY;
-    if (pts.size === 2) { const [a, b] = [...pts.values()]; startDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); startScale = scale; } };
+  let swipeAtivo = false, swipeAcc = 0;
+  i.onpointerdown = (e) => {
+    i.setPointerCapture(e.pointerId); pts.set(e.pointerId, e);
+    lastX = e.clientX; lastY = e.clientY;
+    if (pts.size === 2) {
+      const [a, b] = [...pts.values()];
+      startDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); startScale = scale;
+      swipeAtivo = false;
+    } else if (pts.size === 1) {
+      swipeAcc = 0;
+      swipeAtivo = (scale <= 1); // com zoom 1x, 1 dedo faz swipe entre fotos
+    }
+  };
   i.onpointermove = (e) => {
     if (!pts.has(e.pointerId)) return;
     pts.set(e.pointerId, e);
@@ -766,11 +819,26 @@ function csZoomInit(z, i) {
       const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
       scale = Math.min(6, Math.max(1, startScale * (d / startDist)));
       apply();
-    } else if (pts.size === 1 && scale > 1) { // arrasta
-      tx += e.clientX - lastX; ty += e.clientY - lastY; lastX = e.clientX; lastY = e.clientY; apply();
+    } else if (pts.size === 1) {
+      if (scale > 1) { // PAN (com zoom não troca de foto)
+        tx += e.clientX - lastX; ty += e.clientY - lastY; lastX = e.clientX; lastY = e.clientY; apply();
+      } else if (swipeAtivo) { // SWIPE troca de foto
+        swipeAcc += e.clientX - lastX; lastX = e.clientX; lastY = e.clientY;
+        i.style.transform = `translate(${swipeAcc}px,0) scale(1)`;
+      }
     }
   };
-  const up = (e) => { pts.delete(e.pointerId); if (scale <= 1) { tx = 0; ty = 0; apply(); } };
+  const up = (e) => {
+    pts.delete(e.pointerId);
+    if (pts.size === 0 && scale <= 1) {
+      if (swipeAtivo && Math.abs(swipeAcc) > 60 && CS_ZOOM_LISTA.length > 1) {
+        mostrar(CS_ZOOM_IDX + (swipeAcc < 0 ? 1 : -1));
+      } else {
+        tx = 0; ty = 0; apply();
+      }
+      swipeAtivo = false; swipeAcc = 0;
+    }
+  };
   i.onpointerup = up; i.onpointercancel = up;
 
   // ---- desktop: scroll dá zoom ----
@@ -780,7 +848,7 @@ function csZoomInit(z, i) {
   i.ondblclick = () => { scale = scale > 1 ? 1 : 2.5; tx = 0; ty = 0; apply(); };
 
   // trava o gesto nativo da página só aqui dentro
-  z.ontouchmove = stop;
+  z.ontouchmove = (e) => e.preventDefault();
 }
 
 // ── Edição do NOSSO preço (lápis) ─────────────────────────────────
