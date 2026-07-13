@@ -89,12 +89,22 @@ const CMP_FUELS = [
   { key: 'GA',   label: 'Aditiv.' },
   { key: 'S10',  label: 'Diesel S10' },
 ];
+// Combustíveis dos botões POR CARD (aba Comparação): 5, GC primeiro.
+// `btn` = rótulo curto do botão; `nome` = texto das mensagens de vazio.
+const CMP_FUELS_CARD = [
+  { key: 'GC',   btn: 'GC',   nome: 'comum' },
+  { key: 'GA',   btn: 'GA',   nome: 'aditivada' },
+  { key: 'ET',   btn: 'ET',   nome: 'etanol' },
+  { key: 'S10',  btn: 'S10',  nome: 'diesel S10' },
+  { key: 'S500', btn: 'S500', nome: 'diesel S500' },
+];
 const CMP_STRATS = [
   { key: 'agg',  label: 'Agressivo', desc: '1 centavo abaixo do concorrente mais barato — ganha volume.' },
   { key: 'avg',  label: 'Na média',  desc: 'Média dos concorrentes coletados — equilíbrio.' },
   { key: 'prem', label: 'Premium',   desc: '1 centavo acima do mais caro — protege margem.' },
 ];
 let G_CMP_FUEL = 'GC';
+let G_CMP_FUEL_CARD = {}; // combustível por card: { [posto.k]: 'GC'|'GA'|'ET'|'S10'|'S500' } — nasce em GC
 let G_CMP_STRAT = 'avg';
 let G_CMP_SUP = '';
 let G_CMP_BAND = '';
@@ -307,6 +317,41 @@ function cmpCalcularSugerido(min, avg, max) {
   return avg;
 }
 
+// Calcula { ownVal, competidores } de um posto para o combustível `f`,
+// aplicando o mesmo filtro "só quem mudou" e ordenação de sempre. Usado
+// duas vezes por posto: com o fuel GLOBAL (agregados/visibilidade) e com
+// o fuel DAQUELE card (conteúdo exibido).
+function cmpCalcCard(dado, f) {
+  const ownVal = (dado.proprio && dado.proprio[f] !== null && dado.proprio[f] !== undefined)
+    ? Number(dado.proprio[f]) : null;
+  const competidores = dado.concorrentes
+    .map(c => ({
+      nome: c.nome,
+      preco: (c.registro[f] !== null && c.registro[f] !== undefined) ? Number(c.registro[f]) : null,
+      desatualizado: c.desatualizado,
+      registro: c.registro,
+      ontem: (c.registroOntem && c.registroOntem[f] !== null && c.registroOntem[f] !== undefined)
+        ? Number(c.registroOntem[f]) : null,
+    }))
+    .filter(c => c.preco !== null)
+    .filter(c => !G_CMP_SO_MUDOU || (!c.desatualizado && c.ontem !== null && Math.abs(c.preco - c.ontem) >= 0.005))
+    .sort((a, b) => a.preco - b.preco);
+  return { ownVal, competidores };
+}
+
+// Botões de combustível no topo de cada card (GC · GA · ET · S10 · S500).
+function cmpFuelBtnsCard(k) {
+  const atual = G_CMP_FUEL_CARD[k] || 'GC';
+  const kSafe = String(k).replace(/'/g, "\\'");
+  return '<div class="cmp-card-fuels">' + CMP_FUELS_CARD.map(f =>
+    `<button class="cmp-cfuel${f.key === atual ? ' active' : ''}" onclick="cmpSetFuelCard('${kSafe}','${f.key}')">${f.btn}</button>`
+  ).join('') + '</div>';
+}
+function cmpSetFuelCard(k, fuel) {
+  G_CMP_FUEL_CARD[k] = fuel;
+  renderComparar(); // re-render geral lendo o mapa — preserva o estado dos outros cards
+}
+
 function seloDesatualizado(registro) {
   if (!registro || !registro.data) return '';
   return ` <span style="font-size:.6rem;color:var(--wn)">· dado de ${registro.data}</span>`;
@@ -331,25 +376,18 @@ function renderComparar() {
 
   postos.forEach(posto => {
     const dado = G_COMPARACAO[posto.k] || { proprio: null, proprioDesatualizado: false, concorrentes: [] };
-    const ownVal = (dado.proprio && dado.proprio[fuel] !== null && dado.proprio[fuel] !== undefined)
-      ? Number(dado.proprio[fuel]) : null;
 
-    const competidores = dado.concorrentes
-      .map(c => ({
-        nome: c.nome,
-        preco: (c.registro[fuel] !== null && c.registro[fuel] !== undefined) ? Number(c.registro[fuel]) : null,
-        desatualizado: c.desatualizado,
-        registro: c.registro,
-        ontem: (c.registroOntem && c.registroOntem[fuel] !== null && c.registroOntem[fuel] !== undefined)
-          ? Number(c.registroOntem[fuel]) : null,
-      }))
-      .filter(c => c.preco !== null)
-      .filter(c => !G_CMP_SO_MUDOU || (!c.desatualizado && c.ontem !== null && Math.abs(c.preco - c.ontem) >= 0.005))
-      .sort((a, b) => a.preco - b.preco);
+    // Agregados do rodapé (Minha média / Média concorrência) e a
+    // VISIBILIDADE do card continuam no combustível GLOBAL (G_CMP_FUEL).
+    const glob = cmpCalcCard(dado, fuel);
+    if (glob.ownVal === null && glob.competidores.length === 0) return;
+    if (glob.ownVal !== null) { somaMinha += glob.ownVal; contMinha++; }
+    glob.competidores.forEach(c => { somaConc += c.preco; contConc++; });
 
-    if (ownVal === null && competidores.length === 0) return;
-    if (ownVal !== null) { somaMinha += ownVal; contMinha++; }
-    competidores.forEach(c => { somaConc += c.preco; contConc++; });
+    // Conteúdo do card usa o combustível DAQUELE card (nasce em GC).
+    const fuelCard = G_CMP_FUEL_CARD[posto.k] || 'GC';
+    const fuelCardNome = (CMP_FUELS_CARD.find(f => f.key === fuelCard) || {}).nome || fuelCard;
+    const { ownVal, competidores } = cmpCalcCard(dado, fuelCard);
 
     const precos = competidores.map(c => c.preco);
     const min = precos.length ? Math.min(...precos) : null;
@@ -392,8 +430,8 @@ function renderComparar() {
       }
     } else {
       const msgVazio = G_CMP_SO_MUDOU
-        ? `Nenhum concorrente mudou de preço desde ontem para ${fuelLabel.toLowerCase()}`
-        : `Sem concorrente coletado para ${fuelLabel.toLowerCase()}`;
+        ? `Nenhum concorrente mudou de preço desde ontem para ${fuelCardNome}`
+        : `Sem concorrente coletado para ${fuelCardNome}`;
       listHtml = `<div class="empty" style="padding:.4rem 0;font-size:.74rem;text-align:left">${msgVazio}</div>`;
     }
 
@@ -409,6 +447,7 @@ function renderComparar() {
 
     cardsHtml += `<div class="region-card" id="cmp-card-${posto.k.replace(/[^a-zA-Z0-9]/g, '_')}">
       <div class="region-hdr"><span class="region-nome">${posto.ap}</span>${badgeHtml}</div>
+      ${cmpFuelBtnsCard(posto.k)}
       ${listHtml}
       ${sugeridoHtml}
     </div>`;

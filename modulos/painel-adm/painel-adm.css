@@ -131,6 +131,12 @@ html, body { height: 100%; overflow: hidden; }
 .fueltab { background: var(--sf2); border: 1px solid var(--bd); border-radius: 20px; padding: 6px 14px; font-size: .76rem; font-family: var(--mono); font-weight: 600; color: var(--tx2); cursor: pointer; transition: all .15s; }
 .fueltab:hover { border-color: var(--bd2); }
 .fueltab.active { background: var(--acd); border-color: var(--ac); color: var(--ac); }
+
+/* Botões de combustível POR CARD (aba Comparação) — versão compacta do .fueltab */
+.cmp-card-fuels { display: flex; gap: 4px; flex-wrap: wrap; margin: .5rem 0 .6rem; }
+.cmp-cfuel { background: var(--sf2); border: 1px solid var(--bd); border-radius: 14px; padding: 3px 9px; font-size: .64rem; font-family: var(--mono); font-weight: 700; letter-spacing: .02em; color: var(--tx3); cursor: pointer; transition: all .15s; }
+.cmp-cfuel:hover { border-color: var(--bd2); color: var(--tx2); }
+.cmp-cfuel.active { background: var(--acd); border-color: var(--ac); color: var(--ac); }
 .filtros-comp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .55rem; margin-bottom: .55rem; }
 .filtro-lbl { font-size: .64rem; color: var(--tx3); font-family: var(--mono); text-transform: uppercase; letter-spacing: .05em; display: block; margin-bottom: 4px; }
 .sel { width: 100%; background: var(--sf2); border: 1px solid var(--bd); border-radius: 8px; padding: .55rem .7rem; color: var(--tx); font-family: var(--sans); font-size: .84rem; outline: none; transition: border-color .15s; }
