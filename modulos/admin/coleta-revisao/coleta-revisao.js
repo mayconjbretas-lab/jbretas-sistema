@@ -139,7 +139,7 @@ function renderColetaRevisao(ctx) {
         </div>
       </div>
     </div>
-    <div id="cs-zoom" onclick="this.style.display='none'"><img id="cs-zoom-img" src="" alt="Zoom"></div>
+    <div id="cs-zoom"><button id="cs-zoom-close" aria-label="Fechar">✕</button><img id="cs-zoom-img" src="" alt="Zoom" draggable="false"></div>
   `;
 
   csIniciarSwipe();
@@ -735,6 +735,52 @@ function csZoom(src) {
   if (!z || !i) return;
   i.src = src;
   z.style.display = 'flex';
+  csZoomInit(z, i);
+}
+
+function csZoomInit(z, i) {
+  // estado do zoom/pan
+  let scale = 1, tx = 0, ty = 0;
+  const apply = () => { i.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; };
+  const reset = () => { scale = 1; tx = 0; ty = 0; apply(); };
+  reset();
+
+  // fecha só no fundo preto e no ✕ (nunca ao tocar a foto)
+  const close = () => { z.style.display = 'none'; reset(); };
+  z.onclick = (e) => { if (e.target === z) close(); };
+  const btn = document.getElementById('cs-zoom-close');
+  if (btn) btn.onclick = close;
+
+  // impede o pinch/scroll da PÁGINA dentro do overlay
+  const stop = (e) => e.preventDefault();
+
+  // ---- toque (iPhone): 1 dedo arrasta, 2 dedos dão pinça ----
+  let pts = new Map(), startDist = 0, startScale = 1, lastX = 0, lastY = 0;
+  i.onpointerdown = (e) => { i.setPointerCapture(e.pointerId); pts.set(e.pointerId, e); lastX = e.clientX; lastY = e.clientY;
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; startDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); startScale = scale; } };
+  i.onpointermove = (e) => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, e);
+    if (pts.size === 2) { // pinça
+      const [a, b] = [...pts.values()];
+      const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      scale = Math.min(6, Math.max(1, startScale * (d / startDist)));
+      apply();
+    } else if (pts.size === 1 && scale > 1) { // arrasta
+      tx += e.clientX - lastX; ty += e.clientY - lastY; lastX = e.clientX; lastY = e.clientY; apply();
+    }
+  };
+  const up = (e) => { pts.delete(e.pointerId); if (scale <= 1) { tx = 0; ty = 0; apply(); } };
+  i.onpointerup = up; i.onpointercancel = up;
+
+  // ---- desktop: scroll dá zoom ----
+  i.onwheel = (e) => { e.preventDefault(); scale = Math.min(6, Math.max(1, scale - e.deltaY * 0.002)); if (scale <= 1) { tx = 0; ty = 0; } apply(); };
+
+  // ---- toque duplo / duplo-clique: alterna ajustada <-> 2.5x ----
+  i.ondblclick = () => { scale = scale > 1 ? 1 : 2.5; tx = 0; ty = 0; apply(); };
+
+  // trava o gesto nativo da página só aqui dentro
+  z.ontouchmove = stop;
 }
 
 // ── Edição do NOSSO preço (lápis) ─────────────────────────────────
