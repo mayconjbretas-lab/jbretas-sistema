@@ -24,7 +24,7 @@
 #cs-lista{flex:1;overflow-y:auto;display:flex;flex-direction:column}
 .cs-posto-item{padding:11px 14px;border-bottom:1px solid var(--sf2);cursor:pointer;display:flex;align-items:center;gap:10px}
 .cs-posto-item:hover,.cs-posto-item:active{background:var(--sf)}
-.cs-posto-item.cs-ok  {border-left:3px solid var(--ac);background:rgba(0,229,160,.04)}
+.cs-posto-item.cs-ok  {border:1px solid var(--ac);border-radius:10px;background:rgba(0,229,160,.12)}
 .cs-posto-item.cs-flag{border-left:3px solid #ff4d6d;background:rgba(255,77,109,.04)}
 .cs-posto-icon{width:34px;height:34px;border-radius:8px;background:var(--sf2);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
 .cs-posto-body{flex:1;min-width:0}
