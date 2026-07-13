@@ -198,10 +198,6 @@ html, body { height: 100%; overflow: hidden; }
 .sugerido-val { font-family: var(--mono); font-size: 1rem; font-weight: 700; color: var(--tx); }
 .sugerido-move { font-size: .68rem; margin-left: 5px; font-weight: 600; }
 
-/* Heatmap */
-.hgrid { display: flex; gap: 2px; flex-wrap: wrap; }
-.hcell { height: 22px; border-radius: 3px; flex: 1; min-width: 10px; cursor: pointer; transition: opacity .2s; }
-.hcell:hover { opacity: .65; }
 
 /* Modal "como a média é calculada" (centralizado no desktop) */
 .moverlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 200; display: none; align-items: center; justify-content: center; padding: 1.5rem; }

@@ -228,11 +228,6 @@ html:not([data-theme="light"]) body::before{
 .prv.gc{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;color:transparent}.prv.ga{color:var(--inf)}.prv.et{color:var(--wn)}
 .prv.s10{color:var(--pu)}.prv.nd{color:var(--tx3)}
 
-/* ── HEATMAP ─────────────────────────────────────── */
-.hgrid{display:flex;gap:2px;flex-wrap:wrap}
-.hcell{height:18px;border-radius:3px;flex:1;min-width:8px;cursor:pointer;transition:opacity .2s}
-.hcell:hover{opacity:.65}
-
 /* ── FILTER TAGS ─────────────────────────────────── */
 .filtro-row{display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:.65rem}
 .ftag{background:var(--sf2);border:1px solid var(--bd);border-radius:20px;

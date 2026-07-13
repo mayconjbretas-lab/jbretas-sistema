@@ -596,46 +596,6 @@ function renderComparar() {
       <div class="myavg-sub" style="color:${diffCor}">${diffTxt}</div>
     </div>`;
 
-  renderHeatmapComparar();
-}
-
-function renderHeatmapComparar() {
-  const body = document.getElementById('heatmap-body');
-  const valores = MAP_POSTOS
-    .map(p => G_COMPARACAO[p.k]?.proprio?.GC)
-    .filter(v => v !== null && v !== undefined)
-    .map(Number);
-  if (!valores.length) { body.innerHTML = '<div class="empty">Sem dados</div>'; return; }
-  valores.sort((a, b) => a - b);
-  const min = valores[0], max = valores[valores.length - 1], dif = (max - min) || 1;
-  body.innerHTML = '';
-  MAP_POSTOS.forEach(posto => {
-    const dado = G_COMPARACAO[posto.k];
-    const val = dado?.proprio?.GC;
-    if (val === null || val === undefined) return;
-    const pct = (Number(val) - min) / dif;
-    let cor = 'var(--ok)';
-    if (pct > 0.35 && pct <= 0.7) cor = 'var(--wn)';
-    else if (pct > 0.7) cor = 'var(--dg)';
-    const cell = document.createElement('div');
-    cell.className = 'hcell';
-    cell.style.background = cor;
-    cell.title = `${posto.ap}: ${fmtPrecoBRL(val)}${dado.proprioDesatualizado ? ' (dado de ' + dado.proprio.data + ')' : ''}`;
-    cell.onclick = () => {
-      const btnComp = document.querySelectorAll('.nbtn')[0];
-      setTab(btnComp, 'comp');
-      G_CMP_SUP = ''; G_CMP_BAND = ''; G_CMP_POSTO = ''; G_CMP_FUEL = 'GC';
-      document.getElementById('cmp-sup').value = '';
-      document.getElementById('cmp-band').value = '';
-      document.getElementById('cmp-posto').value = '';
-      renderComparar();
-      setTimeout(() => {
-        const alvo = document.getElementById('cmp-card-' + posto.k.replace(/[^a-zA-Z0-9]/g, '_'));
-        if (alvo) { alvo.scrollIntoView({ behavior: 'smooth', block: 'center' }); alvo.style.borderColor = 'var(--ac)'; }
-      }, 80);
-    };
-    body.appendChild(cell);
-  });
 }
 
 // Auto-refresh só quando o painel está aberto e a aba Comparação ativa.
