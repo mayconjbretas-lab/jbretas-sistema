@@ -457,6 +457,15 @@ function cmpEditarVoce(k, f) {
   if (inp) { inp.focus(); inp.select(); }
 }
 
+// "619" → 6.19 (só dígitos = centavos); "6,19"/"6.19" → 6.19 (decimal direto).
+function cmpParsePreco(str) {
+  const s = String(str || '').trim();
+  if (!s) return NaN;
+  if (/[.,]/.test(s)) return parseFloat(s.replace(',', '.'));
+  const digits = s.replace(/\D/g, '');
+  return digits ? parseInt(digits, 10) / 100 : NaN;
+}
+
 async function cmpConfirmarVoce(k, f) {
   const inp = document.getElementById(`cmpm-inp-${idSafe(k)}-${f}`);
   if (!inp || inp.dataset.saving === '1') return;
@@ -464,16 +473,15 @@ async function cmpConfirmarVoce(k, f) {
   const posto = MAP_POSTOS.find(p => p.k === k);
   if (!dado || !posto) { renderComparar(); return; }
 
-  const raw = inp.value.trim().replace(',', '.');
-  const novo = parseFloat(raw);
+  const novo = cmpParsePreco(inp.value);
   const orig = (dado.proprio && dado.proprio[f] !== null && dado.proprio[f] !== undefined) ? Number(dado.proprio[f]) : null;
 
   // inválido/vazio ou sem mudança → cancela sem salvar
-  if (raw === '' || isNaN(novo) || novo <= 0) { renderComparar(); return; }
+  if (isNaN(novo) || novo <= 0) { renderComparar(); return; }
   if (orig !== null && Math.abs(novo - orig) < 0.005) { renderComparar(); return; }
 
   inp.dataset.saving = '1';
-  const ok = await cmpSalvarPrecoProprio(posto.nome, f, novo, orig);
+  const ok = await cmpSalvarPrecoProprio(posto.ap, f, novo, orig);
   if (ok) {
     if (!dado.proprio) dado.proprio = {};
     dado.proprio[f] = novo; // overlay local (reflete na hora + persiste no reload via cmpAplicarRevisoes)
@@ -484,7 +492,7 @@ async function cmpConfirmarVoce(k, f) {
     const alvoGA = novo + 0.30;
     if (window.confirm(`Aplicar também GA (aditivada) = GC + 0,30 = R$ ${alvoGA.toFixed(2).replace('.', ',')}?`)) {
       const origGA = (dado.proprio && dado.proprio['GA'] !== null && dado.proprio['GA'] !== undefined) ? Number(dado.proprio['GA']) : null;
-      const okGA = await cmpSalvarPrecoProprio(posto.nome, 'GA', alvoGA, origGA);
+      const okGA = await cmpSalvarPrecoProprio(posto.ap, 'GA', alvoGA, origGA);
       if (okGA) dado.proprio['GA'] = alvoGA;
     }
   }
