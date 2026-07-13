@@ -13,10 +13,23 @@ let combustiveisMapeados = []; // [{ nome, codigo, coluna }]
 let localizacaoAtual = null;   // { lat, lng }
 let fotoBase64Atual = null;
 
+// ── Tema claro/escuro (mesma chave jb_theme dos outros módulos) ──
+function aplicarTema(tema) {
+  document.documentElement.setAttribute('data-theme', tema);
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = tema === 'light' ? '☀️' : '🌙';
+  localStorage.setItem('jb_theme', tema);
+}
+function toggleTheme() {
+  const atual = document.documentElement.getAttribute('data-theme') || 'dark';
+  aplicarTema(atual === 'dark' ? 'light' : 'dark');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   usuarioAtual = exigirSessao(['GERENTE']);
   if (!usuarioAtual) return;
 
+  aplicarTema(localStorage.getItem('jb_theme') || 'dark');
   montarTopbar();
 
   if (!usuarioAtual.posto?.nome) {
