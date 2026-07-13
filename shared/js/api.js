@@ -5,8 +5,25 @@
 // (token expirado/inválido) jogando o usuário de volta pro login.
 // ================================================================
 
-async function apiFetch(path, options = {}) {
-  const token = localStorage.getItem('jbretas_token');
+// ── Storage unificado ─────────────────────────────────────────────
+// "Lembrar de mim" MARCADO grava no localStorage (persiste); DESMARCADO
+// grava no sessionStorage (cai ao fechar). A leitura tenta localStorage
+// primeiro, senão sessionStorage — assim o resto do código não precisa
+// saber onde a sessão mora.
+const JB_CHAVES_SESSAO = ['jbretas_token', 'jbretas_usuario', 'jbretas_refresh', 'jbretas_expira'];
+function jbretasGetItem(chave) {
+  const v = localStorage.getItem(chave);
+  return v !== null ? v : sessionStorage.getItem(chave);
+}
+function jbretasSetItem(chave, valor, persistente) {
+  (persistente ? localStorage : sessionStorage).setItem(chave, valor);
+}
+function jbretasClearSessao() {
+  JB_CHAVES_SESSAO.forEach(k => { localStorage.removeItem(k); sessionStorage.removeItem(k); });
+}
+
+async function apiFetch(path, options = {}, _jaTentouRefresh = false) {
+  const token = jbretasGetItem('jbretas_token');
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {}),
@@ -18,12 +35,22 @@ async function apiFetch(path, options = {}) {
     headers,
   });
 
-  // Token inválido/expirado — limpa sessão e manda pro login
   if (resp.status === 401) {
-    localStorage.removeItem('jbretas_token');
-    localStorage.removeItem('jbretas_usuario');
-    const baseUrl = caminhoRaiz();
-    window.location.href = baseUrl + 'index.html?expirado=1';
+    // 401 nas próprias rotas de auth = credenciais/refresh inválidos:
+    // não renova nem redireciona, só propaga o erro pra quem chamou tratar
+    // (ex.: login com senha errada mostra a mensagem certa).
+    if (path.startsWith('/auth/login') || path.startsWith('/auth/refresh')) {
+      const jsonErr = await resp.json().catch(() => ({}));
+      throw new Error(jsonErr.erro || `Erro ${resp.status}`);
+    }
+    // Access vencido: tenta renovar UMA única vez e repete a chamada.
+    if (!_jaTentouRefresh && typeof window.jbretasRefresh === 'function') {
+      const renovou = await window.jbretasRefresh();
+      if (renovou) return apiFetch(path, options, true);
+    }
+    // Sem refresh possível (ou refresh falhou): limpa tudo e vai pro login.
+    jbretasClearSessao();
+    window.location.href = caminhoRaiz() + 'index.html?expirado=1';
     throw new Error('Sessão expirada');
   }
 
@@ -48,4 +75,7 @@ function caminhoRaiz() {
 }
 
 window.apiFetch = apiFetch;
+window.jbretasGetItem = jbretasGetItem;
+window.jbretasSetItem = jbretasSetItem;
+window.jbretasClearSessao = jbretasClearSessao;
 window.caminhoRaiz = caminhoRaiz;

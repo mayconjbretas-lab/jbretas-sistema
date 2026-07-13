@@ -68,13 +68,22 @@
 <script src="shared/js/api.js"></script>
 <script src="shared/js/auth.js"></script>
 <script>
-  // Se já existe sessão válida E o usuário não pediu pra sair por expiração, pula login
-  (function redirecionarSeJaLogado() {
-    const usuario = getUsuarioLogado();
-    const token = getTokenAtual();
-    if (usuario && token && !window.location.search.includes('expirado')) {
-      redirecionarPorPerfil(usuario);
+  // Login automático (Cenário A): só entra direto se houver refresh_token
+  // salvo (localStorage = "lembrar de mim"). Se o access estiver vencido,
+  // renova antes de redirecionar. Sem refresh, mostra o login normal.
+  (async function redirecionarSeJaLogado() {
+    if (window.location.search.includes('expirado')) return;
+    const refresh = localStorage.getItem('jbretas_refresh');
+    if (!refresh) return;
+    const token  = getTokenAtual();
+    const expira = parseInt(localStorage.getItem('jbretas_expira') || '0', 10);
+    const agora  = Math.floor(Date.now() / 1000);
+    if (!token || !expira || expira <= agora + 30) {
+      const ok = await jbretasRefresh();
+      if (!ok) return; // refresh falhou → login normal
     }
+    const usuario = getUsuarioLogado();
+    if (usuario) redirecionarPorPerfil(usuario);
   })();
 
   // Pré-preenche e-mail se "lembrar de mim" foi usado antes
@@ -115,7 +124,7 @@
     btn.textContent = 'ENTRANDO...';
 
     try {
-      const resp = await jbretasLogin(email, senha);
+      const resp = await jbretasLogin(email, senha, lembrar);
 
       // "Lembrar de mim" guarda só o e-mail (nunca a senha) pra pré-preencher
       if (lembrar) {
