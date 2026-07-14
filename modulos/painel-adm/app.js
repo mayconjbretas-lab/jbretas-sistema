@@ -542,6 +542,44 @@ function seloDesatualizado(registro) {
   return ` <span style="font-size:.6rem;color:var(--wn)">· dado de ${registro.data}</span>`;
 }
 
+// Filtros por POSTO na matriz (varrem todos os combustíveis de todos os
+// concorrentes). E lógico entre os dois. Não toca nos agregados nem no
+// cmpCardMatriz. Fuels = as colunas da matriz (CMP_FUELS_CARD).
+function cmpPostoPassaFiltros(dado) {
+  const fuels = CMP_FUELS_CARD.map(f => f.key);
+  const concs = dado.concorrentes || [];
+
+  // 1) Só quem mudou de ontem→hoje: passa se ALGUM concorrente mudou em
+  //    ALGUM combustível (tem ontem, não desatualizado, |Δ| >= 0,005).
+  if (G_CMP_SO_MUDOU) {
+    const algumMudou = concs.some(c => !c.desatualizado && fuels.some(f => {
+      const h = c.registro ? c.registro[f] : undefined;
+      const o = c.registroOntem ? c.registroOntem[f] : undefined;
+      return h !== null && h !== undefined && o !== null && o !== undefined
+        && Math.abs(Number(h) - Number(o)) >= 0.005;
+    }));
+    if (!algumMudou) return false;
+  }
+
+  // 2) Abaixo/Acima do nosso: passa se ALGUM concorrente estiver abaixo
+  //    (ou acima) do nosso proprio[f] em QUALQUER combustível. Sem proprio
+  //    (sem base de comparação) → esconde.
+  if (G_CMP_FAIXA_PRECO === 'abaixo' || G_CMP_FAIXA_PRECO === 'acima') {
+    if (!dado.proprio) return false;
+    const abaixo = G_CMP_FAIXA_PRECO === 'abaixo';
+    const algum = concs.some(c => fuels.some(f => {
+      const cv = c.registro ? c.registro[f] : undefined;
+      const ov = dado.proprio[f];
+      if (cv === null || cv === undefined || ov === null || ov === undefined) return false;
+      const d = Number(cv) - Number(ov);
+      return abaixo ? d < -0.005 : d > 0.005;
+    }));
+    if (!algum) return false;
+  }
+
+  return true;
+}
+
 function renderComparar() {
   montarFuelTabsComparar();
   montarStratTabsComparar();
@@ -568,8 +606,10 @@ function renderComparar() {
     if (glob.ownVal !== null) { somaMinha += glob.ownVal; contMinha++; }
     glob.competidores.forEach(c => { somaConc += c.preco; contConc++; });
 
-    // Card visível se o posto tem QUALQUER dado (próprio ou concorrente).
+    // Card visível se o posto tem QUALQUER dado (próprio ou concorrente)
+    // E passar nos filtros "só quem mudou" / "abaixo-acima do nosso".
     if (!dado.proprio && !dado.concorrentes.length) return;
+    if (!cmpPostoPassaFiltros(dado)) return;
 
     cardsHtml += cmpCardMatriz(posto, dado);
   });
