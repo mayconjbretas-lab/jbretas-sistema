@@ -401,8 +401,15 @@ function cmpCardMatriz(posto, dado) {
   const desatSelo = dado.proprioDesatualizado ? seloDesatualizado(dado.proprio) : '';
   const voceRow = `<tr class="cmpm-row-voce"><th class="cmpm-rowlbl">Você${desatSelo}</th>${voceCells}</tr>`;
 
-  // linhas de concorrentes (preço + diferença vs Você na mesma célula)
-  const concRows = dado.concorrentes.map(c => {
+  // linhas de concorrentes (preço + diferença vs Você na mesma célula),
+  // ordenadas por GC decrescente (maior no topo; sem GC vai pro fim).
+  // slice() pra não mutar o array original (agregados leem dado.concorrentes).
+  const ordenados = dado.concorrentes.slice().sort((a, b) => {
+    const ga = (a.registro && a.registro.GC != null) ? Number(a.registro.GC) : -Infinity;
+    const gb = (b.registro && b.registro.GC != null) ? Number(b.registro.GC) : -Infinity;
+    return gb - ga;
+  });
+  const concRows = ordenados.map(c => {
     const cells = cols.map(f => {
       const cv = (c.registro[f.key] !== null && c.registro[f.key] !== undefined) ? Number(c.registro[f.key]) : null;
       if (cv === null) return `<td class="cmpm-cell"><span class="cmpm-na">—</span></td>`;
