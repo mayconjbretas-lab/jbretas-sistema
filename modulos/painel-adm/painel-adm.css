@@ -161,7 +161,7 @@ html, body { height: 100%; overflow: hidden; }
 .myavg-sub { font-size: .64rem; margin-top: 2px; }
 
 /* Monitor de postos: grade multi-coluna (o grande ganho do desktop) */
-#cmp-regions { display: grid; grid-template-columns: repeat(1, 1fr); gap: .7rem; align-content: start; }
+#cmp-regions { display: grid; grid-template-columns: repeat(2, 1fr); gap: .7rem; align-content: start; }
 .region-card { background: var(--sf); border: 1px solid var(--bd); border-radius: var(--rl); padding: .9rem 1rem; }
 .region-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: .55rem; gap: .45rem; }
 .region-nome { font-size: .9rem; font-weight: 700; color: var(--tx); }
@@ -175,7 +175,7 @@ html, body { height: 100%; overflow: hidden; }
 
 /* ── MATRIZ da Comparação (colunas = fuels; linhas = Você/concorrentes/Sugerido) ── */
 .cmpm-wrap { overflow-x: auto; }
-.cmpm-table { width: 100%; min-width: 580px; max-width: 640px; table-layout: fixed; border-collapse: collapse; font-size: .74rem; }
+.cmpm-table { width: 100%; min-width: 580px; max-width: 640px; margin: 0 auto; table-layout: fixed; border-collapse: collapse; font-size: .74rem; }
 .cmpm-table th, .cmpm-table td { padding: 4px 6px; text-align: left; white-space: nowrap; }
 .cmpm-table thead th { color: var(--tx3); font-family: var(--mono); font-weight: 700; font-size: .64rem; border-bottom: 1px solid var(--bd); }
 .cmpm-rowlbl { text-align: left !important; color: var(--tx2); font-weight: 600; width: 122px; overflow: hidden; text-overflow: ellipsis; }
