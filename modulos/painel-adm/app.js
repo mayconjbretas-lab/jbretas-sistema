@@ -388,7 +388,7 @@ function cmpCardMatriz(posto, dado) {
     own[f.key] = v;
   });
 
-  const thead = `<tr><th class="cmpm-rowlbl"></th>${cols.map(f => `<th>${f.btn}</th>`).join('')}</tr>`;
+  const thead = `<tr><th class="cmpm-rowlbl"></th>${cols.map(f => `<th><span class="cmpm-colh">${f.btn}</span></th>`).join('')}</tr>`;
 
   // linha Você — lápis só nos fuels com valor
   const voceCells = cols.map(f => {

@@ -161,8 +161,7 @@ html, body { height: 100%; overflow: hidden; }
 .myavg-sub { font-size: .64rem; margin-top: 2px; }
 
 /* Monitor de postos: grade multi-coluna (o grande ganho do desktop) */
-#cmp-regions { display: grid; grid-template-columns: repeat(2, 1fr); gap: .7rem; align-content: start; }
-@media (max-width: 720px) { #cmp-regions { grid-template-columns: 1fr; } }
+#cmp-regions { display: grid; grid-template-columns: repeat(1, 1fr); gap: .7rem; align-content: start; }
 .region-card { background: var(--sf); border: 1px solid var(--bd); border-radius: var(--rl); padding: .9rem 1rem; }
 .region-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: .55rem; gap: .45rem; }
 .region-nome { font-size: .9rem; font-weight: 700; color: var(--tx); }
@@ -176,19 +175,22 @@ html, body { height: 100%; overflow: hidden; }
 
 /* ── MATRIZ da Comparação (colunas = fuels; linhas = Você/concorrentes/Sugerido) ── */
 .cmpm-wrap { overflow-x: auto; }
-.cmpm-table { width: 100%; border-collapse: collapse; font-size: .74rem; }
-.cmpm-table th, .cmpm-table td { padding: 4px 6px; text-align: right; white-space: nowrap; }
+.cmpm-table { width: 100%; min-width: 580px; max-width: 640px; table-layout: fixed; border-collapse: collapse; font-size: .74rem; }
+.cmpm-table th, .cmpm-table td { padding: 4px 6px; text-align: left; white-space: nowrap; }
 .cmpm-table thead th { color: var(--tx3); font-family: var(--mono); font-weight: 700; font-size: .64rem; border-bottom: 1px solid var(--bd); }
-.cmpm-rowlbl { text-align: left !important; color: var(--tx2); font-weight: 600; max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
+.cmpm-rowlbl { text-align: left !important; color: var(--tx2); font-weight: 600; width: 122px; overflow: hidden; text-overflow: ellipsis; }
 .cmpm-conc { font-weight: 500; color: var(--tx3); }
-.cmpm-preco { font-family: var(--mono); font-weight: 700; color: var(--tx); }
-.cmpm-diff { font-size: .62rem; font-weight: 600; }
+.cmpm-preco { display: inline-block; width: 52px; text-align: right; font-family: var(--mono); font-weight: 700; color: var(--tx); }
+.cmpm-colh { display: inline-block; width: 52px; text-align: right; }
+.cmpm-diff { font-size: .62rem; font-weight: 600; margin-left: 4px; }
 .cmpm-na { color: var(--tx3); opacity: .5; }
 .cmpm-pen { cursor: pointer; font-size: .72rem; opacity: .65; }
 .cmpm-pen:hover { opacity: 1; }
 .cmpm-input { width: 60px; background: var(--sf2); border: 1px solid var(--ac); border-radius: 6px; padding: 2px 5px; color: var(--tx); font-family: var(--mono); font-size: .72rem; text-align: right; outline: none; }
 .cmpm-row-voce th, .cmpm-row-voce td { border-bottom: 1px solid var(--bd); }
-.cmpm-row-voce .cmpm-rowlbl { color: var(--ac); }
+.cmpm-row-voce { background: rgba(75,176,234,.10); }
+.cmpm-row-voce .cmpm-rowlbl { color: var(--brand-blue); }
+.cmpm-row-voce .cmpm-preco { color: var(--brand-blue); }
 .cmpm-row-sug th, .cmpm-row-sug td { border-top: 1px solid var(--bd); }
 .cmpm-sug .cmpm-preco { color: var(--ac); }
 .cmpm-hint { font-size: .56rem; color: var(--tx3); }
