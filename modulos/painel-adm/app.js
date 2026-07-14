@@ -402,12 +402,17 @@ function cmpCardMatriz(posto, dado) {
   const voceRow = `<tr class="cmpm-row-voce"><th class="cmpm-rowlbl">Você${desatSelo}</th>${voceCells}</tr>`;
 
   // linhas de concorrentes (preço + diferença vs Você na mesma célula),
-  // ordenadas por GC decrescente (maior no topo; sem GC vai pro fim).
+  // ordenadas por GC decrescente com desempate em cascata GC→GA→ET→S10→S500
+  // (todos decrescentes; sem valor conta como -Infinity, vai pro fim).
   // slice() pra não mutar o array original (agregados leem dado.concorrentes).
+  const ORDEM_DESEMPATE = ['GC', 'GA', 'ET', 'S10', 'S500'];
   const ordenados = dado.concorrentes.slice().sort((a, b) => {
-    const ga = (a.registro && a.registro.GC != null) ? Number(a.registro.GC) : -Infinity;
-    const gb = (b.registro && b.registro.GC != null) ? Number(b.registro.GC) : -Infinity;
-    return gb - ga;
+    for (const f of ORDEM_DESEMPATE) {
+      const va = (a.registro && a.registro[f] != null) ? Number(a.registro[f]) : -Infinity;
+      const vb = (b.registro && b.registro[f] != null) ? Number(b.registro[f]) : -Infinity;
+      if (vb !== va) return vb - va;
+    }
+    return 0;
   });
   const concRows = ordenados.map(c => {
     const cells = cols.map(f => {
