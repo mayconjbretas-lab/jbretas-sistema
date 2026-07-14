@@ -406,7 +406,6 @@ function montarStringCarga() {
 }
 
 async function salvarFechamento() {
-  console.log('DIAG salvar: entrou'); // TEMP diagnóstico — remover depois
   const btn = document.getElementById('btn-salvar-fechamento');
   btn.disabled = true;
   btn.textContent = '⏳ Salvando...';
@@ -434,7 +433,6 @@ async function salvarFechamento() {
   };
 
   try {
-    console.log('DIAG salvar: vai mandar POST', payload); // TEMP diagnóstico — remover depois
     const resp = await apiFetch('/fechamento', {
       method: 'POST',
       body: JSON.stringify(payload),
