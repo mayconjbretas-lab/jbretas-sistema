@@ -367,6 +367,26 @@ html:not([data-theme="light"]) body::before{
 .complist-preco{font-family:var(--mono);font-weight:700;color:var(--tx);white-space:nowrap;flex-shrink:0}
 .complist-diff{font-size:.67rem;margin-left:5px;font-weight:600}
 
+/* ── MATRIZ da Comparação (portada do painel-adm; no mobile empilha 1/linha) ── */
+.cmpm-wrap { overflow-x: auto; }
+.cmpm-table { width: 100%; border-collapse: collapse; font-size: .74rem; }
+.cmpm-table th, .cmpm-table td { padding: 4px 6px; text-align: right; white-space: nowrap; }
+.cmpm-table thead th { color: var(--tx3); font-family: var(--mono); font-weight: 700; font-size: .64rem; border-bottom: 1px solid var(--bd); }
+.cmpm-rowlbl { text-align: left !important; color: var(--tx2); font-weight: 600; max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
+.cmpm-conc { font-weight: 500; color: var(--tx3); }
+.cmpm-preco { font-family: var(--mono); font-weight: 700; color: var(--tx); }
+.cmpm-diff { font-size: .62rem; font-weight: 600; }
+.cmpm-na { color: var(--tx3); opacity: .5; }
+.cmpm-pen { cursor: pointer; font-size: .72rem; opacity: .65; }
+.cmpm-pen:hover { opacity: 1; }
+.cmpm-input { width: 60px; background: var(--sf2); border: 1px solid var(--ac); border-radius: 6px; padding: 2px 5px; color: var(--tx); font-family: var(--mono); font-size: .72rem; text-align: right; outline: none; }
+.cmpm-row-voce th, .cmpm-row-voce td { border-bottom: 1px solid var(--bd); }
+.cmpm-row-voce .cmpm-rowlbl { color: var(--ac); }
+.cmpm-row-sug th, .cmpm-row-sug td { border-top: 1px solid var(--bd); }
+.cmpm-sug .cmpm-preco { color: var(--ac); }
+.cmpm-hint { font-size: .56rem; color: var(--tx3); }
+.cmpm-vazio { text-align: center !important; color: var(--tx3); font-size: .72rem; padding: 6px 0; }
+
 .sugerido-row{margin-top:.65rem;padding-top:.6rem;border-top:1px solid var(--bd);
   display:flex;justify-content:space-between;align-items:center}
 .sugerido-lbl{font-size:.67rem;color:var(--tx2);font-family:var(--mono);

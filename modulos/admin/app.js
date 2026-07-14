@@ -252,6 +252,7 @@ async function carregarDadosComparar() {
   document.getElementById('upd-txt').textContent = 'Buscando dados...';
   try {
     G_COMPARACAO = await buscarComparacaoDoDia({ dias: 15 });
+    await cmpAplicarRevisoes(); // sobrepõe os preços editados de hoje no "Você"
     comparaCarregado = true;
     if (!document.getElementById('cmp-posto').dataset.populado) popularFiltrosComparar();
     processarKPIsComparar();
@@ -460,6 +461,273 @@ function seloDesatualizado(registro) {
   return ` <span style="font-size:.6rem;color:var(--wn)">· dado de ${registro.data}</span>`;
 }
 
+// ════════════════════════════════════════════════════════════════
+// MATRIZ da Comparação — portada verbatim do painel-adm (desktop).
+// Colunas GC·GA·ET·S10·S500; linhas Você/concorrentes/Sugerido;
+// lápis (POST /coleta-revisao), regra GA=GC+0,30, overlay de revisões
+// e filtros por posto. Reaproveita fmtPrecoBRL/seloDesatualizado/
+// cmpCalcularSugerido/CMP_FUELS/G_CMP_* que este arquivo já tem.
+// ════════════════════════════════════════════════════════════════
+function cmpCalcCard(dado, f) {
+  const ownVal = (dado.proprio && dado.proprio[f] !== null && dado.proprio[f] !== undefined)
+    ? Number(dado.proprio[f]) : null;
+  const competidores = dado.concorrentes
+    .map(c => ({
+      nome: c.nome,
+      preco: (c.registro[f] !== null && c.registro[f] !== undefined) ? Number(c.registro[f]) : null,
+      desatualizado: c.desatualizado,
+      registro: c.registro,
+      ontem: (c.registroOntem && c.registroOntem[f] !== null && c.registroOntem[f] !== undefined)
+        ? Number(c.registroOntem[f]) : null,
+    }))
+    .filter(c => c.preco !== null)
+    .filter(c => !G_CMP_SO_MUDOU || (!c.desatualizado && c.ontem !== null && Math.abs(c.preco - c.ontem) >= 0.005))
+    .sort((a, b) => a.preco - b.preco);
+  return { ownVal, competidores };
+}
+
+// id seguro pra usar em id="" de célula (mesma regra do id do card).
+function idSafe(k) { return String(k).replace(/[^a-zA-Z0-9]/g, '_'); }
+
+// Data de hoje YYYY-MM-DD a partir do horário LOCAL (evita drift de UTC).
+function cmpHojeISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// min/avg/max dos concorrentes de um posto para um combustível.
+function cmpStatsFuel(dado, f) {
+  const precos = dado.concorrentes
+    .map(c => (c.registro[f] !== null && c.registro[f] !== undefined) ? Number(c.registro[f]) : null)
+    .filter(v => v !== null);
+  if (!precos.length) return null;
+  return { min: Math.min(...precos), max: Math.max(...precos), avg: precos.reduce((a, b) => a + b, 0) / precos.length };
+}
+
+// Sugerido por combustível: GC/ET/S10/S500 pela estratégia global sobre os
+// próprios concorrentes; GA = alvoGC + 0,30 FIXO (ignora concorrentes de GA).
+function cmpSugeridoMatriz(dado) {
+  const out = {};
+  const gc = cmpStatsFuel(dado, 'GC');
+  const alvoGC = gc ? cmpCalcularSugerido(gc.min, gc.avg, gc.max) : null;
+  out.GC = alvoGC;
+  out.GA = (alvoGC !== null) ? alvoGC + 0.30 : null;
+  ['ET', 'S10', 'S500'].forEach(f => {
+    const s = cmpStatsFuel(dado, f);
+    out[f] = s ? cmpCalcularSugerido(s.min, s.avg, s.max) : null;
+  });
+  return out;
+}
+
+// Monta o card no formato MATRIZ (colunas = fuels; linhas = Você / cada
+// concorrente / Sugerido).
+function cmpCardMatriz(posto, dado) {
+  const cols = CMP_FUELS_CARD; // GC, GA, ET, S10, S500
+  const idk = idSafe(posto.k);
+  const kSafe = String(posto.k).replace(/'/g, "\\'");
+
+  // preço próprio por fuel (já com overlay de revisão aplicado em proprio)
+  const own = {};
+  cols.forEach(f => {
+    const v = (dado.proprio && dado.proprio[f.key] !== null && dado.proprio[f.key] !== undefined) ? Number(dado.proprio[f.key]) : null;
+    own[f.key] = v;
+  });
+
+  const thead = `<tr><th class="cmpm-rowlbl"></th>${cols.map(f => `<th>${f.btn}</th>`).join('')}</tr>`;
+
+  // linha Você — lápis só nos fuels com valor
+  const voceCells = cols.map(f => {
+    const v = own[f.key];
+    if (v === null) return `<td class="cmpm-cell" id="cmpm-voce-${idk}-${f.key}"><span class="cmpm-na">—</span></td>`;
+    return `<td class="cmpm-cell cmpm-voce" id="cmpm-voce-${idk}-${f.key}">`
+      + `<span class="cmpm-preco">${fmtPrecoBRL(v)}</span>`
+      + ` <span class="cmpm-pen" title="Editar nosso preço" onclick="cmpEditarVoce('${kSafe}','${f.key}')">✏️</span></td>`;
+  }).join('');
+  const desatSelo = dado.proprioDesatualizado ? seloDesatualizado(dado.proprio) : '';
+  const voceRow = `<tr class="cmpm-row-voce"><th class="cmpm-rowlbl">Você${desatSelo}</th>${voceCells}</tr>`;
+
+  // linhas de concorrentes (preço + diferença vs Você na mesma célula)
+  const concRows = dado.concorrentes.map(c => {
+    const cells = cols.map(f => {
+      const cv = (c.registro[f.key] !== null && c.registro[f.key] !== undefined) ? Number(c.registro[f.key]) : null;
+      if (cv === null) return `<td class="cmpm-cell"><span class="cmpm-na">—</span></td>`;
+      const ov = own[f.key];
+      let diff = '';
+      if (ov !== null) {
+        const d = cv - ov;
+        const igual = Math.abs(d) < 0.005;
+        const cor = igual ? 'var(--wn)' : (d < 0 ? 'var(--dg)' : 'var(--ok)');
+        const txt = igual ? 'igual' : (d > 0 ? '+' : '') + Math.round(d * 100) + 'c';
+        diff = ` <span class="cmpm-diff" style="color:${cor}">${txt}</span>`;
+      }
+      return `<td class="cmpm-cell"><span class="cmpm-preco">${fmtPrecoBRL(cv)}</span>${diff}</td>`;
+    }).join('');
+    const nome = c.nome + (c.desatualizado ? seloDesatualizado(c.registro) : '');
+    return `<tr><th class="cmpm-rowlbl cmpm-conc" title="${c.nome}">${nome}</th>${cells}</tr>`;
+  }).join('');
+  const concHtml = concRows || `<tr><td class="cmpm-vazio" colspan="${cols.length + 1}">Sem concorrente coletado</td></tr>`;
+
+  // linha Sugerido (GA mostra "(GC+30)")
+  const sug = cmpSugeridoMatriz(dado);
+  const sugCells = cols.map(f => {
+    const s = sug[f.key];
+    if (s === null || s === undefined) return `<td class="cmpm-cell"><span class="cmpm-na">—</span></td>`;
+    const hint = f.key === 'GA' ? ` <span class="cmpm-hint">(GC+30)</span>` : '';
+    return `<td class="cmpm-cell cmpm-sug"><span class="cmpm-preco">${fmtPrecoBRL(s)}</span>${hint}</td>`;
+  }).join('');
+  const sugRow = `<tr class="cmpm-row-sug"><th class="cmpm-rowlbl">Sugerido</th>${sugCells}</tr>`;
+
+  return `<div class="region-card" id="cmp-card-${idk}">
+    <div class="region-hdr"><span class="region-nome">${posto.ap}</span></div>
+    <div class="cmpm-wrap"><table class="cmpm-table">
+      <thead>${thead}</thead>
+      <tbody>${voceRow}${concHtml}${sugRow}</tbody>
+    </table></div>
+  </div>`;
+}
+
+// ── Edição inline do "Você" na matriz (mesma rota da aba Coleta) ──
+function cmpEditarVoce(k, f) {
+  const cell = document.getElementById(`cmpm-voce-${idSafe(k)}-${f}`);
+  if (!cell) return;
+  const dado = G_COMPARACAO[k];
+  const orig = (dado && dado.proprio && dado.proprio[f] !== null && dado.proprio[f] !== undefined) ? Number(dado.proprio[f]) : null;
+  const val = orig !== null ? orig.toFixed(2).replace('.', ',') : '';
+  const kSafe = String(k).replace(/'/g, "\\'");
+  cell.innerHTML = `<input class="cmpm-input" id="cmpm-inp-${idSafe(k)}-${f}" type="text" inputmode="decimal"
+    value="${val}"
+    onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
+    onblur="cmpConfirmarVoce('${kSafe}','${f}')">`;
+  const inp = document.getElementById(`cmpm-inp-${idSafe(k)}-${f}`);
+  if (inp) { inp.focus(); inp.select(); }
+}
+
+// "619" → 6.19 (só dígitos = centavos); "6,19"/"6.19" → 6.19 (decimal direto).
+function cmpParsePreco(str) {
+  const s = String(str || '').trim();
+  if (!s) return NaN;
+  if (/[.,]/.test(s)) return parseFloat(s.replace(',', '.'));
+  const digits = s.replace(/\D/g, '');
+  return digits ? parseInt(digits, 10) / 100 : NaN;
+}
+
+async function cmpConfirmarVoce(k, f) {
+  const inp = document.getElementById(`cmpm-inp-${idSafe(k)}-${f}`);
+  if (!inp || inp.dataset.saving === '1') return;
+  const dado = G_COMPARACAO[k];
+  const posto = MAP_POSTOS.find(p => p.k === k);
+  if (!dado || !posto) { renderComparar(); return; }
+
+  const novo = cmpParsePreco(inp.value);
+  const orig = (dado.proprio && dado.proprio[f] !== null && dado.proprio[f] !== undefined) ? Number(dado.proprio[f]) : null;
+
+  // inválido/vazio ou sem mudança → cancela sem salvar
+  if (isNaN(novo) || novo <= 0) { renderComparar(); return; }
+  if (orig !== null && Math.abs(novo - orig) < 0.005) { renderComparar(); return; }
+
+  inp.dataset.saving = '1';
+  const ok = await cmpSalvarPrecoProprio(posto.ap, f, novo, orig);
+  if (ok) {
+    if (!dado.proprio) dado.proprio = {};
+    dado.proprio[f] = novo; // overlay local (reflete na hora + persiste no reload via cmpAplicarRevisoes)
+  }
+
+  // Regra do GA — NUNCA automático: ao salvar GC, oferece GA = GC + 0,30.
+  if (ok && f === 'GC') {
+    const alvoGA = novo + 0.30;
+    if (window.confirm(`Aplicar também GA (aditivada) = GC + 0,30 = R$ ${alvoGA.toFixed(2).replace('.', ',')}?`)) {
+      const origGA = (dado.proprio && dado.proprio['GA'] !== null && dado.proprio['GA'] !== undefined) ? Number(dado.proprio['GA']) : null;
+      const okGA = await cmpSalvarPrecoProprio(posto.ap, 'GA', alvoGA, origGA);
+      if (okGA) dado.proprio['GA'] = alvoGA;
+    }
+  }
+  renderComparar();
+}
+
+async function cmpSalvarPrecoProprio(postoNome, combustivel, precoEditado, precoOriginal) {
+  try {
+    await apiFetch('/coleta-revisao', {
+      method: 'POST',
+      body: JSON.stringify({
+        posto_nome: postoNome,
+        data: cmpHojeISO(),
+        combustivel,
+        preco_editado: precoEditado,
+        preco_original: precoOriginal,
+      }),
+    });
+    return true;
+  } catch (err) {
+    alert('Erro ao salvar preço: ' + (err && err.message ? err.message : 'tente de novo'));
+    return false;
+  }
+}
+
+// Sobrepõe os preços editados de hoje (coleta_revisao) no proprio de cada
+// posto — mesma fonte da aba Coleta, pra o "Você" bater e não sumir ao
+// recarregar. Silencioso se a rota falhar (a matriz funciona sem overlay).
+async function cmpAplicarRevisoes() {
+  try {
+    const resp = await apiFetch('/coleta-revisao?data=' + cmpHojeISO());
+    (resp.linhas || []).forEach(l => {
+      if (l.preco_editado === null || l.preco_editado === undefined) return;
+      const chave = normalizarNomePosto(l.posto_nome || '');
+      const dado = G_COMPARACAO[chave];
+      if (!dado) return;
+      if (!dado.proprio) dado.proprio = {};
+      dado.proprio[l.combustivel] = Number(l.preco_editado);
+    });
+  } catch (err) {
+    console.warn('Não foi possível aplicar revisões na matriz:', err && err.message);
+  }
+}
+
+// Filtros por POSTO na matriz (varrem todos os combustíveis de todos os
+// concorrentes). E lógico entre os dois. Não toca nos agregados nem no
+// cmpCardMatriz. Fuels = as colunas da matriz (CMP_FUELS_CARD).
+function cmpPostoPassaFiltros(dado) {
+  const fuels = CMP_FUELS_CARD.map(f => f.key);
+  const concs = dado.concorrentes || [];
+
+  // 1) Só quem mudou de ontem→hoje: passa se ALGUM concorrente mudou em
+  //    ALGUM combustível (tem ontem, não desatualizado, |Δ| >= 0,005).
+  if (G_CMP_SO_MUDOU) {
+    const algumMudou = concs.some(c => !c.desatualizado && fuels.some(f => {
+      const h = c.registro ? c.registro[f] : undefined;
+      const o = c.registroOntem ? c.registroOntem[f] : undefined;
+      return h !== null && h !== undefined && o !== null && o !== undefined
+        && Math.abs(Number(h) - Number(o)) >= 0.005;
+    }));
+    if (!algumMudou) return false;
+  }
+
+  // 2) Abaixo/Acima do nosso: passa se ALGUM concorrente estiver abaixo
+  //    (ou acima) do nosso proprio[f] em QUALQUER combustível. Sem proprio
+  //    (sem base de comparação) → esconde.
+  if (G_CMP_FAIXA_PRECO === 'abaixo' || G_CMP_FAIXA_PRECO === 'acima') {
+    if (!dado.proprio) return false;
+    const abaixo = G_CMP_FAIXA_PRECO === 'abaixo';
+    const algum = concs.some(c => fuels.some(f => {
+      const cv = c.registro ? c.registro[f] : undefined;
+      const ov = dado.proprio[f];
+      if (cv === null || cv === undefined || ov === null || ov === undefined) return false;
+      const d = Number(cv) - Number(ov);
+      return abaixo ? d < -0.005 : d > 0.005;
+    }));
+    if (!algum) return false;
+  }
+
+  return true;
+}
+
+const CMP_FUELS_CARD = [
+  { key: 'GC',   btn: 'GC',   nome: 'comum' },
+  { key: 'GA',   btn: 'GA',   nome: 'aditivada' },
+  { key: 'ET',   btn: 'ET',   nome: 'etanol' },
+  { key: 'S10',  btn: 'S10',  nome: 'diesel S10' },
+  { key: 'S500', btn: 'S500', nome: 'diesel S500' },
+];
+
 function renderComparar() {
   montarFuelTabsComparar();
   montarStratTabsComparar();
@@ -479,87 +747,19 @@ function renderComparar() {
 
   postos.forEach(posto => {
     const dado = G_COMPARACAO[posto.k] || { proprio: null, proprioDesatualizado: false, concorrentes: [] };
-    const ownVal = (dado.proprio && dado.proprio[fuel] !== null && dado.proprio[fuel] !== undefined)
-      ? Number(dado.proprio[fuel]) : null;
 
-    const competidores = dado.concorrentes
-      .map(c => ({
-        nome: c.nome,
-        preco: (c.registro[fuel] !== null && c.registro[fuel] !== undefined) ? Number(c.registro[fuel]) : null,
-        desatualizado: c.desatualizado,
-        registro: c.registro,
-        ontem: (c.registroOntem && c.registroOntem[fuel] !== null && c.registroOntem[fuel] !== undefined)
-          ? Number(c.registroOntem[fuel]) : null,
-      }))
-      .filter(c => c.preco !== null)
-      .filter(c => !G_CMP_SO_MUDOU || (!c.desatualizado && c.ontem !== null && Math.abs(c.preco - c.ontem) >= 0.005))
-      .sort((a, b) => a.preco - b.preco);
+    // Agregados do rodapé (Minha média / Média concorrência) continuam no
+    // combustível GLOBAL (G_CMP_FUEL) — a matriz não altera isso.
+    const glob = cmpCalcCard(dado, fuel);
+    if (glob.ownVal !== null) { somaMinha += glob.ownVal; contMinha++; }
+    glob.competidores.forEach(c => { somaConc += c.preco; contConc++; });
 
-    if (ownVal === null && competidores.length === 0) return;
-    if (ownVal !== null) { somaMinha += ownVal; contMinha++; }
-    competidores.forEach(c => { somaConc += c.preco; contConc++; });
+    // Card visível se o posto tem QUALQUER dado (próprio ou concorrente)
+    // E passar nos filtros "só quem mudou" / "abaixo-acima do nosso".
+    if (!dado.proprio && !dado.concorrentes.length) return;
+    if (!cmpPostoPassaFiltros(dado)) return;
 
-    const precos = competidores.map(c => c.preco);
-    const min = precos.length ? Math.min(...precos) : null;
-    const max = precos.length ? Math.max(...precos) : null;
-    const avg = precos.length ? precos.reduce((a, b) => a + b, 0) / precos.length : null;
-    const perdendo = ownVal !== null && min !== null && ownVal > min;
-
-    const badgeHtml = ownVal !== null
-      ? `<span class="region-badge ${perdendo ? 'perdendo' : 'ganhando'}">Você: ${fmtPrecoBRL(ownVal)}</span>${dado.proprioDesatualizado ? seloDesatualizado(dado.proprio) : ''}`
-      : '';
-
-    let listHtml = '';
-    if (competidores.length) {
-      competidores.forEach(c => {
-        const d = c.preco - (ownVal || 0);
-        const igual = Math.abs(d) < 0.005;
-
-        if (G_CMP_FAIXA_PRECO === 'abaixo' && ownVal !== null && !(d < -0.004)) return;
-        if (G_CMP_FAIXA_PRECO === 'acima'  && ownVal !== null && !(d >  0.004)) return;
-
-        let diffHtml = '';
-        if (ownVal !== null) {
-          const cor = igual ? 'var(--wn)' : (d < 0 ? 'var(--dg)' : 'var(--ok)');
-          const txt = igual ? 'igual' : (d > 0 ? '+' : '') + Math.round(d * 100) + 'c';
-          diffHtml = `<span class="complist-diff" style="color:${cor}">${txt}</span>`;
-        }
-        let vsOntemHtml = '';
-        if (!c.desatualizado && c.ontem !== null) {
-          const dOntem = c.preco - c.ontem;
-          if (Math.abs(dOntem) >= 0.005) {
-            const corOntem = dOntem > 0 ? 'var(--dg)' : 'var(--ok)';
-            const seta = dOntem > 0 ? '↑' : '↓';
-            vsOntemHtml = ` <span style="font-size:.62rem;color:${corOntem}">${seta}${Math.abs(Math.round(dOntem * 100))}c vs ontem</span>`;
-          }
-        }
-        listHtml += `<div class="complist-row"><span class="complist-nome">${c.nome}${c.desatualizado ? seloDesatualizado(c.registro) : vsOntemHtml}</span><span><span class="complist-preco">${fmtPrecoBRL(c.preco)}</span>${diffHtml}</span></div>`;
-      });
-      if (!listHtml) {
-        listHtml = `<div class="empty" style="padding:.4rem 0;font-size:.74rem;text-align:left">Nenhum concorrente para esse filtro.</div>`;
-      }
-    } else {
-      const msgVazio = G_CMP_SO_MUDOU
-        ? `Nenhum concorrente mudou de preço desde ontem para ${fuelLabel.toLowerCase()}`
-        : `Sem concorrente coletado para ${fuelLabel.toLowerCase()}`;
-      listHtml = `<div class="empty" style="padding:.4rem 0;font-size:.74rem;text-align:left">${msgVazio}</div>`;
-    }
-
-    let sugeridoHtml = '';
-    if (ownVal !== null && precos.length) {
-      const alvo = cmpCalcularSugerido(min, avg, max);
-      const mover = alvo - ownVal;
-      const moverIgual = Math.abs(mover) < 0.005;
-      const corMover = moverIgual ? 'var(--tx3)' : (mover < 0 ? 'var(--dg)' : 'var(--ok)');
-      const txtMover = moverIgual ? 'manter' : (mover > 0 ? '+' : '') + Math.round(mover * 100) + 'c';
-      sugeridoHtml = `<div class="sugerido-row"><span class="sugerido-lbl">Sugerido</span><span><span class="sugerido-val">${fmtPrecoBRL(alvo)}</span><span class="sugerido-move" style="color:${corMover}">${txtMover}</span></span></div>`;
-    }
-
-    cardsHtml += `<div class="region-card" id="cmp-card-${posto.k.replace(/[^a-zA-Z0-9]/g, '_')}">
-      <div class="region-hdr"><span class="region-nome">${posto.ap}</span>${badgeHtml}</div>
-      ${listHtml}
-      ${sugeridoHtml}
-    </div>`;
+    cardsHtml += cmpCardMatriz(posto, dado);
   });
 
   document.getElementById('cmp-regions').innerHTML = cardsHtml || '<div class="empty">Nenhum posto para esse filtro.</div>';
