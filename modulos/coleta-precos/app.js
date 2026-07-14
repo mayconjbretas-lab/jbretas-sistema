@@ -396,7 +396,14 @@ async function carregarHistorico(nomePosto) {
       body.innerHTML = '<div class="empty-state">Nenhuma coleta registrada ainda.</div>';
       return;
     }
-    body.innerHTML = registros.map(r => `
+    const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    body.innerHTML = registros.map(r => {
+      const podeExcluir = r.id && r.dataISO === hojeISO;
+      const alvoSafe = String(r.postoAlvo).replace(/'/g, "\\'");
+      const btn = podeExcluir
+        ? `<button class="hist-del" data-id="${r.id}" title="Excluir esta coleta" onclick="excluirColeta('${r.id}','${alvoSafe}')">🗑️</button>`
+        : '';
+      return `
       <div class="historico-row">
         <div>
           <div class="historico-alvo">${r.postoAlvo}</div>
@@ -405,10 +412,27 @@ async function carregarHistorico(nomePosto) {
         <div class="historico-precos">
           ${['GC','GA','ET','S10','S500'].filter(k => r[k]).map(k => `<span>${k}: R$ ${Number(r[k]).toFixed(2).replace('.', ',')}</span>`).join('')}
         </div>
+        ${btn}
       </div>
-    `).join('');
+    `;
+    }).join('');
   } catch (err) {
     body.innerHTML = `<div class="empty-state">⚠ Erro ao carregar histórico: ${err.message}</div>`;
+  }
+}
+
+async function excluirColeta(id, postoAlvo) {
+  const proprio = ehProprioPosto(postoAlvo);
+  const msg = proprio
+    ? "Excluir a coleta do SEU posto? O preço 'Você' volta ao lançamento anterior."
+    : `Excluir a coleta de ${postoAlvo} de hoje?`;
+  if (!confirm(msg)) return;
+  try {
+    await apiFetch('/coletas/' + id, { method: 'DELETE' });
+    mostrarToast('🗑️ Coleta excluída', proprio ? 'Coleta do seu posto removida.' : `Coleta de ${postoAlvo} removida.`);
+    await carregarHistorico(usuarioAtual.posto.nome);
+  } catch (err) {
+    mostrarToast('❌ Erro ao excluir', err.message);
   }
 }
 
