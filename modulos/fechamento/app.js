@@ -128,10 +128,10 @@ function parseTanquesRaw(raw) {
     const mCod = seg.match(/^([^(]+)\(/);
     if (!mCod) return;
     const codigo = mCod[1].trim();
-    const mCm = seg.match(/:\s*(\d+)cm\s*=\s*\d+L/);
+    const mCm = seg.match(/:\s*(\d+)cm\s*=\s*[\d.]+L/);
     if (mCm) { mapa[codigo] = { cm: parseInt(mCm[1]) }; return; }
-    const mL = seg.match(/:\s*(\d+)L/);
-    if (mL) { mapa[codigo] = { litros: parseInt(mL[1]) }; return; }
+    const mL = seg.match(/:\s*([\d.]+)L/);
+    if (mL) { mapa[codigo] = { litros: parseFloat(mL[1]) }; return; }
   });
   return mapa;
 }
