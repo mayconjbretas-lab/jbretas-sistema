@@ -49,6 +49,28 @@ function fmtL(v) {
   return Math.round(Number(v)).toLocaleString('pt-BR');
 }
 
+// Parse BR de litros p/ inputs editáveis: se tem vírgula, ela é o decimal e
+// pontos são milhar; se só tem ponto, o ponto é o decimal (mesmo padrão do
+// cmpParsePreco da matriz, sem dividir por 100). Retorna Number ou null.
+function parseLitros(str) {
+  const s = String(str == null ? '' : str).trim();
+  if (!s) return null;
+  const norm = s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s;
+  const limpo = norm.replace(/[^0-9.]/g, '');
+  if (!limpo) return null;
+  const n = parseFloat(limpo);
+  return isNaN(n) ? null : n;
+}
+
+// Formata litros p/ EDIÇÃO: vírgula decimal, SEM separador de milhar (ponto
+// como milhar seria ambíguo com o decimal). Ex.: 3540.1 → "3540,1".
+function fmtLitrosEdit(v) {
+  if (v === null || v === undefined || v === '') return '';
+  const n = Number(v);
+  if (isNaN(n)) return '';
+  return n.toLocaleString('pt-BR', { useGrouping: false, maximumFractionDigits: 3 });
+}
+
 // ── Topbar ──────────────────────────────────────────────────────
 function preencherTopbar() {
   if (!USUARIO) return;
@@ -188,7 +210,7 @@ function montarLinhasMedicao(dados) {
           const combAttr = String(col.comb).replace(/"/g, '&quot;');
           html += '<td class="' + grpEnd + '"><input type="text" inputmode="numeric" class="cell-in"' +
             ' data-dia="' + diaIdx + '" data-campo="' + cat.chave + '" data-comb="' + combAttr + '"' +
-            ' value="' + fmtL(val).replace('—', '') + '"' +
+            ' value="' + fmtLitrosEdit(val) + '"' +
             ' onfocus="onCelulaFocus(this)" oninput="onCelulaDigito(this)"' +
             ' onkeydown="onCelulaTecla(event,this)" onblur="onCelulaBlur(this)"></td>';
         } else {
@@ -276,8 +298,10 @@ function onCelulaFocus(input) {
   input.closest('tr').classList.add('linha-ativa');
   // Guarda o valor de modelo antes de editar (pra montar a entrada de undo no blur).
   _valorAoFocar = _valorCelula(input);
-  const raw = input.value.replace(/\./g, '').replace(/[^0-9]/g, '');
-  if (!raw || raw === '0') input.value = '0';
+  // Zero chato: se está 0/vazio, limpa pra digitar direto; senão o select()
+  // abaixo marca tudo pra sobrescrever.
+  const n = parseLitros(input.value);
+  if (n === null || n === 0) input.value = '';
   requestAnimationFrame(() => input.select());
 }
 
@@ -292,14 +316,10 @@ function _valorCelula(input) {
 }
 
 function onCelulaDigito(input) {
-  const cursorPos = input.selectionStart;
-  const raw = input.value.replace(/\./g, '').replace(/[^0-9]/g, '');
-  const num = parseInt(raw) || 0;
-  const formatado = num === 0 ? '0' : num.toLocaleString('pt-BR');
-  const diff = formatado.length - input.value.length;
-  input.value = formatado;
-  try { input.setSelectionRange(cursorPos + diff, cursorPos + diff); } catch (e) {}
-  _salvarCelula(input, num === 0 ? null : num);
+  // Não reformata durante a digitação (a máscara de milhar comia a vírgula).
+  // Só interpreta o valor e salva; a normalização visual acontece no blur.
+  const num = parseLitros(input.value);
+  _salvarCelula(input, (num && num > 0) ? num : null);
 }
 
 function onCelulaTecla(e, input) {
@@ -307,10 +327,9 @@ function onCelulaTecla(e, input) {
     e.preventDefault();
     const passo = e.shiftKey ? 100 : (e.altKey ? 10 : 1000);
     const delta = e.key === 'ArrowUp' ? passo : -passo;
-    const raw   = input.value.replace(/\./g, '').replace(/[^0-9]/g, '');
-    const atual = parseInt(raw) || 0;
+    const atual = parseLitros(input.value) || 0;
     const novo  = Math.max(0, atual + delta);
-    input.value = novo === 0 ? '0' : novo.toLocaleString('pt-BR');
+    input.value = novo === 0 ? '' : fmtLitrosEdit(novo);
     _salvarCelula(input, novo === 0 ? null : novo);
     return;
   }
@@ -341,10 +360,9 @@ function _moverCelula(input, deltaDia, deltaCampo) {
 }
 
 function onCelulaBlur(input) {
-  const raw = input.value.replace(/\./g, '').replace(/[^0-9]/g, '');
-  const num = parseInt(raw) || 0;
-  const valorNovo = num > 0 ? num : null;
-  input.value = num > 0 ? num.toLocaleString('pt-BR') : '';
+  const num = parseLitros(input.value);
+  const valorNovo = (num && num > 0) ? num : null;
+  input.value = valorNovo === null ? '' : fmtLitrosEdit(valorNovo);
   _salvarCelula(input, valorNovo);
   // Registra o net da edição desta célula na pilha de undo (só se mudou).
   if (_valorAoFocar !== valorNovo) {
