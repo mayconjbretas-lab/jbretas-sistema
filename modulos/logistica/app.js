@@ -166,7 +166,8 @@ function montarCabecalhoMedicao(grupos, combustiveisVenda) {
   const thead = document.getElementById('medicao-thead');
   let row1 = '<tr><th rowspan="2" class="sticky-col">DIA</th>';
   CATEGORIAS_MEDICAO.forEach((cat, ci) => {
-    const n = colunasDaCategoria(cat.chave, grupos, combustiveisVenda).length;
+    let n = colunasDaCategoria(cat.chave, grupos, combustiveisVenda).length;
+    if (cat.chave === 'venda') n += 1; // + coluna TOTAL
     const grpEnd = (ci < CATEGORIAS_MEDICAO.length - 1) ? ' grp-end' : '';
     row1 += '<th colspan="' + n + '" class="' + cat.classe + grpEnd + '">' + cat.titulo + '</th>';
   });
@@ -174,10 +175,13 @@ function montarCabecalhoMedicao(grupos, combustiveisVenda) {
   let row2 = '<tr>';
   CATEGORIAS_MEDICAO.forEach(cat => {
     const cols = colunasDaCategoria(cat.chave, grupos, combustiveisVenda);
+    const ehVenda = cat.chave === 'venda';
     cols.forEach((g, gi) => {
-      const grpEnd = (gi === cols.length - 1) ? ' class="grp-end"' : '';
+      // na Venda o grp-end vai pro TOTAL (última coluna do grupo)
+      const grpEnd = (gi === cols.length - 1 && !ehVenda) ? ' class="grp-end"' : '';
       row2 += '<th' + grpEnd + '>' + g.abv + '</th>';
     });
+    if (ehVenda) row2 += '<th class="grp-end col-total-venda">TOTAL</th>';
   });
   row2 += '</tr>';
   thead.innerHTML = row1 + row2;
@@ -196,9 +200,11 @@ function montarLinhasMedicao(dados) {
     CATEGORIAS_MEDICAO.forEach(cat => {
       const cols    = colunasDaCategoria(cat.chave, grupos, vendaCols);
       const valores = d[cat.chave] || [];
+      const ehVenda = cat.chave === 'venda';
       cols.forEach((col, i) => {
         const val    = valores[i];
-        const grpEnd = (i === cols.length - 1) ? ' grp-end' : '';
+        // na Venda o grp-end vai pro TOTAL (adicionado após este loop)
+        const grpEnd = (i === cols.length - 1 && !ehVenda) ? ' grp-end' : '';
         if (cat.chave === 'previsao') {
           // Preenchido por recalcularPrevisaoEDiff após montar as linhas.
           html += '<td class="' + grpEnd + '"><span class="cell-val" id="prev_' + diaIdx + '_' + i + '">—</span></td>';
@@ -220,6 +226,12 @@ function montarLinhasMedicao(dados) {
             '<span class="cell-val cell-ro' + vazia + '">' + fmtL(val) + '</span></td>';
         }
       });
+      if (ehVenda) {
+        const totalVenda = somaVendaDia(valores);
+        const vaziaT = (totalVenda === null) ? ' cell-vazia' : '';
+        html += '<td class="grp-end"><span class="cell-val cell-total-venda' + vaziaT + '" id="vtot_' + diaIdx + '">' +
+          (totalVenda === null ? '—' : fmtL(totalVenda)) + '</span></td>';
+      }
     });
     html += '</tr>';
   });
@@ -268,6 +280,29 @@ function recalcularPrevisaoEDiff(diaIdx) {
       diffEl.textContent = (diffVal === null ? '—' : ((diffVal > 0 ? '+' : '') + fmtL(diffVal)));
     }
   });
+}
+
+// Soma das vendas do dia (todas as colunas). null se o dia não tem NENHUMA venda.
+function somaVendaDia(vendaArr) {
+  if (!Array.isArray(vendaArr)) return null;
+  let algum = false, soma = 0;
+  vendaArr.forEach(v => {
+    if (v !== null && v !== undefined && v !== '') { algum = true; soma += Number(v) || 0; }
+  });
+  return algum ? soma : null;
+}
+
+// Atualiza (ao vivo) a coluna TOTAL do grupo Venda de um dia.
+function recalcularTotalVenda(diaIdx) {
+  if (!DADOS_ATUAIS) return;
+  const dia = DADOS_ATUAIS.dias[diaIdx];
+  if (!dia) return;
+  const total = somaVendaDia(dia.venda);
+  const el = document.getElementById('vtot_' + diaIdx);
+  if (el) {
+    el.textContent = (total === null ? '—' : fmtL(total));
+    el.classList.toggle('cell-vazia', total === null);
+  }
 }
 
 // Atualiza só a DIFERENÇA de um dia (diff = med_hoje − prev_hoje). Portado do antigo.
@@ -413,6 +448,7 @@ function _recalcAfeta(diaIdx, campo) {
   } else if (campo === 'carga' || campo === 'venda') {
     recalcularPrevisaoEDiff(diaIdx);
     _atualizarDiffDia(diaIdx + 1);
+    if (campo === 'venda') recalcularTotalVenda(diaIdx);
   }
 }
 

@@ -200,5 +200,7 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
     var(--accent-dim2) 5px, var(--accent-dim2) 6px);
 }
 .cell-ro { color: var(--text3); }
+.cell-total-venda { font-weight: 700; color: var(--c-ven); }
+.cell-total-venda.cell-vazia { font-weight: 600; color: var(--text3); }
 
 .matriz-erro { color: var(--danger); text-align: center; padding: 2rem; font-family: var(--mono); font-size: .8rem; }
