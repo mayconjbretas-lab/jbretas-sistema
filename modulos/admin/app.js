@@ -74,6 +74,8 @@ function setTab(btn, tab) {
   if (tab === 'comp' && !comparaCarregado) carregarDadosComparar();
   if (tab === 'hist') carregarHistorico();
   if (tab === 'coleta') renderColetaRevisao(document.getElementById('s-coleta'));
+  // Relatórios — mesmo JS do painel-adm desktop (renderRelatorios em window), sem fork.
+  if (tab === 'relat') renderRelatorios(document.getElementById('s-relat'));
 }
 
 function abrirMais() { document.getElementById('modal-mais').classList.add('open'); }

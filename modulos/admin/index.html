@@ -217,6 +217,9 @@
       </div>
     </section>
 
+    <!-- ═══ ABA: RELATÓRIOS ═══ (compartilha ../painel-adm/relatorios.js, sem fork) -->
+    <section class="scr" id="s-relat"></section>
+
     <!-- ═══ ABA: MAIS+ ═══ (entrega futura) -->
     <section class="scr" id="s-mais">
       <div id="mais-conteudo"><div class="empty">🚧 Em construção</div></div>
@@ -245,6 +248,10 @@
     <button class="nbtn" onclick="setTab(this,'hist')">
       <span class="ni">📈</span>
       <span class="nl">Histórico</span>
+    </button>
+    <button class="nbtn" onclick="setTab(this,'relat')">
+      <span class="ni">📊</span>
+      <span class="nl">Relatórios</span>
     </button>
     <button class="nbtn" onclick="abrirMais()">
       <span class="ni">➕</span>
@@ -295,6 +302,7 @@
 <script src="../../shared/js/auth.js"></script>
 <script src="../../shared/js/coletas-service.js"></script>
 <script src="coleta-revisao/coleta-revisao.js"></script>
+<script src="../painel-adm/relatorios.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

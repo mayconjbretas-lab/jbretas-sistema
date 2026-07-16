@@ -63,6 +63,14 @@
         '#s-relat .rel-body { display: flex; flex-direction: column; gap: .9rem; }' +
         '#s-relat .rel-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; align-items: start; }' +
         '@media (max-width: 900px) { #s-relat .rel-grid2 { grid-template-columns: 1fr; } }' +
+        // Telas de celular (~390px): aperta fonte/padding da tabela do consolidado
+        // pra caber legível; se ainda estourar, o .cbody rola na horizontal.
+        '@media (max-width: 430px) {' +
+          '#s-relat .rel-title { font-size: .9rem; }' +
+          '#s-relat .rel-table { font-size: .74rem; }' +
+          '#s-relat .rel-table th, #s-relat .rel-table td { padding: .4rem .35rem; }' +
+          '#s-relat .rel-rank li { font-size: .8rem; padding: .5rem .6rem; }' +
+        '}' +
         '#s-relat .rel-copy { background: var(--sf2); border: 1px solid var(--bd); color: var(--tx2); font-family: var(--mono); font-size: .7rem; font-weight: 700; padding: .45rem .8rem; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: all .15s; }' +
         '#s-relat .rel-copy:hover { border-color: var(--ac); color: var(--ac); }' +
         '#s-relat .rel-table { width: 100%; border-collapse: collapse; font-size: .84rem; }' +
