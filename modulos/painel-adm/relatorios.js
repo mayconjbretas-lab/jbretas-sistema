@@ -59,6 +59,7 @@
         '#s-relat .rel-title { font-family: var(--mono); font-size: 1rem; font-weight: 700; color: var(--tx); }' +
         '#s-relat .rel-date { background: var(--sf2); border: 1px solid var(--bd); border-radius: 8px; padding: .5rem .7rem; color: var(--tx); font-family: var(--mono); font-size: .82rem; outline: none; }' +
         '#s-relat .rel-date:focus { border-color: var(--ac); }' +
+        '#s-relat .rel-chips { display: flex; gap: 6px; flex-wrap: wrap; }' +
         '#s-relat .rel-body { display: flex; flex-direction: column; gap: .9rem; }' +
         '#s-relat .rel-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; align-items: start; }' +
         '@media (max-width: 900px) { #s-relat .rel-grid2 { grid-template-columns: 1fr; } }' +
@@ -84,6 +85,13 @@
         '<div class="rel-top">' +
           '<div class="rel-title">📊 Relatórios — Rede</div>' +
           '<input type="date" class="rel-date" id="rel-data" value="' + _dataISO + '">' +
+        '</div>' +
+        // Chips = âncoras de rolagem (scrollIntoView suave até o card); NÃO alternam
+        // vistas — os 3 cards ficam todos visíveis.
+        '<div class="rel-chips">' +
+          '<button class="fueltab" onclick="__relScroll(\'consolidado\')">📊 Consolidado</button>' +
+          '<button class="fueltab" onclick="__relScroll(\'mix\')">🥇 Mix G. Aditivada</button>' +
+          '<button class="fueltab" onclick="__relScroll(\'produtos\')">🛢️ Venda de Produtos</button>' +
         '</div>' +
         '<div class="rel-body" id="rel-body"><div class="empty">Carregando…</div></div>' +
       '</div>';
@@ -119,7 +127,7 @@
 
   // Card com cabeçalho (título + subtítulo opcional + botão copiar).
   function cardCabecalho(titulo, sub, tipo, inner) {
-    return '<div class="card">' +
+    return '<div class="card" id="rel-card-' + tipo + '">' +
       '<div class="chdr" style="display:flex;justify-content:space-between;align-items:center;gap:.6rem">' +
         '<div><div class="ctitle">' + titulo + '</div>' + (sub ? '<div class="csub">' + sub + '</div>' : '') + '</div>' +
         '<button class="rel-copy" onclick="__relCopiar(\'' + tipo + '\', this)">📋 Copiar p/ WhatsApp</button>' +
@@ -217,6 +225,12 @@
   }
 
   // ── Ações públicas (chamadas pelos onclick inline) ───────────────
+  // Âncora de rolagem: leva suave até o card do tipo, sem esconder os outros.
+  window.__relScroll = function (tipo) {
+    const el = document.getElementById('rel-card-' + tipo);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   window.__relCopiar = function (tipo, btn) {
     const texto = tipo === 'mix' ? textoMix()
                 : tipo === 'produtos' ? textoProdutos()
