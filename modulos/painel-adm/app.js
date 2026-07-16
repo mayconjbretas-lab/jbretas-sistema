@@ -69,6 +69,8 @@ function setTab(btn, tab) {
   if (tab === 'coleta') renderColetaRevisao(document.getElementById('s-coleta'));
   // Medição — ADM define o pré-pedido (medicao.js expõe renderMedicao em window).
   if (tab === 'medicao') renderMedicao(document.getElementById('s-medicao'));
+  // Relatórios — consolidado/mix/produtos da rede (relatorios.js expõe renderRelatorios).
+  if (tab === 'relat') renderRelatorios(document.getElementById('s-relat'));
   // Demais abas (mapa/histórico/mais) entram nos próximos blocos.
 }
 

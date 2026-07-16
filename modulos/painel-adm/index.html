@@ -164,6 +164,7 @@
     <section class="scr" id="s-medicao"><div class="em-construcao">🛢️ Medição — em construção</div></section>
     <section class="scr" id="s-mapa"><div class="em-construcao">🗺️ Mapa — em construção</div></section>
     <section class="scr" id="s-hist"><div class="em-construcao">📈 Histórico — em construção</div></section>
+    <section class="scr" id="s-relat"></section>
     <section class="scr" id="s-mais"><div class="em-construcao">➕ Mais — em construção</div></section>
   </main>
 
@@ -173,6 +174,7 @@
     <button class="nbtn" onclick="setTab(this,'medicao')">       <span class="ni">🛢️</span><span class="nl">Medição</span></button>
     <button class="nbtn" onclick="setTab(this,'mapa')">          <span class="ni">🗺️</span><span class="nl">Mapa</span></button>
     <button class="nbtn" onclick="setTab(this,'hist')">          <span class="ni">📈</span><span class="nl">Histórico</span></button>
+    <button class="nbtn" onclick="setTab(this,'relat')">         <span class="ni">📊</span><span class="nl">Relatórios</span></button>
     <button class="nbtn" onclick="setTab(this,'mais')">          <span class="ni">➕</span><span class="nl">Mais+</span></button>
   </nav>
 
@@ -205,6 +207,7 @@
 <!-- Coleta (revisão) — mesmo JS do painel mobile (renderColetaRevisao em window), sem fork -->
 <script src="../admin/coleta-revisao/coleta-revisao.js"></script>
 <script src="medicao.js"></script>
+<script src="relatorios.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
