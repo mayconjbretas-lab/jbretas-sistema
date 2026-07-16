@@ -172,7 +172,7 @@ async function carregarFechamentoDoDia(dataISO) {
     combustiveisAtuais.forEach(c => {
       const valor = vendasMapa[c.nome];
       const input = document.getElementById('venda-' + c.nome.replace(/\s+/g, '_'));
-      if (valor !== undefined && input) input.value = valor;
+      if (valor !== undefined && input) input.value = fmtLitrosEdit(valor);
     });
     atualizarTotalVendas();
 
@@ -285,19 +285,50 @@ function renderVendas() {
   body.innerHTML = combustiveisAtuais.map(c => `
     <div class="fuel-row">
       <span class="fuel-label">${c.codigo} — ${c.nome}</span>
-      <input class="step-input" type="number" min="0" step="0.01"
+      <input class="step-input" type="text" inputmode="decimal"
         id="venda-${c.nome.replace(/\s+/g, '_')}" data-combustivel="${c.nome}"
-        placeholder="0" oninput="atualizarTotalVendas()"
+        placeholder="0" oninput="atualizarTotalVendas()" onblur="normalizarVenda(this)"
         style="background:var(--surface3);border:1px solid var(--border2);border-radius:8px;width:110px;">
     </div>
   `).join('');
+}
+
+// Parse BR de litros p/ os inputs de venda: se tem vírgula, ela é o decimal e os
+// pontos são milhar; se só tem ponto, o ponto é o decimal. Mesma regra do
+// parseLitros da Logística e do parser corrigido no server.js. Number ou null.
+function parseLitros(str) {
+  const s = String(str == null ? '' : str).trim();
+  if (!s) return null;
+  const norm = s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s;
+  const limpo = norm.replace(/[^0-9.]/g, '');
+  if (!limpo) return null;
+  const n = parseFloat(limpo);
+  return isNaN(n) ? null : n;
+}
+
+// Formata litros p/ EDIÇÃO: vírgula decimal, SEM separador de milhar (o ponto
+// como milhar seria ambíguo com o decimal). Ex.: 5163.287 → "5163,287". Igual
+// ao fmtLitrosEdit da Logística.
+function fmtLitrosEdit(v) {
+  if (v === null || v === undefined || v === '') return '';
+  const n = Number(v);
+  if (isNaN(n)) return '';
+  return n.toLocaleString('pt-BR', { useGrouping: false, maximumFractionDigits: 3 });
+}
+
+// Blur do input de venda: normaliza o valor exibido (vírgula decimal, sem milhar)
+// e recalcula o total — feedback visual que denuncia digitação errada na origem.
+function normalizarVenda(input) {
+  const n = parseLitros(input.value);
+  input.value = (n === null || n === 0) ? '' : fmtLitrosEdit(n);
+  atualizarTotalVendas();
 }
 
 function atualizarTotalVendas() {
   let total = 0;
   combustiveisAtuais.forEach(c => {
     const input = document.getElementById('venda-' + c.nome.replace(/\s+/g, '_'));
-    total += parseFloat(input?.value) || 0;
+    total += parseLitros(input?.value) || 0;
   });
   document.getElementById('total-vendas').textContent = total.toLocaleString('pt-BR') + ' L';
 }
@@ -391,7 +422,9 @@ function montarStringTanques() {
 function montarStringVendas() {
   return combustiveisAtuais.map(c => {
     const input = document.getElementById('venda-' + c.nome.replace(/\s+/g, '_'));
-    const valor = parseFloat(input?.value) || 0;
+    // Número CANÔNICO: ponto decimal, sem milhar (ex.: "7285L" ou "5163.287L").
+    // Deixa o vendas_raw inequívoco pra sempre — o backend não precisa adivinhar.
+    const valor = parseLitros(input?.value) || 0;
     return `${c.nome}: ${valor}L`;
   }).join(' | ');
 }
