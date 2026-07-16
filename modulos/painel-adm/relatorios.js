@@ -16,7 +16,6 @@
   let _shellPronto = false;
   let _dados       = null;            // resposta do GET /relatorios
   let _dataISO     = null;            // data selecionada (YYYY-MM-DD)
-  let _vista       = 'consolidado';   // 'consolidado' | 'mix' | 'produtos'
 
   // Ontem em Brasília, formato en-CA (mesmo default do backend).
   function ontemISO() {
@@ -60,7 +59,9 @@
         '#s-relat .rel-title { font-family: var(--mono); font-size: 1rem; font-weight: 700; color: var(--tx); }' +
         '#s-relat .rel-date { background: var(--sf2); border: 1px solid var(--bd); border-radius: 8px; padding: .5rem .7rem; color: var(--tx); font-family: var(--mono); font-size: .82rem; outline: none; }' +
         '#s-relat .rel-date:focus { border-color: var(--ac); }' +
-        '#s-relat .rel-chips { display: flex; gap: 6px; flex-wrap: wrap; }' +
+        '#s-relat .rel-body { display: flex; flex-direction: column; gap: .9rem; }' +
+        '#s-relat .rel-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; align-items: start; }' +
+        '@media (max-width: 900px) { #s-relat .rel-grid2 { grid-template-columns: 1fr; } }' +
         '#s-relat .rel-copy { background: var(--sf2); border: 1px solid var(--bd); color: var(--tx2); font-family: var(--mono); font-size: .7rem; font-weight: 700; padding: .45rem .8rem; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: all .15s; }' +
         '#s-relat .rel-copy:hover { border-color: var(--ac); color: var(--ac); }' +
         '#s-relat .rel-table { width: 100%; border-collapse: collapse; font-size: .84rem; }' +
@@ -84,11 +85,6 @@
           '<div class="rel-title">📊 Relatórios — Rede</div>' +
           '<input type="date" class="rel-date" id="rel-data" value="' + _dataISO + '">' +
         '</div>' +
-        '<div class="rel-chips">' +
-          '<button class="fueltab active" id="rel-chip-consolidado" onclick="__relVista(\'consolidado\', this)">📊 Consolidado</button>' +
-          '<button class="fueltab" id="rel-chip-mix" onclick="__relVista(\'mix\', this)">🥇 Mix G. Aditivada</button>' +
-          '<button class="fueltab" id="rel-chip-produtos" onclick="__relVista(\'produtos\', this)">🛢️ Venda de Produtos</button>' +
-        '</div>' +
         '<div class="rel-body" id="rel-body"><div class="empty">Carregando…</div></div>' +
       '</div>';
     const inp = sec.querySelector('#rel-data');
@@ -110,14 +106,15 @@
     }
   }
 
-  // ── Render da vista ativa ────────────────────────────────────────
+  // ── Render: tudo numa tela só — consolidado em cima, mix + produtos
+  //    lado a lado abaixo (grid 2 col; empilha em <900px). ────────────
   function renderVista() {
     const body = document.getElementById('rel-body');
     if (!body) return;
     if (!_dados) { body.innerHTML = '<div class="empty">Carregando…</div>'; return; }
-    body.innerHTML = _vista === 'mix' ? renderMix()
-                   : _vista === 'produtos' ? renderProdutos()
-                   : renderConsolidado();
+    body.innerHTML =
+      renderConsolidado() +
+      '<div class="rel-grid2">' + renderMix() + renderProdutos() + '</div>';
   }
 
   // Card com cabeçalho (título + subtítulo opcional + botão copiar).
@@ -220,13 +217,6 @@
   }
 
   // ── Ações públicas (chamadas pelos onclick inline) ───────────────
-  window.__relVista = function (v, btn) {
-    _vista = v;
-    document.querySelectorAll('#s-relat .rel-chips .fueltab').forEach(c => c.classList.remove('active'));
-    if (btn) btn.classList.add('active');
-    renderVista();
-  };
-
   window.__relCopiar = function (tipo, btn) {
     const texto = tipo === 'mix' ? textoMix()
                 : tipo === 'produtos' ? textoProdutos()
