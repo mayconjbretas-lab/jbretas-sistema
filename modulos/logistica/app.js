@@ -87,6 +87,8 @@ function switchMainTab(tabId, el) {
   document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
   document.getElementById(tabId)?.classList.add('active');
   if (el) el.classList.add('active');
+  // Custo & Margem — render próprio (custo-margem.js expõe renderCustoMargem).
+  if (tabId === 'tab-custo' && window.renderCustoMargem) renderCustoMargem(document.getElementById('tab-custo'));
 }
 
 // ── Seletor de posto (GET /postos) ──────────────────────────────
