@@ -223,6 +223,9 @@
     <!-- ═══ ABA: CUSTO & MARGEM ═══ (compartilha ../logistica/custo-margem.js, sem fork; ADM = leitura) -->
     <section class="scr" id="s-custo"></section>
 
+    <!-- ═══ ABA: FORNECEDORES ═══ (compartilha ../painel-adm/fornecedores.js, sem fork) -->
+    <section class="scr" id="s-forn"></section>
+
     <!-- ═══ ABA: MAIS+ ═══ (entrega futura) -->
     <section class="scr" id="s-mais">
       <div id="mais-conteudo"><div class="empty">🚧 Em construção</div></div>
@@ -240,9 +243,9 @@
       <span class="ni">📋</span>
       <span class="nl">Coleta</span>
     </button>
-    <button class="nbtn" onclick="setTab(this,'regional')">
-      <span class="ni">🗺️</span>
-      <span class="nl">Regional</span>
+    <button class="nbtn" onclick="setTab(this,'forn')">
+      <span class="ni">📊</span>
+      <span class="nl">Fornecedores</span>
     </button>
     <button class="nbtn active" onclick="setTab(this,'mapa')">
       <span class="ni">📍</span>
@@ -271,6 +274,10 @@
     <div class="mitem" onclick="abrirCustoMobile()">
       <span class="mic">💰</span>
       Custo &amp; Margem
+    </div>
+    <div class="mitem" onclick="abrirRegionalMobile()">
+      <span class="mic">🌍</span>
+      Regional
     </div>
   </div>
 </div>
@@ -310,6 +317,7 @@
 <script src="coleta-revisao/coleta-revisao.js"></script>
 <script src="../painel-adm/relatorios.js"></script>
 <script src="../logistica/custo-margem.js"></script>
+<script src="../painel-adm/fornecedores.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

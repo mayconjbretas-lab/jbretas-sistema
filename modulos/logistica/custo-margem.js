@@ -211,6 +211,9 @@
             '<label class="cm-daylabel" id="cm-daylabel"></label>' +
             '<button class="cm-daybtn" onclick="__cmDia(1)" title="Próximo dia">▶</button>' +
             '<button class="cm-daybtn cm-hoje" id="cm-hoje-btn" onclick="__cmHoje()" title="Voltar para hoje" style="display:none">⟳ Hoje</button>' +
+            // Dashboard de fornecedores — só aparece onde o fornecedores.js está
+            // carregado (painel-adm / admin), não na Logística.
+            (window.__abrirForn ? '<button class="cm-daybtn cm-hoje" onclick="__abrirForn()" title="Dashboard de fornecedores">📊 Fornecedores</button>' : '') +
           '</div>' +
         '</div>' +
         '<div class="cm-card" id="cm-bar"></div>' +

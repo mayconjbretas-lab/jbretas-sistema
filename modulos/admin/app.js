@@ -76,6 +76,8 @@ function setTab(btn, tab) {
   if (tab === 'coleta') renderColetaRevisao(document.getElementById('s-coleta'));
   // Relatórios — mesmo JS do painel-adm desktop (renderRelatorios em window), sem fork.
   if (tab === 'relat') renderRelatorios(document.getElementById('s-relat'));
+  // Fornecedores — dashboard (fornecedores.js expõe renderFornecedores), agora aba do rodapé.
+  if (tab === 'forn') renderFornecedores(document.getElementById('s-forn'));
 }
 
 function abrirMais() { document.getElementById('modal-mais').classList.add('open'); }
@@ -88,6 +90,15 @@ function abrirCustoMobile() {
   document.querySelectorAll('.nbtn').forEach(x => x.classList.remove('active'));
   document.getElementById('s-custo').classList.add('active');
   renderCustoMargem(document.getElementById('s-custo'));
+}
+
+// Regional — agora acessada pelo Mais+ (o rodapé passou a ter Fornecedores no
+// lugar). Sem render/fetch próprio: a section é placeholder, só ativada.
+function abrirRegionalMobile() {
+  document.getElementById('modal-mais').classList.remove('open');
+  document.querySelectorAll('.scr').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.nbtn').forEach(x => x.classList.remove('active'));
+  document.getElementById('s-regional').classList.add('active');
 }
 function fecharMais(e) { if (e.target.id === 'modal-mais') fecharMaisBtn(); }
 function fecharMaisBtn() { document.getElementById('modal-mais').classList.remove('open'); }
