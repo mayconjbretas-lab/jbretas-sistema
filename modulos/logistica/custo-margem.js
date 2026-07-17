@@ -82,6 +82,14 @@
   }
   const idSafe = (v) => String(v).replace(/[^a-zA-Z0-9]/g, '_');
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  // Normaliza bandeira p/ o match do chip: sem acento, caixa alta, espaços
+  // colapsados e sem o prefixo "BANDEIRA " ("Bandeira Branca" casa com "BRANCA").
+  function normBandeira(s) {
+    return String(s || '')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toUpperCase().trim().replace(/\s+/g, ' ')
+      .replace(/^BANDEIRA\s+/, '');
+  }
 
   // ── Acesso aos dados ─────────────────────────────────────────────
   function getPosto(pid) { return (_dados && _dados.postos || []).find(p => String(p.posto_id) === String(pid)) || null; }
@@ -93,7 +101,7 @@
     const nome = _fNome.trim().toLowerCase();
     return (_dados && _dados.postos || []).filter(p => {
       if (nome && !String(p.posto || '').toLowerCase().includes(nome)) return false;
-      if (_fBandeira && String(p.bandeira || '').toUpperCase().trim() !== _fBandeira) return false;
+      if (_fBandeira && normBandeira(p.bandeira) !== normBandeira(_fBandeira)) return false;
       return true;
     });
   }
