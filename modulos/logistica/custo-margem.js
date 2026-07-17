@@ -113,9 +113,26 @@
     if (document.getElementById('custo-margem-style')) return;
     const st = document.createElement('style');
     st.id = 'custo-margem-style';
+    // Contexto admin mobile: só carrega admin.css (tokens CURTOS --sf/--ac/--tx…),
+    // sem base.css → os tokens longos não existem. Se faltarem, prefixamos um
+    // alias longo→curto escopado em .cm-wrap (--ok e --mono já existem lá).
+    const temLongos = getComputedStyle(document.documentElement)
+      .getPropertyValue('--surface').trim() !== '';
+    const alias = temLongos ? '' : (
+      '.cm-wrap{' +
+        '--surface:var(--sf);--surface2:var(--sf2);--surface3:var(--sf3);' +
+        '--border:var(--bd);--border2:var(--bd2);' +
+        '--accent:var(--ac);--accent-dim:var(--acd);' +
+        '--text:var(--tx);--text2:var(--tx2);--text3:var(--tx3);' +
+        '--danger:var(--dg);--warning:var(--wn);--radius-lg:var(--rl)' +
+      '}' +
+      // No admin a .scr já tem padding próprio — evita padding dobrado.
+      '.scr .cm-wrap{padding:.2rem 0}'
+    );
     // CSS escopado em .cm-wrap (o wrapper que o montarShell cria) — agnóstico ao
     // container, funciona tanto na Logística (#tab-custo) quanto no Painel ADM (#s-custo).
     st.textContent =
+      alias +
       // Painel ADM: deixa a seção fluir e a .pa-main rolar (inócuo na Logística).
       '#s-custo{height:auto;min-height:100%}' +
       '#s-custo.active{display:block}' +

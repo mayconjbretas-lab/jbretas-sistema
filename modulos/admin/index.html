@@ -220,6 +220,9 @@
     <!-- ═══ ABA: RELATÓRIOS ═══ (compartilha ../painel-adm/relatorios.js, sem fork) -->
     <section class="scr" id="s-relat"></section>
 
+    <!-- ═══ ABA: CUSTO & MARGEM ═══ (compartilha ../logistica/custo-margem.js, sem fork; ADM = leitura) -->
+    <section class="scr" id="s-custo"></section>
+
     <!-- ═══ ABA: MAIS+ ═══ (entrega futura) -->
     <section class="scr" id="s-mais">
       <div id="mais-conteudo"><div class="empty">🚧 Em construção</div></div>
@@ -265,7 +268,10 @@
   <div class="msheet">
     <button class="mclose" onclick="fecharMaisBtn()">✕</button>
     <div class="mtitle">Mais funções</div>
-    <div class="empty">🚧 Em construção</div>
+    <div class="mitem" onclick="abrirCustoMobile()">
+      <span class="mic">💰</span>
+      Custo &amp; Margem
+    </div>
   </div>
 </div>
 
@@ -303,6 +309,7 @@
 <script src="../../shared/js/coletas-service.js"></script>
 <script src="coleta-revisao/coleta-revisao.js"></script>
 <script src="../painel-adm/relatorios.js"></script>
+<script src="../logistica/custo-margem.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

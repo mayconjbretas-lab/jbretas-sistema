@@ -79,6 +79,16 @@ function setTab(btn, tab) {
 }
 
 function abrirMais() { document.getElementById('modal-mais').classList.add('open'); }
+
+// Custo & Margem (mesmo JS da Logística, sem fork) — aberto pelo item do Mais+.
+// Fecha o modal e ativa a section s-custo (não é aba do bnav). ADM = só leitura.
+function abrirCustoMobile() {
+  document.getElementById('modal-mais').classList.remove('open');
+  document.querySelectorAll('.scr').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.nbtn').forEach(x => x.classList.remove('active'));
+  document.getElementById('s-custo').classList.add('active');
+  renderCustoMargem(document.getElementById('s-custo'));
+}
 function fecharMais(e) { if (e.target.id === 'modal-mais') fecharMaisBtn(); }
 function fecharMaisBtn() { document.getElementById('modal-mais').classList.remove('open'); }
 
