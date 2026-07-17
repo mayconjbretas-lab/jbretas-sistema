@@ -68,6 +68,29 @@ function isoMenosDias(iso, n) {
   return d.toISOString().split('T')[0];
 }
 function fmtBR(iso) { return iso.split('-').reverse().join('/'); }
+function fmtBRcurto(iso) { const p = iso.split('-'); return p[2] + '/' + p[1]; } // dd/mm
+
+// Formata m³ em pt-BR com 2 casas e vírgula; null/undefined/'' → "—".
+function fmtNum(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  const n = Number(v);
+  if (isNaN(n)) return '—';
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtM3(v) { const s = fmtNum(v); return s === '—' ? '—' : s + ' m³'; }
+
+// Máscara ancorada à direita (estilo moeda): só dígitos, os 2 ÚLTIMOS são os
+// decimais (os vermelhos do hidrômetro). "110188" → "1.101,88". Backspace natural.
+function mascararLeitura(el) {
+  const d = el.value.replace(/\D/g, '');
+  if (!d) { el.value = ''; return; }
+  el.value = (parseInt(d, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Texto mascarado → número decimal ("1.101,88" → 1101.88). NaN se vazio.
+function parseLeituraMascara(str) {
+  const d = String(str).replace(/\D/g, '');
+  return d ? parseInt(d, 10) / 100 : NaN;
+}
 function porData(iso) { return registros.find(r => r.data === iso) || null; }
 function somaConsumo(inicioISO, fimISO) {
   return registros
@@ -96,14 +119,6 @@ function renderResumo() {
   }
 
   const hoje = hojeISO();
-  const ontem = isoMenosDias(hoje, 1);
-  const anteontem = isoMenosDias(hoje, 2);
-
-  const regHoje = porData(hoje);
-  const regOntem = porData(ontem);
-  const consumoHoje = regHoje ? Number(regHoje.consumo) : null;
-  const consumoOntem = regOntem ? Number(regOntem.consumo) : null;
-  const consumoAnteontem = porData(anteontem)?.consumo ?? null;
 
   const semanaAtual   = somaConsumo(isoMenosDias(hoje, 6), hoje);
   const semanaAnterior = somaConsumo(isoMenosDias(hoje, 13), isoMenosDias(hoje, 7));
@@ -120,28 +135,33 @@ function renderResumo() {
 
   const ultima = registros[0]; // mais recente (API retorna desc)
   const penultima = registros[1] || null;
+  // Último consumo diário registrado (a leitura costuma ser de ontem) — é o
+  // número que o gerente/ADM quer ver de cara, com a data explícita.
+  const ultimoConsumo = (ultima.consumo === null || ultima.consumo === undefined) ? null : Number(ultima.consumo);
+  const consumoAntes = (penultima && penultima.consumo != null) ? Number(penultima.consumo) : null;
   const deltaLeitura = penultima ? Number(ultima.leitura) - Number(penultima.leitura) : null;
 
   grid.innerHTML = `
     <div class="kpi-card">
-      <div class="kpi-label">Consumo Hoje</div>
-      <div class="kpi-value">${consumoHoje !== null ? consumoHoje.toFixed(3) + ' m³' : '—'}</div>
-      ${consumoHoje !== null ? badgeHtml(variacaoPct(consumoHoje, consumoOntem)) : '<div class="kpi-sub">Nenhuma leitura hoje ainda</div>'}
+      <div class="kpi-label">Último Consumo Diário</div>
+      <div class="kpi-value">${fmtM3(ultimoConsumo)}</div>
+      <div class="kpi-sub">em ${fmtBR(ultima.data)}</div>
+      ${ultimoConsumo !== null ? badgeHtml(variacaoPct(ultimoConsumo, consumoAntes)) : ''}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Esta Semana</div>
-      <div class="kpi-value">${semanaAtual.toFixed(3)} m³</div>
+      <div class="kpi-value">${fmtM3(semanaAtual)}</div>
       ${badgeHtml(variacaoPct(semanaAtual, semanaAnterior))}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Este Mês</div>
-      <div class="kpi-value">${mesAtual.toFixed(3)} m³</div>
+      <div class="kpi-value">${fmtM3(mesAtual)}</div>
       ${badgeHtml(variacaoPct(mesAtual, mesAnterior))}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Leitura Atual</div>
-      <div class="kpi-value">${Number(ultima.leitura).toFixed(3)} m³</div>
-      <div class="kpi-sub">em ${fmtBR(ultima.data)}${deltaLeitura !== null ? ` · +${deltaLeitura.toFixed(3)} m³ desde a leitura anterior` : ''}</div>
+      <div class="kpi-value">${fmtM3(ultima.leitura)}</div>
+      <div class="kpi-sub">em ${fmtBR(ultima.data)}${deltaLeitura !== null ? ` · +${fmtNum(deltaLeitura)} m³ desde a leitura anterior` : ''}</div>
     </div>
   `;
 
@@ -159,12 +179,12 @@ function renderGrafico() {
     const altura = Math.max(4, Math.round((valores[i] / max) * 100));
     const isHoje = iso === hoje;
     return `<div class="bar ${isHoje ? 'hoje' : ''}" style="height:${altura}%"
-      onclick="mostrarValorBarra('${iso}', ${valores[i]})" title="${fmtBR(iso)}: ${valores[i].toFixed(3)} m³"></div>`;
+      onclick="mostrarValorBarra('${iso}', ${valores[i]})" title="${fmtBR(iso)}: ${fmtNum(valores[i])} m³"></div>`;
   }).join('');
 }
 
 function mostrarValorBarra(iso, valor) {
-  document.getElementById('bar-chart-legenda').textContent = `${fmtBR(iso)}: ${valor.toFixed(3)} m³`;
+  document.getElementById('bar-chart-legenda').textContent = `${fmtBR(iso)}: ${fmtNum(valor)} m³`;
 }
 
 // ── Tabelas por período ─────────────────────────────────────────
@@ -183,22 +203,26 @@ function renderTabela(aba) {
 
   const linhas = lista.map((r, i) => {
     const anterior = lista[i - 1];
-    const pct = anterior ? variacaoPct(Number(r.consumo), Number(anterior.consumo)) : null;
+    const consumoNum = (r.consumo === null || r.consumo === undefined) ? null : Number(r.consumo);
+    const antesNum = (anterior && anterior.consumo != null) ? Number(anterior.consumo) : null;
+    const pct = (consumoNum !== null && antesNum !== null) ? variacaoPct(consumoNum, antesNum) : null;
     return `
       <tr>
-        <td>${fmtBR(r.data)}</td>
-        <td>${Number(r.leitura).toFixed(3)} m³</td>
-        <td>${Number(r.consumo).toFixed(3)} m³</td>
+        <td>${fmtBRcurto(r.data)}</td>
+        <td>${fmtNum(r.leitura)}</td>
+        <td>${fmtNum(consumoNum)}</td>
         <td>${pct !== null ? badgeHtml(pct) : '—'}</td>
       </tr>
     `;
   }).join('');
 
   container.innerHTML = `
-    <table class="copasa-tabela">
-      <thead><tr><th>Data</th><th>Leitura</th><th>Consumo</th><th>Variação</th></tr></thead>
-      <tbody>${linhas}</tbody>
-    </table>
+    <div class="copasa-tabela-wrap">
+      <table class="copasa-tabela">
+        <thead><tr><th>Data</th><th>Leitura (m³)</th><th>Consumo (m³)</th><th>Variação</th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    </div>
   `;
 }
 
@@ -212,7 +236,7 @@ function abrirModalRegistro() {
 
   const ultima = registros[0];
   document.getElementById('modal-ultima-leitura').textContent = ultima
-    ? `Última leitura: ${Number(ultima.leitura).toFixed(3)} m³ em ${fmtBR(ultima.data)}`
+    ? `Última leitura: ${fmtM3(ultima.leitura)} em ${fmtBR(ultima.data)}`
     : 'Nenhuma leitura anterior registrada — esta será a primeira.';
 
   document.getElementById('modal-registro').classList.add('active');
@@ -224,7 +248,7 @@ function fecharModalRegistro() {
 
 async function salvarLeitura() {
   const data = document.getElementById('input-data-leitura').value;
-  const leitura = parseFloat(document.getElementById('input-leitura').value);
+  const leitura = parseLeituraMascara(document.getElementById('input-leitura').value);
   const msg = document.getElementById('modal-msg');
   const btn = document.getElementById('btn-confirmar-leitura');
 
@@ -235,7 +259,7 @@ async function salvarLeitura() {
   }
   const ultima = registros[0];
   if (ultima && leitura < Number(ultima.leitura)) {
-    msg.textContent = `A leitura não pode ser menor que a última registrada (${Number(ultima.leitura).toFixed(3)} m³ em ${fmtBR(ultima.data)}). O hidrômetro só soma.`;
+    msg.textContent = `A leitura não pode ser menor que a última registrada (${fmtM3(ultima.leitura)} em ${fmtBR(ultima.data)}). O hidrômetro só soma.`;
     msg.className = 'modal-msg err';
     return;
   }
@@ -245,7 +269,7 @@ async function salvarLeitura() {
   try {
     await apiFetch('/copasa', { method: 'POST', body: JSON.stringify({ data, leitura }) });
     fecharModalRegistro();
-    mostrarToast('✅ Leitura registrada!', `${leitura.toFixed(3)} m³ em ${fmtBR(data)}`);
+    mostrarToast('✅ Leitura registrada!', `${fmtM3(leitura)} em ${fmtBR(data)}`);
     await carregarDados();
   } catch (err) {
     msg.textContent = err.message;

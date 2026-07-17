@@ -100,7 +100,8 @@
     </div>
     <div class="field-group">
       <label class="field-label">Leitura do hidrômetro (m³)</label>
-      <input type="number" class="field-input" id="input-leitura" step="0.001" min="0" placeholder="0,000">
+      <input type="text" inputmode="numeric" class="field-input" id="input-leitura" placeholder="0,00" oninput="mascararLeitura(this)">
+      <div class="field-hint">Digite todos os dígitos do relógio — os 2 vermelhos são os decimais</div>
     </div>
 
     <button class="btn-modal-send" id="btn-confirmar-leitura" onclick="salvarLeitura()">Salvar leitura</button>

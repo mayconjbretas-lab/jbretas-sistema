@@ -89,16 +89,23 @@
   text-align: center;
 }
 
-.copasa-tabela { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+/* Hint sob o campo de leitura (modal de registro) */
+.field-hint { font-size: 0.68rem; color: var(--text3); margin-top: 6px; line-height: 1.35; }
+
+/* Wrapper com rolagem horizontal suave — rede de segurança pra tabela caber
+   inteira em telas estreitas (as 4 colunas já compactam pra caber em ~390px). */
+.copasa-tabela-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.copasa-tabela { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
 .copasa-tabela th {
   text-align: left;
   font-family: var(--mono);
-  font-size: 0.66rem;
-  letter-spacing: 0.08em;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text3);
-  padding: 0 0.5rem 0.6rem;
+  padding: 0 0.4rem 0.5rem;
   border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
-.copasa-tabela td { padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--border); color: var(--text2); }
+.copasa-tabela td { padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--border); color: var(--text2); white-space: nowrap; }
 .copasa-tabela tr:last-child td { border-bottom: none; }
