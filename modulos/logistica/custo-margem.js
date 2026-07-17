@@ -110,6 +110,7 @@
       '#tab-custo .cm-daynav{display:flex;align-items:center;gap:.4rem}' +
       '#tab-custo .cm-daybtn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:.9rem}' +
       '#tab-custo .cm-daybtn:hover{border-color:var(--accent);color:var(--accent)}' +
+      '#tab-custo .cm-hoje{width:auto;padding:0 .7rem;font-family:var(--mono);font-size:.72rem;font-weight:700;letter-spacing:.02em}' +
       '#tab-custo .cm-daylabel{position:relative;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:.8rem;font-weight:700;padding:.5rem .9rem;border-radius:8px;cursor:pointer;white-space:nowrap}' +
       '#tab-custo .cm-daylabel input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}' +
       '#tab-custo .cm-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.1rem}' +
@@ -175,6 +176,7 @@
             '<button class="cm-daybtn" onclick="__cmDia(-1)" title="Dia anterior">◀</button>' +
             '<label class="cm-daylabel" id="cm-daylabel"></label>' +
             '<button class="cm-daybtn" onclick="__cmDia(1)" title="Próximo dia">▶</button>' +
+            '<button class="cm-daybtn cm-hoje" id="cm-hoje-btn" onclick="__cmHoje()" title="Voltar para hoje" style="display:none">⟳ Hoje</button>' +
           '</div>' +
         '</div>' +
         '<div class="cm-card" id="cm-bar"></div>' +
@@ -190,6 +192,9 @@
     _dataISO = iso;
     const lbl = document.getElementById('cm-daylabel');
     if (lbl) lbl.innerHTML = esc(fmtDiaNav(iso)) + '<input type="date" value="' + iso + '" onchange="__cmDataInput(this)">';
+    // Botão "⟳ Hoje" só aparece quando NÃO estamos no dia de hoje (Brasília).
+    const hojeBtn = document.getElementById('cm-hoje-btn');
+    if (hojeBtn) hojeBtn.style.display = (iso === hojeISO()) ? 'none' : '';
     const box = document.getElementById('cm-grid-box');
     if (box) box.innerHTML = '<div class="cm-empty">Carregando…</div>';
     try {
@@ -483,6 +488,7 @@
 
   // ── Filtro / navegação de dia ────────────────────────────────────
   window.__cmDia = function (n) { carregar(addDias(_dataISO, n)); };
+  window.__cmHoje = function () { carregar(hojeISO()); };
   window.__cmDataInput = function (el) { if (el.value) carregar(el.value); };
   window.__cmChip = function (b) { _fBandeira = b; renderFiltro(); renderGrid(); atualizarBarraAlvo(); __cmAplicarCancel(); };
   window.__cmBusca = function (el) { _fNome = el.value; renderGrid(); atualizarBarraAlvo(); __cmAplicarCancel(); };
