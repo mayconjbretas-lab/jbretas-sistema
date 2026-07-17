@@ -24,16 +24,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   await carregarDados();
 });
 
-function toggleMenu(event) {
-  event.stopPropagation();
-  document.getElementById('dropdown-menu').classList.toggle('hidden');
-}
-document.addEventListener('click', (e) => {
-  const menu = document.getElementById('dropdown-menu');
-  if (menu && !menu.classList.contains('hidden') && !e.target.closest('#btn-menu')) {
-    menu.classList.add('hidden');
-  }
-});
+// Navegação entre módulos agora é pelo rodapé (shared/js/gerente-nav.js) —
+// o antigo menu de 3 pontinhos (toggleMenu + fechar-ao-clicar-fora) foi removido.
 
 function montarTopbar() {
   document.getElementById('app-gerente').textContent = usuarioAtual.nome || '—';
