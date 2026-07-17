@@ -207,17 +207,47 @@
     }
   }
 
-  // ── Barra ⚡ Lançar custo do dia (rede toda) ──────────────────────
+  // ── Barra ⚡ Lançar custo do dia (respeita o FILTRO ATIVO) ─────────
+  // O alvo do lançamento em massa = postos VISÍVEIS no grid (chips + busca),
+  // não a rede inteira. Título, botão e confirmação nomeiam esse alvo.
+  function alvoBarra() {
+    const n = postosFiltrados().length;
+    const s = n === 1 ? '' : 's';
+    const hasB = !!_fBandeira, hasQ = !!_fNome.trim();
+    let titulo, btnSuf, confirmAlvo;
+    if (!hasB && !hasQ) {
+      titulo = `REDE TODA (${n})`; btnSuf = '(todas)'; confirmAlvo = 'da rede';
+    } else if (hasB) {
+      titulo = `${_fBandeira} (${n} posto${s})`; btnSuf = `(${_fBandeira})`; confirmAlvo = `da ${_fBandeira}`;
+    } else {
+      titulo = `BUSCA (${n} posto${s})`; btnSuf = '(busca)'; confirmAlvo = 'da busca';
+    }
+    return {
+      n, s,
+      tituloFull: '⚡ Lançar custo do dia — ' + titulo,
+      btnLabel: `Aplicar em ${n} posto${s} ${btnSuf}`,
+      confirmAlvo,
+    };
+  }
+  // Atualiza SÓ o título e o rótulo do botão (não recria os inputs — não apaga
+  // o que o usuário já digitou). Chamado quando o filtro muda.
+  function atualizarBarraAlvo() {
+    const a = alvoBarra();
+    const t = document.getElementById('cm-bar-titulo'); if (t) t.textContent = a.tituloFull;
+    const b = document.getElementById('cm-bar-btn');    if (b) b.textContent = a.btnLabel;
+  }
+
   function renderBarra() {
     const bar = document.getElementById('cm-bar');
     const campos = BARRA_COMB.map(f =>
       '<div class="cm-bar-field"><label>' + f.cod + '</label>' +
       '<input id="cm-bar-' + f.cod + '" inputmode="decimal" placeholder="0,0000"></div>'
     ).join('');
+    const a = alvoBarra();
     bar.innerHTML =
-      '<div class="cm-bar-title">⚡ Lançar custo do dia — rede toda</div>' +
+      '<div class="cm-bar-title" id="cm-bar-titulo">' + esc(a.tituloFull) + '</div>' +
       '<div class="cm-bar-inputs">' + campos +
-        '<button class="cm-btn" onclick="__cmAplicarPrep()">Aplicar em todos os postos</button>' +
+        '<button class="cm-btn" id="cm-bar-btn" onclick="__cmAplicarPrep()">' + esc(a.btnLabel) + '</button>' +
       '</div>' +
       '<div id="cm-bar-confirm"></div>';
   }
@@ -414,15 +444,19 @@
     const cods = Object.keys(vals);
     const box = document.getElementById('cm-bar-confirm');
     if (!cods.length) { box.innerHTML = '<div class="cm-confirm"><span class="txt">Preencha ao menos um custo pra aplicar.</span></div>'; return; }
-    // conta quantos postos recebem cada combustível
+    const postos = postosFiltrados();
+    if (!postos.length) { box.innerHTML = '<div class="cm-confirm"><span class="txt">Nenhum posto no filtro atual.</span></div>'; return; }
+    // conta os lançamentos reais (postos VISÍVEIS × combustíveis preenchidos que o posto tem)
     let totalLanc = 0;
-    (_dados && _dados.postos || []).forEach(p => {
+    postos.forEach(p => {
       (p.combustiveis || []).forEach(c => { if (vals[String(c.codigo).toUpperCase()] !== undefined) totalLanc++; });
     });
+    const a = alvoBarra();
     const resumo = cods.map(cod => cod + ' ' + fmtCusto(vals[cod])).join(' · ');
     box.innerHTML =
       '<div class="cm-confirm">' +
-        '<span class="txt">Aplicar <b>' + resumo + '</b> em <b>' + totalLanc + '</b> lançamento(s) da rede?</span>' +
+        '<span class="txt">Lançar <b>' + resumo + '</b> em <b>' + a.n + '</b> posto' + a.s + ' ' + esc(a.confirmAlvo) +
+          ' (' + totalLanc + ' lançamento' + (totalLanc === 1 ? '' : 's') + ')?</span>' +
         '<button class="cm-btn" onclick="__cmAplicarConfirm()">Confirmar</button>' +
         '<button class="cm-btn ghost" onclick="__cmAplicarCancel()">Cancelar</button>' +
       '</div>';
@@ -434,7 +468,7 @@
   window.__cmAplicarConfirm = async function () {
     const vals = lerBarra();
     const lancamentos = [];
-    (_dados && _dados.postos || []).forEach(p => {
+    postosFiltrados().forEach(p => {
       (p.combustiveis || []).forEach(c => {
         const cod = String(c.codigo).toUpperCase();
         if (vals[cod] === undefined) return;
@@ -450,8 +484,8 @@
   // ── Filtro / navegação de dia ────────────────────────────────────
   window.__cmDia = function (n) { carregar(addDias(_dataISO, n)); };
   window.__cmDataInput = function (el) { if (el.value) carregar(el.value); };
-  window.__cmChip = function (b) { _fBandeira = b; renderFiltro(); renderGrid(); };
-  window.__cmBusca = function (el) { _fNome = el.value; renderGrid(); };
+  window.__cmChip = function (b) { _fBandeira = b; renderFiltro(); renderGrid(); atualizarBarraAlvo(); __cmAplicarCancel(); };
+  window.__cmBusca = function (el) { _fNome = el.value; renderGrid(); atualizarBarraAlvo(); __cmAplicarCancel(); };
 
   // ── Fornecedores: editar/salvar ──────────────────────────────────
   window.__cmFornEdit = function () { _fornEdit = true; renderFornecedores(); };
