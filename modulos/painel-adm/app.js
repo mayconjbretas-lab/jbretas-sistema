@@ -71,6 +71,8 @@ function setTab(btn, tab) {
   if (tab === 'medicao') renderMedicao(document.getElementById('s-medicao'));
   // Relatórios — consolidado/mix/produtos da rede (relatorios.js expõe renderRelatorios).
   if (tab === 'relat') renderRelatorios(document.getElementById('s-relat'));
+  // Custo & Margem — mesmo JS da Logística; ADM entra em modo só-leitura (sem edição).
+  if (tab === 'custo') renderCustoMargem(document.getElementById('s-custo'));
   // Demais abas (mapa/histórico/mais) entram nos próximos blocos.
 }
 

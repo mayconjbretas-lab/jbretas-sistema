@@ -24,7 +24,8 @@
     { cod: 'S10', nome: 'Diesel S10' },
     { cod: 'S500', nome: 'Diesel S500' },
   ];
-  const BANDEIRAS = ['IPIRANGA', 'VIBRA', 'ALE', 'BR', 'RIO BRANCO', 'SHELL', 'BRANCA'];
+  // Chips de bandeira são DINÂMICOS: gerados das bandeiras presentes nos dados
+  // (ver bandeirasDisponiveis) — nasce/some sozinho conforme o banco.
 
   // ── Estado ───────────────────────────────────────────────────────
   let _shellPronto = false;
@@ -34,6 +35,7 @@
   let _fNome       = '';     // filtro por nome
   let _fBandeira   = '';     // filtro por bandeira (chip ativo)
   let _fornEdit    = false;  // modo edição do card de fornecedores
+  let _readonly    = false;  // ADM (painel-adm) = só leitura: sem barra, lápis nem editar
 
   // ── Helpers de data ──────────────────────────────────────────────
   function hojeISO() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); }
@@ -111,70 +113,77 @@
     if (document.getElementById('custo-margem-style')) return;
     const st = document.createElement('style');
     st.id = 'custo-margem-style';
+    // CSS escopado em .cm-wrap (o wrapper que o montarShell cria) — agnóstico ao
+    // container, funciona tanto na Logística (#tab-custo) quanto no Painel ADM (#s-custo).
     st.textContent =
-      '#tab-custo .cm-wrap{flex:1;min-height:0;overflow-y:auto;padding:1.1rem 1.2rem;display:flex;flex-direction:column;gap:1rem}' +
-      '#tab-custo .cm-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}' +
-      '#tab-custo .cm-title{font-family:var(--mono);font-size:1rem;font-weight:700;color:var(--text)}' +
-      '#tab-custo .cm-daynav{display:flex;align-items:center;gap:.4rem}' +
-      '#tab-custo .cm-daybtn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:.9rem}' +
-      '#tab-custo .cm-daybtn:hover{border-color:var(--accent);color:var(--accent)}' +
-      '#tab-custo .cm-hoje{width:auto;padding:0 .7rem;font-family:var(--mono);font-size:.72rem;font-weight:700;letter-spacing:.02em}' +
-      '#tab-custo .cm-daylabel{position:relative;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:.8rem;font-weight:700;padding:.5rem .9rem;border-radius:8px;cursor:pointer;white-space:nowrap}' +
-      '#tab-custo .cm-daylabel input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}' +
-      '#tab-custo .cm-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.1rem}' +
-      '#tab-custo .cm-bar-title{font-family:var(--mono);font-size:.74rem;font-weight:700;color:var(--accent);letter-spacing:.04em;text-transform:uppercase;margin-bottom:.7rem}' +
-      '#tab-custo .cm-bar-inputs{display:flex;gap:.7rem;flex-wrap:wrap;align-items:flex-end}' +
-      '#tab-custo .cm-bar-field{display:flex;flex-direction:column;gap:3px}' +
-      '#tab-custo .cm-bar-field label{font-size:.62rem;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em}' +
-      '#tab-custo .cm-bar-field input{width:92px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.5rem .6rem;color:var(--text);font-family:var(--mono);font-size:.85rem;text-align:right;outline:none}' +
-      '#tab-custo .cm-bar-field input:focus{border-color:var(--accent)}' +
-      '#tab-custo .cm-btn{background:var(--accent);color:#1a1206;border:none;font-family:var(--mono);font-size:.75rem;font-weight:700;padding:.6rem 1rem;border-radius:8px;cursor:pointer;white-space:nowrap}' +
-      '#tab-custo .cm-btn:hover{opacity:.9}' +
-      '#tab-custo .cm-btn.ghost{background:var(--surface2);border:1px solid var(--border);color:var(--text)}' +
-      '#tab-custo .cm-btn.ghost:hover{border-color:var(--accent);color:var(--accent)}' +
-      '#tab-custo .cm-confirm{margin-top:.7rem;background:var(--surface2);border:1px solid var(--accent);border-radius:10px;padding:.7rem .85rem;display:flex;align-items:center;gap:.7rem;flex-wrap:wrap}' +
-      '#tab-custo .cm-confirm .txt{font-size:.8rem;color:var(--text2);flex:1}' +
-      '#tab-custo .cm-filtro{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}' +
-      '#tab-custo .cm-search{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.5rem .7rem;color:var(--text);font-size:.84rem;outline:none;min-width:200px}' +
-      '#tab-custo .cm-search:focus{border-color:var(--accent)}' +
-      '#tab-custo .cm-chips{display:flex;gap:5px;flex-wrap:wrap}' +
-      '#tab-custo .cm-chip{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 11px;font-size:.68rem;font-family:var(--mono);font-weight:700;color:var(--text3);cursor:pointer;transition:all .15s}' +
-      '#tab-custo .cm-chip:hover{border-color:var(--border2);color:var(--text2)}' +
-      '#tab-custo .cm-chip.on{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}' +
-      '#tab-custo .cm-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}' +
-      '@media(max-width:1100px){#tab-custo .cm-grid{grid-template-columns:1fr}}' +
-      '#tab-custo .cm-pcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:.9rem 1rem}' +
-      '#tab-custo .cm-pcard-hdr{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.6rem}' +
-      '#tab-custo .cm-pnome{font-size:.92rem;font-weight:700;color:var(--text)}' +
-      '#tab-custo .cm-badge{font-family:var(--mono);font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;background:var(--surface3);color:var(--text2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;white-space:nowrap}' +
-      '#tab-custo .cm-table{width:100%;border-collapse:collapse;font-size:.8rem}' +
-      '#tab-custo .cm-table th{text-align:right;font-family:var(--mono);font-size:.58rem;letter-spacing:.04em;text-transform:uppercase;color:var(--text3);padding:0 .4rem .45rem;border-bottom:1px solid var(--border);white-space:nowrap}' +
-      '#tab-custo .cm-table th:first-child{text-align:left}' +
-      '#tab-custo .cm-table td{padding:.42rem .4rem;border-bottom:1px solid var(--border);color:var(--text2);text-align:right;white-space:nowrap}' +
-      '#tab-custo .cm-table td:first-child{text-align:left;color:var(--text);font-weight:600}' +
-      '#tab-custo .cm-table tr:last-child td{border-bottom:none}' +
-      '#tab-custo .cm-custo{font-family:var(--mono);font-weight:700;color:var(--accent)}' +
-      '#tab-custo .cm-venda{font-family:var(--mono);color:var(--text)}' +
-      '#tab-custo .cm-auto{font-size:.54rem;color:var(--text3);border:1px solid var(--border);border-radius:4px;padding:0 3px;margin-left:4px;vertical-align:middle}' +
-      '#tab-custo .cm-pen{cursor:pointer;opacity:.55;font-size:.72rem;margin-left:5px}' +
-      '#tab-custo .cm-pen:hover{opacity:1}' +
-      '#tab-custo .cm-na{color:var(--text3);opacity:.6}' +
-      '#tab-custo .cm-inp{width:74px;background:var(--surface2);border:1px solid var(--accent);border-radius:6px;padding:2px 5px;color:var(--text);font-family:var(--mono);font-size:.78rem;text-align:right;outline:none}' +
-      '#tab-custo .cm-m-bom{color:var(--ok);font-weight:700;font-family:var(--mono)}' +
-      '#tab-custo .cm-m-med{color:var(--warning);font-weight:700;font-family:var(--mono)}' +
-      '#tab-custo .cm-m-ruim{color:var(--danger);font-weight:700;font-family:var(--mono)}' +
-      '#tab-custo .cm-d-bom{color:var(--ok);font-family:var(--mono)}' +
-      '#tab-custo .cm-d-ruim{color:var(--danger);font-family:var(--mono)}' +
-      '#tab-custo .cm-d-zero{color:var(--text3);font-family:var(--mono)}' +
-      '#tab-custo .cm-forn-menor{color:var(--ok);font-weight:700}' +
-      '#tab-custo .cm-empty{text-align:center;color:var(--text3);font-size:.82rem;padding:2rem}' +
-      '#tab-custo .cm-erro{text-align:center;color:var(--danger);font-size:.82rem;padding:2rem}';
+      // Painel ADM: deixa a seção fluir e a .pa-main rolar (inócuo na Logística).
+      '#s-custo{height:auto;min-height:100%}' +
+      '#s-custo.active{display:block}' +
+      '.cm-wrap{flex:1;min-height:0;overflow-y:auto;padding:1.1rem 1.2rem;display:flex;flex-direction:column;gap:1rem}' +
+      '.cm-wrap .cm-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}' +
+      '.cm-wrap .cm-title{font-family:var(--mono);font-size:1rem;font-weight:700;color:var(--text)}' +
+      '.cm-wrap .cm-daynav{display:flex;align-items:center;gap:.4rem}' +
+      '.cm-wrap .cm-daybtn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:.9rem}' +
+      '.cm-wrap .cm-daybtn:hover{border-color:var(--accent);color:var(--accent)}' +
+      '.cm-wrap .cm-hoje{width:auto;padding:0 .7rem;font-family:var(--mono);font-size:.72rem;font-weight:700;letter-spacing:.02em}' +
+      '.cm-wrap .cm-daylabel{position:relative;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:.8rem;font-weight:700;padding:.5rem .9rem;border-radius:8px;cursor:pointer;white-space:nowrap}' +
+      '.cm-wrap .cm-daylabel input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}' +
+      '.cm-wrap .cm-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.1rem}' +
+      '.cm-wrap .cm-bar-title{font-family:var(--mono);font-size:.74rem;font-weight:700;color:var(--accent);letter-spacing:.04em;text-transform:uppercase;margin-bottom:.7rem}' +
+      '.cm-wrap .cm-bar-inputs{display:flex;gap:.7rem;flex-wrap:wrap;align-items:flex-end}' +
+      '.cm-wrap .cm-bar-field{display:flex;flex-direction:column;gap:3px}' +
+      '.cm-wrap .cm-bar-field label{font-size:.62rem;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em}' +
+      '.cm-wrap .cm-bar-field input{width:92px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.5rem .6rem;color:var(--text);font-family:var(--mono);font-size:.85rem;text-align:right;outline:none}' +
+      '.cm-wrap .cm-bar-field input:focus{border-color:var(--accent)}' +
+      '.cm-wrap .cm-btn{background:var(--accent);color:#1a1206;border:none;font-family:var(--mono);font-size:.75rem;font-weight:700;padding:.6rem 1rem;border-radius:8px;cursor:pointer;white-space:nowrap}' +
+      '.cm-wrap .cm-btn:hover{opacity:.9}' +
+      '.cm-wrap .cm-btn.ghost{background:var(--surface2);border:1px solid var(--border);color:var(--text)}' +
+      '.cm-wrap .cm-btn.ghost:hover{border-color:var(--accent);color:var(--accent)}' +
+      '.cm-wrap .cm-confirm{margin-top:.7rem;background:var(--surface2);border:1px solid var(--accent);border-radius:10px;padding:.7rem .85rem;display:flex;align-items:center;gap:.7rem;flex-wrap:wrap}' +
+      '.cm-wrap .cm-confirm .txt{font-size:.8rem;color:var(--text2);flex:1}' +
+      '.cm-wrap .cm-filtro{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}' +
+      '.cm-wrap .cm-search{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.5rem .7rem;color:var(--text);font-size:.84rem;outline:none;min-width:200px}' +
+      '.cm-wrap .cm-search:focus{border-color:var(--accent)}' +
+      '.cm-wrap .cm-chips{display:flex;gap:5px;flex-wrap:wrap}' +
+      '.cm-wrap .cm-chip{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 11px;font-size:.68rem;font-family:var(--mono);font-weight:700;color:var(--text3);cursor:pointer;transition:all .15s}' +
+      '.cm-wrap .cm-chip:hover{border-color:var(--border2);color:var(--text2)}' +
+      '.cm-wrap .cm-chip.on{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}' +
+      '.cm-wrap .cm-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}' +
+      '@media(max-width:1100px){.cm-wrap .cm-grid{grid-template-columns:1fr}}' +
+      '.cm-wrap .cm-pcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:.9rem 1rem}' +
+      '.cm-wrap .cm-pcard-hdr{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.6rem}' +
+      '.cm-wrap .cm-pnome{font-size:.92rem;font-weight:700;color:var(--text)}' +
+      '.cm-wrap .cm-badge{font-family:var(--mono);font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;background:var(--surface3);color:var(--text2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;white-space:nowrap}' +
+      '.cm-wrap .cm-table{width:100%;border-collapse:collapse;font-size:.8rem}' +
+      '.cm-wrap .cm-table th{text-align:right;font-family:var(--mono);font-size:.58rem;letter-spacing:.04em;text-transform:uppercase;color:var(--text3);padding:0 .4rem .45rem;border-bottom:1px solid var(--border);white-space:nowrap}' +
+      '.cm-wrap .cm-table th:first-child{text-align:left}' +
+      '.cm-wrap .cm-table td{padding:.42rem .4rem;border-bottom:1px solid var(--border);color:var(--text2);text-align:right;white-space:nowrap}' +
+      '.cm-wrap .cm-table td:first-child{text-align:left;color:var(--text);font-weight:600}' +
+      '.cm-wrap .cm-table tr:last-child td{border-bottom:none}' +
+      '.cm-wrap .cm-custo{font-family:var(--mono);font-weight:700;color:var(--accent)}' +
+      '.cm-wrap .cm-venda{font-family:var(--mono);color:var(--text)}' +
+      '.cm-wrap .cm-auto{font-size:.54rem;color:var(--text3);border:1px solid var(--border);border-radius:4px;padding:0 3px;margin-left:4px;vertical-align:middle}' +
+      '.cm-wrap .cm-pen{cursor:pointer;opacity:.55;font-size:.72rem;margin-left:5px}' +
+      '.cm-wrap .cm-pen:hover{opacity:1}' +
+      '.cm-wrap .cm-na{color:var(--text3);opacity:.6}' +
+      '.cm-wrap .cm-inp{width:74px;background:var(--surface2);border:1px solid var(--accent);border-radius:6px;padding:2px 5px;color:var(--text);font-family:var(--mono);font-size:.78rem;text-align:right;outline:none}' +
+      '.cm-wrap .cm-m-bom{color:var(--ok);font-weight:700;font-family:var(--mono)}' +
+      '.cm-wrap .cm-m-med{color:var(--warning);font-weight:700;font-family:var(--mono)}' +
+      '.cm-wrap .cm-m-ruim{color:var(--danger);font-weight:700;font-family:var(--mono)}' +
+      '.cm-wrap .cm-d-bom{color:var(--ok);font-family:var(--mono)}' +
+      '.cm-wrap .cm-d-ruim{color:var(--danger);font-family:var(--mono)}' +
+      '.cm-wrap .cm-d-zero{color:var(--text3);font-family:var(--mono)}' +
+      '.cm-wrap .cm-forn-menor{color:var(--ok);font-weight:700}' +
+      '.cm-wrap .cm-empty{text-align:center;color:var(--text3);font-size:.82rem;padding:2rem}' +
+      '.cm-wrap .cm-erro{text-align:center;color:var(--danger);font-size:.82rem;padding:2rem}';
     document.head.appendChild(st);
   }
 
   // ── Shell (montado uma vez) ──────────────────────────────────────
   function montarShell(sec) {
     _dataISO = _dataISO || hojeISO();
+    // ADM abre a aba só pra leitura (Logística edita). Detecta pela sessão.
+    _readonly = !!(window.getUsuarioLogado && getUsuarioLogado() && getUsuarioLogado().perfil === 'ADM');
     injetarEstilo();
     sec.innerHTML =
       '<div class="cm-wrap">' +
@@ -252,6 +261,7 @@
 
   function renderBarra() {
     const bar = document.getElementById('cm-bar');
+    if (_readonly) { bar.style.display = 'none'; return; }   // ADM não lança em massa
     const campos = BARRA_COMB.map(f =>
       '<div class="cm-bar-field"><label>' + f.cod + '</label>' +
       '<input id="cm-bar-' + f.cod + '" inputmode="decimal" placeholder="0,0000"></div>'
@@ -266,11 +276,25 @@
   }
 
   // ── Filtro (busca + chips de bandeira) ───────────────────────────
+  // Bandeiras presentes nos dados (normalizadas), ordenadas por contagem desc.
+  function bandeirasDisponiveis() {
+    const cont = new Map();
+    (_dados && _dados.postos || []).forEach(p => {
+      const b = normBandeira(p.bandeira);
+      if (!b) return;
+      cont.set(b, (cont.get(b) || 0) + 1);
+    });
+    return [...cont.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }
+
   function renderFiltro() {
     const f = document.getElementById('cm-filtro');
-    const chips = BANDEIRAS.map(b =>
-      '<button class="cm-chip' + (_fBandeira === b ? ' on' : '') + '" onclick="__cmChip(\'' + b + '\')">' + b + '</button>'
-    ).join('');
+    const chips = bandeirasDisponiveis().map(b => {
+      const val = b.label.replace(/'/g, "\\'");
+      return '<button class="cm-chip' + (_fBandeira === b.label ? ' on' : '') + '" onclick="__cmChip(\'' + val + '\')">' + esc(b.label) + '</button>';
+    }).join('');
     f.innerHTML =
       '<input class="cm-search" id="cm-search" placeholder="🔎 Buscar posto…" value="' + esc(_fNome) + '" oninput="__cmBusca(this)">' +
       '<div class="cm-chips">' +
@@ -292,8 +316,10 @@
     const linhas = (p.combustiveis || []).map(c => {
       const cod = String(c.codigo).toUpperCase();
       // CUSTO (editável)
-      const custoHtml = (c.custo != null ? '<span class="cm-custo">' + fmtCusto(c.custo) + '</span>' : '<span class="cm-na">—</span>') +
-        '<span class="cm-pen" title="Editar custo" onclick="__cmEditCusto(\'' + pid + '\',\'' + cod + '\')">✏️</span>';
+      // Lápis só quando NÃO é leitura (ADM não edita).
+      const penCusto = _readonly ? '' : '<span class="cm-pen" title="Editar custo" onclick="__cmEditCusto(\'' + pid + '\',\'' + cod + '\')">✏️</span>';
+      const penVenda = _readonly ? '' : '<span class="cm-pen" title="Sobrescrever venda" onclick="__cmEditVenda(\'' + pid + '\',\'' + cod + '\')">✏️</span>';
+      const custoHtml = (c.custo != null ? '<span class="cm-custo">' + fmtCusto(c.custo) + '</span>' : '<span class="cm-na">—</span>') + penCusto;
       // VENDA (+ etiqueta auto quando vem da coleta) + lápis de override
       let vendaHtml;
       if (c.venda != null) {
@@ -302,7 +328,7 @@
       } else {
         vendaHtml = '<span class="cm-na">—</span>';
       }
-      vendaHtml += '<span class="cm-pen" title="Sobrescrever venda" onclick="__cmEditVenda(\'' + pid + '\',\'' + cod + '\')">✏️</span>';
+      vendaHtml += penVenda;
       // MARGEM / DELTA
       const margemHtml = c.margem != null ? '<span class="' + margemClasse(c.margem) + '">' + fmtMarg(c.margem) + '</span>' : '<span class="cm-na">—</span>';
       const deltaHtml = '<span class="' + deltaClasse(c.reajuste) + '">' + fmtDelta(c.reajuste) + '</span>';
@@ -358,10 +384,12 @@
         '<thead>' + thead + '</thead><tbody>' + linhas + '</tbody></table>';
     }
 
-    const botoes = _fornEdit
-      ? '<button class="cm-btn" onclick="__cmFornSave()">Salvar</button>' +
-        '<button class="cm-btn ghost" onclick="__cmFornCancel()">Cancelar</button>'
-      : (itens.length ? '<button class="cm-btn ghost" onclick="__cmFornEdit()">✎ Editar</button>' : '');
+    const botoes = _readonly
+      ? ''   // ADM não edita fornecedores
+      : (_fornEdit
+        ? '<button class="cm-btn" onclick="__cmFornSave()">Salvar</button>' +
+          '<button class="cm-btn ghost" onclick="__cmFornCancel()">Cancelar</button>'
+        : (itens.length ? '<button class="cm-btn ghost" onclick="__cmFornEdit()">✎ Editar</button>' : ''));
 
     box.innerHTML =
       '<div class="cm-card">' +
