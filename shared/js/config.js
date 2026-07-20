@@ -14,5 +14,6 @@ window.JBRETAS_CONFIG = {
     LOGISTICA:  '/modulos/logistica/',
     MOTORISTA:  '/modulos/motorista/',
     SUPERVISOR: '/modulos/supervisor/',
+    TI:         '/modulos/painel-ti/',
   },
 };

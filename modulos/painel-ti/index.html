@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>JBRETAS — Painel TI</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" sizes="48x48" href="/shared/jbretas-favicon-48.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/shared/icon-192.png">
+<meta name="theme-color" content="#0a0d1c">
+<link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
+<link rel="stylesheet" href="../../shared/css/base.css">
+<link rel="stylesheet" href="painel-ti.css">
+<script>
+  (function(){
+    var t = localStorage.getItem('jb_theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+</head>
+<body>
+
+<div id="screen-app">
+
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <img src="/shared/jbretas-logo.png" alt="JBretas" style="height:34px;display:block">
+      <div>
+        <div class="topbar-brand">JBRETAS</div>
+        <div style="font-size:.62rem;color:var(--text3);letter-spacing:.2em;text-transform:uppercase;font-family:var(--mono);margin-top:2px">// Painel TI</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-user">
+        <div class="avatar" id="app-avatar">--</div>
+        <div class="topbar-info">
+          <div class="topbar-name" id="app-nome">—</div>
+          <div class="topbar-posto" id="app-sub">TI</div>
+        </div>
+      </div>
+      <button class="menu-dots" id="theme-btn" onclick="toggleTheme()" title="Alternar tema">🌙</button>
+      <button class="menu-dots" onclick="location.reload()" title="Atualizar">🔄</button>
+      <button class="btn-logout" onclick="jbretasLogout()">SAIR</button>
+    </div>
+  </div>
+
+  <div class="app-main">
+
+    <div class="page-header">
+      <div>
+        <div class="page-title">👁️ Acessar como</div>
+        <div class="page-date">Entre na sessão de qualquer usuário para dar suporte</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">🧑‍💼</span>
+        <span class="section-title">Usuários</span>
+        <span style="margin-left:auto;font-family:var(--mono);font-size:.62rem;color:var(--text3)" id="ti-contador">—</span>
+      </div>
+      <div class="section-body">
+
+        <div class="ti-chips" id="ti-chips">
+          <button class="ti-chip active" data-modalidade="" type="button">Todos</button>
+          <button class="ti-chip" data-modalidade="GERENTE" type="button">GERENTE</button>
+          <button class="ti-chip" data-modalidade="SUPERVISOR" type="button">SUPERVISOR</button>
+          <button class="ti-chip" data-modalidade="ADM" type="button">ADM</button>
+          <button class="ti-chip" data-modalidade="LOGISTICA" type="button">LOGÍSTICA</button>
+        </div>
+
+        <input class="ti-busca" id="ti-busca" type="text" autocomplete="off"
+               placeholder="Buscar por nome ou posto...">
+
+        <div id="ti-lista">
+          <div class="empty-state">Carregando usuários...</div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<div class="toast" id="toast">
+  <div class="toast-title">Painel TI</div>
+  <div id="toast-msg"></div>
+</div>
+
+<script src="../../shared/js/config.js"></script>
+<script src="../../shared/js/api.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
