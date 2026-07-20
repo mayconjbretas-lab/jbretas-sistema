@@ -39,6 +39,17 @@ function fmtRS(v) {       // R$ pt-BR sem centavos
   const n = Number(v); if (isNaN(n)) return '—';
   return 'R$ ' + n.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
 }
+function fmtRS2(v) {      // R$ pt-BR com 2 casas
+  if (v === null || v === undefined || v === '') return '—';
+  const n = Number(v); if (isNaN(n)) return '—';
+  return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Célula de comissão: >0 vira R$ verde; null/zero vira travessão.
+function comissaoCel(v) {
+  const n = Number(v);
+  if (v === null || v === undefined || v === '' || isNaN(n) || n <= 0) return { txt: '—', cls: '' };
+  return { txt: fmtRS2(n), cls: 'com-pos' };
+}
 function semaforoFr(v) {  // fração: >=1 ok | 0.85–0.99 info | <0.85 wn
   const n = Number(v); if (isNaN(n)) return '';
   return n >= 1 ? 'sem-ok' : (n >= 0.85 ? 'sem-inf' : 'sem-wn');
@@ -81,10 +92,12 @@ async function carregar() {
     document.getElementById('app-regional').textContent = reg;
     renderRegional();
     renderMix();
+    renderComissao();
   } catch (err) {
     const msg = '<div class="sup-erro">Erro ao carregar: ' + esc(err.message || err) + '</div>';
     document.getElementById('s-regional').innerHTML = msg;
     document.getElementById('s-mix').innerHTML = msg;
+    document.getElementById('s-comissao').innerHTML = msg;
   }
 }
 
@@ -156,6 +169,45 @@ function renderMix() {
     (linhasPostos ? '<ul class="sup-rank">' + linhasPostos + '</ul>' : '<div class="sup-empty">Sem dados de mix.</div>') + '</div>';
 
   document.getElementById('s-mix').innerHTML = cardReg + cardPostos;
+}
+
+// ── ABA COMISSÃO ─────────────────────────────────────────────────
+function renderComissao() {
+  const c = (_dados && _dados.comissao) || { periodo: null, postos: [], gerente: null, supervisor: null };
+  const box = document.getElementById('s-comissao');
+  const temAlgo = (c.postos && c.postos.length) || c.gerente || c.supervisor;
+  if (!temAlgo) {
+    box.innerHTML = '<div class="sup-card"><div class="sup-card-title">💰 Comissão</div><div class="sup-empty">Aguardando preenchimento da planilha.</div></div>';
+    return;
+  }
+  const periodo = c.periodo ? '<div class="sup-sub">Período ' + esc(c.periodo) + '</div>' : '';
+
+  // Card 1: comissionamento dos gerentes (por posto)
+  const linhas = (c.postos || []).map(p => {
+    const com = comissaoCel(p.comissao);
+    return '<tr>' +
+      '<td>' + nomeExib(p.nome) + '</td>' +
+      '<td>' + fmtRS2(p.tm) + '</td>' +
+      '<td>' + fmtPctFr(p.perc_meta) + '</td>' +
+      '<td class="' + com.cls + '">' + com.txt + '</td>' +
+    '</tr>';
+  }).join('');
+  const cardPostos = '<div class="sup-card"><div class="sup-card-title">💰 Comissionamento · gerentes da regional</div>' + periodo +
+    (linhas
+      ? '<div class="sup-tbl-wrap"><table class="sup-tbl"><thead><tr><th>Posto</th><th>TM</th><th>%Meta</th><th>Comissão</th></tr></thead><tbody>' + linhas + '</tbody></table></div>'
+      : '<div class="sup-empty">Sem postos.</div>') + '</div>';
+
+  // Card 2: gerente (projeção) — se vier tipo='gerente'
+  const cardLinha = (titulo, item) => {
+    const com = comissaoCel(item.comissao);
+    return '<div class="sup-card"><div class="sup-card-title">' + titulo + '</div>' +
+      '<div class="sup-com-linha"><span class="sup-com-nome">' + nomeExib(item.nome) + '</span>' +
+      '<span class="sup-com-val ' + com.cls + '">' + com.txt + '</span></div></div>';
+  };
+  const cardGerente = c.gerente ? cardLinha('📈 Vendas Gerente · projeção', c.gerente) : '';
+  const cardSup = c.supervisor ? cardLinha('🧭 Supervisor', c.supervisor) : '';
+
+  box.innerHTML = cardPostos + cardGerente + cardSup;
 }
 
 // ── ABA MAPA ─────────────────────────────────────────────────────

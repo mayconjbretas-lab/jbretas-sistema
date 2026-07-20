@@ -64,6 +64,13 @@ html, body { height: 100%; overflow: hidden; }
 .sup-tbl td.sem-ok { color: var(--ok); font-weight: 700; }
 .sup-tbl td.sem-inf { color: var(--info); font-weight: 700; }
 .sup-tbl td.sem-wn { color: var(--warning); font-weight: 700; }
+.sup-tbl td.com-pos { color: var(--ok); font-weight: 700; }
+
+/* ── Comissão (linha gerente/supervisor) ── */
+.sup-com-linha { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .7rem .85rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; }
+.sup-com-nome { color: var(--text); font-weight: 600; font-size: .9rem; }
+.sup-com-val { font-family: var(--mono); font-weight: 700; color: var(--text2); white-space: nowrap; }
+.sup-com-val.com-pos { color: var(--ok); }
 
 /* ── Mapa ── */
 .map-wrap { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1rem; }
