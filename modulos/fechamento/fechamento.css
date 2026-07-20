@@ -94,6 +94,12 @@
 .carga-campos { display: none; }
 .carga-campos.visivel { display: block; }
 
+/* Toggle "Posto fechado hoje?" — mesmo idioma do toggle da Carga (single button). */
+.toggle-fechado-btn { width: 100%; padding: 10px; text-align: center; font-family: var(--mono); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; cursor: pointer; border: 1px solid var(--border2); border-radius: var(--radius); background: var(--surface2); color: var(--text3); transition: all 0.2s; margin-bottom: 1rem; }
+.toggle-fechado-btn.fechado-ativo { background: var(--danger); color: #fff; border-color: var(--danger); }
+/* Inputs de venda travados quando o posto está fechado (0 visível, apagado). */
+.step-input.venda-apagada { opacity: 0.5; color: var(--text3); cursor: not-allowed; }
+
 .save-bar { position: sticky; bottom: 0; padding: 1rem 1.5rem; background: linear-gradient(to top, var(--bg) 60%, transparent); display: flex; flex-direction: column; align-items: center; gap: 0.5rem; z-index: 1; }
 .btn-save { background: var(--accent); color: #0a0d0f; border: none; border-radius: var(--radius); font-family: var(--mono); font-size: 0.85rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.9rem 2.5rem; cursor: pointer; min-width: 280px; }
 .btn-save:disabled { background: var(--surface3); color: var(--text3); cursor: not-allowed; opacity: 0.65; border: 1px dashed var(--border2); }

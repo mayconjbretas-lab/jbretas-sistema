@@ -15,6 +15,7 @@ let usuarioAtual = null;
 let tanquesAtuais = [];
 let combustiveisAtuais = [];
 let cargaRespondida = null; // 'sim' | 'nao' | null
+let postoFechado = false;   // toggle "Posto fechado hoje?" — zera as vendas
 let fechamentoBloqueado = false;
 
 // ── Tema claro/escuro (mesma chave jb_theme dos outros módulos) ──
@@ -283,6 +284,9 @@ function renderVendas() {
         style="background:var(--surface3);border:1px solid var(--border2);border-radius:8px;width:110px;">
     </div>
   `).join('');
+  // Inputs recriados em branco → reseta o toggle "Posto fechado" pra desligado.
+  postoFechado = false;
+  aplicarPostoFechado();
 }
 
 // Parse BR de litros p/ os inputs de venda: se tem vírgula, ela é o decimal e os
@@ -311,6 +315,7 @@ function fmtLitrosEdit(v) {
 // Blur do input de venda: normaliza o valor exibido (vírgula decimal, sem milhar)
 // e recalcula o total — feedback visual que denuncia digitação errada na origem.
 function normalizarVenda(input) {
+  if (postoFechado) return; // mantém o "0" visível dos campos travados
   const n = parseLitros(input.value);
   input.value = (n === null || n === 0) ? '' : fmtLitrosEdit(n);
   atualizarTotalVendas();
@@ -323,6 +328,36 @@ function atualizarTotalVendas() {
     total += parseLitros(input?.value) || 0;
   });
   document.getElementById('total-vendas').textContent = total.toLocaleString('pt-BR') + ' L';
+}
+
+// Toggle "Posto fechado hoje?": liga → zera e trava todos os inputs de venda;
+// desliga → reabilita e limpa os zeros (volta ao estado em branco). O estado
+// não persiste no banco — a venda 0 gravada é o registro. A Carga segue como
+// está (posto fechado pode ter recebido carga).
+function togglePostoFechado() {
+  postoFechado = !postoFechado;
+  aplicarPostoFechado();
+}
+function aplicarPostoFechado() {
+  const btn = document.getElementById('btn-posto-fechado');
+  if (btn) {
+    btn.classList.toggle('fechado-ativo', postoFechado);
+    btn.textContent = postoFechado ? '🔒 Posto fechado hoje — vendas zeradas' : '🔒 Posto fechado hoje?';
+  }
+  combustiveisAtuais.forEach(c => {
+    const input = document.getElementById('venda-' + c.nome.replace(/\s+/g, '_'));
+    if (!input) return;
+    if (postoFechado) {
+      input.value = '0';
+      input.readOnly = true;
+      input.classList.add('venda-apagada');
+    } else {
+      input.value = '';
+      input.readOnly = false;
+      input.classList.remove('venda-apagada');
+    }
+  });
+  atualizarTotalVendas();
 }
 
 function renderCarga() {
