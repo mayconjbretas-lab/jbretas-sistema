@@ -271,11 +271,21 @@ async function salvarLeitura() {
   const ultima = registros[0];
   const anteriorNum = ultima ? Number(ultima.leitura) : null;
   const { consumo: consumoPrev, status } = calcularConsumoCopasa(leitura, anteriorNum);
-  // Leitura menor e longe do topo do mostrador → provável erro de digitação.
+  // Leitura menor e longe do topo do mostrador: pode ser typo OU o hidrômetro
+  // que virou/foi trocado. Pergunta ao gerente em vez de bloquear.
+  let marcoZero = false;
   if (status === 'suspeita') {
-    msg.textContent = `Leitura menor que a anterior (${fmtM3(ultima.leitura)} em ${fmtBR(ultima.data)}) — confira. O hidrômetro só soma, salvo giro do mostrador.`;
-    msg.className = 'modal-msg err';
-    return;
+    const virou = confirm(
+      `Leitura menor que a anterior (${fmtM3(ultima.leitura)} em ${fmtBR(ultima.data)}). O hidrômetro virou?\n\n` +
+      `Se sim, hoje fica sem consumo e amanhã o cálculo volta ao normal.\n\n` +
+      `Cancelar = Corrigir · OK = Sim, virou.`
+    );
+    if (!virou) { // era typo — ele corrige o campo
+      msg.textContent = 'Beleza, confira e corrija a leitura.';
+      msg.className = 'modal-msg';
+      return;
+    }
+    marcoZero = true;
   }
   // Giro do mostrador detectado (rollover): consumo real correto, segue salvando.
   if (status === 'giro') {
@@ -286,7 +296,7 @@ async function salvarLeitura() {
   btn.disabled = true;
   btn.textContent = 'Salvando...';
   try {
-    await apiFetch('/copasa', { method: 'POST', body: JSON.stringify({ data, leitura }) });
+    await apiFetch('/copasa', { method: 'POST', body: JSON.stringify({ data, leitura, marco_zero: marcoZero }) });
     fecharModalRegistro();
     mostrarToast('✅ Leitura registrada!', `${fmtM3(leitura)} em ${fmtBR(data)}`);
     await carregarDados();
