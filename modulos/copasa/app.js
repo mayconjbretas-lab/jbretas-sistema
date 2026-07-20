@@ -101,6 +101,17 @@ function variacaoPct(atual, anterior) {
   if (!anterior || anterior === 0) return null;
   return ((atual - anterior) / anterior) * 100;
 }
+// Cálculo de consumo com giro do mostrador (rollover). Espelha
+// jbretas-api/copasa-calc.js — mantenha os dois em sincronia.
+// Retorna { consumo, status }: 'primeira' | 'normal' | 'giro' | 'suspeita'.
+function calcularConsumoCopasa(atual, anterior) {
+  if (anterior === null || anterior === undefined) return { consumo: null, status: 'primeira' };
+  if (atual >= anterior) return { consumo: Math.round((atual - anterior) * 100) / 100, status: 'normal' };
+  let M = 10000;
+  while (M <= anterior) M *= 10; // menor potência de 10 > anterior, mínimo 10.000
+  if (anterior >= 0.9 * M) return { consumo: Math.round(((M - anterior) + atual) * 100) / 100, status: 'giro' };
+  return { consumo: null, status: 'suspeita' };
+}
 function badgeHtml(pct, { neutro = false } = {}) {
   if (pct === null || pct === undefined || isNaN(pct)) return '<span class="kpi-badge neutro">sem comparação</span>';
   const sobe = pct > 0;
@@ -258,10 +269,18 @@ async function salvarLeitura() {
     return;
   }
   const ultima = registros[0];
-  if (ultima && leitura < Number(ultima.leitura)) {
-    msg.textContent = `A leitura não pode ser menor que a última registrada (${fmtM3(ultima.leitura)} em ${fmtBR(ultima.data)}). O hidrômetro só soma.`;
+  const anteriorNum = ultima ? Number(ultima.leitura) : null;
+  const { consumo: consumoPrev, status } = calcularConsumoCopasa(leitura, anteriorNum);
+  // Leitura menor e longe do topo do mostrador → provável erro de digitação.
+  if (status === 'suspeita') {
+    msg.textContent = `Leitura menor que a anterior (${fmtM3(ultima.leitura)} em ${fmtBR(ultima.data)}) — confira. O hidrômetro só soma, salvo giro do mostrador.`;
     msg.className = 'modal-msg err';
     return;
+  }
+  // Giro do mostrador detectado (rollover): consumo real correto, segue salvando.
+  if (status === 'giro') {
+    msg.textContent = `Giro do mostrador detectado — consumo calculado: ${fmtM3(consumoPrev)}. Salvando…`;
+    msg.className = 'modal-msg';
   }
 
   btn.disabled = true;
