@@ -183,9 +183,12 @@ function rotuloCombustivel(c) {
   return rotuloBase(c);
 }
 // Re-rotula as linhas já renderizadas (só o texto do label; inputs/preços intactos).
+// Âncora do label é o ÍNDICE da linha (não a coluna): no P. JA duas linhas
+// compartilham a coluna 'gc' (GASOLINA COMUM e GASOLINA OCTAPRO caem ambas em
+// 'gc'), então id por coluna colidia e re-rotulava a linha errada. Índice é único.
 function atualizarRotulosPrecos() {
-  combustiveisMapeados.forEach(c => {
-    const el = document.getElementById(`fuel-label-${c.coluna}`);
+  combustiveisMapeados.forEach((c, i) => {
+    const el = document.getElementById(`fuel-label-${i}`);
     if (el) el.textContent = rotuloCombustivel(c);
   });
 }
@@ -196,9 +199,9 @@ function renderPrecos() {
     body.innerHTML = '<div class="empty-state">Nenhum combustível compatível cadastrado para este posto.</div>';
     return;
   }
-  body.innerHTML = combustiveisMapeados.map(c => `
+  body.innerHTML = combustiveisMapeados.map((c, i) => `
     <div class="fuel-row" style="margin-bottom:8px;">
-      <span class="fuel-label" id="fuel-label-${c.coluna}">${rotuloCombustivel(c)}</span>
+      <span class="fuel-label" id="fuel-label-${i}">${rotuloCombustivel(c)}</span>
       <input class="preco-input" type="tel" inputmode="numeric" id="preco-${c.coluna}"
         data-coluna="${c.coluna}" data-val="0" value="0,00"
         oninput="formatPrecoInput(this)">
