@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>JBRETAS — Portal do Supervisor</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" sizes="48x48" href="/shared/jbretas-favicon-48.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/shared/icon-192.png">
+<meta name="theme-color" content="#0a0d1c">
+<link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="../../shared/css/base.css">
+<link rel="stylesheet" href="supervisor.css">
+<script>
+  (function(){
+    var t = localStorage.getItem('jb_theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+</head>
+<body>
+
+<div id="screen-app">
+
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <img src="/shared/jbretas-logo.png" alt="JBretas" style="height:34px;display:block">
+      <div>
+        <div class="topbar-brand">JBRETAS</div>
+        <div style="font-size:.62rem;color:var(--text3);letter-spacing:.2em;text-transform:uppercase;font-family:var(--mono);margin-top:2px">// Portal do Supervisor</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-user">
+        <div class="avatar" id="app-avatar">--</div>
+        <div class="topbar-info">
+          <div class="topbar-name" id="app-usuario">—</div>
+          <div class="topbar-posto" id="app-regional">—</div>
+        </div>
+      </div>
+      <button class="menu-dots" id="theme-btn" onclick="toggleTheme()" title="Alternar tema">🌙</button>
+      <button class="menu-dots" onclick="location.reload()" title="Atualizar">🔄</button>
+      <button class="btn-logout" onclick="jbretasLogout()">SAIR</button>
+    </div>
+  </div>
+
+  <div class="app-main" id="app-main">
+    <section class="scr active" id="s-regional"><div class="sup-empty">Carregando…</div></section>
+    <section class="scr" id="s-mix"><div class="sup-empty">Carregando…</div></section>
+    <section class="scr" id="s-mapa">
+      <div class="map-wrap"><div id="leaflet-map"></div></div>
+      <div id="mapa-lista"></div>
+    </section>
+  </div>
+
+  <nav class="bnav">
+    <button class="nbtn active" onclick="setTab(this,'regional')"><span class="ni">🏆</span><span class="nl">Regional</span></button>
+    <button class="nbtn" onclick="setTab(this,'mix')"><span class="ni">🥇</span><span class="nl">Mix</span></button>
+    <button class="nbtn" onclick="setTab(this,'mapa')"><span class="ni">🗺️</span><span class="nl">Mapa</span></button>
+  </nav>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="../../shared/js/postos-mapa.js"></script>
+<script src="../../shared/js/config.js"></script>
+<script src="../../shared/js/api.js"></script>
+<script src="../../shared/js/auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

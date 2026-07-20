@@ -13,5 +13,6 @@ window.JBRETAS_CONFIG = {
     ADM:        '/modulos/admin/',
     LOGISTICA:  '/modulos/logistica/',
     MOTORISTA:  '/modulos/motorista/',
+    SUPERVISOR: '/modulos/supervisor/',
   },
 };
