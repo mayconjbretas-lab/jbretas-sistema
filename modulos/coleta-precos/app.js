@@ -13,6 +13,19 @@ let combustiveisMapeados = []; // [{ nome, codigo, coluna }]
 let localizacaoAtual = null;   // { lat, lng }
 let fotoBase64Atual = null;
 
+// ── Override de RÓTULO por concorrente (SÓ exibição) ──────────────
+// Alguns concorrentes vendem produto premium com outro nome comercial
+// (ex.: P. RAJA e P. CENTER SUL vendem PODIUM; Octapro é exclusivo nosso).
+// Chave = nome do concorrente (casado via normNomePosto, sem depender de
+// acento/caixa/espaço). Valor = { <codigo do combustível>: 'novo rótulo' }.
+// APENAS o texto muda: coluna, código salvo e payload do POST /coletas
+// seguem idênticos (o preço cai no mesmo slot premium de hoje). Fácil de
+// estender: some outra linha aqui.
+const ROTULO_POR_CONCORRENTE = {
+  'P. RAJA':       { OCT: 'POD — GASOLINA PODIUM' },
+  'REDE FLEX CENTER SUL': { OCT: 'POD — GASOLINA PODIUM' },
+};
+
 // ── Tema claro/escuro (mesma chave jb_theme dos outros módulos) ──
 function aplicarTema(tema) {
   document.documentElement.setAttribute('data-theme', tema);
@@ -150,7 +163,31 @@ function onConcorrenteSelecionado() {
   const select = document.getElementById('select-concorrente');
   const id = select.value;
   concorrenteSelecionado = concorrentes.find(c => c.id === id) || null;
+  atualizarRotulosPrecos(); // re-rotula (ex.: Octapro→Podium p/ Raja/Center Sul)
   atualizarEstadoSalvar();
+}
+
+// Rótulo base de uma linha de combustível.
+function rotuloBase(c) {
+  return `${c.codigo || c.coluna.toUpperCase()} — ${c.nome}`;
+}
+// Rótulo aplicando o override do concorrente atualmente selecionado (se houver).
+// Concorrente fora do mapa → rótulo normal. Casa por nome normalizado.
+function rotuloCombustivel(c) {
+  if (concorrenteSelecionado) {
+    const alvo = normNomePosto(concorrenteSelecionado.nome);
+    for (const [nome, ov] of Object.entries(ROTULO_POR_CONCORRENTE)) {
+      if (normNomePosto(nome) === alvo && ov[c.codigo]) return ov[c.codigo];
+    }
+  }
+  return rotuloBase(c);
+}
+// Re-rotula as linhas já renderizadas (só o texto do label; inputs/preços intactos).
+function atualizarRotulosPrecos() {
+  combustiveisMapeados.forEach(c => {
+    const el = document.getElementById(`fuel-label-${c.coluna}`);
+    if (el) el.textContent = rotuloCombustivel(c);
+  });
 }
 
 function renderPrecos() {
@@ -161,7 +198,7 @@ function renderPrecos() {
   }
   body.innerHTML = combustiveisMapeados.map(c => `
     <div class="fuel-row" style="margin-bottom:8px;">
-      <span class="fuel-label">${c.codigo || c.coluna.toUpperCase()} — ${c.nome}</span>
+      <span class="fuel-label" id="fuel-label-${c.coluna}">${rotuloCombustivel(c)}</span>
       <input class="preco-input" type="tel" inputmode="numeric" id="preco-${c.coluna}"
         data-coluna="${c.coluna}" data-val="0" value="0,00"
         oninput="formatPrecoInput(this)">
