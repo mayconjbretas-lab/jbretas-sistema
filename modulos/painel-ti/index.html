@@ -50,41 +50,118 @@
 
   <div class="app-main">
 
-    <div class="page-header">
-      <div>
-        <div class="page-title">👁️ Acessar como</div>
-        <div class="page-date">Entre na sessão de qualquer usuário para dar suporte</div>
-      </div>
+    <div class="ti-tabs" id="ti-tabs">
+      <button class="ti-tab active" id="tabbtn-acessar"  data-tab="acessar"  type="button">👁️ Acessar como</button>
+      <button class="ti-tab"        id="tabbtn-usuarios" data-tab="usuarios" type="button">👤 Usuários</button>
     </div>
 
-    <div class="section">
-      <div class="section-header">
-        <span class="section-icon">🧑‍💼</span>
-        <span class="section-title">Usuários</span>
-        <span style="margin-left:auto;font-family:var(--mono);font-size:.62rem;color:var(--text3)" id="ti-contador">—</span>
-      </div>
-      <div class="section-body">
-
-        <div class="ti-chips" id="ti-chips">
-          <button class="ti-chip active" data-modalidade="" type="button">Todos</button>
-          <button class="ti-chip" data-modalidade="GERENTE" type="button">GERENTE</button>
-          <button class="ti-chip" data-modalidade="SUPERVISOR" type="button">SUPERVISOR</button>
-          <button class="ti-chip" data-modalidade="ADM" type="button">ADM</button>
-          <button class="ti-chip" data-modalidade="LOGISTICA" type="button">LOGÍSTICA</button>
+    <!-- ══════════ ABA: ACESSAR COMO ══════════ -->
+    <section id="tab-acessar" class="ti-tab-panel active">
+      <div class="page-header">
+        <div>
+          <div class="page-title">👁️ Acessar como</div>
+          <div class="page-date">Entre na sessão de qualquer usuário para dar suporte</div>
         </div>
-
-        <input class="ti-busca" id="ti-busca" type="text" autocomplete="off"
-               placeholder="Buscar por nome ou posto...">
-
-        <div id="ti-lista">
-          <div class="empty-state">Carregando usuários...</div>
-        </div>
-
       </div>
-    </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-icon">🧑‍💼</span>
+          <span class="section-title">Usuários</span>
+          <span style="margin-left:auto;font-family:var(--mono);font-size:.62rem;color:var(--text3)" id="ti-contador">—</span>
+        </div>
+        <div class="section-body">
+          <div class="ti-chips" id="ti-chips">
+            <button class="ti-chip active" data-modalidade="" type="button">Todos</button>
+            <button class="ti-chip" data-modalidade="GERENTE" type="button">GERENTE</button>
+            <button class="ti-chip" data-modalidade="SUPERVISOR" type="button">SUPERVISOR</button>
+            <button class="ti-chip" data-modalidade="ADM" type="button">ADM</button>
+            <button class="ti-chip" data-modalidade="LOGISTICA" type="button">LOGÍSTICA</button>
+          </div>
+          <input class="ti-busca" id="ti-busca" type="text" autocomplete="off"
+                 placeholder="Buscar por nome ou posto...">
+          <div id="ti-lista">
+            <div class="empty-state">Carregando usuários...</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ ABA: USUÁRIOS ══════════ -->
+    <section id="tab-usuarios" class="ti-tab-panel">
+      <div class="page-header">
+        <div>
+          <div class="page-title">👤 Usuários</div>
+          <div class="page-date">Criar, editar, desativar e excluir</div>
+        </div>
+        <button class="ti-btn-novo" id="btn-novo-usuario" type="button">➕ Novo usuário</button>
+      </div>
+
+      <div class="ti-aviso" id="ti-imp-aviso" style="display:none">
+        ⚠ Você está <b>vendo como</b> outro usuário. Volte ao TI real para gerenciar usuários.
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-icon">👥</span>
+          <span class="section-title">Todos os usuários</span>
+          <span style="margin-left:auto;font-family:var(--mono);font-size:.62rem;color:var(--text3)" id="ti-u-contador">—</span>
+        </div>
+        <div class="section-body">
+          <input class="ti-busca" id="ti-u-busca" type="text" autocomplete="off"
+                 placeholder="Buscar por nome, e-mail ou posto...">
+          <div id="ti-u-lista">
+            <div class="empty-state">—</div>
+          </div>
+        </div>
+      </div>
+    </section>
 
   </div>
 
+</div>
+
+<!-- ══════════ MODAL: NOVO / EDITAR ══════════ -->
+<div class="modal-overlay" id="ti-modal">
+  <div class="modal-card">
+    <div class="modal-title" id="ti-modal-title">Novo usuário</div>
+    <div class="modal-sub" id="ti-modal-sub">Preencha os dados do usuário.</div>
+
+    <div class="field-group">
+      <label class="field-label">Nome</label>
+      <input class="field-input" id="f-nome" type="text" autocomplete="off">
+    </div>
+    <div class="field-group">
+      <label class="field-label">E-mail</label>
+      <input class="field-input" id="f-email" type="email" autocomplete="off">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Senha</label>
+      <input class="field-input" id="f-senha" type="text" autocomplete="off">
+      <div class="ti-hint" id="f-senha-hint"></div>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Perfil</label>
+      <select class="field-select" id="f-perfil">
+        <option value="GERENTE">GERENTE</option>
+        <option value="SUPERVISOR">SUPERVISOR</option>
+        <option value="ADM">ADM</option>
+        <option value="LOGISTICA">LOGÍSTICA</option>
+      </select>
+    </div>
+    <div class="field-group" id="f-grp-posto">
+      <label class="field-label">Posto</label>
+      <select class="field-select" id="f-posto"></select>
+    </div>
+    <div class="field-group" id="f-grp-super" style="display:none">
+      <label class="field-label">Regional (supervisor)</label>
+      <input class="field-input" id="f-super" type="text" autocomplete="off">
+    </div>
+
+    <div class="modal-msg" id="ti-modal-msg"></div>
+    <button class="btn-modal-send" id="ti-modal-salvar" type="button">Salvar</button>
+    <button class="btn-modal-cancel" id="ti-modal-cancel" type="button">Cancelar</button>
+  </div>
 </div>
 
 <div class="toast" id="toast">
