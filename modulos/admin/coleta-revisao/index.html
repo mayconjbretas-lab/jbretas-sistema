@@ -16,8 +16,8 @@
 <!-- Mesmo ambiente de CSS do admin: admin.css (= jbretas2.css do AppPainel,
      define os tokens --sf/--ac/--tx*). NÃO carregar base.css aqui — misturar
      tokens quebraria o layout (mesma nota do admin/index.html). -->
-<link rel="stylesheet" href="../admin.css">
-<link rel="stylesheet" href="coleta-revisao.css">
+<link rel="stylesheet" href="../admin.css?v=202607221525">
+<link rel="stylesheet" href="coleta-revisao.css?v=202607221525">
 <script>
   (function(){
     var t = localStorage.getItem('jb_theme') || 'dark';
@@ -31,12 +31,12 @@
      Ranking→Coleta do admin/index.html; aqui é página standalone de QA. -->
 <div id="cr-root"></div>
 
-<script src="../../../shared/js/config.js"></script>
-<script src="../../../shared/js/api.js"></script>
-<script src="../../../shared/js/auth.js"></script>
-<script src="../../../shared/js/postos-mapa.js"></script>
-<script src="../../../shared/js/coletas-service.js"></script>
-<script src="coleta-revisao.js"></script>
+<script src="../../../shared/js/config.js?v=202607221525"></script>
+<script src="../../../shared/js/api.js?v=202607221525"></script>
+<script src="../../../shared/js/auth.js?v=202607221525"></script>
+<script src="../../../shared/js/postos-mapa.js?v=202607221525"></script>
+<script src="../../../shared/js/coletas-service.js?v=202607221525"></script>
+<script src="coleta-revisao.js?v=202607221525"></script>
 <script>
   // Exige sessão ADM (redireciona pro login se não houver). Depois de
   // logado como ADM no localhost, esta página renderiza com dados reais.
