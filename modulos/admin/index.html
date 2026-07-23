@@ -22,8 +22,8 @@
      tokens (--bg, --sf, --ac...) são de outro sistema, misturar quebraria
      o layout. Os outros módulos (Fechamento/Coleta/Copasa) continuam em
      base.css normalmente; só o admin usa esse visual. -->
-<link rel="stylesheet" href="admin.css?v=202607221525">
-<link rel="stylesheet" href="coleta-revisao/coleta-revisao.css?v=202607221525">
+<link rel="stylesheet" href="admin.css?v=202607231317">
+<link rel="stylesheet" href="coleta-revisao/coleta-revisao.css?v=202607231317">
 <script>
   (function(){
     var t = localStorage.getItem('jb_theme') || 'dark';
@@ -100,9 +100,9 @@
               </select>
             </div>
             <div>
-              <label class="filtro-lbl">Supervisor</label>
-              <select class="sel" id="cmp-sup" style="margin-bottom:0" onchange="cmpSetSup(this.value)">
-                <option value="">Todos supervisores</option>
+              <label class="filtro-lbl">Região</label>
+              <select class="sel" id="cmp-sup" style="margin-bottom:0" onchange="cmpSetReg(this.value)">
+                <option value="">Todas regiões</option>
               </select>
             </div>
             <div>
@@ -126,6 +126,7 @@
               ✕ Limpar filtro
             </button>
           </div>
+          <div style="display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:.55rem" id="cmp-ord-btns"></div>
           <div class="strat-box">
             <div class="csub" style="margin-bottom:.4rem">Estratégia de preço sugerido</div>
             <div class="strat-row" id="cmp-strat-tabs"></div>
@@ -309,15 +310,15 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-<script src="../../shared/js/postos-mapa.js?v=202607221525"></script>
-<script src="../../shared/js/config.js?v=202607221525"></script>
-<script src="../../shared/js/api.js?v=202607221525"></script>
-<script src="../../shared/js/auth.js?v=202607221525"></script>
-<script src="../../shared/js/coletas-service.js?v=202607221525"></script>
-<script src="coleta-revisao/coleta-revisao.js?v=202607221525"></script>
-<script src="../painel-adm/relatorios.js?v=202607221525"></script>
-<script src="../logistica/custo-margem.js?v=202607221525"></script>
-<script src="../painel-adm/fornecedores.js?v=202607221525"></script>
-<script src="app.js?v=202607221525"></script>
+<script src="../../shared/js/postos-mapa.js?v=202607231317"></script>
+<script src="../../shared/js/config.js?v=202607231317"></script>
+<script src="../../shared/js/api.js?v=202607231317"></script>
+<script src="../../shared/js/auth.js?v=202607231317"></script>
+<script src="../../shared/js/coletas-service.js?v=202607231317"></script>
+<script src="coleta-revisao/coleta-revisao.js?v=202607231317"></script>
+<script src="../painel-adm/relatorios.js?v=202607231317"></script>
+<script src="../logistica/custo-margem.js?v=202607231317"></script>
+<script src="../painel-adm/fornecedores.js?v=202607231317"></script>
+<script src="app.js?v=202607231317"></script>
 </body>
 </html>

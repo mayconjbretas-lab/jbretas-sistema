@@ -263,11 +263,12 @@ const CMP_STRATS = [
 ];
 let G_CMP_FUEL = 'GC';
 let G_CMP_STRAT = 'avg';
-let G_CMP_SUP = '';
+let G_CMP_REG = '';
 let G_CMP_BAND = '';
 let G_CMP_POSTO = '';
 let G_CMP_SO_MUDOU = false;
 let G_CMP_FAIXA_PRECO = 'todos'; // 'todos' | 'abaixo' | 'acima'
+let G_CMP_ORD = ''; // '' = alfabético | 'barato' = preço Você asc | 'caro' = desc
 let G_COMPARACAO = {}; // vem de buscarComparacaoDoDia()
 let G_MEDIA_DETALHE = null;
 
@@ -291,13 +292,14 @@ async function carregarDadosComparar() {
 
 function popularFiltrosComparar() {
   const selPosto = document.getElementById('cmp-posto');
-  const selSup = document.getElementById('cmp-sup');
+  const selReg = document.getElementById('cmp-sup'); // id mantido; agora é filtro de REGIÃO
   const selBand = document.getElementById('cmp-band');
-  const sups = [...new Set(MAP_POSTOS.map(p => p.sup))].sort();
   const bandas = [...new Set(MAP_POSTOS.map(p => p.banda))].sort();
   selPosto.innerHTML = '<option value="">Todos os postos</option>' +
     MAP_POSTOS.slice().sort((a, b) => a.ap.localeCompare(b.ap)).map(p => `<option value="${p.k}">${p.ap}</option>`).join('');
-  selSup.innerHTML = '<option value="">Todos supervisores</option>' + sups.map(s => `<option value="${s}">${s}</option>`).join('');
+  selReg.innerHTML = '<option value="">Todas regiões</option>'
+    + '<option value="metro">Metropolitana</option>'
+    + '<option value="sjdr">São João del Rei</option>';
   selBand.innerHTML = '<option value="">Todas bandeiras</option>' + bandas.map(b => `<option value="${b}">${b}</option>`).join('');
   selPosto.dataset.populado = '1';
 }
@@ -453,9 +455,28 @@ function montarStratTabsComparar() {
 
 function cmpSetFuel(key)  { G_CMP_FUEL  = key; renderComparar(); }
 function cmpSetStrat(key) { G_CMP_STRAT = key; renderComparar(); }
-function cmpSetSup(val)   { G_CMP_SUP   = val; renderComparar(); }
+function cmpSetReg(val)   { G_CMP_REG   = val; renderComparar(); }
 function cmpSetBand(val)  { G_CMP_BAND  = val; renderComparar(); }
 function cmpSetPosto(val) { G_CMP_POSTO = val; renderComparar(); }
+// Toggle: clicar no botão ativo desliga (volta pro alfabético).
+function cmpSetOrd(val)   { G_CMP_ORD = (G_CMP_ORD === val) ? '' : val; renderComparar(); }
+
+// Renderiza os 2 botões de ordenação por preço no container #cmp-ord-btns.
+// Cores do tema: verde (--ok) p/ "mais barato", vermelho (--dg) p/ "mais caro".
+// Ativo = fundo levemente preenchido + borda na cor cheia.
+function cmpMontarOrdBtns() {
+  const wrap = document.getElementById('cmp-ord-btns');
+  if (!wrap) return;
+  const bAtivo = G_CMP_ORD === 'barato';
+  const cAtivo = G_CMP_ORD === 'caro';
+  wrap.innerHTML =
+      `<button class="ftag" onclick="cmpSetOrd('barato')" style="color:var(--ok);`
+    + `border-color:${bAtivo ? 'var(--ok)' : 'rgba(0,229,160,.35)'};`
+    + `background:${bAtivo ? 'rgba(0,229,160,.15)' : 'transparent'}">↓ Mais barato</button>`
+    + `<button class="ftag" onclick="cmpSetOrd('caro')" style="color:var(--dg);`
+    + `border-color:${cAtivo ? 'var(--dg)' : 'rgba(255,107,107,.35)'};`
+    + `background:${cAtivo ? 'rgba(255,107,107,.15)' : 'transparent'}">↑ Mais caro</button>`;
+}
 function cmpToggleSoMudou(chk) { G_CMP_SO_MUDOU = chk.checked; renderComparar(); }
 
 function cmpSetFaixaPreco(btn, faixa) {
@@ -544,8 +565,10 @@ function cmpSugeridoMatriz(dado) {
 
 // Monta o card no formato MATRIZ (colunas = fuels; linhas = Você / cada
 // concorrente / Sugerido).
-function cmpCardMatriz(posto, dado) {
+function cmpCardMatriz(posto, dado, pos) {
   const cols = CMP_FUELS_CARD; // GC, GA, ET, S10, S500
+  // Prefixo de posição (dourado) só quando a lista está ordenada por preço.
+  const posPrefix = pos ? `<span style="color:var(--accent)">${pos}º </span>` : '';
   const idk = idSafe(posto.k);
   const kSafe = String(posto.k).replace(/'/g, "\\'");
 
@@ -613,7 +636,7 @@ function cmpCardMatriz(posto, dado) {
   const sugRow = `<tr class="cmpm-row-sug"><th class="cmpm-rowlbl">Sugerido</th>${sugCells}</tr>`;
 
   return `<div class="region-card" id="cmp-card-${idk}">
-    <div class="region-hdr"><span class="region-nome">${posto.ap}</span></div>
+    <div class="region-hdr"><span class="region-nome">${posPrefix}${posto.ap}</span></div>
     <div class="cmpm-wrap"><table class="cmpm-table">
       <thead>${thead}</thead>
       <tbody>${voceRow}${concHtml}${sugRow}</tbody>
@@ -766,19 +789,40 @@ const CMP_FUELS_CARD = [
 function renderComparar() {
   montarFuelTabsComparar();
   montarStratTabsComparar();
+  cmpMontarOrdBtns();
 
   const fuel = G_CMP_FUEL;
   const fuelLabel = (CMP_FUELS.find(f => f.key === fuel) || {}).label || fuel;
 
+  const ordAtivo = (G_CMP_ORD === 'barato' || G_CMP_ORD === 'caro');
+  // Preço "Você" do posto no combustível GLOBAL selecionado (null se sem preço).
+  const precoVoce = (p) => {
+    const d = G_COMPARACAO[p.k];
+    return d ? cmpCalcCard(d, fuel).ownVal : null;
+  };
+
   const postos = MAP_POSTOS.filter(p => {
     if (G_CMP_POSTO && p.k !== G_CMP_POSTO) return false;
-    if (G_CMP_SUP  && p.sup  !== G_CMP_SUP)  return false;
+    if (G_CMP_REG  && p.reg  !== G_CMP_REG)  return false;
     if (G_CMP_BAND && p.banda !== G_CMP_BAND) return false;
     return true;
-  }).sort((a, b) => a.ap.localeCompare(b.ap));
+  });
+  if (ordAtivo) {
+    // Postos sem preço "Você" vão SEMPRE pro fim; entre eles, alfabético.
+    postos.sort((a, b) => {
+      const pa = precoVoce(a), pb = precoVoce(b);
+      if (pa === null && pb === null) return a.ap.localeCompare(b.ap);
+      if (pa === null) return 1;
+      if (pb === null) return -1;
+      return G_CMP_ORD === 'barato' ? pa - pb : pb - pa;
+    });
+  } else {
+    postos.sort((a, b) => a.ap.localeCompare(b.ap));
+  }
 
   let somaMinha = 0, contMinha = 0, somaConc = 0, contConc = 0;
   let cardsHtml = '';
+  let posOrd = 0; // posição só entre os cards efetivamente renderizados
 
   postos.forEach(posto => {
     const dado = G_COMPARACAO[posto.k] || { proprio: null, proprioDesatualizado: false, concorrentes: [] };
@@ -794,7 +838,8 @@ function renderComparar() {
     if (!dado.proprio && !dado.concorrentes.length) return;
     if (!cmpPostoPassaFiltros(dado)) return;
 
-    cardsHtml += cmpCardMatriz(posto, dado);
+    posOrd += 1;
+    cardsHtml += cmpCardMatriz(posto, dado, ordAtivo ? posOrd : null);
   });
 
   document.getElementById('cmp-regions').innerHTML = cardsHtml || '<div class="empty">Nenhum posto para esse filtro.</div>';

@@ -10,12 +10,12 @@
 <link rel="apple-touch-icon" href="/shared/icon-192.png">
 <meta name="theme-color" content="#0a0d1c">
 <link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
-<link rel="stylesheet" href="../../shared/css/base.css?v=202607221525">
+<link rel="stylesheet" href="../../shared/css/base.css?v=202607231317">
 <!-- CSS da Coleta (revisão) — compartilhado com o painel mobile, sem fork.
      Usa tokens --sf/--ac/--tx* resolvidos pela camada de alias em painel-adm.css. -->
-<link rel="stylesheet" href="../admin/coleta-revisao/coleta-revisao.css?v=202607221525">
-<link rel="stylesheet" href="painel-adm.css?v=202607221525">
-<link rel="stylesheet" href="medicao.css?v=202607221525">
+<link rel="stylesheet" href="../admin/coleta-revisao/coleta-revisao.css?v=202607231317">
+<link rel="stylesheet" href="painel-adm.css?v=202607231317">
+<link rel="stylesheet" href="medicao.css?v=202607231317">
 <script>
   // Pre-paint: aplica o tema salvo antes de renderizar (evita flash).
   (function(){
@@ -124,8 +124,8 @@
                   <select class="sel" id="cmp-posto" onchange="cmpSetPosto(this.value)"><option value="">Todos os postos</option></select>
                 </div>
                 <div>
-                  <label class="filtro-lbl">Supervisor</label>
-                  <select class="sel" id="cmp-sup" onchange="cmpSetSup(this.value)"><option value="">Todos supervisores</option></select>
+                  <label class="filtro-lbl">Região</label>
+                  <select class="sel" id="cmp-sup" onchange="cmpSetReg(this.value)"><option value="">Todas regiões</option></select>
                 </div>
                 <div>
                   <label class="filtro-lbl">Bandeira</label>
@@ -140,6 +140,7 @@
                 <button class="ftag" id="flt-acima" onclick="cmpSetFaixaPreco(this,'acima')">🔴 Acima do nosso</button>
                 <button class="ftag" id="flt-todos-preco" onclick="cmpSetFaixaPreco(this,'todos')" style="display:none">✕ Limpar filtro</button>
               </div>
+              <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem" id="cmp-ord-btns"></div>
             </div>
           </div>
 
@@ -202,18 +203,18 @@
   </div>
 </div>
 
-<script src="../../shared/js/config.js?v=202607221525"></script>
-<script src="../../shared/js/api.js?v=202607221525"></script>
-<script src="../../shared/js/auth.js?v=202607221525"></script>
-<script src="../../shared/js/postos-mapa.js?v=202607221525"></script>
-<script src="../../shared/js/coletas-service.js?v=202607221525"></script>
+<script src="../../shared/js/config.js?v=202607231317"></script>
+<script src="../../shared/js/api.js?v=202607231317"></script>
+<script src="../../shared/js/auth.js?v=202607231317"></script>
+<script src="../../shared/js/postos-mapa.js?v=202607231317"></script>
+<script src="../../shared/js/coletas-service.js?v=202607231317"></script>
 <!-- Coleta (revisão) — mesmo JS do painel mobile (renderColetaRevisao em window), sem fork -->
-<script src="../admin/coleta-revisao/coleta-revisao.js?v=202607221525"></script>
-<script src="medicao.js?v=202607221525"></script>
-<script src="relatorios.js?v=202607221525"></script>
+<script src="../admin/coleta-revisao/coleta-revisao.js?v=202607231317"></script>
+<script src="medicao.js?v=202607231317"></script>
+<script src="relatorios.js?v=202607231317"></script>
 <!-- Custo & Margem — mesmo JS da Logística (renderCustoMargem em window), sem fork; ADM = só leitura -->
-<script src="../logistica/custo-margem.js?v=202607221525"></script>
-<script src="fornecedores.js?v=202607221525"></script>
-<script src="app.js?v=202607221525"></script>
+<script src="../logistica/custo-margem.js?v=202607231317"></script>
+<script src="fornecedores.js?v=202607231317"></script>
+<script src="app.js?v=202607231317"></script>
 </body>
 </html>
