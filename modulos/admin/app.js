@@ -267,7 +267,8 @@ let G_CMP_REG = '';
 let G_CMP_BAND = '';
 let G_CMP_POSTO = '';
 let G_CMP_SO_MUDOU = false;
-let G_CMP_FAIXA_PRECO = 'todos'; // 'todos' | 'abaixo' | 'acima'
+let G_CMP_ABAIXO = false; // chip "abaixo do nosso" (independente do "acima")
+let G_CMP_ACIMA  = false; // chip "acima do nosso"  (independente do "abaixo")
 let G_CMP_ORD = ''; // '' = alfabético | 'barato' = preço Você asc | 'caro' = desc
 let G_COMPARACAO = {}; // vem de buscarComparacaoDoDia()
 let G_MEDIA_DETALHE = null;
@@ -479,17 +480,19 @@ function cmpMontarOrdBtns() {
 }
 function cmpToggleSoMudou(chk) { G_CMP_SO_MUDOU = chk.checked; renderComparar(); }
 
+// Chips independentes: 'abaixo' e 'acima' alternam sozinhos (podem os 2
+// ativos ao mesmo tempo); 'todos' = limpar os dois. `btn` não é mais usado
+// (o estado manda no visual), mantido só p/ compat com o onclick do HTML.
 function cmpSetFaixaPreco(btn, faixa) {
-  G_CMP_FAIXA_PRECO = faixa;
-  ['flt-abaixo', 'flt-acima', 'flt-todos-preco'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { el.classList.remove('active'); el.style.display = id === 'flt-todos-preco' ? 'none' : ''; }
-  });
-  if (faixa !== 'todos') {
-    btn.classList.add('active');
-    const limpar = document.getElementById('flt-todos-preco');
-    if (limpar) limpar.style.display = '';
-  }
+  if (faixa === 'abaixo')      G_CMP_ABAIXO = !G_CMP_ABAIXO;
+  else if (faixa === 'acima')  G_CMP_ACIMA  = !G_CMP_ACIMA;
+  else                         { G_CMP_ABAIXO = false; G_CMP_ACIMA = false; } // 'todos' = limpar
+  const bA = document.getElementById('flt-abaixo');
+  const bC = document.getElementById('flt-acima');
+  const bL = document.getElementById('flt-todos-preco');
+  if (bA) bA.classList.toggle('active', G_CMP_ABAIXO);
+  if (bC) bC.classList.toggle('active', G_CMP_ACIMA);
+  if (bL) bL.style.display = (G_CMP_ABAIXO || G_CMP_ACIMA) ? '' : 'none';
   renderComparar();
 }
 
@@ -618,7 +621,18 @@ function cmpCardMatriz(posto, dado, pos) {
         const txt = igual ? 'igual' : (d > 0 ? '+' : '') + Math.round(d * 100) + 'c';
         diff = ` <span class="cmpm-diff" style="color:${cor}">${txt}</span>`;
       }
-      return `<td class="cmpm-cell"><span class="cmpm-preco">${fmtPrecoBRL(cv)}</span>${diff}</td>`;
+      // Destaque de filtro: SÓ na coluna do combustível ativo (G_CMP_FUEL) e
+      // só com o filtro correspondente ligado. Mesmo critério do esconder.
+      let hl = '';
+      if (f.key === G_CMP_FUEL) {
+        if (G_CMP_SO_MUDOU && cmpConcMudou(c, f.key)) hl += ' cmpm-hl-mudou';
+        if (ov !== null) {
+          const d = cv - ov;
+          if (G_CMP_ABAIXO && d < -0.005)     hl += ' cmpm-hl-abaixo';
+          else if (G_CMP_ACIMA && d > 0.005)  hl += ' cmpm-hl-acima';
+        }
+      }
+      return `<td class="cmpm-cell${hl}"><span class="cmpm-preco">${fmtPrecoBRL(cv)}</span>${diff}</td>`;
     }).join('');
     const nome = c.nome + (c.desatualizado ? seloDesatualizado(c.registro) : '');
     return `<tr><th class="cmpm-rowlbl cmpm-conc" title="${c.nome}">${nome}</th>${cells}</tr>`;
@@ -740,38 +754,41 @@ async function cmpAplicarRevisoes() {
   }
 }
 
-// Filtros por POSTO na matriz (varrem todos os combustíveis de todos os
-// concorrentes). E lógico entre os dois. Não toca nos agregados nem no
-// cmpCardMatriz. Fuels = as colunas da matriz (CMP_FUELS_CARD).
+// Concorrente `c` mudou de preço no combustível `f` entre ontem e hoje?
+// Fonte de ontem = c.registroOntem (mesma origem que o filtro antigo usava).
+// Só conta se o dado de hoje NÃO está desatualizado, tem leitura de ontem e
+// |Δ| >= 0,5 centavo. Sem preço em algum lado → não conta.
+function cmpConcMudou(c, f) {
+  if (!c || c.desatualizado) return false;
+  const h = c.registro ? c.registro[f] : undefined;
+  const o = c.registroOntem ? c.registroOntem[f] : undefined;
+  return h !== null && h !== undefined && o !== null && o !== undefined
+    && Math.abs(Number(h) - Number(o)) >= 0.005;
+}
+
+// Filtros por POSTO na matriz, SEMPRE relativos ao combustível ativo
+// (G_CMP_FUEL). AND lógico entre eles + com região/posto/bandeira. O mesmo
+// critério pinta as células em cmpCardMatriz (esconder + destacar).
 function cmpPostoPassaFiltros(dado) {
-  const fuels = CMP_FUELS_CARD.map(f => f.key);
+  const f = G_CMP_FUEL;
   const concs = dado.concorrentes || [];
 
-  // 1) Só quem mudou de ontem→hoje: passa se ALGUM concorrente mudou em
-  //    ALGUM combustível (tem ontem, não desatualizado, |Δ| >= 0,005).
-  if (G_CMP_SO_MUDOU) {
-    const algumMudou = concs.some(c => !c.desatualizado && fuels.some(f => {
-      const h = c.registro ? c.registro[f] : undefined;
-      const o = c.registroOntem ? c.registroOntem[f] : undefined;
-      return h !== null && h !== undefined && o !== null && o !== undefined
-        && Math.abs(Number(h) - Number(o)) >= 0.005;
-    }));
-    if (!algumMudou) return false;
-  }
+  // 1) Só quem mudou de ontem→hoje: passa se ALGUM concorrente mudou no
+  //    combustível ATIVO.
+  if (G_CMP_SO_MUDOU && !concs.some(c => cmpConcMudou(c, f))) return false;
 
-  // 2) Abaixo/Acima do nosso: passa se ALGUM concorrente estiver abaixo
-  //    (ou acima) do nosso proprio[f] em QUALQUER combustível. Sem proprio
-  //    (sem base de comparação) → esconde.
-  if (G_CMP_FAIXA_PRECO === 'abaixo' || G_CMP_FAIXA_PRECO === 'acima') {
-    if (!dado.proprio) return false;
-    const abaixo = G_CMP_FAIXA_PRECO === 'abaixo';
-    const algum = concs.some(c => fuels.some(f => {
-      const cv = c.registro ? c.registro[f] : undefined;
-      const ov = dado.proprio[f];
-      if (cv === null || cv === undefined || ov === null || ov === undefined) return false;
-      const d = Number(cv) - Number(ov);
-      return abaixo ? d < -0.005 : d > 0.005;
-    }));
+  // 2) Abaixo/Acima do nosso (chips independentes): passa se ALGUM
+  //    concorrente estiver abaixo (ou acima) do nosso proprio[f] no
+  //    combustível ativo. Sem proprio (sem base) → esconde se algum chip on.
+  if (G_CMP_ABAIXO || G_CMP_ACIMA) {
+    const ov = (dado.proprio && dado.proprio[f] !== null && dado.proprio[f] !== undefined) ? Number(dado.proprio[f]) : null;
+    if (ov === null) return false;
+    const algum = concs.some(c => {
+      const cv = (c.registro && c.registro[f] !== null && c.registro[f] !== undefined) ? Number(c.registro[f]) : null;
+      if (cv === null) return false;
+      const d = cv - ov;
+      return (G_CMP_ABAIXO && d < -0.005) || (G_CMP_ACIMA && d > 0.005);
+    });
     if (!algum) return false;
   }
 

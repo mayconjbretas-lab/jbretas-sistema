@@ -378,6 +378,12 @@ html:not([data-theme="light"]) body::before{
 .cmpm-colh { display: inline-block; width: 52px; text-align: right; }
 .cmpm-diff { font-size: .62rem; font-weight: 600; margin-left: 4px; }
 .cmpm-na { color: var(--tx3); opacity: .5; }
+/* Destaques de filtro na matriz (só na coluna do combustível ativo).
+   mudou = anel âmbar; abaixo = fundo vermelho suave (concorrente mais
+   barato = perigo); acima = fundo verde suave. Combináveis. */
+.cmpm-hl-mudou  { box-shadow: inset 0 0 0 2px var(--wn); border-radius: 5px; }
+.cmpm-hl-abaixo { background: color-mix(in srgb, var(--dg) 16%, transparent); border-radius: 5px; }
+.cmpm-hl-acima  { background: color-mix(in srgb, var(--ok) 16%, transparent); border-radius: 5px; }
 .cmpm-pen { cursor: pointer; font-size: .72rem; opacity: .65; }
 .cmpm-pen:hover { opacity: 1; }
 .cmpm-input { width: 60px; background: var(--sf2); border: 1px solid var(--ac); border-radius: 6px; padding: 2px 5px; color: var(--tx); font-family: var(--mono); font-size: .72rem; text-align: right; outline: none; }

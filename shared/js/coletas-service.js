@@ -66,14 +66,17 @@ function resolverAliasPosto(nome) {
   return ALIASES_POSTO[normalizado] || nome;
 }
 
+// Fonte AUTORITATIVA = o campo `tipo` que o GET /coletas devolve. Desde o
+// fix da Beatriz (13/07/2026) o POST /coletas decide `tipo` pela coluna
+// estrutural postos.auto_concorrente_id ('Próprio' quando o concorrente
+// coletado é o concorrente-de-si; senão 'Concorrente'). Classificamos SÓ
+// por esse campo. NÃO comparamos mais nome de posto (o método antigo) —
+// foi exatamente a comparação de nome, via alias divergente, que quebrou a
+// Beatriz. Sem `tipo` explícito de própria → conta como concorrente (mesmo
+// default do backend p/ coleta ambígua).
 function ehColetaPropria(registro) {
   const tipo = String(registro.tipo || '').trim().toUpperCase();
-  if (tipo === 'PRÓPRIO' || tipo === 'PROPRIO') return true;
-  if (tipo === 'CONCORRENTE') return false;
-  // fallback pra legado ainda não migrado — resolve apelido do
-  // posto_alvo antes de comparar
-  const alvoResolvido = resolverAliasPosto(registro.postoAlvo);
-  return semAcentoComparacao(registro.posto) === semAcentoComparacao(alvoResolvido);
+  return tipo === 'PRÓPRIO' || tipo === 'PROPRIO';
 }
 
 // Busca coletas (via GET /coletas, já autenticado) e agrupa por posto
