@@ -570,10 +570,15 @@ async function cmpConfirmarVoce(k, f) {
   if (orig !== null && Math.abs(novo - orig) < 0.005) { renderComparar(); return; }
 
   inp.dataset.saving = '1';
+  const flashFuels = []; // fuels que geraram solicitação (feedback ✓)
   const ok = await cmpSalvarPrecoProprio(posto.ap, f, novo, orig);
   if (ok) {
     if (!dado.proprio) dado.proprio = {};
     dado.proprio[f] = novo; // overlay local (reflete na hora + persiste no reload via cmpAplicarRevisoes)
+    // Solicitação SEMPRE que o preço mudou (posto.ap, NÃO .nome). O guard de
+    // "sem mudança" acima já retornou, mas reconfere por segurança.
+    if ((orig === null || Math.abs(novo - orig) >= 0.005)
+        && await cmpCriarSolicitacao(posto.ap, f, orig, novo)) flashFuels.push(f);
   }
 
   // Regra do GA — NUNCA automático: ao salvar GC, oferece GA = GC + 0,30.
@@ -582,10 +587,16 @@ async function cmpConfirmarVoce(k, f) {
     if (window.confirm(`Aplicar também GA (aditivada) = GC + 0,30 = R$ ${alvoGA.toFixed(2).replace('.', ',')}?`)) {
       const origGA = (dado.proprio && dado.proprio['GA'] !== null && dado.proprio['GA'] !== undefined) ? Number(dado.proprio['GA']) : null;
       const okGA = await cmpSalvarPrecoProprio(posto.ap, 'GA', alvoGA, origGA);
-      if (okGA) dado.proprio['GA'] = alvoGA;
+      if (okGA) {
+        dado.proprio['GA'] = alvoGA;
+        // GA também SEMPRE gera solicitação — só pula se o valor não mudou.
+        if ((origGA === null || Math.abs(alvoGA - origGA) >= 0.005)
+            && await cmpCriarSolicitacao(posto.ap, 'GA', origGA, alvoGA)) flashFuels.push('GA');
+      }
     }
   }
   renderComparar();
+  flashFuels.forEach(ff => cmpFlashCheck(k, ff));
 }
 
 async function cmpSalvarPrecoProprio(postoNome, combustivel, precoEditado, precoOriginal) {
@@ -605,6 +616,42 @@ async function cmpSalvarPrecoProprio(postoNome, combustivel, precoEditado, preco
     alert('Erro ao salvar preço: ' + (err && err.message ? err.message : 'tente de novo'));
     return false;
   }
+}
+
+// Cria a solicitação de preço pro gerente confirmar na bomba. O preço já foi
+// salvo (revisão) antes desta chamada — se aqui falhar, o preço fica, mas
+// avisamos que a notificação do gerente não saiu.
+async function cmpCriarSolicitacao(postoNome, combustivel, precoAntigo, precoNovo) {
+  try {
+    await apiFetch('/solicitacoes-preco', {
+      method: 'POST',
+      body: JSON.stringify({
+        posto_nome:   postoNome,
+        combustivel,
+        preco_antigo: (precoAntigo === null || precoAntigo === undefined) ? null : precoAntigo,
+        preco_novo:   precoNovo,
+      }),
+    });
+    return true;
+  } catch (err) {
+    alert('Preço salvo, mas falhou ao solicitar confirmação do gerente: ' + (err && err.message ? err.message : 'tente de novo'));
+    return false;
+  }
+}
+
+// Feedback leve: ✓ dourado rápido na célula "Você" do combustível editado
+// (após o renderComparar já ter recriado a célula).
+function cmpFlashCheck(k, f) {
+  const cell = document.getElementById(`cmpm-voce-${idSafe(k)}-${f}`);
+  if (!cell) return;
+  const chk = document.createElement('span');
+  chk.textContent = ' ✓';
+  chk.style.color = 'var(--ac)';
+  chk.style.fontWeight = '700';
+  chk.style.transition = 'opacity .6s';
+  cell.appendChild(chk);
+  setTimeout(() => { chk.style.opacity = '0'; }, 500);
+  setTimeout(() => { if (chk.parentNode) chk.parentNode.removeChild(chk); }, 1200);
 }
 
 // Sobrepõe os preços editados de hoje (coleta_revisao) no proprio de cada

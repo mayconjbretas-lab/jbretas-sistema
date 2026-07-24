@@ -17,7 +17,7 @@
 // CSS injetado via <style> com os tokens LONGOS do base.css (dual-theme).
 // ================================================================
 (function () {
-  const INTERVALO_MS = 60000;
+  const INTERVALO_MS = 20000;
   const FUEL_LABEL = {
     GC: 'Gasolina Comum', GA: 'Gasolina Aditivada', ET: 'Etanol',
     S10: 'Diesel S10', S500: 'Diesel S500',
@@ -28,6 +28,8 @@
   let _fotoPorId = {};        // id da solicitação -> base64 comprimido
   let _montado = false;
   let _timer = null;
+  let _ctx = null;            // AudioContext único/persistente (lazy)
+  let _somPendente = false;   // poll tocou com áudio travado → toca no 1º gesto
 
   function ehGerente() {
     try { return (getUsuarioLogado() || {}).perfil === 'GERENTE'; }
@@ -73,29 +75,91 @@
     } catch (e) { cb(dataUrlOriginal); }
   }
 
-  // ── Beep (WebAudio, 2 notas rápidas). Autoplay policy pode bloquear
-  //    antes de qualquer interação → falha silenciosa. ──
-  function beep() {
+  // Cria (lazy) o AudioContext único do módulo. Retorna null se indisponível.
+  function garantirCtx() {
+    if (!_ctx) {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) _ctx = new AC();
+      } catch (e) { _ctx = null; }
+    }
+    return _ctx;
+  }
+
+  // Destrava o áudio (autoplay policy): garante o _ctx e chama resume(). Se
+  // havia som pendente (poll tocou antes de um gesto), toca ele agora. Listener
+  // PERSISTENTE no init — com guard de custo zero quando já está tudo ok.
+  function destravarAudio() {
+    if (_ctx && _ctx.state === 'running' && !_somPendente) return; // nada a fazer
     try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return;
-      const ctx = new AC();
-      const nota = (freq, inicio, dur) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = freq;
-        const t0 = ctx.currentTime + inicio;
-        gain.gain.setValueAtTime(0.0001, t0);
-        gain.gain.exponentialRampToValueAtTime(0.2, t0 + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.start(t0); osc.stop(t0 + dur);
-      };
-      nota(880, 0, 0.13);      // A5
-      nota(1174.66, 0.15, 0.16); // D6
-      setTimeout(() => { try { ctx.close(); } catch (e) {} }, 600);
+      const ctx = garantirCtx();
+      if (!ctx) return;
+      if (ctx.state === 'suspended' && ctx.resume) {
+        ctx.resume().then(() => {
+          if (_somPendente && ctx.state === 'running') { _somPendente = false; tocarNotificacao(); }
+        }).catch(() => {});
+      } else if (ctx.state === 'running' && _somPendente) {
+        _somPendente = false;
+        tocarNotificacao();
+      }
     } catch (e) { /* silencioso */ }
+  }
+
+  // ── Notificação (WebAudio): tri-tone E5→A5→C#6 repetido 2×, com corpo
+  //    (triangle 1 oitava acima) + vibração. Usa o _ctx PERSISTENTE. Se o áudio
+  //    ainda está travado (sem _ctx, ou 'suspended' que não retomou), marca
+  //    _somPendente=true — o próximo gesto do usuário toca o som atrasado. A
+  //    vibração não depende de gesto: tenta sempre. Falha = silêncio (sem log). ──
+  function tocarNotificacao() {
+    const agendar = (ctx) => {
+      const seq = [659.25, 880, 1108.73]; // E5, A5, C#6
+      const passo = 0.18;                  // duração de cada nota
+      const gapSeq = 0.35;                 // pausa entre as 2 repetições
+      const nota = (freq, t0, dur) => {
+        // sine principal (0.5) + triangle 1 oitava acima (0.15) pra dar corpo.
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        g.connect(ctx.destination);
+        const o1 = ctx.createOscillator();
+        o1.type = 'sine'; o1.frequency.value = freq; o1.connect(g);
+        const g2 = ctx.createGain();
+        g2.gain.setValueAtTime(0.0001, t0);
+        g2.gain.exponentialRampToValueAtTime(0.15, t0 + 0.02);
+        g2.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        g2.connect(ctx.destination);
+        const o2 = ctx.createOscillator();
+        o2.type = 'triangle'; o2.frequency.value = freq * 2; o2.connect(g2);
+        o1.start(t0); o1.stop(t0 + dur);
+        o2.start(t0); o2.stop(t0 + dur);
+      };
+      const base = ctx.currentTime + 0.03;
+      const durSeq = seq.length * passo;   // 0,54s por sequência
+      for (let rep = 0; rep < 2; rep++) {
+        const ini = base + rep * (durSeq + gapSeq);
+        seq.forEach((f, i) => nota(f, ini + i * passo, passo));
+      }
+    };
+    try {
+      const ctx = garantirCtx();
+      if (ctx && ctx.state === 'running') {
+        _somPendente = false;
+        agendar(ctx);
+      } else {
+        // Travado: guarda pro próximo gesto. Tentativa oportunista de resume()
+        // (sem gesto normalmente NÃO destrava); se destravar, toca na hora.
+        _somPendente = true;
+        if (ctx && ctx.state === 'suspended' && ctx.resume) {
+          ctx.resume().then(() => {
+            if (_somPendente && ctx.state === 'running') { _somPendente = false; agendar(ctx); }
+          }).catch(() => {});
+        }
+      }
+    } catch (e) { _somPendente = true; }
+    try {
+      if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]);
+    } catch (e) { /* iOS/sem suporte — silencioso */ }
   }
 
   // ── Estilo (tokens longos do base.css; dual-theme) ──────────────
@@ -348,7 +412,7 @@
       return;
     }
     const n = _pendentes.length;
-    if (_ultimaContagem !== null && n > _ultimaContagem) beep();
+    if (_ultimaContagem !== null && n > _ultimaContagem) tocarNotificacao();
     _ultimaContagem = n;
     updateBadge(n);
     updateFaixa(n);
@@ -368,6 +432,11 @@
   function init() {
     if (!ehGerente()) return;
     injetarEstilo();      // CSS do badge/sheet no <head> ANTES do 1º updateBadge
+    // Destrava o áudio a cada gesto (autoplay policy). Listener PERSISTENTE (NÃO
+    // once): se um som ficar pendente depois do 1º gesto, o próximo gesto toca.
+    // destravarAudio tem guard de custo zero quando o áudio já está liberado.
+    ['pointerdown', 'keydown', 'click', 'touchend'].forEach(ev =>
+      document.addEventListener(ev, destravarAudio, { capture: true }));
     esperarBnav(15);      // badge assim que o bnav do gerente-nav existir
     refresh();            // 1º poll (sem beep)
     _timer = setInterval(refresh, INTERVALO_MS);
