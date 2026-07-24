@@ -593,22 +593,14 @@ function cmpCardMatriz(posto, dado, pos) {
       + ` <span class="cmpm-pen" title="Editar nosso preço" onclick="cmpEditarVoce('${kSafe}','${f.key}')">✏️</span></td>`;
   }).join('');
   const desatSelo = dado.proprioDesatualizado ? seloDesatualizado(dado.proprio) : '';
-  const voceRow = `<tr class="cmpm-row-voce"><th class="cmpm-rowlbl">Você${desatSelo}</th>${voceCells}</tr>`;
+  const fOrd = G_CMP_FUEL;                                    // fuel do ranking
+  const ordAtivo = (G_CMP_ORD === 'barato' || G_CMP_ORD === 'caro');
 
-  // linhas de concorrentes (preço + diferença vs Você na mesma célula),
-  // ordenadas por GC decrescente com desempate em cascata GC→GA→ET→S10→S500
-  // (todos decrescentes; sem valor conta como -Infinity, vai pro fim).
-  // slice() pra não mutar o array original (agregados leem dado.concorrentes).
-  const ORDEM_DESEMPATE = ['GC', 'GA', 'ET', 'S10', 'S500'];
-  const ordenados = dado.concorrentes.slice().sort((a, b) => {
-    for (const f of ORDEM_DESEMPATE) {
-      const va = (a.registro && a.registro[f] != null) ? Number(a.registro[f]) : -Infinity;
-      const vb = (b.registro && b.registro[f] != null) ? Number(b.registro[f]) : -Infinity;
-      if (vb !== va) return vb - va;
-    }
-    return 0;
-  });
-  const concRows = ordenados.map(c => {
+  // Descritor da linha Você (preço de ranking = próprio no fuel ativo).
+  const voceObj = { tipo: 'voce', preco: own[fOrd], label: `Você${desatSelo}`, cells: voceCells };
+
+  // Descritores dos concorrentes (célula = preço + diff, igual a antes).
+  const concObjs = dado.concorrentes.map(c => {
     const cells = cols.map(f => {
       const cv = (c.registro[f.key] !== null && c.registro[f.key] !== undefined) ? Number(c.registro[f.key]) : null;
       if (cv === null) return `<td class="cmpm-cell"><span class="cmpm-na">—</span></td>`;
@@ -634,12 +626,56 @@ function cmpCardMatriz(posto, dado, pos) {
       }
       return `<td class="cmpm-cell${hl}"><span class="cmpm-preco">${fmtPrecoBRL(cv)}</span>${diff}</td>`;
     }).join('');
-    const nome = c.nome + (c.desatualizado ? seloDesatualizado(c.registro) : '');
-    return `<tr><th class="cmpm-rowlbl cmpm-conc" title="${c.nome}">${nome}</th>${cells}</tr>`;
-  }).join('');
-  const concHtml = concRows || `<tr><td class="cmpm-vazio" colspan="${cols.length + 1}">Sem concorrente coletado</td></tr>`;
+    const nomeLbl = c.nome + (c.desatualizado ? seloDesatualizado(c.registro) : '');
+    const preco = (c.registro && c.registro[fOrd] != null) ? Number(c.registro[fOrd]) : null;
+    return { tipo: 'conc', preco, label: nomeLbl, title: c.nome, registro: c.registro, cells };
+  });
 
-  // linha Sugerido (GA mostra "(GC+30)")
+  // Ordem das linhas dentro do card:
+  //  - ordenação ATIVA: Você + concorrentes juntos, por preço no fuel ativo
+  //    (asc no 'barato', desc no 'caro'); linhas sem preço no fuel vão pro fim.
+  //  - desligada: layout atual (Você no topo; concorrentes por GC desc cascata).
+  const ORDEM_DESEMPATE = ['GC', 'GA', 'ET', 'S10', 'S500'];
+  let linhas;
+  if (ordAtivo) {
+    linhas = [voceObj, ...concObjs].sort((a, b) => {
+      if (a.preco === null && b.preco === null) return 0;
+      if (a.preco === null) return 1;
+      if (b.preco === null) return -1;
+      return G_CMP_ORD === 'barato' ? a.preco - b.preco : b.preco - a.preco;
+    });
+  } else {
+    // slice() pra não mutar; sem valor conta como -Infinity (vai pro fim).
+    const concOrd = concObjs.slice().sort((a, b) => {
+      for (const f of ORDEM_DESEMPATE) {
+        const va = (a.registro && a.registro[f] != null) ? Number(a.registro[f]) : -Infinity;
+        const vb = (b.registro && b.registro[f] != null) ? Number(b.registro[f]) : -Infinity;
+        if (vb !== va) return vb - va;
+      }
+      return 0;
+    });
+    linhas = [voceObj, ...concOrd];
+  }
+
+  // Renderiza cada linha; com ordenação ativa, nº interno (dourado, discreto)
+  // nas linhas COM preço no fuel e 📌 na linha Você (que agora flutua).
+  let nInt = 0;
+  const linhasHtml = linhas.map(o => {
+    let prefixo = '';
+    if (ordAtivo && o.preco !== null) { nInt += 1; prefixo = `<span class="cmpm-posint">${nInt}º</span> `; }
+    const pin = (ordAtivo && o.tipo === 'voce') ? '📌 ' : '';
+    const thCls = 'cmpm-rowlbl' + (o.tipo === 'conc' ? ' cmpm-conc' : '');
+    const titleAttr = o.title ? ` title="${o.title}"` : '';
+    const trCls = o.tipo === 'voce' ? ' class="cmpm-row-voce"' : '';
+    return `<tr${trCls}><th class="${thCls}"${titleAttr}>${prefixo}${pin}${o.label}</th>${o.cells}</tr>`;
+  }).join('');
+
+  // Mensagem de vazio quando não há concorrentes (Você continua acima).
+  const concVazio = concObjs.length === 0
+    ? `<tr><td class="cmpm-vazio" colspan="${cols.length + 1}">Sem concorrente coletado</td></tr>`
+    : '';
+
+  // linha Sugerido (GA mostra "(GC+30)") — SEMPRE fixa no rodapé, fora do ranking.
   const sug = cmpSugeridoMatriz(dado);
   const sugCells = cols.map(f => {
     const s = sug[f.key];
@@ -653,7 +689,7 @@ function cmpCardMatriz(posto, dado, pos) {
     <div class="region-hdr"><span class="region-nome">${posPrefix}${posto.ap}</span></div>
     <div class="cmpm-wrap"><table class="cmpm-table">
       <thead>${thead}</thead>
-      <tbody>${voceRow}${concHtml}${sugRow}</tbody>
+      <tbody>${linhasHtml}${concVazio}${sugRow}</tbody>
     </table></div>
   </div>`;
 }
@@ -803,20 +839,28 @@ const CMP_FUELS_CARD = [
   { key: 'S500', btn: 'S500', nome: 'diesel S500' },
 ];
 
+// Melhor preço do card inteiro no fuel `f`, sob a ótica da ordenação: menor
+// (ord 'barato') ou maior (ord 'caro') entre a linha Você e TODOS os
+// concorrentes. null se ninguém tem preço no fuel (card vai pro fim da lista).
+function cmpMelhorPrecoCard(dado, f, ord) {
+  if (!dado) return null;
+  const precos = [];
+  if (dado.proprio && dado.proprio[f] != null) precos.push(Number(dado.proprio[f]));
+  (dado.concorrentes || []).forEach(c => {
+    if (c.registro && c.registro[f] != null) precos.push(Number(c.registro[f]));
+  });
+  if (!precos.length) return null;
+  return ord === 'caro' ? Math.max(...precos) : Math.min(...precos);
+}
+
 function renderComparar() {
   montarFuelTabsComparar();
   montarStratTabsComparar();
   cmpMontarOrdBtns();
 
   const fuel = G_CMP_FUEL;
-  const fuelLabel = (CMP_FUELS.find(f => f.key === fuel) || {}).label || fuel;
 
   const ordAtivo = (G_CMP_ORD === 'barato' || G_CMP_ORD === 'caro');
-  // Preço "Você" do posto no combustível GLOBAL selecionado (null se sem preço).
-  const precoVoce = (p) => {
-    const d = G_COMPARACAO[p.k];
-    return d ? cmpCalcCard(d, fuel).ownVal : null;
-  };
 
   const postos = MAP_POSTOS.filter(p => {
     if (G_CMP_POSTO && p.k !== G_CMP_POSTO) return false;
@@ -825,9 +869,11 @@ function renderComparar() {
     return true;
   });
   if (ordAtivo) {
-    // Postos sem preço "Você" vão SEMPRE pro fim; entre eles, alfabético.
+    // Ranking pelo MELHOR preço do card no fuel ativo (min no 'barato', max no
+    // 'caro'). Cards sem preço nenhum no fuel vão pro fim; entre eles, alfabético.
     postos.sort((a, b) => {
-      const pa = precoVoce(a), pb = precoVoce(b);
+      const pa = cmpMelhorPrecoCard(G_COMPARACAO[a.k], fuel, G_CMP_ORD);
+      const pb = cmpMelhorPrecoCard(G_COMPARACAO[b.k], fuel, G_CMP_ORD);
       if (pa === null && pb === null) return a.ap.localeCompare(b.ap);
       if (pa === null) return 1;
       if (pb === null) return -1;

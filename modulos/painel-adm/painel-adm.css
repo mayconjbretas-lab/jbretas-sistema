@@ -162,6 +162,10 @@ html, body { height: 100%; overflow: hidden; }
 
 /* Monitor de postos: grade multi-coluna (o grande ganho do desktop) */
 #cmp-regions { display: grid; grid-template-columns: repeat(2, 1fr); gap: .7rem; align-content: start; }
+
+/* Posição interna da linha no ranking do card (dourado, discreto). */
+.cmpm-posint { font-family: var(--mono); font-size: .6rem; font-weight: 700; color: var(--ac); opacity: .85; }
+
 .region-card { background: var(--sf); border: 1px solid var(--bd); border-radius: var(--rl); padding: .9rem 1rem; }
 .region-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: .55rem; gap: .45rem; }
 .region-nome { font-size: .9rem; font-weight: 700; color: var(--tx); }
