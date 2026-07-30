@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JBRETAS — Caixas</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" sizes="48x48" href="/shared/jbretas-favicon-48.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/shared/icon-192.png">
+<meta name="theme-color" content="#0a0d1c">
+<link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
+<link rel="stylesheet" href="../../shared/css/base.css?v=202607271259">
+<link rel="stylesheet" href="caixas.css?v=202607271259">
+<script>
+  // Pre-paint: aplica o tema salvo antes de renderizar (evita flash).
+  (function(){
+    var t = localStorage.getItem('jb_theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+</head>
+<body>
+
+<div id="screen-app">
+
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <img src="/shared/jbretas-logo.png" alt="JBretas" style="height:34px;display:block">
+      <div>
+        <div class="topbar-brand">JBRETAS</div>
+        <div style="font-size:.62rem;color:var(--text3);letter-spacing:.2em;text-transform:uppercase;font-family:var(--mono);margin-top:2px">// Caixas</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-user">
+        <div class="avatar" id="app-avatar">--</div>
+        <div class="topbar-info">
+          <div class="topbar-name" id="app-usuario">—</div>
+          <div class="topbar-posto" id="app-perfil">—</div>
+        </div>
+      </div>
+      <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Alternar tema">🌙</button>
+      <button class="btn-logout" onclick="jbretasLogout()">SAIR</button>
+    </div>
+  </div>
+
+  <main class="cx-main">
+
+    <!-- controles: posto + data -->
+    <div class="cx-controls">
+      <div class="cx-field">
+        <label class="cx-label">Posto</label>
+        <select class="cx-select" id="cx-posto" onchange="onFiltroChange()">
+          <option value="">Carregando postos…</option>
+        </select>
+      </div>
+      <div class="cx-field">
+        <label class="cx-label">Data</label>
+        <input class="cx-input" type="date" id="cx-data" onchange="onFiltroChange()">
+      </div>
+      <button class="cx-refresh" onclick="carregarEspelho()" title="Atualizar">↻ Atualizar</button>
+    </div>
+
+    <!-- 3 cartões -->
+    <div class="cx-cards">
+      <div class="cx-card">
+        <div class="cx-card-lbl">Maquininha</div>
+        <div class="cx-card-val" id="card-maq">—</div>
+        <div class="cx-card-sub" id="card-maq-sub">operadora (Getnet)</div>
+      </div>
+      <div class="cx-card">
+        <div class="cx-card-lbl">Lançado</div>
+        <div class="cx-card-val cx-muted" id="card-lanc">—</div>
+        <div class="cx-card-sub">aguardando integração TecnoX</div>
+      </div>
+      <div class="cx-card">
+        <div class="cx-card-lbl">Divergência</div>
+        <div class="cx-card-val cx-muted" id="card-div">—</div>
+        <div class="cx-card-sub">Maquininha − Lançado</div>
+      </div>
+    </div>
+
+    <!-- abas de turno (dinâmicas) -->
+    <div class="cx-tabs" id="cx-tabs"></div>
+
+    <!-- conteúdo: tabela ou mensagem -->
+    <div id="cx-conteudo">
+      <div class="cx-vazio">Selecione um posto e uma data.</div>
+    </div>
+
+  </main>
+
+</div>
+
+<script src="../../shared/js/config.js?v=202607271259"></script>
+<script src="../../shared/js/api.js?v=202607271259"></script>
+<script src="../../shared/js/auth.js?v=202607271259"></script>
+<script src="app.js?v=202607271259"></script>
+</body>
+</html>

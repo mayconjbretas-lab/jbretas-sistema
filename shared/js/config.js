@@ -12,6 +12,7 @@ window.JBRETAS_CONFIG = {
     GERENTE:    '/modulos/fechamento/',
     ADM:        '/modulos/admin/',
     LOGISTICA:  '/modulos/logistica/',
+    CAIXAS:     '/modulos/caixas/',
     MOTORISTA:  '/modulos/motorista/',
     SUPERVISOR: '/modulos/supervisor/',
     TI:         '/modulos/painel-ti/',

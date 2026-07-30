@@ -1,0 +1,106 @@
+/* ================================================================
+   JBRETAS — módulo Caixas. Tema Premium (tokens do base.css).
+   Tela única: controles + 3 cartões + abas de turno + tabela espelho.
+   ================================================================ */
+.cx-main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 1.4rem 1.2rem 3rem;
+}
+
+/* ── controles ── */
+.cx-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 1.2rem;
+}
+.cx-field { display: flex; flex-direction: column; gap: .35rem; }
+.cx-label {
+  font-size: .62rem; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--text3); font-family: var(--mono);
+}
+.cx-select, .cx-input {
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: .6rem .8rem; font: inherit; min-width: 240px;
+}
+.cx-select:focus, .cx-input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.cx-refresh {
+  background: var(--surface2); color: var(--text2);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: .6rem 1rem; cursor: pointer; font-size: .85rem;
+}
+.cx-refresh:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── 3 cartões ── */
+.cx-cards {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1rem; margin-bottom: 1.4rem;
+}
+.cx-card {
+  background: var(--grad-panel);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 1.1rem 1.2rem;
+}
+.cx-card-lbl {
+  font-size: .64rem; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--text3); font-family: var(--mono); margin-bottom: .5rem;
+}
+.cx-card-val {
+  font-size: 1.5rem; font-weight: 700; color: var(--accent);
+  font-family: var(--mono);
+}
+.cx-card-val.cx-muted { color: var(--text3); }
+.cx-card-sub { font-size: .72rem; color: var(--text3); margin-top: .35rem; }
+
+/* ── abas de turno ── */
+.cx-tabs { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.cx-tab {
+  background: transparent; color: var(--text2);
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: .4rem .95rem; cursor: pointer; font-size: .8rem; font-weight: 600;
+}
+.cx-tab:hover { border-color: var(--border2); }
+.cx-tab.active {
+  background: var(--accent-dim); color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ── tabela espelho ── */
+.cx-tabela { width: 100%; border-collapse: collapse; }
+.cx-tabela thead th {
+  text-align: left; font-size: .62rem; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text3); font-family: var(--mono);
+  padding: .55rem .7rem; border-bottom: 1px solid var(--border);
+}
+.cx-tabela th.num, .cx-tabela td.num { text-align: right; }
+.cx-grupo {
+  cursor: pointer; border-bottom: 1px solid var(--border);
+}
+.cx-grupo:hover { background: var(--accent-dim2); }
+.cx-grupo td { padding: .65rem .7rem; font-size: .9rem; color: var(--text); }
+.cx-grupo .cx-op { font-weight: 600; }
+.cx-grupo .cx-caret { color: var(--text3); font-size: .7rem; margin-right: .4rem; }
+.cx-grupo .cx-val { font-family: var(--mono); color: var(--accent); }
+.cx-det td {
+  padding: .4rem .7rem .4rem 1.8rem; font-size: .82rem; color: var(--text2);
+  border-bottom: 1px solid var(--border); background: var(--surface);
+}
+.cx-det .cx-val { font-family: var(--mono); color: var(--text); }
+
+.cx-vazio {
+  color: var(--text3); font-size: .95rem; text-align: center;
+  padding: 3rem 1rem; border: 1px dashed var(--border); border-radius: var(--radius-lg);
+}
+.cx-erro { color: var(--danger); }
+
+@media (max-width: 720px) {
+  .cx-cards { grid-template-columns: 1fr; }
+  .cx-select, .cx-input { min-width: 0; width: 100%; }
+  .cx-field { flex: 1; min-width: 140px; }
+}
