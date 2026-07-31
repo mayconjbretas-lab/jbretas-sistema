@@ -165,7 +165,10 @@ async function carregarFechamentoDoDia(dataISO) {
     combustiveisAtuais.forEach(c => {
       const valor = vendasMapa[c.nome];
       const input = document.getElementById('venda-' + c.nome.replace(/\s+/g, '_'));
-      if (valor !== undefined && input) input.value = fmtLitrosEdit(valor);
+      if (valor !== undefined && input) {
+        input.value = String(Math.round(Number(valor) || 0)); // litro inteiro
+        mascararVenda(input);                                  // exibe já formatado (milhar)
+      }
     });
     atualizarTotalVendas();
 
@@ -278,9 +281,9 @@ function renderVendas() {
   body.innerHTML = combustiveisAtuais.map(c => `
     <div class="fuel-row">
       <span class="fuel-label">${c.codigo} — ${c.nome}</span>
-      <input class="step-input" type="text" inputmode="decimal"
+      <input class="step-input" type="text" inputmode="numeric"
         id="venda-${c.nome.replace(/\s+/g, '_')}" data-combustivel="${c.nome}"
-        placeholder="0" oninput="atualizarTotalVendas()" onblur="normalizarVenda(this)"
+        placeholder="0" oninput="mascararVenda(this); atualizarTotalVendas()"
         style="background:var(--surface3);border:1px solid var(--border2);border-radius:8px;width:110px;">
     </div>
   `).join('');
@@ -289,17 +292,30 @@ function renderVendas() {
   aplicarPostoFechado();
 }
 
-// Parse BR de litros p/ os inputs de venda: se tem vírgula, ela é o decimal e os
-// pontos são milhar; se só tem ponto, o ponto é o decimal. Mesma regra do
-// parseLitros da Logística e do parser corrigido no server.js. Number ou null.
+// Parse de litros dos inputs de venda: litro é INTEIRO, o ponto é SEMPRE milhar
+// (removido) e qualquer decimal é descartado. Sem heurística — só dígitos.
+// Sempre número (0 no vazio), pareado com a máscara ao vivo (mascararVenda).
 function parseLitros(str) {
-  const s = String(str == null ? '' : str).trim();
-  if (!s) return null;
-  const norm = s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s;
-  const limpo = norm.replace(/[^0-9.]/g, '');
-  if (!limpo) return null;
-  const n = parseFloat(limpo);
-  return isNaN(n) ? null : n;
+  const digitos = String(str == null ? '' : str).replace(/\D/g, '');
+  return Math.round(Number(digitos)) || 0;
+}
+
+// Máscara ao vivo do input de venda: mantém só dígitos (litro inteiro) e reinsere
+// o ponto de milhar a cada 3 casas. Preserva a posição do cursor pela distância
+// até o fim, pra digitação não "pular". Litro é sempre inteiro — vírgula/decimal
+// digitados são descartados na origem.
+function mascararVenda(el) {
+  const distFim = el.value.length - el.selectionStart; // distância do cursor até o FIM
+  let v = el.value;
+  const iVirg = v.indexOf(',');
+  if (iVirg !== -1) v = v.slice(0, iVirg);             // descarta da 1ª vírgula em diante
+  v = v.replace(/\D/g, '');                            // só dígitos
+  v = v.replace(/^0+/, '');                            // remove zeros à esquerda (vazio segue vazio)
+  if (v.length > 6) v = v.slice(0, 6);                 // teto de 6 dígitos
+  v = v.replace(/\B(?=(\d{3})+(?!\d))/g, '.');         // ponto de milhar a cada 3, da direita p/ esquerda
+  el.value = v;
+  const pos = Math.max(0, v.length - distFim);         // restaura o cursor pela distância guardada
+  try { el.setSelectionRange(pos, pos); } catch (e) { /* input pode não estar focado (ex.: carga do dia) */ }
 }
 
 // Formata litros p/ EDIÇÃO: vírgula decimal, SEM separador de milhar (o ponto
@@ -312,12 +328,10 @@ function fmtLitrosEdit(v) {
   return n.toLocaleString('pt-BR', { useGrouping: false, maximumFractionDigits: 3 });
 }
 
-// Blur do input de venda: normaliza o valor exibido (vírgula decimal, sem milhar)
-// e recalcula o total — feedback visual que denuncia digitação errada na origem.
+// Mantida por compatibilidade com chamadas existentes: agora só aplica a máscara
+// ao vivo e recalcula o total. NUNCA mais reformata com vírgula decimal.
 function normalizarVenda(input) {
-  if (postoFechado) return; // mantém o "0" visível dos campos travados
-  const n = parseLitros(input.value);
-  input.value = (n === null || n === 0) ? '' : fmtLitrosEdit(n);
+  mascararVenda(input);
   atualizarTotalVendas();
 }
 
@@ -477,6 +491,26 @@ async function salvarFechamento() {
   const hora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
   const totalVendasTexto = document.getElementById('total-vendas').textContent;
+
+  // GUARD DE FAIXA: volumes acima do plausível pedem confirmação explícita —
+  // barreira final contra erro de escala antes de enviar.
+  const LIMITE_VENDA = 30000;
+  const suspeitos = [];
+  combustiveisAtuais.forEach(c => {
+    const input = document.getElementById('venda-' + c.nome.replace(/\s+/g, '_'));
+    const litros = parseLitros(input?.value);
+    if (litros > LIMITE_VENDA) suspeitos.push({ input, texto: `${c.nome}: ${litros.toLocaleString('pt-BR')} L` });
+  });
+  if (suspeitos.length) {
+    const msg = 'Volume(s) acima do normal:\n\n' + suspeitos.map(s => '• ' + s.texto).join('\n') +
+      '\n\nConfirma esse volume?';
+    if (!confirm(msg)) {
+      btn.disabled = false;
+      btn.textContent = '💾 SALVAR FECHAMENTO';
+      suspeitos[0].input?.focus();
+      return;
+    }
+  }
 
   const payload = {
     data: dataBR,
