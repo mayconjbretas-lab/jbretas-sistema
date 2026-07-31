@@ -5,3 +5,5 @@
 .env*
 !.env.example
 .claude/
+node_modules/
+.wrangler/

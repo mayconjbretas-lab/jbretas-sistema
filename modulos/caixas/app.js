@@ -158,10 +158,13 @@ function renderFila() {
     const est = estadoPosto(p);
     const sel = p.posto.id === POSTO_ATUAL ? ' cx-chip-sel' : '';
     const check = est === 'conferido' ? ' <span class="cx-chip-check">✓</span>' : '';
-    const tip = est === 'sem-coleta' ? ' title="sem coleta nesta data"' : '';
+    // rótulo curto = nome sem "P. "; código vai pro title/tooltip
+    const rotulo = String(p.posto.nome || '').replace(/^P\.\s*/, '') || p.posto.codigo || '';
+    const tipTxt = (p.posto.codigo || '') + (est === 'sem-coleta' ? ' · sem coleta nesta data' : '');
+    const tip = tipTxt.trim() ? ` title="${esc(tipTxt.trim())}"` : '';
     const cont = p.tem_coleta ? ` <span class="cx-chip-cont">${p.total_conferidos}/${p.total_turnos}</span>` : '';
     return `<button class="cx-chip cx-chip-${est}${sel}"${tip} onclick="selecionarPosto('${esc(p.posto.id)}')">` +
-      `${esc(p.posto.codigo || p.posto.nome)}${cont}${check}</button>`;
+      `${esc(rotulo)}${cont}${check}</button>`;
   }).join('');
   document.getElementById('cx-fila').innerHTML = html;
 }

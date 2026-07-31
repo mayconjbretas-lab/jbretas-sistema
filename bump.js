@@ -11,21 +11,25 @@ const path = require('path');
 // Versão = AAAAMMDDHHMM (ex: 202607221530).
 const v = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
 
-// Os 12 HTML que têm assets locais (relativo à raiz deste script).
-const ARQUIVOS = [
-  'index.html',
-  'modulos/admin/index.html',
-  'modulos/admin/coleta-precos/index.html',
-  'modulos/admin/coleta-revisao/index.html',
-  'modulos/admin/mapa-precos/index.html',
-  'modulos/coleta-precos/index.html',
-  'modulos/copasa/index.html',
-  'modulos/fechamento/index.html',
-  'modulos/logistica/index.html',
-  'modulos/painel-adm/index.html',
-  'modulos/painel-ti/index.html',
-  'modulos/supervisor/index.html',
-];
+// Descobre TODOS os *.html varrendo o repo a partir da raiz deste script,
+// em vez de lista fixa (senão módulos novos ficam de fora do cache-bust).
+// Ignora node_modules, .git, .wrangler e demais pastas ocultas/de build.
+const IGNORAR = new Set(['node_modules', 'dist', 'build']);
+function descobrirHtmls(dirAbs, baseAbs) {
+  const achados = [];
+  for (const entry of fs.readdirSync(dirAbs, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      // pula node_modules/build e qualquer pasta oculta (.git, .wrangler, .claude…)
+      if (IGNORAR.has(entry.name) || entry.name.startsWith('.')) continue;
+      achados.push(...descobrirHtmls(path.join(dirAbs, entry.name), baseAbs));
+    } else if (entry.isFile() && /\.html$/i.test(entry.name)) {
+      // relativo à raiz, sempre com "/" (independe do SO)
+      achados.push(path.relative(baseAbs, path.join(dirAbs, entry.name)).split(path.sep).join('/'));
+    }
+  }
+  return achados;
+}
+const ARQUIVOS = descobrirHtmls(__dirname, __dirname).sort();
 
 // Local = não é http(s):// nem //cdn. Data URIs também ficam de fora.
 function ehLocal(url) {
