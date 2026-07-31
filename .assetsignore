@@ -1,6 +1,6 @@
-.git
-.wrangler
-.claude
-node_modules
+node_modules/
+.wrangler/
+.git/
+.claude/
 README.md
 server-patch-tanques.js
