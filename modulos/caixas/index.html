@@ -47,44 +47,39 @@
 
   <main class="cx-main">
 
-    <!-- controles: posto + data -->
-    <div class="cx-controls">
-      <div class="cx-field">
-        <label class="cx-label">Posto</label>
-        <select class="cx-select" id="cx-posto" onchange="onFiltroChange()">
-          <option value="">Carregando postos…</option>
-        </select>
+    <!-- 1) FAIXA DE CONTEXTO -->
+    <div class="cx-context">
+      <div class="cx-context-top">
+        <div class="cx-carteira" id="cx-carteira">CARTEIRA —</div>
+        <div class="cx-context-controls">
+          <div class="cx-field">
+            <label class="cx-label" for="cx-posto">Posto</label>
+            <select class="cx-select" id="cx-posto" onchange="onPostoChange()">
+              <option value="">Carregando postos…</option>
+            </select>
+          </div>
+          <div class="cx-field">
+            <label class="cx-label" for="cx-data">Data</label>
+            <div class="cx-data-wrap">
+              <input class="cx-input" type="date" id="cx-data" onchange="onDataChange()">
+              <span class="cx-selo" id="cx-selo-d1" hidden>D-1</span>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="cx-field">
-        <label class="cx-label">Data</label>
-        <input class="cx-input" type="date" id="cx-data" onchange="onFiltroChange()">
-      </div>
-      <button class="cx-refresh" onclick="carregarEspelho()" title="Atualizar">↻ Atualizar</button>
+      <div class="cx-resumo" id="cx-resumo">Meus postos hoje: — · conferidos — · pendentes —</div>
     </div>
 
-    <!-- 3 cartões -->
-    <div class="cx-cards">
-      <div class="cx-card">
-        <div class="cx-card-lbl">Maquininha</div>
-        <div class="cx-card-val" id="card-maq">—</div>
-        <div class="cx-card-sub" id="card-maq-sub">operadora (Getnet)</div>
-      </div>
-      <div class="cx-card">
-        <div class="cx-card-lbl">Lançado</div>
-        <div class="cx-card-val cx-muted" id="card-lanc">—</div>
-        <div class="cx-card-sub">aguardando integração TecnoX</div>
-      </div>
-      <div class="cx-card">
-        <div class="cx-card-lbl">Divergência</div>
-        <div class="cx-card-val cx-muted" id="card-div">—</div>
-        <div class="cx-card-sub">Maquininha − Lançado</div>
-      </div>
-    </div>
+    <!-- 2) FILA DE TRABALHO (chips) -->
+    <div class="cx-fila" id="cx-fila"></div>
 
-    <!-- abas de turno (dinâmicas) -->
+    <!-- 3) AVISO DE DIA PARCIAL -->
+    <div class="cx-parcial" id="cx-parcial" hidden></div>
+
+    <!-- 4) ABAS DE TURNO (dinâmicas) -->
     <div class="cx-tabs" id="cx-tabs"></div>
 
-    <!-- conteúdo: tabela ou mensagem -->
+    <!-- conteúdo: Zona A + Zona B + Ações (ou mensagem) -->
     <div id="cx-conteudo">
       <div class="cx-vazio">Selecione um posto e uma data.</div>
     </div>

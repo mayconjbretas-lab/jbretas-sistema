@@ -1,64 +1,97 @@
 /* ================================================================
    JBRETAS — módulo Caixas. Tema Premium (tokens do base.css).
-   Tela única: controles + 3 cartões + abas de turno + tabela espelho.
+   Fila de conferência: contexto + chips + abas + Zona A/B + ações.
+   Mobile-first (o padrão do sistema, exceto Logística).
    ================================================================ */
 .cx-main {
   max-width: 1080px;
   margin: 0 auto;
-  padding: 1.4rem 1.2rem 3rem;
+  padding: 1.1rem 1rem 3.5rem;
 }
 
-/* ── controles ── */
-.cx-controls {
-  display: flex;
-  gap: 1rem;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  margin-bottom: 1.2rem;
+/* ── 1) FAIXA DE CONTEXTO ── */
+.cx-context {
+  background: var(--grad-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
 }
-.cx-field { display: flex; flex-direction: column; gap: .35rem; }
+.cx-context-top {
+  display: flex; flex-direction: column; gap: .9rem;
+}
+.cx-carteira {
+  font-family: var(--mono); font-weight: 700;
+  font-size: .82rem; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--accent);
+}
+.cx-context-controls {
+  display: flex; gap: .9rem; flex-wrap: wrap; align-items: flex-end;
+}
+.cx-field { display: flex; flex-direction: column; gap: .35rem; flex: 1; min-width: 150px; }
 .cx-label {
-  font-size: .62rem; letter-spacing: .16em; text-transform: uppercase;
+  font-size: .6rem; letter-spacing: .16em; text-transform: uppercase;
   color: var(--text3); font-family: var(--mono);
 }
 .cx-select, .cx-input {
   background: var(--surface2); color: var(--text);
   border: 1px solid var(--border); border-radius: var(--radius);
-  padding: .6rem .8rem; font: inherit; min-width: 240px;
+  padding: .6rem .8rem; font: inherit; width: 100%;
 }
 .cx-select:focus, .cx-input:focus {
   outline: none; border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-dim);
 }
-.cx-refresh {
+.cx-data-wrap { display: flex; align-items: center; gap: .5rem; }
+.cx-data-wrap .cx-input { flex: 1; }
+.cx-selo {
+  font-family: var(--mono); font-size: .62rem; font-weight: 700;
+  letter-spacing: .1em; color: var(--accent);
+  background: var(--accent-dim); border: 1px solid var(--accent);
+  border-radius: 999px; padding: .28rem .6rem; white-space: nowrap;
+}
+.cx-resumo {
+  margin-top: .85rem; padding-top: .85rem; border-top: 1px solid var(--border);
+  font-size: .8rem; color: var(--text2); font-family: var(--mono);
+}
+
+/* ── 2) FILA DE TRABALHO (chips) ── */
+.cx-fila {
+  display: flex; gap: .45rem; flex-wrap: wrap; margin-bottom: 1rem;
+}
+.cx-chip {
+  display: inline-flex; align-items: center; gap: .35rem;
   background: var(--surface2); color: var(--text2);
-  border: 1px solid var(--border); border-radius: var(--radius);
-  padding: .6rem 1rem; cursor: pointer; font-size: .85rem;
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: .4rem .8rem; cursor: pointer; font-size: .78rem; font-weight: 600;
+  transition: border-color .12s, background .12s;
 }
-.cx-refresh:hover { border-color: var(--accent); color: var(--accent); }
+.cx-chip:hover { border-color: var(--border2); }
+.cx-chip-cont { font-family: var(--mono); font-size: .68rem; color: var(--text3); }
+.cx-chip-check { color: var(--ok); font-weight: 700; }
+/* pendente = borda neutra (padrão acima) */
+.cx-chip-conferido {
+  border-color: var(--ok); color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+}
+.cx-chip-conferido .cx-chip-cont { color: var(--ok); }
+.cx-chip-sem-coleta { opacity: .45; cursor: default; }
+.cx-chip-sel {
+  border-color: var(--accent) !important; color: var(--accent) !important;
+  background: var(--accent-dim) !important;
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+.cx-chip-sel .cx-chip-cont { color: var(--accent); }
 
-/* ── 3 cartões ── */
-.cx-cards {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 1rem; margin-bottom: 1.4rem;
+/* ── 3) AVISO DE DIA PARCIAL ── */
+.cx-parcial {
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+  border: 1px solid var(--warning); border-radius: var(--radius);
+  color: var(--text); font-size: .82rem; line-height: 1.4;
+  padding: .7rem .9rem; margin-bottom: 1rem;
 }
-.cx-card {
-  background: var(--grad-panel);
-  border: 1px solid var(--border); border-radius: var(--radius-lg);
-  padding: 1.1rem 1.2rem;
-}
-.cx-card-lbl {
-  font-size: .64rem; letter-spacing: .18em; text-transform: uppercase;
-  color: var(--text3); font-family: var(--mono); margin-bottom: .5rem;
-}
-.cx-card-val {
-  font-size: 1.5rem; font-weight: 700; color: var(--accent);
-  font-family: var(--mono);
-}
-.cx-card-val.cx-muted { color: var(--text3); }
-.cx-card-sub { font-size: .72rem; color: var(--text3); margin-top: .35rem; }
 
-/* ── abas de turno ── */
+/* ── 4) ABAS DE TURNO ── */
 .cx-tabs { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: 1rem; }
 .cx-tab {
   background: transparent; color: var(--text2);
@@ -67,40 +100,110 @@
 }
 .cx-tab:hover { border-color: var(--border2); }
 .cx-tab.active {
-  background: var(--accent-dim); color: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-dim); color: var(--accent); border-color: var(--accent);
+}
+.cx-tab-check { color: var(--ok); font-size: .72rem; }
+
+/* ── Zonas (cards) ── */
+.cx-zona {
+  background: var(--grad-panel);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 1rem 1.1rem; margin-bottom: 1rem;
+}
+.cx-zona-tit {
+  font-size: .64rem; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--text3); font-family: var(--mono);
+  margin: 0 0 .9rem; font-weight: 700;
 }
 
-/* ── tabela espelho ── */
-.cx-tabela { width: 100%; border-collapse: collapse; }
+/* ── 5) ZONA A — "O turno fecha?" ── */
+.cx-za { display: flex; flex-direction: column; gap: .2rem; }
+.cx-za-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: .8rem;
+  padding: .7rem 0; border-bottom: 1px solid var(--border);
+}
+.cx-za-row:last-child { border-bottom: none; }
+.cx-za-val {
+  font-family: var(--mono); font-size: 1.15rem; font-weight: 700; color: var(--accent);
+}
+.cx-za-val.cx-muted { color: var(--text3); font-size: 1rem; }
+.cx-za-lbl { font-size: .74rem; color: var(--text2); margin-top: .2rem; }
+.cx-za-fonte {
+  font-size: .62rem; color: var(--text3); font-family: var(--mono);
+  text-align: right; white-space: nowrap;
+}
+
+/* ── 6) ZONA B — tabela "Onde o erro se esconde" ── */
+.cx-tab-wrap { overflow-x: auto; }
+.cx-tabela { width: 100%; border-collapse: collapse; min-width: 560px; }
 .cx-tabela thead th {
-  text-align: left; font-size: .62rem; letter-spacing: .12em;
+  text-align: left; font-size: .6rem; letter-spacing: .1em;
   text-transform: uppercase; color: var(--text3); font-family: var(--mono);
-  padding: .55rem .7rem; border-bottom: 1px solid var(--border);
+  padding: .55rem .7rem; border-bottom: 1px solid var(--border); white-space: nowrap;
 }
 .cx-tabela th.num, .cx-tabela td.num { text-align: right; }
-.cx-grupo {
-  cursor: pointer; border-bottom: 1px solid var(--border);
-}
+.cx-tabela th.cen, .cx-tabela td.cen { text-align: center; }
+.cx-grupo { cursor: pointer; border-bottom: 1px solid var(--border); }
 .cx-grupo:hover { background: var(--accent-dim2); }
-.cx-grupo td { padding: .65rem .7rem; font-size: .9rem; color: var(--text); }
+.cx-grupo td { padding: .65rem .7rem; font-size: .86rem; color: var(--text); }
 .cx-grupo .cx-op { font-weight: 600; }
-.cx-grupo .cx-caret { color: var(--text3); font-size: .7rem; margin-right: .4rem; }
-.cx-grupo .cx-val { font-family: var(--mono); color: var(--accent); }
+.cx-caret { color: var(--text3); font-size: .7rem; margin-right: .4rem; }
+.cx-val { font-family: var(--mono); color: var(--accent); }
+.cx-muted { color: var(--text3); font-style: italic; }
+.cx-prazo { font-family: var(--mono); font-size: .78rem; color: var(--text2); }
 .cx-det td {
-  padding: .4rem .7rem .4rem 1.8rem; font-size: .82rem; color: var(--text2);
+  padding: .4rem .7rem .4rem 1.8rem; font-size: .8rem; color: var(--text2);
   border-bottom: 1px solid var(--border); background: var(--surface);
 }
-.cx-det .cx-val { font-family: var(--mono); color: var(--text); }
+.cx-det .cx-val { color: var(--text); }
+/* operadora conhecida sem coleta (âmbar) */
+.cx-semcoleta td {
+  padding: .6rem .7rem; font-size: .82rem;
+  color: var(--warning); border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+}
+.cx-semcoleta .cx-op { color: var(--warning); }
+.cx-semcoleta .cx-prazo { color: var(--warning); }
+/* linhas fixas (dinheiro/sangria, nota a prazo) */
+.cx-fixa td {
+  padding: .6rem .7rem; font-size: .82rem; color: var(--text2);
+  border-top: 1px dashed var(--border); border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.cx-fixa .cx-op { color: var(--text); font-weight: 600; }
 
+/* ── 7) AÇÕES ── */
+.cx-acoes {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .7rem;
+  margin-top: 1.2rem;
+}
+.cx-acao-info { font-size: .78rem; color: var(--text2); flex: 1; min-width: 180px; }
+.cx-acao-info strong { color: var(--text); }
+.cx-btn {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: .65rem 1.1rem; cursor: pointer; font: inherit; font-weight: 600;
+  font-size: .85rem; background: var(--surface2); color: var(--text2);
+}
+.cx-btn:hover { border-color: var(--accent); color: var(--accent); }
+.cx-btn-marcar {
+  background: var(--accent); color: #08101f; border-color: var(--accent);
+}
+.cx-btn-marcar:hover { opacity: .9; color: #08101f; }
+.cx-btn-desmarcar { color: var(--text3); }
+.cx-btn-prox { margin-left: auto; }
+
+/* ── vazio / erro ── */
 .cx-vazio {
-  color: var(--text3); font-size: .95rem; text-align: center;
-  padding: 3rem 1rem; border: 1px dashed var(--border); border-radius: var(--radius-lg);
+  color: var(--text3); font-size: .92rem; text-align: center;
+  padding: 2.5rem 1rem; border: 1px dashed var(--border); border-radius: var(--radius-lg);
 }
 .cx-erro { color: var(--danger); }
 
-@media (max-width: 720px) {
-  .cx-cards { grid-template-columns: 1fr; }
-  .cx-select, .cx-input { min-width: 0; width: 100%; }
-  .cx-field { flex: 1; min-width: 140px; }
+/* ── ≥ 720px: contexto em linha ── */
+@media (min-width: 720px) {
+  .cx-main { padding: 1.4rem 1.2rem 3rem; }
+  .cx-context-top { flex-direction: row; align-items: flex-end; justify-content: space-between; }
+  .cx-carteira { padding-bottom: .6rem; }
+  .cx-context-controls { flex: 0 1 auto; }
+  .cx-field { min-width: 200px; flex: 0 1 auto; }
 }
