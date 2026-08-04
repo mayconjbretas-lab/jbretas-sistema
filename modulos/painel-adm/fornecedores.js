@@ -18,7 +18,8 @@
 
   let _shellPronto = false;
   let _dados       = null;
-  let _periodo     = 'mes';
+  let _periodo     = 'mes';   // tipo enviado ao backend: dia|quinzena|quinzena15|mes|trimestre|ano
+  let _ref         = null;    // referência do período (null = default do backend); as setas mudam só isto
   let _comb        = null;
 
   // ── Formatação ───────────────────────────────────────────────────
@@ -54,6 +55,13 @@
       '.forn-chip{background:var(--sf2);border:1px solid var(--bd);border-radius:20px;padding:5px 12px;font-size:.68rem;font-family:var(--mono);font-weight:700;color:var(--tx3);cursor:pointer;transition:all .15s}' +
       '.forn-chip:hover{border-color:var(--bd2);color:var(--tx2)}' +
       '.forn-chip.on{background:var(--acd);border-color:var(--ac);color:var(--ac)}' +
+      '.forn-subq{display:flex;gap:6px;flex-wrap:wrap}' +
+      '.forn-nav{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}' +
+      '.forn-navbtn{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:8px;width:34px;height:32px;cursor:pointer;font-size:.8rem;font-family:var(--mono);display:inline-flex;align-items:center;justify-content:center}' +
+      '.forn-navbtn:hover:not(:disabled){border-color:var(--ac);color:var(--ac)}' +
+      '.forn-navbtn:disabled{opacity:.35;cursor:not-allowed}' +
+      '.forn-nav-lbl{font-family:var(--mono);font-size:.82rem;font-weight:700;color:var(--tx);min-width:130px;text-align:center}' +
+      '.forn-nav-int{font-family:var(--mono);font-size:.72rem;color:var(--tx3)}' +
       '.forn-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem}' +
       '.forn-kpi{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:.9rem 1rem}' +
       '.forn-kpi-lbl{font-size:.62rem;font-family:var(--mono);color:var(--tx3);text-transform:uppercase;letter-spacing:.06em}' +
@@ -101,6 +109,8 @@
           '<button class="forn-back" onclick="__fornVoltar()">← Custo</button>' +
         '</div>' +
         '<div class="forn-chips" id="forn-per"></div>' +
+        '<div class="forn-subq" id="forn-subq" style="display:none"></div>' +
+        '<div class="forn-nav" id="forn-nav" style="display:none"></div>' +
         '<div class="forn-chips" id="forn-comb"></div>' +
         '<div id="forn-body"><div class="forn-empty">Carregando…</div></div>' +
       '</div>';
@@ -109,10 +119,14 @@
 
   async function carregar() {
     renderPeriodChips();
+    renderSubQuinzena();
     const body = document.getElementById('forn-body');
     if (body) body.innerHTML = '<div class="forn-empty">Carregando…</div>';
     try {
-      _dados = await apiFetch('/fornecedores-dashboard?periodo=' + encodeURIComponent(_periodo));
+      const url = '/fornecedores-dashboard?periodo=' + encodeURIComponent(_periodo) +
+        (_ref ? '&ref=' + encodeURIComponent(_ref) : '');
+      _dados = await apiFetch(url);
+      renderNavegador();
       const combs = Object.keys(_dados.combustiveis || {});
       if (!_comb || !combs.includes(_comb)) _comb = combs[0] || null;
       renderCombChips();
@@ -122,12 +136,41 @@
     }
   }
 
+  // O chip QUINZENA fica aceso tanto na quinzena fechada quanto no rolante.
+  function chipAtivo(key) {
+    return key === 'quinzena' ? (_periodo === 'quinzena' || _periodo === 'quinzena15') : (_periodo === key);
+  }
   function renderPeriodChips() {
     const el = document.getElementById('forn-per');
     if (!el) return;
     el.innerHTML = PERIODOS.map(p =>
-      '<button class="forn-chip' + (_periodo === p.key ? ' on' : '') + '" onclick="__fornPeriodo(\'' + p.key + '\')">' + p.label + '</button>'
+      '<button class="forn-chip' + (chipAtivo(p.key) ? ' on' : '') + '" onclick="__fornPeriodo(\'' + p.key + '\')">' + p.label + '</button>'
     ).join('');
+  }
+
+  // Sub-chips FECHADA / ÚLTIMOS 15 DIAS — só quando QUINZENA está ativo.
+  function renderSubQuinzena() {
+    const el = document.getElementById('forn-subq');
+    if (!el) return;
+    if (_periodo !== 'quinzena' && _periodo !== 'quinzena15') { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = '';
+    el.innerHTML =
+      '<button class="forn-chip' + (_periodo === 'quinzena' ? ' on' : '') + '" onclick="__fornSubQ(\'fechada\')">FECHADA</button>' +
+      '<button class="forn-chip' + (_periodo === 'quinzena15' ? ' on' : '') + '" onclick="__fornSubQ(\'rolante\')">ÚLTIMOS 15 DIAS</button>';
+  }
+
+  // Navegador [◀] rótulo [▶] intervalo. Some no quinzena15 (rolante).
+  function renderNavegador() {
+    const el = document.getElementById('forn-nav');
+    if (!el) return;
+    const p = _dados && _dados.periodo;
+    if (!p || _periodo === 'quinzena15') { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = '';
+    el.innerHTML =
+      '<button class="forn-navbtn" onclick="__fornNav(\'ant\')"' + (p.tem_anterior ? '' : ' disabled') + '>◀</button>' +
+      '<div class="forn-nav-lbl">' + esc(p.rotulo) + '</div>' +
+      '<button class="forn-navbtn" onclick="__fornNav(\'prox\')"' + (p.tem_proximo ? '' : ' disabled') + '>▶</button>' +
+      '<div class="forn-nav-int">' + esc(p.intervalo) + '</div>';
   }
 
   function renderCombChips() {
@@ -153,7 +196,7 @@
 
     const kpis =
       '<div class="forn-kpis">' +
-        '<div class="forn-kpi"><div class="forn-kpi-lbl">Menor custo médio</div>' +
+        '<div class="forn-kpi"><div class="forn-kpi-lbl">Menor custo médio cotado</div>' +
           '<div class="forn-kpi-val">R$ ' + fmtCusto(menor.media) + '</div>' +
           '<div class="forn-kpi-sub">' + esc(menor.distribuidora) + '</div></div>' +
         '<div class="forn-kpi"><div class="forn-kpi-lbl">Maior diferença</div>' +
@@ -235,7 +278,29 @@
   }
 
   // ── Ações públicas ───────────────────────────────────────────────
-  window.__fornPeriodo = function (p) { _periodo = p; carregar(); };
+  // Trocar de TIPO limpa o _ref (volta pro default do backend). O chip
+  // QUINZENA entra no modo FECHADA por padrão.
+  window.__fornPeriodo = function (key) {
+    _ref = null;
+    _periodo = (key === 'quinzena') ? 'quinzena' : key;
+    carregar();
+  };
+  window.__fornSubQ = function (modo) {
+    _ref = null;
+    _periodo = (modo === 'rolante') ? 'quinzena15' : 'quinzena';
+    carregar();
+  };
+  // Setas: só mudam o _ref (usa os refs vizinhos que o backend já devolveu).
+  window.__fornNav = function (dir) {
+    const p = _dados && _dados.periodo;
+    if (!p) return;
+    if (dir === 'ant' && !p.tem_anterior) return;
+    if (dir === 'prox' && !p.tem_proximo) return;
+    const alvo = (dir === 'ant') ? p.ref_anterior : p.ref_proximo;
+    if (!alvo) return;
+    _ref = alvo;
+    carregar();
+  };
   window.__fornComb = function (k) { _comb = k; renderCombChips(); renderBody(); };
   // Entra no dashboard (chamado pelo botão do header do Custo & Margem).
   window.__abrirForn = function () {
@@ -253,6 +318,6 @@
     if (!sec) return;
     if (!_shellPronto || !sec.querySelector('.forn-wrap')) montarShell(sec);
     if (!_dados) carregar();
-    else { renderPeriodChips(); renderCombChips(); renderBody(); }
+    else { renderPeriodChips(); renderSubQuinzena(); renderNavegador(); renderCombChips(); renderBody(); }
   };
 })();
