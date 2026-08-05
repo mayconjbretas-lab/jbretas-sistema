@@ -204,7 +204,7 @@
           '<div class="forn-kpi-sub">' + esc(maiorDelta.distribuidora) + ' vs ' + esc(menor.distribuidora) + '</div></div>' +
         '<div class="forn-kpi"><div class="forn-kpi-lbl">Volume do período</div>' +
           '<div class="forn-kpi-val">' + fmtLitros(c.litros) + '</div>' +
-          '<div class="forn-kpi-sub">' + esc(_comb) + ' · carga recebida</div></div>' +
+          '<div class="forn-kpi-sub">' + esc(_comb) + ' · comprado · nota fiscal</div></div>' +
       '</div>';
 
     const nota = (_dados.n_datas_serie === 1)
