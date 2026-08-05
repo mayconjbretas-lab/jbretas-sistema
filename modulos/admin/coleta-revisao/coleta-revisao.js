@@ -274,13 +274,16 @@ function csFmt(v) {
   return parseFloat(v).toFixed(2).replace('.', ',');
 }
 function csCorBanda(b) {
-  if (!b) return { bg:'var(--sf2)', txt:'var(--tx3)' };
-  const bl = b.toLowerCase();
-  if (bl.includes('shell'))    return { bg:'#92600020', txt:'#fcd34d' };
-  if (bl.includes('ipiranga')) return { bg:'#d6400020', txt:'#f87171' };
-  if (bl.includes('br') || bl.includes('petrobras')) return { bg:'#00562020', txt:'#4ade80' };
-  if (bl.includes('ale'))      return { bg:'#1e3a8a20', txt:'#93c5fd' };
-  return { bg:'var(--sf2)', txt:'var(--tx2)' };
+  const bl = String(b || '').toLowerCase();
+  const temPalavra = (p) => new RegExp('\\b' + p + '\\b').test(bl);
+  if (bl.includes('branca'))     return { bg:'var(--sf2)',  txt:'var(--tx2)' };
+  if (bl.includes('rio branco')) return { bg:'#3f3f4620', txt:'#d4d4d8' };
+  if (bl.includes('vibra') || bl.includes('petrobras') || temPalavra('br'))
+                                 return { bg:'#00562020', txt:'#4ade80' };
+  if (bl.includes('ipiranga'))   return { bg:'#d6400020', txt:'#f87171' };
+  if (bl.includes('shell'))      return { bg:'#92600020', txt:'#fcd34d' };
+  if (bl.includes('ale'))        return { bg:'#1e3a8a20', txt:'#93c5fd' };
+  return { bg:'var(--sf2)',  txt:'var(--tx2)' };
 }
 
 // ── Filtros ───────────────────────────────────────────────────────
