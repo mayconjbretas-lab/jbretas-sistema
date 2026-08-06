@@ -80,6 +80,7 @@
       '.forn-bar.ruim{background:var(--dg)}' +
       '.forn-colnome{font-size:.62rem;color:var(--tx2);margin-top:6px;text-align:center;word-break:break-word;line-height:1.2}' +
       '.forn-coldelta{font-size:.6rem;font-family:var(--mono);margin-top:2px;font-weight:700}' +
+      '.forn-colvol{font-size:.56rem;font-family:var(--mono);color:var(--tx3);margin-top:2px}' +
       '.forn-econ{margin-top:.9rem;font-size:.76rem;color:var(--tx2);border-top:1px solid var(--bd);padding-top:.7rem}' +
       '.forn-econ b{color:var(--dg)}' +
       '.forn-matriz-wrap{overflow-x:auto}' +
@@ -233,12 +234,18 @@
         '<div class="forn-col-plot"><div class="forn-bar ' + cls + '" style="height:' + h + '%"></div></div>' +
         '<div class="forn-colnome">' + esc(f.distribuidora) + '</div>' +
         '<div class="forn-coldelta" style="color:' + cor + '">' + deltaLbl + '</div>' +
+        '<div class="forn-colvol">' + fmtLitros(f.litros) + '</div>' +
       '</div>';
     }).join('');
-    const maiorDelta = forns.reduce((a, b) => (b.delta > a.delta ? b : a), forns[0]);
-    const econ = (maiorDelta.delta > ZERO)
-      ? '<div class="forn-econ">Custo extra no período se todo o volume (' + fmtLitros(c.litros) + ') viesse de <b>' +
-        esc(maiorDelta.distribuidora) + '</b>: <b>R$ ' + fmtReais(maiorDelta.custo_extra) + '</b></div>'
+    const totalExtra = Number(c.custo_extra_total) || 0;
+    const acima = forns.filter(f => f.delta > ZERO)
+      .sort((a, b) => b.custo_extra - a.custo_extra);
+    const quebra = acima.length
+      ? ' — ' + acima.map(f => esc(f.distribuidora) + ' R$ ' + fmtReais(f.custo_extra)).join(' · ')
+      : '';
+    const econ = (totalExtra > 0)
+      ? '<div class="forn-econ">Pago acima do menor preço no período: <b>R$ ' +
+        fmtReais(totalExtra) + '</b>' + quebra + '</div>'
       : '';
     return '<div class="forn-card"><div class="forn-card-title">Custo médio por fornecedor — ' + esc(_comb) + '</div>' +
       '<div class="forn-chart">' + cols + '</div>' + econ + '</div>';
