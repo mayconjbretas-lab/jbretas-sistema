@@ -16,6 +16,10 @@
   let _shellPronto = false;
   let _dados       = null;            // resposta do GET /relatorios
   let _dataISO     = null;            // data selecionada (YYYY-MM-DD)
+  // Card de Mix tem JANELA PRÓPRIA (período), independente do #rel-data diário.
+  let _mixDados    = null;            // resposta do GET /relatorios/mix-periodo
+  let _mixInicio   = null;            // início do período do Mix (YYYY-MM-DD)
+  let _mixFim      = null;            // fim do período do Mix (YYYY-MM-DD)
 
   // Ontem em Brasília, formato en-CA (mesmo default do backend).
   function ontemISO() {
@@ -26,6 +30,12 @@
   function brData(iso) {
     const p = String(iso || '').split('-');
     return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : String(iso || '');
+  }
+
+  // "2026-07-15" -> "15/07" (rótulo curto de período do Mix).
+  function brDataCurta(iso) {
+    const p = String(iso || '').split('-');
+    return p.length === 3 ? `${p[2]}/${p[1]}` : String(iso || '');
   }
 
   // Nome de exibição: tira o prefixo "P. " e capitaliza natural
@@ -101,7 +111,13 @@
         '#s-relat .rel-rank li:first-child { border-color: var(--ac); background: var(--acd); }' +
         '#s-relat .rel-rank .rk-pos { font-family: var(--mono); font-weight: 700; color: var(--tx3); min-width: 1.6rem; }' +
         '#s-relat .rel-rank .rk-nome { flex: 1; color: var(--tx); font-weight: 600; }' +
+        // Contagem de dias lançados do posto — discreta, denuncia buraco de lançamento.
+        '#s-relat .rel-rank .rk-dias { font-family: var(--mono); font-size: .7rem; color: var(--tx3); white-space: nowrap; }' +
         '#s-relat .rel-rank .rk-val { font-family: var(--mono); font-weight: 700; color: var(--ac); white-space: nowrap; }' +
+        // Inputs de período do card de Mix (mesmo visual do .rel-date do topo).
+        '#s-relat .rel-mixwin { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }' +
+        '#s-relat .rel-mixwin input.rel-date { font-size: .74rem; padding: .35rem .45rem; }' +
+        '#s-relat .rel-mixwin .rel-sep { color: var(--tx3); }' +
       '</style>' +
       '<div class="rel-wrap">' +
         '<div class="rel-top">' +
@@ -136,15 +152,51 @@
     }
   }
 
+  // ── Carrega o Mix POR PERÍODO (GET /relatorios/mix-periodo) ──────
+  // Sem inicio/fim → backend usa o ciclo de vendas corrente (21→20) e
+  // devolve a janela usada, que passa a alimentar os dois date inputs.
+  async function carregarMix(inicio, fim) {
+    const qs = (inicio && fim)
+      ? '?inicio=' + encodeURIComponent(inicio) + '&fim=' + encodeURIComponent(fim)
+      : '';
+    try {
+      _mixDados  = await apiFetch('/relatorios/mix-periodo' + qs);
+      _mixInicio = _mixDados.inicio;
+      _mixFim    = _mixDados.fim;
+    } catch (err) {
+      _mixInicio = inicio || _mixInicio;
+      _mixFim    = fim    || _mixFim;
+      _mixDados  = { inicio: _mixInicio, fim: _mixFim, postos: [], total: {}, _erro: (err.message || err) };
+    }
+    renderVista();
+  }
+
   // ── Render: tudo numa tela só — consolidado em cima, mix + produtos
   //    lado a lado abaixo (grid 2 col; empilha em <900px). ────────────
   function renderVista() {
     const body = document.getElementById('rel-body');
     if (!body) return;
-    if (!_dados) { body.innerHTML = '<div class="empty">Carregando…</div>'; return; }
+    // Consolidado/Produtos vêm do fetch diário; Mix tem fetch próprio. Cada
+    // card trata seu próprio "carregando", então NÃO abortamos aqui: assim o
+    // Mix pode aparecer antes/depois do diário sem um wipar o outro.
     body.innerHTML =
       renderConsolidado() +
-      '<div class="rel-grid2">' + renderMix() + renderProdutos() + '</div>';
+      '<div class="rel-grid2">' + renderMixCard() + renderProdutos() + '</div>';
+    bindMixInputs();
+  }
+
+  // (Re)liga os handlers dos dois date inputs do card de Mix — o innerHTML
+  // acima recria os elementos a cada render, então rebinda toda vez.
+  function bindMixInputs() {
+    const ini = document.getElementById('rel-mix-ini');
+    const fim = document.getElementById('rel-mix-fim');
+    const disparar = () => {
+      const i = document.getElementById('rel-mix-ini');
+      const f = document.getElementById('rel-mix-fim');
+      if (i && f && i.value && f.value) carregarMix(i.value, f.value);
+    };
+    if (ini) ini.onchange = disparar;
+    if (fim) fim.onchange = disparar;
   }
 
   // Card com cabeçalho (título + subtítulo opcional + botão copiar).
@@ -160,6 +212,7 @@
 
   function renderConsolidado() {
     const d = _dados;
+    if (!d) return cardCabecalho('Consolidado da rede', '', 'consolidado', '<div class="empty">Carregando…</div>');
     const linhas = (d.postos || []).map(p => {
       const gasTx = (p.tecnox && p.tecnox.litros_gas != null) ? p.tecnox.litros_gas : null;
       const dg = deltaGas(p.gasolina_litros, gasTx);
@@ -198,17 +251,49 @@
     return cardCabecalho('Consolidado da rede', '', 'consolidado', tabela);
   }
 
-  function renderMix() {
-    const rank = (_dados.postos || []).filter(p => p.mix != null).sort((a, b) => b.mix - a.mix);
-    const inner = rank.length
-      ? '<ul class="rel-rank">' + rank.map((p, i) =>
-          '<li><span class="rk-pos">' + (i + 1) + '.</span><span class="rk-nome">' + nomeExib(p.posto) + '</span><span class="rk-val">' + fmtPct(p.mix) + '</span></li>'
-        ).join('') + '</ul>'
-      : '<div class="empty">Sem dados de mix para esta data.</div>';
-    return cardCabecalho('🥇 Mix de Gasolina Aditivada', '% do volume de gasolina', 'mix', inner);
+  // Card do Mix: janela PRÓPRIA (dois date inputs) + ranking agregado do
+  // período vindo de /relatorios/mix-periodo. Markup próprio (não usa
+  // cardCabecalho) pra caber os inputs no cabeçalho ao lado do Copiar.
+  function renderMixCard() {
+    const d = _mixDados;
+    const iniVal = _mixInicio || (d && d.inicio) || '';
+    const fimVal = _mixFim    || (d && d.fim)    || '';
+    let sub, inner;
+    if (!d) {
+      sub   = '% do volume de gasolina';
+      inner = '<div class="empty">Carregando…</div>';
+    } else if (d._erro) {
+      sub   = '% do volume de gasolina';
+      inner = '<div class="empty" style="color:var(--dg)">Erro ao carregar: ' + d._erro + '</div>';
+    } else {
+      const tot  = d.total || {};
+      const rank = (d.postos || []).filter(p => p.mix != null);  // backend já ordena; null fora
+      sub = 'ciclo ' + brDataCurta(d.inicio) + ' a ' + brDataCurta(d.fim) + ' · ' + (tot.dias_max || 0) + ' dias lançados';
+      inner = rank.length
+        ? '<ul class="rel-rank">' + rank.map((p, i) =>
+            '<li><span class="rk-pos">' + (i + 1) + '.</span>' +
+            '<span class="rk-nome">' + nomeExib(p.nome) + '</span>' +
+            '<span class="rk-dias">' + p.dias + 'd</span>' +
+            '<span class="rk-val">' + fmtPct(p.mix) + '</span></li>'
+          ).join('') + '</ul>'
+        : '<div class="empty">Sem dados de mix para este período.</div>';
+    }
+    return '<div class="card" id="rel-card-mix">' +
+      '<div class="chdr" style="display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem;flex-wrap:wrap">' +
+        '<div><div class="ctitle">🥇 Mix de Gasolina Aditivada</div><div class="csub">' + sub + '</div></div>' +
+        '<div class="rel-mixwin">' +
+          '<input type="date" class="rel-date" id="rel-mix-ini" value="' + iniVal + '">' +
+          '<span class="rel-sep">→</span>' +
+          '<input type="date" class="rel-date" id="rel-mix-fim" value="' + fimVal + '">' +
+          '<button class="rel-copy" onclick="__relCopiar(\'mix\', this)">📋 Copiar p/ WhatsApp</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cbody" style="overflow-x:auto">' + inner + '</div>' +
+    '</div>';
   }
 
   function renderProdutos() {
+    if (!_dados) return cardCabecalho('🛢️ Venda de Produtos', 'sem combustível, R$', 'produtos', '<div class="empty">Carregando…</div>');
     const comDados = (_dados.postos || []).filter(p => p.lubrificantes_rs != null);
     let inner;
     if (!comDados.length) {
@@ -243,10 +328,13 @@
   }
 
   function textoMix() {
-    const d = _dados; if (!d) return '';
-    const rank = (d.postos || []).filter(p => p.mix != null).sort((a, b) => b.mix - a.mix);
-    const linhas = ['🟢 *MIX DE GASOLINA ADITIVADA*', '(% do volume de gasolina)'];
-    rank.forEach((p, i) => linhas.push((i + 1) + '. ' + nomeExib(p.posto) + ' — ' + fmtPct(p.mix)));
+    const d = _mixDados; if (!d) return '';
+    const rank = (d.postos || []).filter(p => p.mix != null);  // backend já ordena
+    const linhas = [
+      '🟢 *Mix G. Aditivada — ' + brDataCurta(d.inicio) + ' a ' + brDataCurta(d.fim) + '*',
+      '(% do volume de gasolina)',
+    ];
+    rank.forEach((p, i) => linhas.push((i + 1) + '. ' + nomeExib(p.nome) + ' — ' + fmtPct(p.mix) + ' (' + p.dias + 'd)'));
     return linhas.join('\n');
   }
 
@@ -287,7 +375,9 @@
   window.renderRelatorios = function (sec) {
     if (!sec) return;
     if (!_shellPronto || !sec.querySelector('#rel-data')) montarShell(sec);
-    if (!_dados) carregar(_dataISO);  // primeira abertura busca; depois só re-renderiza
-    else renderVista();
+    // Diário e Mix têm fetches independentes; cada um chama renderVista ao chegar.
+    if (!_dados)    carregar(_dataISO);        // Consolidado + Produtos (dia)
+    if (!_mixDados) carregarMix();             // Mix (período; default = ciclo corrente)
+    if (_dados && _mixDados) renderVista();     // reabertura: já tem tudo, só re-render
   };
 })();
