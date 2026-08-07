@@ -107,8 +107,8 @@
       '<div class="forn-wrap">' +
         '<div class="forn-head">' +
           '<div class="forn-title">📊 Fornecedores</div>' +
-          '<button class="forn-back" onclick="__fornVoltar()">← Custo</button>' +
         '</div>' +
+        (window.navCustoHTML ? window.navCustoHTML('forn') : '') +
         '<div class="forn-chips" id="forn-per"></div>' +
         '<div class="forn-subq" id="forn-subq" style="display:none"></div>' +
         '<div class="forn-nav" id="forn-nav" style="display:none"></div>' +

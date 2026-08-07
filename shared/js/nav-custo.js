@@ -1,0 +1,66 @@
+// shared/js/nav-custo.js
+// Seletor unico compartilhado pelas telas Custo · Compra · Fornecedores ·
+// Simulador. Substitui os botoes de ida-e-volta que cada tela tinha.
+// Botao fica DESABILITADO enquanto a tela correspondente nao existir.
+(function () {
+  'use strict';
+
+  var TELAS = [
+    { id: 'custo',     sec: 's-custo',     icone: '\u{1F4B0}', rotulo: 'Custo',        render: 'renderCustoMargem' },
+    { id: 'compra',    sec: 's-compra',    icone: '\u{1F9FE}', rotulo: 'Compra',       render: 'renderCompra' },
+    { id: 'forn',      sec: 's-forn',      icone: '\u{1F4CA}', rotulo: 'Fornecedores', render: 'renderFornecedores' },
+    { id: 'simulador', sec: 's-simulador', icone: '\u2696\uFE0F', rotulo: 'Simulador', render: 'renderSimulador' },
+  ];
+
+  var estiloInjetado = false;
+  function injetarEstilo() {
+    if (estiloInjetado) return;
+    estiloInjetado = true;
+    var st = document.createElement('style');
+    st.textContent =
+      '.navc{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}' +
+      '.navc-btn{font-family:inherit;font-size:.75rem;padding:6px 14px;' +
+        'border-radius:999px;border:1px solid var(--bd);background:transparent;' +
+        'color:var(--tx);cursor:pointer;white-space:nowrap;' +
+        'transition:color .15s,border-color .15s}' +
+      '.navc-btn:hover:not(:disabled){border-color:var(--ac);color:var(--ac)}' +
+      '.navc-btn.on{border-color:var(--ac);color:var(--ac);font-weight:600}' +
+      '.navc-btn:disabled{opacity:.4;cursor:not-allowed}';
+    document.head.appendChild(st);
+  }
+
+  // HTML do seletor. `ativa` = id da tela atual.
+  window.navCustoHTML = function (ativa) {
+    injetarEstilo();
+    return '<div class="navc">' + TELAS.map(function (t) {
+      var pronta = (typeof window[t.render] === 'function');
+      return '<button class="navc-btn' + (t.id === ativa ? ' on' : '') + '"' +
+        (pronta ? '' : ' disabled') +
+        ' onclick="__navCusto(\'' + t.id + '\')">' +
+        t.icone + ' ' + t.rotulo + '</button>';
+    }).join('') + '</div>';
+  };
+
+  window.__navCusto = function (id) {
+    var t = null;
+    for (var i = 0; i < TELAS.length; i++) if (TELAS[i].id === id) t = TELAS[i];
+    if (!t) return;
+    var fn = window[t.render];
+    if (typeof fn !== 'function') return;
+    var sec = document.getElementById(t.sec);
+    if (!sec) return;
+    document.querySelectorAll('.scr').forEach(function (x) { x.classList.remove('active'); });
+    sec.classList.add('active');
+    // Sincroniza o rodape do mobile: antes a secao trocava e o botao do bnav
+    // continuava aceso na aba errada.
+    var bnav = document.querySelectorAll('.nbtn');
+    if (bnav.length) {
+      bnav.forEach(function (b) { b.classList.remove('active'); });
+      bnav.forEach(function (b) {
+        var oc = b.getAttribute('onclick') || '';
+        if (oc.indexOf("'" + id + "'") >= 0) b.classList.add('active');
+      });
+    }
+    fn(sec);
+  };
+})();
