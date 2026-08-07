@@ -7,7 +7,7 @@
 
   var TELAS = [
     { id: 'custo',     sec: 's-custo',     icone: '\u{1F4B0}', rotulo: 'Custo',        render: 'renderCustoMargem' },
-    { id: 'compra',    sec: 's-compra',    icone: '\u{1F9FE}', rotulo: 'Compra',       render: 'renderCompra' },
+    { id: 'compra',    sec: 's-compra',    icone: '\u{1F9FE}', rotulo: 'Compra',       render: 'renderCompra', glow: true },
     { id: 'forn',      sec: 's-forn',      icone: '\u{1F4CA}', rotulo: 'Fornecedores', render: 'renderFornecedores' },
     { id: 'simulador', sec: 's-simulador', icone: '\u2696\uFE0F', rotulo: 'Simulador', render: 'renderSimulador' },
   ];
@@ -25,7 +25,8 @@
         'transition:color .15s,border-color .15s}' +
       '.navc-btn:hover:not(:disabled){border-color:var(--ac);color:var(--ac)}' +
       '.navc-btn.on{border-color:var(--ac);color:var(--ac);font-weight:600}' +
-      '.navc-btn:disabled{opacity:.4;cursor:not-allowed}';
+      '.navc-btn:disabled{opacity:.4;cursor:not-allowed}' +
+      '.navc-ico-glow{filter:drop-shadow(0 0 1px var(--ac)) drop-shadow(0 0 3px var(--acd))}';
     document.head.appendChild(st);
   }
 
@@ -37,7 +38,7 @@
       return '<button class="navc-btn' + (t.id === ativa ? ' on' : '') + '"' +
         (pronta ? '' : ' disabled') +
         ' onclick="__navCusto(\'' + t.id + '\')">' +
-        t.icone + ' ' + t.rotulo + '</button>';
+        (t.glow ? '<span class="navc-ico-glow">' + t.icone + '</span>' : t.icone) + ' ' + t.rotulo + '</button>';
     }).join('') + '</div>';
   };
 
