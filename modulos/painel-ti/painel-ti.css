@@ -195,7 +195,7 @@
 /* ── Aba Pendências: KPIs ── */
 .ti-it-kpis {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 10px;
   margin-bottom: 1.25rem;
 }
@@ -205,6 +205,13 @@
   border-radius: var(--radius);
   padding: 0.8rem 0.9rem;
   text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.ti-it-kpi:hover { border-color: var(--border2); }
+.ti-it-kpi.on {
+  background: var(--accent-dim);
+  border-color: var(--accent);
 }
 .ti-it-kpi-num {
   font-family: var(--mono); font-size: 1.5rem; font-weight: 700; color: var(--text);
@@ -213,7 +220,7 @@
   font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase;
   font-family: var(--mono); color: var(--text3); margin-top: 3px;
 }
-@media (max-width: 560px) { .ti-it-kpis { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .ti-it-kpis { grid-template-columns: repeat(3, 1fr); } }
 
 /* ── Aba Pendências: filtros ── */
 .ti-it-filtros {
@@ -286,3 +293,5 @@
 }
 .ti-it-btn:hover { border-color: var(--accent); color: var(--accent); }
 .ti-it-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.ti-it-btn.reabrir { color: var(--info); }
+.ti-it-btn.reabrir:hover { border-color: var(--info); color: var(--info); }

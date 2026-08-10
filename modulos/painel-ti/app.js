@@ -27,6 +27,7 @@ let modalUserId        = null;   // null = novo; id = editar
 
 // estado — aba Pendências
 let itens = [], itensCarregado = false, itContagem = {}, itFiltro = 'todos';
+let itStatus = 'abertos';   // abertos (novo+em_analise) | novo | em_analise | resolvido | ignorado
 
 // ── Tema ──
 function aplicarTema(tema) {
@@ -240,6 +241,13 @@ function ligarControlesUsuarios() {
     const btn = e.target.closest ? e.target.closest('.ti-it-chip') : null;
     if (!btn) return;
     itFiltro = btn.getAttribute('data-f') || 'todos';
+    renderItens();
+  });
+  const itKpis = document.getElementById('ti-it-kpis');
+  if (itKpis) itKpis.addEventListener('click', (e) => {
+    const btn = e.target.closest ? e.target.closest('.ti-it-kpi') : null;
+    if (!btn) return;
+    itStatus = btn.getAttribute('data-st') || 'abertos';
     renderItens();
   });
   const itLista = document.getElementById('ti-it-lista');
@@ -486,7 +494,7 @@ async function carregarItens(force) {
   if (itensCarregado && !force) { renderItens(); return itens; }
   const lista = document.getElementById('ti-it-lista');
   try {
-    const resp = await apiFetch('/ti/itens');
+    const resp = await apiFetch('/ti/itens?todos=1');
     itens = (resp && resp.itens) || [];
     itContagem = (resp && resp.contagem) || {};
     itensCarregado = true;
@@ -499,16 +507,22 @@ async function carregarItens(force) {
 }
 
 function renderItens() {
-  // KPIs — contagem por status (vem do backend).
+  // KPIs clicáveis — filtram por status. "Abertos" (novo+em_analise) é o padrão.
   const kpis = document.getElementById('ti-it-kpis');
   if (kpis) {
     const c = itContagem || {};
-    const box = (num, lbl) =>
-      '<div class="ti-it-kpi"><div class="ti-it-kpi-num">' + (Number(num) || 0) + '</div>' +
-      '<div class="ti-it-kpi-lbl">' + lbl + '</div></div>';
+    const abertos = (Number(c.novo) || 0) + (Number(c.em_analise) || 0);
+    const box = (st, num, lbl) =>
+      '<button class="ti-it-kpi' + (itStatus === st ? ' on' : '') + '" type="button" data-st="' + st + '">' +
+        '<div class="ti-it-kpi-num">' + (Number(num) || 0) + '</div>' +
+        '<div class="ti-it-kpi-lbl">' + lbl + '</div>' +
+      '</button>';
     kpis.innerHTML =
-      box(c.novo, 'Novos') + box(c.em_analise, 'Em análise') +
-      box(c.resolvido, 'Resolvidos') + box(c.ignorado, 'Ignorados');
+      box('abertos', abertos, 'Abertos') +
+      box('novo', c.novo, 'Novos') +
+      box('em_analise', c.em_analise, 'Em análise') +
+      box('resolvido', c.resolvido, 'Resolvidos') +
+      box('ignorado', c.ignorado, 'Ignorados');
   }
 
   // Filtros — todos, alta (severidade), e uma pílula por categoria distinta.
@@ -526,17 +540,26 @@ function renderItens() {
     ).join('');
   }
 
-  // Lista — cards respeitando itFiltro.
+  // Lista — aplica itStatus E itFiltro juntos.
   const lista = document.getElementById('ti-it-lista');
   if (!lista) return;
   const filtrados = (itens || []).filter(i => {
-    if (itFiltro === 'todos') return true;
-    if (itFiltro === 'alta')  return i.severidade === 'alta';
+    // status
+    if (itStatus === 'abertos') {
+      if (i.status !== 'novo' && i.status !== 'em_analise') return false;
+    } else if (i.status !== itStatus) {
+      return false;
+    }
+    // severidade / categoria
+    if (itFiltro === 'alta') return i.severidade === 'alta';
     if (itFiltro.indexOf('cat:') === 0) return i.categoria === itFiltro.slice(4);
-    return true;
+    return true;   // 'todos'
   });
   if (!filtrados.length) {
-    lista.innerHTML = '<div class="empty-state">Nada aberto neste filtro.</div>';
+    const msg = (itStatus === 'resolvido') ? 'Nenhum item resolvido ainda.'
+              : (itStatus === 'ignorado')  ? 'Nenhum item ignorado.'
+              : 'Nada aberto neste filtro.';
+    lista.innerHTML = '<div class="empty-state">' + msg + '</div>';
     return;
   }
   const dis = podeEscrever() ? '' : ' disabled';
@@ -546,16 +569,24 @@ function renderItens() {
     const cat  = i.categoria ? '<span class="ti-it-cat">' + escapeHtml(i.categoria) + '</span>' : '';
     const selo = (i.status === 'em_analise') ? '<span class="ti-it-cat">em análise</span>' : '';
     const det  = i.detalhe ? '<div class="ti-it-det">' + escapeHtml(i.detalhe) + '</div>' : '';
-    const btn = (st, lbl) =>
-      '<button class="ti-it-btn" type="button" data-id="' + escapeHtml(i.id) + '" data-st="' + st + '"' + dis + '>' + lbl + '</button>';
+    const btn = (st, lbl, extra) =>
+      '<button class="ti-it-btn' + (extra ? ' ' + extra : '') + '" type="button" data-id="' + escapeHtml(i.id) + '" data-st="' + st + '"' + dis + '>' + lbl + '</button>';
+    // Ações conforme o status atual do item.
+    let acoes;
+    if (i.status === 'novo') {
+      acoes = btn('em_analise', 'Em análise') + btn('resolvido', 'Resolver') + btn('ignorado', 'Ignorar');
+    } else if (i.status === 'em_analise') {
+      acoes = btn('resolvido', 'Resolver') + btn('ignorado', 'Ignorar') + btn('novo', 'Reabrir', 'reabrir');
+    } else {
+      // resolvido / ignorado
+      acoes = btn('novo', 'Reabrir', 'reabrir');
+    }
     return '' +
       '<div class="ti-it ' + sevCls + '">' +
         '<div class="ti-it-titulo">' + escapeHtml(i.titulo || '—') + '</div>' +
         '<div>' + cat + selo + '</div>' +
         det +
-        '<div class="ti-it-acoes">' +
-          btn('em_analise', 'Em análise') + btn('resolvido', 'Resolver') + btn('ignorado', 'Ignorar') +
-        '</div>' +
+        '<div class="ti-it-acoes">' + acoes + '</div>' +
       '</div>';
   }).join('');
 }
