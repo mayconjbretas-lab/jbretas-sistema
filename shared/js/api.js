@@ -47,6 +47,13 @@ async function apiFetch(path, options = {}, _jaTentouRefresh = false) {
     if (!_jaTentouRefresh && typeof window.jbretasRefresh === 'function') {
       const renovou = await window.jbretasRefresh();
       if (renovou) return apiFetch(path, options, true);
+      // Refresh não renovou. Se o token de refresh AINDA existe, a falha
+      // foi transitória (429/5xx/offline) — o jbretasRefresh só apaga em
+      // 401/403. Nesse caso não desloga: propaga o erro para a tela
+      // tratar, e o boot tenta renovar de novo no próximo acesso.
+      if (localStorage.getItem('jbretas_refresh')) {
+        throw new Error('Não foi possível renovar a sessão agora. Tente novamente em instantes.');
+      }
     }
     // Sem refresh possível (ou refresh falhou): limpa tudo e vai pro login.
     jbretasClearSessao();

@@ -40,17 +40,23 @@ async function jbretasRefresh() {
       body: JSON.stringify({ refresh_token: refresh }),
     });
     const json = await resp.json().catch(() => ({}));
-    if (!resp.ok || !json.success || !json.token) {
+    // Só limpa a sessão quando o refresh foi REJEITADO (401/403).
+    // 429, 5xx e queda de rede são transitórios — mantém o refresh salvo
+    // para tentar de novo, senão o app desloga o gerente por rate-limit
+    // ou por instabilidade momentânea da API.
+    if (resp.status === 401 || resp.status === 403) {
       jbretasClearSessao();
       return false;
+    }
+    if (!resp.ok || !json.success || !json.token) {
+      return false;   // falha transitória: NÃO limpa
     }
     localStorage.setItem('jbretas_token', json.token);
     if (json.refresh_token) localStorage.setItem('jbretas_refresh', json.refresh_token);
     if (json.expira != null) localStorage.setItem('jbretas_expira', String(json.expira));
     return true;
   } catch (e) {
-    jbretasClearSessao();
-    return false;
+    return false;     // offline ou API fora: NÃO limpa
   }
 }
 
