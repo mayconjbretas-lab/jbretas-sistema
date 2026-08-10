@@ -25,6 +25,9 @@ let buscaU             = '';
 let gerenciarCarregado = false;
 let modalUserId        = null;   // null = novo; id = editar
 
+// estado — aba Pendências
+let itens = [], itensCarregado = false, itContagem = {}, itFiltro = 'todos';
+
 // ── Tema ──
 function aplicarTema(tema) {
   document.documentElement.setAttribute('data-theme', tema);
@@ -83,13 +86,14 @@ function montarTopbar() {
 // ABAS
 // ════════════════════════════════════════════════════════════════
 function switchTab(name) {
-  ['acessar', 'usuarios'].forEach(t => {
+  ['acessar', 'usuarios', 'pendencias'].forEach(t => {
     const panel = document.getElementById('tab-' + t);
     if (panel) panel.classList.toggle('active', t === name);
     const btn = document.getElementById('tabbtn-' + t);
     if (btn) btn.classList.toggle('active', t === name);
   });
   if (name === 'usuarios') carregarGerenciar(false);
+  if (name === 'pendencias') carregarItens(false);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -229,6 +233,21 @@ function ligarControlesUsuarios() {
   if (salvar) salvar.addEventListener('click', submitForm);
   const cancel = document.getElementById('ti-modal-cancel');
   if (cancel) cancel.addEventListener('click', fecharModal);
+
+  // Aba Pendências — filtros e ações por delegação (ligadas uma vez).
+  const itFiltros = document.getElementById('ti-it-filtros');
+  if (itFiltros) itFiltros.addEventListener('click', (e) => {
+    const btn = e.target.closest ? e.target.closest('.ti-it-chip') : null;
+    if (!btn) return;
+    itFiltro = btn.getAttribute('data-f') || 'todos';
+    renderItens();
+  });
+  const itLista = document.getElementById('ti-it-lista');
+  if (itLista) itLista.addEventListener('click', (e) => {
+    const btn = e.target.closest ? e.target.closest('.ti-it-btn') : null;
+    if (!btn) return;
+    mudarStatusItem(btn.getAttribute('data-id'), btn.getAttribute('data-st'));
+  });
 }
 
 async function carregarGerenciar(force) {
@@ -460,6 +479,101 @@ async function excluirUsuario(id) {
   }
 }
 
+// ════════════════════════════════════════════════════════════════
+// ABA "PENDÊNCIAS" (ti_itens — GET /ti/itens, PATCH /ti/itens/:id)
+// ════════════════════════════════════════════════════════════════
+async function carregarItens(force) {
+  if (itensCarregado && !force) { renderItens(); return itens; }
+  const lista = document.getElementById('ti-it-lista');
+  try {
+    const resp = await apiFetch('/ti/itens');
+    itens = (resp && resp.itens) || [];
+    itContagem = (resp && resp.contagem) || {};
+    itensCarregado = true;
+  } catch (err) {
+    if (lista) lista.innerHTML = '<div class="empty-state">⚠ Falha ao carregar: ' + escapeHtml(err.message) + '</div>';
+    return itens;
+  }
+  renderItens();
+  return itens;
+}
+
+function renderItens() {
+  // KPIs — contagem por status (vem do backend).
+  const kpis = document.getElementById('ti-it-kpis');
+  if (kpis) {
+    const c = itContagem || {};
+    const box = (num, lbl) =>
+      '<div class="ti-it-kpi"><div class="ti-it-kpi-num">' + (Number(num) || 0) + '</div>' +
+      '<div class="ti-it-kpi-lbl">' + lbl + '</div></div>';
+    kpis.innerHTML =
+      box(c.novo, 'Novos') + box(c.em_analise, 'Em análise') +
+      box(c.resolvido, 'Resolvidos') + box(c.ignorado, 'Ignorados');
+  }
+
+  // Filtros — todos, alta (severidade), e uma pílula por categoria distinta.
+  const filtrosEl = document.getElementById('ti-it-filtros');
+  if (filtrosEl) {
+    const cats = [];
+    (itens || []).forEach(i => {
+      if (i.categoria && cats.indexOf(i.categoria) === -1) cats.push(i.categoria);
+    });
+    cats.sort((a, b) => String(a).localeCompare(String(b)));
+    const defs = [{ f: 'todos', lbl: 'Todos' }, { f: 'alta', lbl: 'Alta' }]
+      .concat(cats.map(cat => ({ f: 'cat:' + cat, lbl: cat })));
+    filtrosEl.innerHTML = defs.map(d =>
+      '<button class="ti-it-chip' + (itFiltro === d.f ? ' on' : '') + '" type="button" data-f="' + escapeHtml(d.f) + '">' + escapeHtml(d.lbl) + '</button>'
+    ).join('');
+  }
+
+  // Lista — cards respeitando itFiltro.
+  const lista = document.getElementById('ti-it-lista');
+  if (!lista) return;
+  const filtrados = (itens || []).filter(i => {
+    if (itFiltro === 'todos') return true;
+    if (itFiltro === 'alta')  return i.severidade === 'alta';
+    if (itFiltro.indexOf('cat:') === 0) return i.categoria === itFiltro.slice(4);
+    return true;
+  });
+  if (!filtrados.length) {
+    lista.innerHTML = '<div class="empty-state">Nada aberto neste filtro.</div>';
+    return;
+  }
+  const dis = podeEscrever() ? '' : ' disabled';
+  lista.innerHTML = filtrados.map(i => {
+    const sevCls = (i.severidade === 'alta') ? 'ti-it-alta'
+                 : (i.severidade === 'baixa') ? 'ti-it-baixa' : 'ti-it-media';
+    const cat  = i.categoria ? '<span class="ti-it-cat">' + escapeHtml(i.categoria) + '</span>' : '';
+    const selo = (i.status === 'em_analise') ? '<span class="ti-it-cat">em análise</span>' : '';
+    const det  = i.detalhe ? '<div class="ti-it-det">' + escapeHtml(i.detalhe) + '</div>' : '';
+    const btn = (st, lbl) =>
+      '<button class="ti-it-btn" type="button" data-id="' + escapeHtml(i.id) + '" data-st="' + st + '"' + dis + '>' + lbl + '</button>';
+    return '' +
+      '<div class="ti-it ' + sevCls + '">' +
+        '<div class="ti-it-titulo">' + escapeHtml(i.titulo || '—') + '</div>' +
+        '<div>' + cat + selo + '</div>' +
+        det +
+        '<div class="ti-it-acoes">' +
+          btn('em_analise', 'Em análise') + btn('resolvido', 'Resolver') + btn('ignorado', 'Ignorar') +
+        '</div>' +
+      '</div>';
+  }).join('');
+}
+
+// PATCH status. Recarrega do servidor (lista + contagem) em vez de mexer no
+// array local — a contagem é responsabilidade do backend.
+async function mudarStatusItem(id, status) {
+  if (!id || !status) return;
+  if (!podeEscrever()) return;
+  try {
+    await apiFetch('/ti/itens/' + id, { method: 'PATCH', body: JSON.stringify({ status: status }) });
+  } catch (err) {
+    alert('Falha ao atualizar item: ' + err.message);
+    return;
+  }
+  await carregarItens(true);
+}
+
 // Expostos p/ onclick do HTML e p/ o harness de testes.
 window.toggleTheme       = toggleTheme;
 window.entrarComo        = entrarComo;
@@ -477,3 +591,6 @@ window.excluirUsuario    = excluirUsuario;
 window.setAtivo          = setAtivo;
 window.abrirModal        = abrirModal;
 window.atualizarBloqueio = atualizarBloqueio;
+window.carregarItens     = carregarItens;
+window.renderItens       = renderItens;
+window.mudarStatusItem   = mudarStatusItem;

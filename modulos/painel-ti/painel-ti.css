@@ -191,3 +191,98 @@
   font-size: 0.68rem; color: var(--text3); font-family: var(--mono);
   margin-top: 6px; line-height: 1.4;
 }
+
+/* ── Aba Pendências: KPIs ── */
+.ti-it-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 1.25rem;
+}
+.ti-it-kpi {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.8rem 0.9rem;
+  text-align: center;
+}
+.ti-it-kpi-num {
+  font-family: var(--mono); font-size: 1.5rem; font-weight: 700; color: var(--text);
+}
+.ti-it-kpi-lbl {
+  font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase;
+  font-family: var(--mono); color: var(--text3); margin-top: 3px;
+}
+@media (max-width: 560px) { .ti-it-kpis { grid-template-columns: repeat(2, 1fr); } }
+
+/* ── Aba Pendências: filtros ── */
+.ti-it-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 1rem;
+}
+.ti-it-chip {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text3);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ti-it-chip:hover { border-color: var(--border2); color: var(--text2); }
+.ti-it-chip.on {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Aba Pendências: lista de cards ── */
+.ti-it-lista {
+  display: grid;
+  gap: 8px;
+}
+.ti-it {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--text3);
+  border-radius: var(--radius);
+  padding: 0.8rem 0.9rem;
+}
+.ti-it-alta  { border-left-color: var(--danger); }
+.ti-it-media { border-left-color: var(--warning); }
+.ti-it-baixa { border-left-color: var(--text3); }
+.ti-it-titulo {
+  font-size: 0.9rem; font-weight: 500; color: var(--text); line-height: 1.35;
+}
+.ti-it-cat {
+  display: inline-block; font-size: 0.58rem; letter-spacing: 0.06em;
+  text-transform: uppercase; font-family: var(--mono);
+  color: var(--text3); border: 1px solid var(--border2);
+  border-radius: 4px; padding: 1px 6px; margin: 6px 6px 0 0;
+}
+.ti-it-det {
+  font-size: 0.76rem; color: var(--text2); font-family: var(--mono);
+  line-height: 1.5; margin-top: 8px;
+}
+.ti-it-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.ti-it-btn {
+  background: var(--surface3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text2);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, opacity 0.15s;
+}
+.ti-it-btn:hover { border-color: var(--accent); color: var(--accent); }
+.ti-it-btn:disabled { opacity: 0.35; cursor: not-allowed; }
