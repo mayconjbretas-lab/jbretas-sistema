@@ -1,7 +1,7 @@
 // ================================================================
 // JBRETAS SISTEMA — shared/js/push-inscricao.js
 // Registra o service worker (/sw.js) e inscreve o aparelho no Web Push.
-// Só age pra GERENTE/ADM em navegador com suporte. iOS exige que o
+// Só age pra GERENTE/ADM/LOGISTICA em navegador com suporte. iOS exige que o
 // requestPermission saia de um GESTO do usuário → quando a permissão ainda
 // está 'default', mostramos uma faixa discreta e só pedimos no clique.
 // Backend (6A): GET /push/vapid-public-key, POST /push/inscrever.
@@ -12,7 +12,7 @@
   function elegivel() {
     try {
       const u = getUsuarioLogado();
-      if (!u || (u.perfil !== 'GERENTE' && u.perfil !== 'ADM')) return false;
+      if (!u || (u.perfil !== 'GERENTE' && u.perfil !== 'ADM' && u.perfil !== 'LOGISTICA')) return false;
       return ('serviceWorker' in navigator) && ('PushManager' in window);
     } catch (e) { return false; }
   }
