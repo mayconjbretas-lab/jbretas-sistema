@@ -173,8 +173,12 @@ async function csCarregar() {
         return { linhas: [] };
       }),
     ]);
-    const hoje  = hojeBR();
-    const ontem = ontemBR();
+    // Referência de "hoje/ontem" para a derivação. Com data selecionada
+    // (CS_DATA), a referência é a PRÓPRIA data escolhida — senão proprioHoje/
+    // temColeta/desatualizado seriam medidos contra o dia corrente e a tela
+    // mostraria tudo como "atrasado/pendente" mesmo vendo o dia certo.
+    const hoje  = CS_DATA ? isoParaBR(CS_DATA)              : hojeBR();
+    const ontem = CS_DATA ? isoParaBR(diaAntesISO(CS_DATA)) : ontemBR();
 
     // revisões já gravadas hoje, indexadas pela MESMA chave de posto do
     // módulo (normalizarNomePosto(nome) === mp.k). O GET devolve posto_nome.
@@ -251,8 +255,22 @@ async function csCarregar() {
       CS_ESTADOS[p.key] = (conferido || editado) ? 'ok' : 'pend';
     });
 
+    // Guarda o posto com detalhe ABERTO antes do rebuild de CS_FILTRADOS.
+    const abertoKey = (CS_POSTO_IDX >= 0 && CS_FILTRADOS[CS_POSTO_IDX])
+      ? CS_FILTRADOS[CS_POSTO_IDX].key : null;
+
     csPopularFiltros();
     csAplicarFiltros();
+
+    // Se o detalhe estava ABERTO, re-renderiza pro MESMO posto na nova carga.
+    // csAplicarFiltros só redesenha a LISTA; sem isto o painel aberto continua
+    // mostrando o dia anterior (fotos/preços/supervisor desatualizados) mesmo
+    // com o cabeçalho já na data nova.
+    if (abertoKey) {
+      const idxNovo = CS_FILTRADOS.findIndex(p => p.key === abertoKey);
+      if (idxNovo >= 0) { CS_POSTO_IDX = idxNovo; CS_CONC_IDX = 0; csRenderDetalhe(); }
+      else csVoltarLista();
+    }
 
     // data mais recente entre os registros próprios
     const datas = CS_POSTOS.map(p => p.data).filter(Boolean);
@@ -314,6 +332,20 @@ function csFltDiasChange(v) {
 function hojeISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+// 'YYYY-MM-DD' → 'DD/MM/YYYY' (formato que a API devolve em r.data). É por
+// aqui que a data selecionada vira a referência da derivação (proprioHoje etc.).
+function isoParaBR(iso) {
+  const p = String(iso || '').split('-');
+  return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : String(iso || '');
+}
+// Dia anterior a um 'YYYY-MM-DD' (aritmética em UTC, sem drift de fuso).
+function diaAntesISO(iso) {
+  const p = String(iso || '').split('-').map(Number);
+  if (p.length !== 3) return iso;
+  const d = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
 }
 function csFmt(v) {
   if (v === null || v === undefined) return '—';
@@ -447,8 +479,10 @@ function csRenderDetalhe() {
   const badge = document.getElementById('cs-d-badge');
   if (badge) {
     badge.textContent = est === 'ok' ? '✓ ok' : est === 'flag' ? '⚠ sinalizado' : 'pendente';
-    // "pendente": verde se a coleta é de HOJE, vermelho se é de dia anterior.
-    const pendCls = (posto.data === hojeBR()) ? 'cs-badge-pend-hoje' : 'cs-badge-pend-atrasado';
+    // "pendente": verde se a coleta é do DIA VISTO (hoje ou a data selecionada),
+    // vermelho se é de dia anterior a ele.
+    const refBR = CS_DATA ? isoParaBR(CS_DATA) : hojeBR();
+    const pendCls = (posto.data === refBR) ? 'cs-badge-pend-hoje' : 'cs-badge-pend-atrasado';
     badge.className   = 'cs-badge ' + (est === 'ok' ? 'cs-badge-ok' : est === 'flag' ? 'cs-badge-flag' : pendCls);
   }
 
