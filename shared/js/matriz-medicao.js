@@ -469,11 +469,15 @@
     if (_subtitle) _subtitle.innerHTML = '• <span style="color:var(--danger)">' + msg + '</span>';
   }
 
-  // Ajusta o offset da 2ª linha sticky do cabeçalho conforme a altura real da 1ª.
+  // Ajusta o offset da 2ª linha sticky do cabeçalho conforme a altura REAL da 1ª.
+  // Mede a <tr> (não o th DIA, que tem rowspan=2 e abrange as duas linhas) e usa
+  // getBoundingClientRect().height p/ pegar o fracionário (ex.: 32,5px) — offsetHeight
+  // arredondaria. Grava em :root; o CSS lê via var(--thead-row1-h) no top da 2ª linha.
   function ajustarSticky() {
-    const row1 = _thead && _thead.querySelector('tr:first-child th');
-    if (row1) {
-      document.documentElement.style.setProperty('--thead-row1-h', row1.offsetHeight + 'px');
+    const linha1 = _thead && _thead.querySelector('tr:first-child');
+    if (linha1) {
+      document.documentElement.style.setProperty(
+        '--thead-row1-h', linha1.getBoundingClientRect().height + 'px');
     }
   }
 
@@ -522,6 +526,18 @@
   window.onCelulaDigito = onCelulaDigito;
   window.onCelulaTecla  = onCelulaTecla;
   window.onCelulaBlur   = onCelulaBlur;
+
+  // Recalcula --thead-row1-h ao redimensionar. Registrado UMA vez aqui (nível do
+  // módulo, fora do montar), então trocar de posto/remontar não acumula listeners.
+  // O rAF evita recalcular em excesso durante o arraste; o guard de ajustarSticky
+  // (_thead nulo) cobre disparos antes de qualquer montar().
+  window.addEventListener('resize', function () { requestAnimationFrame(ajustarSticky); });
+
+  // Fontes (JetBrains Mono/Sora) carregam async e mudam a altura da linha depois
+  // do 1º render. Recalcula quando prontas (também registrado uma única vez).
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(ajustarSticky);
+  }
 
   // API pública (padrão do custo-margem.js).
   window.matrizMedicao = {
