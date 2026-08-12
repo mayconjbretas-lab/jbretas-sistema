@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0d1c">
+<title>JBRETAS — Logística (mobile)</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" sizes="48x48" href="/shared/jbretas-favicon-48.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/shared/icon-192.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
+<link rel="stylesheet" href="../../shared/css/base.css?v=202608121827">
+<link rel="stylesheet" href="logistica-mobile.css?v=202608121827">
+<script>
+  // Pre-paint: aplica o tema salvo antes de renderizar (evita flash).
+  (function(){
+    var t = localStorage.getItem('jb_theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+</head>
+<body>
+
+<div id="screen-app">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="tb-brand">
+      <img src="/shared/jbretas-logo.png" alt="JBretas" class="tb-logo">
+      <div>
+        <div class="tb-name">JBRETAS</div>
+        <div class="tb-sub">// LOGÍSTICA</div>
+      </div>
+    </div>
+    <div class="tb-right">
+      <button class="tb-btn" onclick="irParaDesktop()" title="Abrir versão desktop">🖥️ Desktop</button>
+      <button class="tb-btn" onclick="location.reload()" title="Atualizar">&#128260;</button>
+      <button class="tb-btn" id="theme-btn" onclick="toggleTheme()" title="Alternar tema">🌙</button>
+      <button class="tb-btn tb-sair" onclick="jbretasLogout()" title="Sair">Sair</button>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="main" id="main">
+    <section class="scr active" id="s-medicao"></section>
+    <section class="scr" id="s-precos"></section>
+    <section class="scr" id="s-custo"></section>
+  </main>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bnav">
+    <button class="nbtn active" onclick="setTab(this,'medicao')">
+      <span class="ni">📊</span><span class="nl">Medição</span>
+    </button>
+    <button class="nbtn" onclick="setTab(this,'precos')">
+      <span class="ni">💲</span><span class="nl">Preços</span>
+    </button>
+    <button class="nbtn" onclick="setTab(this,'custo')">
+      <span class="ni">💰</span><span class="nl">Custo</span>
+    </button>
+    <button class="nbtn" onclick="abrirMais()">
+      <span class="ni">➕</span><span class="nl">Mais</span>
+    </button>
+  </nav>
+</div>
+
+<!-- ═══ MODAL MAIS+ ═══ -->
+<div class="moverlay" id="modal-mais" onclick="fecharMais(event)">
+  <div class="msheet">
+    <button class="mclose" onclick="fecharMaisBtn()">✕</button>
+    <div class="mtitle">Mais funções</div>
+    <div class="mitem mitem-off" aria-disabled="true">
+      <span class="mic">🚚</span>
+      Motorista / Conciliação — em breve
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TOAST ═══ -->
+<div class="toast" id="toast">
+  <div class="ttitle" id="t-title"></div>
+  <div id="t-msg"></div>
+</div>
+
+<script src="../../shared/js/config.js?v=202608121827"></script>
+<script src="../../shared/js/api.js?v=202608121827"></script>
+<script src="../../shared/js/auth.js?v=202608121827"></script>
+<script src="../../shared/js/solicitacoes-logistica.js?v=202608121827"></script>
+<script src="../../shared/js/push-inscricao.js?v=202608121827"></script>
+<script src="../logistica/custo-margem.js?v=202608121827"></script>
+<script src="app.js?v=202608121827"></script>
+</body>
+</html>

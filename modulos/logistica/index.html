@@ -22,6 +22,33 @@
 </head>
 <body>
 
+<!-- ═══ TELA DE ESCOLHA Desktop/Mobile (mostrada por JS se sem preferência) ═══ -->
+<div id="tela-escolha" class="escolha-overlay">
+  <div class="escolha-card">
+    <div class="escolha-brand">
+      <div class="escolha-brand-name">JBRETAS</div>
+      <div class="escolha-brand-sub">// Logística</div>
+    </div>
+    <div class="escolha-titulo">Qual versão você quer abrir?</div>
+    <div class="escolha-btns">
+      <button class="escolha-btn" onclick="escolherVersao('desktop')">
+        <span class="escolha-emoji">🖥️</span>
+        <span>Desktop</span>
+        <span class="escolha-hint">Painel completo</span>
+      </button>
+      <button class="escolha-btn" onclick="escolherVersao('mobile')">
+        <span class="escolha-emoji">📲</span>
+        <span>Mobile</span>
+        <span class="escolha-hint">Versão de bolso</span>
+      </button>
+    </div>
+    <div class="escolha-remember">
+      <input type="checkbox" id="chk-lembrar">
+      <label for="chk-lembrar">Lembrar minha escolha neste dispositivo</label>
+    </div>
+  </div>
+</div>
+
 <div id="screen-app">
 
   <div class="topbar">
@@ -40,6 +67,8 @@
           <div class="topbar-posto" id="app-perfil">—</div>
         </div>
       </div>
+      <button class="btn-mobile" onclick="irParaMobile()" title="Abrir versão mobile">📲 Mobile</button>
+      <button class="theme-btn" onclick="location.reload()" title="Atualizar">&#128260;</button>
       <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Alternar tema">🌙</button>
       <button class="btn-logout" onclick="jbretasLogout()">SAIR</button>
     </div>
@@ -69,26 +98,9 @@
     <!-- WORKSPACE -->
     <main class="logi-workspace">
 
-      <!-- ABA 1: MATRIZ / MEDIÇÃO -->
-      <section id="tab-matriz" class="view-panel active">
-        <div class="table-actions">
-          <div class="table-title">Matriz Integrada de Suprimentos
-            <span id="matriz-subtitle">• Carregando posto...</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:1rem;">
-            <div class="scroll-indicator">↔ Scroll horizontal para ver tudo</div>
-            <button class="btn-refresh" id="btn-refresh" onclick="atualizarMatriz()" title="Atualizar dados do servidor">↻ Atualizar</button>
-          </div>
-        </div>
-        <div class="spreadsheet-frame">
-          <table class="ss-table">
-            <thead id="medicao-thead"></thead>
-            <tbody id="matriz-corpo">
-              <tr><td style="padding:2rem;color:var(--text3);text-align:center;">Selecione um posto…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <!-- ABA 1: MATRIZ / MEDIÇÃO — montada por window.matrizMedicao.montar()
+           (shared/js/matriz-medicao.js). Container vazio de propósito. -->
+      <section id="tab-matriz" class="view-panel active"></section>
 
       <!-- ABA 2: MOTORISTA / CONCILIAÇÃO (Fase 2) -->
       <section id="tab-motorista" class="view-panel">
@@ -115,6 +127,7 @@
 <script src="../../shared/js/solicitacoes-logistica.js?v=202608121827"></script>
 <script src="../../shared/js/push-inscricao.js?v=202608121827"></script>
 <script src="custo-margem.js?v=202608121827"></script>
+<script src="../../shared/js/matriz-medicao.js?v=202608121827"></script>
 <script src="app.js?v=202608121827"></script>
 </body>
 </html>

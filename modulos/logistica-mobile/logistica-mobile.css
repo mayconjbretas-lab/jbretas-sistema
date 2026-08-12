@@ -1,0 +1,165 @@
+/* ================================================================
+   JBRETAS SISTEMA — modulos/logistica-mobile/logistica-mobile.css
+   Só o SHELL do mobile da Logística (topbar + main + bnav + modal).
+   Tokens LONGOS do base.css (--surface/--border/--accent/--text*...).
+   O conteúdo das telas vem depois; aqui não há estilo de card/tabela.
+   ================================================================ */
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* App em coluna: topbar fixa em cima, main rola, bnav fixa embaixo. */
+#screen-app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem;
+  padding: .7rem 1rem;
+  padding-top: calc(.7rem + env(safe-area-inset-top));
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.tb-brand { display: flex; align-items: center; gap: .55rem; min-width: 0; }
+.tb-logo { height: 32px; display: block; }
+.tb-name { font-family: var(--mono); font-weight: 700; font-size: .95rem; color: var(--text); letter-spacing: .04em; }
+.tb-sub { font-family: var(--mono); font-size: .6rem; color: var(--text3); letter-spacing: .18em; text-transform: uppercase; margin-top: 1px; }
+.tb-right { display: flex; align-items: center; gap: .4rem; flex-shrink: 0; }
+.tb-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: .72rem;
+  font-weight: 700;
+  padding: .45rem .6rem;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tb-btn:hover { border-color: var(--accent); color: var(--accent); }
+.tb-sair { color: var(--text3); }
+.tb-sair:hover { border-color: var(--danger); color: var(--danger); }
+
+/* ── MAIN + SECTIONS ── */
+.main {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 1rem;
+  /* Folga p/ o conteúdo não ficar sob o bnav ao rolar até o fim. */
+  padding-bottom: calc(1rem + 64px + env(safe-area-inset-bottom));
+}
+.scr { display: none; }
+.scr.active { display: block; }
+
+/* ── BOTTOM NAV ── */
+.bnav {
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+.nbtn {
+  flex: 1;
+  min-height: 44px;                 /* alvo de toque iOS/Android */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: .5rem .2rem;
+  background: transparent;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-family: var(--sans);
+}
+.nbtn .ni { font-size: 1.15rem; line-height: 1; }
+.nbtn .nl { font-size: .6rem; font-weight: 600; letter-spacing: .02em; }
+.nbtn.active { color: var(--accent); }
+.nbtn.active .nl { font-weight: 700; }
+
+/* ── MODAL "MAIS+" (bottom sheet) ── */
+.moverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, .6);
+}
+.moverlay.open { display: flex; }
+.msheet {
+  width: 100%;
+  max-width: 520px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 1.2rem 1.2rem calc(1.2rem + env(safe-area-inset-bottom));
+  position: relative;
+}
+@media (min-width: 600px) { .moverlay { align-items: center; padding: 1.5rem; } .msheet { border-radius: var(--radius-lg); } }
+.mclose {
+  position: absolute; top: .8rem; right: .8rem;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px 10px; color: var(--text3);
+  cursor: pointer; font-size: .9rem;
+}
+.mtitle { font-family: var(--mono); font-size: .9rem; font-weight: 700; color: var(--text); margin-bottom: .9rem; padding-right: 2.5rem; }
+.mitem {
+  display: flex; align-items: center; gap: .6rem;
+  min-height: 44px;
+  padding: .7rem .8rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: .9rem;
+  cursor: pointer;
+}
+.mitem + .mitem { margin-top: .6rem; }
+.mitem .mic { font-size: 1.1rem; }
+.mitem-off { opacity: .45; cursor: not-allowed; pointer-events: none; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  min-width: 200px; max-width: 92vw;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: .7rem .9rem;
+  color: var(--text);
+  font-size: .82rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s;
+  z-index: 1100;
+}
+.toast.show { opacity: 1; }
+.toast .ttitle { font-family: var(--mono); font-weight: 700; font-size: .72rem; color: var(--accent); margin-bottom: 2px; }
