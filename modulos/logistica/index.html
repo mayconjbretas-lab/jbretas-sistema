@@ -10,8 +10,8 @@
 <link rel="apple-touch-icon" href="/shared/icon-192.png">
 <meta name="theme-color" content="#0a0d1c">
 <link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
-<link rel="stylesheet" href="../../shared/css/base.css?v=202608121224">
-<link rel="stylesheet" href="logistica.css?v=202608121224">
+<link rel="stylesheet" href="../../shared/css/base.css?v=202608121326">
+<link rel="stylesheet" href="logistica.css?v=202608121326">
 <script>
   // Pre-paint: aplica o tema salvo antes de renderizar (evita flash).
   (function(){
@@ -61,6 +61,7 @@
           <li class="nav-item active" data-tab="tab-matriz" onclick="switchMainTab('tab-matriz', this)">📊 Matriz / Medição</li>
           <li class="nav-item" data-tab="tab-motorista" onclick="switchMainTab('tab-motorista', this)">🚚 Motorista / Conciliação</li>
           <li class="nav-item" data-tab="tab-custo" onclick="switchMainTab('tab-custo', this)">💰 Custo &amp; Margem</li>
+          <li class="nav-item" data-tab="tab-precos" onclick="switchMainTab('tab-precos', this)">💲 Alteração de Preços<span id="sl-nav-count"></span></li>
         </ul>
       </nav>
     </aside>
@@ -99,17 +100,21 @@
         <div class="em-construcao">💰 Custo &amp; Margem — em construção (Fase 2)</div>
       </section>
 
+      <section id="tab-precos" class="view-panel">
+        <div id="sl-pagina"></div>
+      </section>
+
     </main>
   </div>
 
 </div>
 
-<script src="../../shared/js/config.js?v=202608121224"></script>
-<script src="../../shared/js/api.js?v=202608121224"></script>
-<script src="../../shared/js/auth.js?v=202608121224"></script>
-<script src="../../shared/js/solicitacoes-logistica.js?v=202608121224"></script>
-<script src="../../shared/js/push-inscricao.js?v=202608121224"></script>
-<script src="custo-margem.js?v=202608121224"></script>
-<script src="app.js?v=202608121224"></script>
+<script src="../../shared/js/config.js?v=202608121326"></script>
+<script src="../../shared/js/api.js?v=202608121326"></script>
+<script src="../../shared/js/auth.js?v=202608121326"></script>
+<script src="../../shared/js/solicitacoes-logistica.js?v=202608121326"></script>
+<script src="../../shared/js/push-inscricao.js?v=202608121326"></script>
+<script src="custo-margem.js?v=202608121326"></script>
+<script src="app.js?v=202608121326"></script>
 </body>
 </html>

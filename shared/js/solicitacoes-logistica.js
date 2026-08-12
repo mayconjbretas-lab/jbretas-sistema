@@ -4,15 +4,17 @@
 // Só age se o perfil for LOGISTICA.
 //
 // Faz:
-//  1) Polling a cada 20s de GET /solicitacoes-preco?status=aguardando_logistica
-//     (a Logística é central: vê a REDE toda) → beep quando a contagem AUMENTA.
-//  2) Faixa de aviso clicável no topo (inserida após a .topbar da Logística).
-//  3) Bottom-sheet AGRUPADO POR POSTO: um card por posto, uma linha por
-//     combustível, e um botão "APROVAR TODOS (n)" que chama, em sequência,
-//     POST /solicitacoes-preco/:id/aprovar (SEM corpo, SEM foto).
+//  1) Polling a cada 20s de GET /solicitacoes-preco?status=todas (a Logística
+//     é central: vê a REDE toda). Separa em memória: aguardando_logistica no
+//     topo (pendentes) + o resto no histórico (por data desc).
+//  2) Faixa de aviso clicável no topo (inserida após a .topbar) → troca para a
+//     SEÇÃO "tab-precos" (não abre mais bottom-sheet).
+//  3) Renderiza a SEÇÃO de página em #sl-pagina: título + contagem, cards das
+//     pendentes (1 por posto, cabeçalho colorido), separador Histórico com
+//     seletor de data, e cards do histórico agrupados por dia.
 //
-// Diferente do gerente: aqui NÃO há foto/preview/compressão nem gate de foto —
-// aprovar é a etapa que libera a troca na bomba e só então o gerente é avisado.
+// Ação: POST /solicitacoes-preco/:id/aprovar (SEM corpo/foto). Aprovar libera
+// a troca na bomba e só então o gerente é avisado (backend).
 //
 // Expõe window.solicitacoesLogistica = { refresh, abrir }.
 // CSS injetado via <style> com os tokens LONGOS do base.css (dual-theme).
@@ -25,10 +27,10 @@
   };
   const FUEL_ORDER = ['GC', 'GA', 'ET', 'S10', 'S500'];
 
-  let _solicitacoes = [];     // último snapshot (rede toda), 1 item por solicitação
-  let _ultimaContagem = null; // p/ detectar aumento (beep). null = 1º poll
-  let _montado = false;
-  let _timer = null;
+  let _solicitacoes = [];     // último snapshot (rede toda, todos os status)
+  let _ultimaContagem = null; // p/ detectar aumento de pendentes (beep). null = 1º poll
+  let _dataHist = '';         // filtro de dia do histórico ('' = todos)
+  let _ultimoRenderSig = null;// evita re-render desnecessário a cada poll
   let _ctx = null;            // AudioContext único/persistente (lazy)
   let _somPendente = false;   // poll tocou com áudio travado → toca no 1º gesto
 
@@ -42,17 +44,28 @@
     if (v === null || v === undefined || v === '' || isNaN(Number(v))) return '—';
     return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
-  function fmtQuando(iso) {
+  function horaDe(iso) {
     try {
-      return new Date(iso).toLocaleString('pt-BR', {
-        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+      return new Date(iso).toLocaleTimeString('pt-BR', {
+        timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit',
+      });
+    } catch (e) { return ''; }
+  }
+  function diaISO(iso) {
+    try { return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); }
+    catch (e) { return ''; }
+  }
+  function diaLabel(iso) {
+    try {
+      return new Date(iso).toLocaleDateString('pt-BR', {
+        timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric',
       });
     } catch (e) { return ''; }
   }
   const escapeHtml = (s) => String(s == null ? '' : s)
     .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  // Cria (lazy) o AudioContext único do módulo. Retorna null se indisponível.
+  // ── Áudio (mesma máquina do lado gerente) ───────────────────────
   function garantirCtx() {
     if (!_ctx) {
       try {
@@ -62,9 +75,6 @@
     }
     return _ctx;
   }
-
-  // Destrava o áudio (autoplay policy). Listener PERSISTENTE no init — guard de
-  // custo zero quando já está tudo ok.
   function destravarAudio() {
     if (_ctx && _ctx.state === 'running' && !_somPendente) return;
     try {
@@ -80,9 +90,6 @@
       }
     } catch (e) { /* silencioso */ }
   }
-
-  // ── Notificação (WebAudio): tri-tone E5→A5→C#6 repetido 2× + vibração.
-  //    (mesma máquina do lado gerente.) ──
   function tocarNotificacao() {
     const agendar = (ctx) => {
       const seq = [659.25, 880, 1108.73]; // E5, A5, C#6
@@ -143,39 +150,45 @@
         'border-bottom:2px solid var(--accent);color:var(--accent);font-family:var(--mono);' +
         'font-size:.8rem;font-weight:700;text-align:center}' +
       '.sl-faixa.visivel{display:block}' +
-      // overlay + sheet (molde ranking-mix)
-      '.sl-overlay{position:fixed;inset:0;z-index:1000;display:none;align-items:flex-end;' +
-        'justify-content:center;background:rgba(0,0,0,.6)}' +
-      '.sl-overlay.open{display:flex}' +
-      '@media(min-width:600px){.sl-overlay{align-items:center;padding:1.5rem}}' +
-      '.sl-sheet{background:var(--surface);border:1px solid var(--border);' +
-        'border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;' +
-        'padding:1.2rem 1.2rem calc(1.2rem + env(safe-area-inset-bottom));position:relative}' +
-      '@media(min-width:600px){.sl-sheet{border-radius:16px}}' +
-      '.sl-close{position:absolute;top:.8rem;right:.8rem;background:var(--surface2);' +
-        'border:1px solid var(--border);border-radius:8px;padding:4px 10px;color:var(--text3);' +
-        'cursor:pointer;font-size:.9rem}' +
-      '.sl-title{font-family:var(--mono);font-size:.9rem;font-weight:700;color:var(--text);padding-right:2.5rem}' +
-      '.sl-sub{font-size:.64rem;color:var(--text3);font-family:var(--mono);text-transform:uppercase;' +
-        'letter-spacing:.05em;margin:.15rem 0 .9rem}' +
-      '.sl-list{display:flex;flex-direction:column;gap:.8rem}' +
-      '.sl-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:.9rem}' +
-      '.sl-card.done{opacity:.45;transition:opacity .3s}' +
-      '.sl-posto{font-family:var(--mono);font-weight:700;color:var(--text);font-size:.9rem;margin-bottom:.6rem}' +
-      '.sl-linhas{display:flex;flex-direction:column;gap:.45rem}' +
-      '.sl-linha{display:flex;justify-content:space-between;align-items:baseline;gap:.6rem;flex-wrap:wrap}' +
+      // página (seção tab-precos)
+      '#sl-pagina{padding:1rem 0}' +
+      '.sl-head{display:flex;align-items:baseline;gap:.8rem;flex-wrap:wrap;margin-bottom:1rem}' +
+      '.sl-h1{font-family:var(--mono);font-size:1rem;font-weight:700;color:var(--text)}' +
+      '.sl-count-alerta{font-family:var(--mono);font-size:.78rem;font-weight:700;color:var(--danger)}' +
+      '.sl-cards{display:flex;flex-direction:column;gap:.8rem}' +
+      // card + cabeçalho colorido (encosta nas bordas, arredonda só em cima)
+      '.sl-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;overflow:hidden}' +
+      '.sl-card-hd{display:flex;justify-content:space-between;align-items:center;gap:.6rem;' +
+        'padding:.5rem .9rem;border-radius:12px 12px 0 0}' +
+      '.sl-hd-posto{font-family:var(--mono);font-weight:700;font-size:.86rem}' +
+      '.sl-hd-estado{font-family:var(--mono);font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}' +
+      '.sl-hd-pend{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}' +
+      '.sl-hd-ok{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}' +
+      '.sl-hd-aguard{background:color-mix(in srgb,var(--warning) 20%,transparent);color:var(--warning)}' +
+      '.sl-hd-canc{background:var(--surface3);color:var(--text3)}' +
+      '.sl-card-body{padding:.8rem .9rem}' +
+      '.sl-linhas{display:flex;flex-direction:column;gap:.55rem}' +
+      '.sl-linha-top{display:flex;justify-content:space-between;gap:.6rem;align-items:baseline;flex-wrap:wrap}' +
       '.sl-fuel{font-weight:600;color:var(--text);font-size:.82rem}' +
       '.sl-precos{font-family:var(--mono);font-size:.86rem;color:var(--text3)}' +
       '.sl-novo{color:var(--accent);font-weight:700}' +
-      '.sl-quando{font-family:var(--mono);font-size:.62rem;color:var(--text3);white-space:nowrap}' +
+      '.sl-tempos{font-family:var(--mono);font-size:.62rem;color:var(--text3);margin-top:2px}' +
       '.sl-aprovar{width:100%;margin-top:.8rem;background:var(--accent);color:#0a0d0f;border:none;' +
-        'border-radius:8px;padding:.8rem;font-family:var(--mono);font-size:.78rem;font-weight:700;' +
-        'letter-spacing:.05em;text-transform:uppercase;cursor:pointer}' +
-      '.sl-aprovar:disabled{background:var(--surface3);color:var(--text3);cursor:not-allowed;' +
-        'opacity:.65;border:1px dashed var(--border2)}' +
+        'border-radius:8px;padding:.7rem;font-family:var(--mono);font-size:.76rem;font-weight:700;' +
+        'letter-spacing:.04em;text-transform:uppercase;cursor:pointer}' +
+      '.sl-aprovar:disabled{background:var(--surface3);color:var(--text3);cursor:not-allowed;opacity:.65}' +
       '.sl-erro{color:var(--danger);font-size:.72rem;margin-top:.5rem;display:none}' +
       '.sl-erro.on{display:block}' +
-      '.sl-msg{text-align:center;color:var(--text3);font-size:.82rem;padding:1.5rem}';
+      // separador + histórico
+      '.sl-sep{display:flex;align-items:center;justify-content:space-between;gap:.6rem;' +
+        'margin:1.4rem 0 .8rem;border-top:1px solid var(--border);padding-top:.9rem}' +
+      '.sl-sep-txt{font-family:var(--mono);font-size:.78rem;font-weight:700;color:var(--text2)}' +
+      '.sl-data{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);' +
+        'font-family:var(--mono);font-size:.72rem;padding:.35rem .5rem}' +
+      '.sl-dia{margin-bottom:1rem}' +
+      '.sl-dia-lbl{font-family:var(--mono);font-size:.68rem;color:var(--text3);text-transform:uppercase;' +
+        'letter-spacing:.05em;margin-bottom:.5rem}' +
+      '.sl-vazio{text-align:center;color:var(--text3);font-size:.82rem;padding:1.2rem}';
     document.head.appendChild(st);
   }
 
@@ -201,31 +214,17 @@
     }
   }
 
-  // ── Bottom-sheet ────────────────────────────────────────────────
-  function montarSheet() {
-    if (_montado) return;
-    injetarEstilo();
-    const ov = document.createElement('div');
-    ov.className = 'sl-overlay';
-    ov.id = 'sl-overlay';
-    ov.innerHTML =
-      '<div class="sl-sheet">' +
-        '<button class="sl-close" id="sl-close">✕</button>' +
-        '<div class="sl-title">📌 Alterações a aprovar</div>' +
-        '<div class="sl-sub">Aprove a troca na bomba — libera o gerente</div>' +
-        '<div id="sl-body"><div class="sl-msg">Carregando…</div></div>' +
-      '</div>';
-    document.body.appendChild(ov);
-    ov.querySelector('#sl-close').onclick = fechar;
-    ov.addEventListener('click', (e) => { if (e.target === ov) fechar(); });
-    ov.addEventListener('click', onSheetClick);
-    _montado = true;
+  // Contador inline no item "Alteração de Preços" da sidebar.
+  function updateNavContador(count) {
+    const el = document.getElementById('sl-nav-count');
+    if (!el) return;
+    el.textContent = count > 0 ? ' (' + count + ')' : '';
   }
 
-  // Agrupa as solicitações por posto (ordena postos por nome; itens por combustível).
-  function agrupar() {
+  // ── Agrupamentos ────────────────────────────────────────────────
+  function agruparPorPosto(itens) {
     const map = {};
-    _solicitacoes.forEach(s => {
+    itens.forEach(s => {
       const pid = s.posto_id;
       if (!map[pid]) map[pid] = { posto_id: pid, posto_nome: s.posto_nome || String(pid), itens: [] };
       map[pid].itens.push(s);
@@ -236,56 +235,143 @@
     arr.sort((a, b) => String(a.posto_nome).localeCompare(String(b.posto_nome)));
     return arr;
   }
-
-  function cardHtml(grupo) {
-    const linhas = grupo.itens.map(s => {
-      const fuel = FUEL_LABEL[s.combustivel] || s.combustivel;
-      return '<div class="sl-linha">' +
-        '<span class="sl-fuel">' + escapeHtml(fuel) + '</span>' +
-        '<span class="sl-precos">' + fmtBRL(s.preco_antigo) +
-          ' → <span class="sl-novo">' + fmtBRL(s.preco_novo) + '</span></span>' +
-        '<span class="sl-quando">' + fmtQuando(s.criado_em) + '</span>' +
-      '</div>';
-    }).join('');
-    const n = grupo.itens.length;
-    return '<div class="sl-card" data-posto="' + escapeHtml(grupo.posto_id) + '">' +
-        '<div class="sl-posto">' + escapeHtml(grupo.posto_nome) + '</div>' +
-        '<div class="sl-linhas">' + linhas + '</div>' +
-        '<div class="sl-erro" data-erro="' + escapeHtml(grupo.posto_id) + '"></div>' +
-        '<button class="sl-aprovar" data-aprovar="' + escapeHtml(grupo.posto_id) + '">✅ APROVAR TODOS (' + n + ')</button>' +
-      '</div>';
+  function agruparPorDia(itens) {
+    const map = {};
+    itens.forEach(s => {
+      const dia = diaISO(s.criado_em);
+      if (!map[dia]) map[dia] = { dia, label: diaLabel(s.criado_em), itens: [] };
+      map[dia].itens.push(s);
+    });
+    const arr = Object.keys(map).map(k => map[k]);
+    arr.sort((a, b) => String(b.dia).localeCompare(String(a.dia))); // desc
+    return arr;
   }
 
-  function renderLista() {
-    const body = document.getElementById('sl-body');
-    if (!body) return;
-    if (!_solicitacoes.length) {
-      body.innerHTML = '<div class="sl-msg">Nenhuma alteração aguardando aprovação. 🎉</div>';
-      return;
+  // ── HTML ────────────────────────────────────────────────────────
+  function lineHtml(s, isHist) {
+    const fuel = FUEL_LABEL[s.combustivel] || s.combustivel;
+    const precos = fmtBRL(s.preco_antigo) + ' → <span class="sl-novo">' + fmtBRL(s.preco_novo) + '</span>';
+    let tempos;
+    if (!isHist) {
+      tempos = 'solicitado ' + horaDe(s.criado_em);
+    } else {
+      const parts = ['solicitado ' + horaDe(s.criado_em)];
+      if (s.aprovado_em) parts.push('aprovado ' + horaDe(s.aprovado_em));
+      parts.push(s.confirmado_em ? 'placa trocada ' + horaDe(s.confirmado_em) : 'placa pendente');
+      tempos = parts.join(' · ');
     }
-    body.innerHTML = '<div class="sl-list">' + agrupar().map(cardHtml).join('') + '</div>';
+    return '<div class="sl-linha">' +
+        '<div class="sl-linha-top"><span class="sl-fuel">' + escapeHtml(fuel) + '</span>' +
+          '<span class="sl-precos">' + precos + '</span></div>' +
+        '<div class="sl-tempos">' + escapeHtml(tempos) + '</div>' +
+      '</div>';
   }
 
-  function onSheetClick(e) {
-    const ap = e.target.closest && e.target.closest('[data-aprovar]');
-    if (ap) { aprovarPosto(ap.getAttribute('data-aprovar')); return; }
+  function cardPendenteHtml(g) {
+    const n = g.itens.length;
+    return '<div class="sl-card">' +
+        '<div class="sl-card-hd sl-hd-pend">' +
+          '<span class="sl-hd-posto">' + escapeHtml(g.posto_nome) + '</span>' +
+          '<span class="sl-hd-estado">Pendente de aprovação</span></div>' +
+        '<div class="sl-card-body">' +
+          '<div class="sl-linhas">' + g.itens.map(s => lineHtml(s, false)).join('') + '</div>' +
+          '<div class="sl-erro" data-erro="' + escapeHtml(g.posto_id) + '"></div>' +
+          '<button class="sl-aprovar" data-aprovar="' + escapeHtml(g.posto_id) + '">✅ Aprovar todos (' + n + ')</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  // Estado do card de histórico: verde (todas com placa trocada), amarelo
+  // (aprovado, aguardando o gerente trocar a placa) ou cinza (cancelado).
+  function estadoHist(itens) {
+    if (itens.length && itens.every(i => i.confirmado_em)) return { cls: 'sl-hd-ok', txt: 'Aprovado' };
+    if (itens.length && itens.every(i => i.status === 'cancelada')) return { cls: 'sl-hd-canc', txt: 'Cancelado' };
+    return { cls: 'sl-hd-aguard', txt: 'Aguardando gerente' };
+  }
+  function cardHistHtml(g) {
+    const est = estadoHist(g.itens);
+    return '<div class="sl-card">' +
+        '<div class="sl-card-hd ' + est.cls + '">' +
+          '<span class="sl-hd-posto">' + escapeHtml(g.posto_nome) + '</span>' +
+          '<span class="sl-hd-estado">' + est.txt + '</span></div>' +
+        '<div class="sl-card-body"><div class="sl-linhas">' +
+          g.itens.map(s => lineHtml(s, true)).join('') + '</div></div>' +
+      '</div>';
+  }
+
+  // Assinatura do estado renderizável — evita re-render a cada poll sem mudança.
+  function assinatura() {
+    return _dataHist + '||' + _solicitacoes
+      .map(s => s.id + ':' + s.status + ':' + (s.confirmado_em || '') + ':' + (s.aprovado_em || ''))
+      .join(',');
+  }
+
+  function renderPagina() {
+    const host = document.getElementById('sl-pagina');
+    if (!host) return;
+    const sig = assinatura();
+    if (sig === _ultimoRenderSig) return; // nada mudou → não mexe no DOM
+    _ultimoRenderSig = sig;
+
+    // delegação de clique (uma vez só — innerHTML troca filhos, não o host)
+    if (!host._slLigado) {
+      host.addEventListener('click', (e) => {
+        const ap = e.target.closest && e.target.closest('[data-aprovar]');
+        if (ap) aprovarPosto(ap.getAttribute('data-aprovar'));
+      });
+      host._slLigado = true;
+    }
+
+    const pendentes = _solicitacoes.filter(s => s.status === 'aguardando_logistica');
+    const historico = _solicitacoes.filter(s => s.status !== 'aguardando_logistica');
+    const n = pendentes.length;
+
+    let html = '<div class="sl-head"><span class="sl-h1">Alteração de preços</span>' +
+      (n > 0 ? '<span class="sl-count-alerta">' + n + ' aguardando aprovação</span>' : '') +
+    '</div>';
+
+    if (pendentes.length) {
+      html += '<div class="sl-cards">' + agruparPorPosto(pendentes).map(cardPendenteHtml).join('') + '</div>';
+    } else {
+      html += '<div class="sl-vazio">Nenhuma alteração aguardando aprovação. 🎉</div>';
+    }
+
+    html += '<div class="sl-sep"><span class="sl-sep-txt">Histórico</span>' +
+      '<input type="date" id="sl-data-hist" class="sl-data" value="' + escapeHtml(_dataHist) + '"></div>';
+
+    let hist = historico.slice();
+    if (_dataHist) hist = hist.filter(s => diaISO(s.criado_em) === _dataHist);
+    if (!hist.length) {
+      html += '<div class="sl-vazio">Sem histórico' + (_dataHist ? ' nesta data' : '') + '.</div>';
+    } else {
+      html += agruparPorDia(hist).map(d =>
+        '<div class="sl-dia"><div class="sl-dia-lbl">' + escapeHtml(d.label) + '</div>' +
+          '<div class="sl-cards">' + agruparPorPosto(d.itens).map(cardHistHtml).join('') + '</div>' +
+        '</div>'
+      ).join('');
+    }
+
+    host.innerHTML = html;
+
+    const di = document.getElementById('sl-data-hist');
+    if (di) di.addEventListener('change', (e) => { _dataHist = e.target.value || ''; renderPagina(); });
   }
 
   function mostrarErroPosto(postoId, msg) {
-    const ov = document.getElementById('sl-overlay');
-    if (!ov) return;
-    const el = ov.querySelector('[data-erro="' + postoId + '"]');
+    const host = document.getElementById('sl-pagina');
+    if (!host) return;
+    const el = host.querySelector('[data-erro="' + postoId + '"]');
     if (el) { el.textContent = msg; el.classList.add('on'); }
   }
 
-  // Aprova, em SEQUÊNCIA, todas as solicitações do posto. As que dão certo
-  // somem (o backend tira do status aguardando_logistica); as que falham ficam,
-  // e o erro aparece no card. Recarrega do servidor no fim.
+  // Aprova, em SEQUÊNCIA, todas as pendentes do posto. As que dão certo saem
+  // de aguardando_logistica (backend); as que falham ficam e o erro aparece.
   async function aprovarPosto(postoId) {
-    const itens = _solicitacoes.filter(s => String(s.posto_id) === String(postoId));
+    const itens = _solicitacoes.filter(s =>
+      s.status === 'aguardando_logistica' && String(s.posto_id) === String(postoId));
     if (!itens.length) return;
-    const ov = document.getElementById('sl-overlay');
-    const btn = ov && ov.querySelector('button[data-aprovar="' + postoId + '"]');
+    const host = document.getElementById('sl-pagina');
+    const btn = host && host.querySelector('button[data-aprovar="' + postoId + '"]');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Aprovando…'; }
     let falhas = 0;
     for (const s of itens) {
@@ -295,58 +381,47 @@
         falhas++;
       }
     }
-    await refresh();        // puxa o estado real (aprovadas somem, falhas ficam)
-    renderLista();          // reconstrói a lista já sem as aprovadas
+    await refresh();            // re-fetch do servidor
+    _ultimoRenderSig = null;    // força re-render limpo (botão restaurado)
+    renderPagina();
     if (falhas > 0) {
       mostrarErroPosto(postoId, falhas + ' alteração(ões) não aprovada(s). Tente novamente.');
     }
-    fecharSeVazio();
-  }
-
-  function fecharSeVazio() {
-    const ov = document.getElementById('sl-overlay');
-    if (ov && !ov.querySelector('.sl-card')) fechar();
-  }
-  function fechar() {
-    const ov = document.getElementById('sl-overlay');
-    if (ov) ov.classList.remove('open');
   }
 
   // ── Dados ───────────────────────────────────────────────────────
   async function refresh() {
     if (!ehLogistica()) return;
     try {
-      const resp = await apiFetch('/solicitacoes-preco?status=aguardando_logistica');
+      const resp = await apiFetch('/solicitacoes-preco?status=todas');
       _solicitacoes = (resp && resp.solicitacoes) || [];
     } catch (e) {
-      // rede/sessão: não mexe no snapshot atual, tenta no próximo poll
-      return;
+      return; // rede/sessão: mantém snapshot, tenta no próximo poll
     }
-    const n = _solicitacoes.length;
+    const n = _solicitacoes.filter(s => s.status === 'aguardando_logistica').length;
     if (_ultimaContagem !== null && n > _ultimaContagem) tocarNotificacao();
     _ultimaContagem = n;
     updateFaixa(n);
+    updateNavContador(n);
+    renderPagina();
   }
 
-  async function abrir() {
-    if (!ehLogistica()) return;
-    montarSheet();
-    const ov = document.getElementById('sl-overlay');
-    ov.classList.add('open');
-    document.getElementById('sl-body').innerHTML = '<div class="sl-msg">Carregando…</div>';
-    await refresh();
-    renderLista();
+  // Atalho: só troca pra seção nova (o render já roda no polling).
+  function abrir() {
+    const el = document.querySelector('.nav-item[data-tab="tab-precos"]');
+    if (typeof window.switchMainTab === 'function') window.switchMainTab('tab-precos', el || null);
+    _ultimoRenderSig = null;
+    renderPagina();
   }
 
   // ── Init ────────────────────────────────────────────────────────
   function init() {
     if (!ehLogistica()) return;
-    injetarEstilo();      // CSS da faixa/sheet no <head> ANTES do 1º updateFaixa
-    // Destrava o áudio a cada gesto (autoplay policy). Listener PERSISTENTE (NÃO once).
+    injetarEstilo();
     ['pointerdown', 'keydown', 'click', 'touchend'].forEach(ev =>
       document.addEventListener(ev, destravarAudio, { capture: true }));
     refresh();            // 1º poll (sem beep)
-    _timer = setInterval(refresh, INTERVALO_MS);
+    setInterval(refresh, INTERVALO_MS);
   }
 
   window.solicitacoesLogistica = { refresh, abrir };
