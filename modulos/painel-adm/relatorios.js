@@ -20,6 +20,12 @@
   let _mixDados    = null;            // resposta do GET /relatorios/mix-periodo
   let _mixInicio   = null;            // início do período do Mix (YYYY-MM-DD)
   let _mixFim      = null;            // fim do período do Mix (YYYY-MM-DD)
+  // Consolidado: alterna Dia (padrão) × Período. Período tem janela própria
+  // (default = MESMO ciclo do card Mix, via _mixInicio/_mixFim do backend).
+  let _consModo    = 'dia';
+  let _consInicio  = null;
+  let _consFim     = null;
+  let _consDados   = null;            // resposta do GET /relatorios?inicio&fim
 
   // Ontem em Brasília, formato en-CA (mesmo default do backend).
   function ontemISO() {
@@ -158,6 +164,17 @@
     renderVista();
   }
 
+  // ── Carrega o Consolidado por PERÍODO (GET /relatorios?inicio&fim) ──
+  async function carregarConsPeriodo(inicio, fim) {
+    _consInicio = inicio; _consFim = fim;
+    try {
+      _consDados = await apiFetch('/relatorios?inicio=' + encodeURIComponent(inicio) + '&fim=' + encodeURIComponent(fim));
+    } catch (err) {
+      _consDados = { modo: 'periodo', inicio, fim, postos: [], totais: {}, _erro: (err.message || err) };
+    }
+    renderVista();
+  }
+
   // ── Render: tudo numa tela só — consolidado em cima, mix + produtos
   //    lado a lado abaixo (grid 2 col; empilha em <900px). ────────────
   function renderVista() {
@@ -198,32 +215,94 @@
   }
 
   function renderConsolidado() {
-    const d = _dados;
-    if (!d) return cardCabecalho('Consolidado da rede', '', 'consolidado', '<div class="empty">Carregando…</div>');
-    const linhas = (d.postos || []).map(p => {
-      return '<tr>' +
-        '<td class="nome">' + nomeExib(p.posto) + '</td>' +
-        '<td class="num">' + (p.litros == null ? '—' : fmtL(p.litros) + ' L') + '</td>' +
-        '<td class="num">' + fmtRS(p.lubrificantes_rs) + '</td>' +
-        '<td class="num">' + fmtPct(p.mix) + '</td>' +
-      '</tr>';
-    }).join('');
-    const t = d.totais || {};
-    const total =
-      '<tr class="rel-total">' +
-        '<td>🏆 TOTAL REDE</td>' +
-        '<td class="num">' + fmtL(t.litros) + ' L</td>' +
-        '<td class="num">' + fmtRS(t.lubrificantes_rs) + '</td>' +
-        '<td class="num">' + fmtPct(t.mix) + '</td>' +
-      '</tr>';
-    const tabela =
-      '<table class="rel-table">' +
-        '<thead><tr>' +
-          '<th>Posto</th><th class="num">Combust. (L)</th><th class="num">Lubrif. (R$)</th><th class="num">Mix GA (dia)</th>' +
-        '</tr></thead>' +
-        '<tbody>' + linhas + total + '</tbody>' +
-      '</table>';
-    return cardCabecalho('Consolidado da rede', '', 'consolidado', tabela);
+    const modo = _consModo;
+    const d = modo === 'periodo' ? _consDados : _dados;
+
+    // Botões de modo (visual dos chips .fueltab; ativo = .active).
+    const toggle =
+      '<div class="rel-chips" style="gap:6px">' +
+        '<button class="fueltab' + (modo === 'dia' ? ' active' : '') + '" onclick="__relConsModo(\'dia\')">Dia</button>' +
+        '<button class="fueltab' + (modo === 'periodo' ? ' active' : '') + '" onclick="__relConsModo(\'periodo\')">Período</button>' +
+      '</div>';
+    // Período tem janela própria; Dia usa o input único do TOPO (#rel-data), como já era.
+    const controles = modo === 'periodo'
+      ? '<div class="rel-mixwin">' +
+          '<input type="date" class="rel-date" id="rel-cons-ini" value="' + (_consInicio || '') + '" onchange="__relConsPeriodoInput()">' +
+          '<span class="rel-sep">→</span>' +
+          '<input type="date" class="rel-date" id="rel-cons-fim" value="' + (_consFim || '') + '" onchange="__relConsPeriodoInput()">' +
+        '</div>'
+      : '';
+
+    // Subtítulo: dia → a data; período → "ciclo DD/MM a DD/MM".
+    let sub;
+    if (modo === 'periodo') {
+      const i = (d && d.inicio) || _consInicio, f = (d && d.fim) || _consFim;
+      sub = (i && f) ? ('ciclo ' + brDataCurta(i) + ' a ' + brDataCurta(f)) : '';
+    } else {
+      const dd = (d && d.data) || _dataISO;
+      sub = dd ? brData(dd) : '';
+    }
+
+    // Corpo — colunas/rótulos vêm de d.modo (não dos params).
+    let inner;
+    if (d && d._erro) {
+      inner = '<div class="empty" style="color:var(--dg)">Erro ao carregar: ' + d._erro + '</div>';
+    } else if (!d) {
+      inner = '<div class="empty">Carregando…</div>';
+    } else {
+      const ehPer = d.modo === 'periodo';
+      // "Nd" com o visual discreto do badge do card Mix (.rk-dias é escopado em
+      // .rel-rank e não vale na tabela, então replicamos inline).
+      const nd = (v) => '<span style="font-family:var(--mono);font-size:.7rem;color:var(--tx3);white-space:nowrap">' + v + 'd</span>';
+      // Período: ordena alfabético por nome no FRONT (não confia na ordem do backend).
+      let postos = (d.postos || []);
+      if (ehPer) postos = postos.slice().sort((a, b) => nomeExib(a.posto).localeCompare(nomeExib(b.posto)));
+      const linhas = postos.map(p => ehPer
+        ? '<tr>' +
+            '<td class="nome">' + nomeExib(p.posto) + '</td>' +
+            '<td class="num">' + (p.gasolina_litros == null ? '—' : fmtL(p.gasolina_litros) + ' L') + '</td>' +
+            '<td class="num">' + fmtRS(p.lubrificantes_rs) + '</td>' +
+            '<td class="num">' + fmtPct(p.mix) + '</td>' +
+            '<td class="num">' + nd(p.dias) + '</td>' +
+          '</tr>'
+        : '<tr>' +
+            '<td class="nome">' + nomeExib(p.posto) + '</td>' +
+            '<td class="num">' + (p.litros == null ? '—' : fmtL(p.litros) + ' L') + '</td>' +
+            '<td class="num">' + fmtRS(p.lubrificantes_rs) + '</td>' +
+            '<td class="num">' + fmtPct(p.mix) + '</td>' +
+          '</tr>'
+      ).join('');
+      const t = d.totais || {};
+      const total = ehPer
+        ? '<tr class="rel-total">' +
+            '<td>🏆 TOTAL REDE</td>' +
+            '<td class="num">' + (t.gasolina_litros == null ? '—' : fmtL(t.gasolina_litros) + ' L') + '</td>' +
+            '<td class="num">' + fmtRS(t.lubrificantes_rs) + '</td>' +
+            '<td class="num">' + fmtPct(t.mix) + '</td>' +
+            '<td class="num">' + nd(t.dias_max || 0) + '</td>' +
+          '</tr>'
+        : '<tr class="rel-total">' +
+            '<td>🏆 TOTAL REDE</td>' +
+            '<td class="num">' + fmtL(t.litros) + ' L</td>' +
+            '<td class="num">' + fmtRS(t.lubrificantes_rs) + '</td>' +
+            '<td class="num">' + fmtPct(t.mix) + '</td>' +
+          '</tr>';
+      const head = ehPer
+        ? '<th>Posto</th><th class="num">Gasolina (L)</th><th class="num">Lubrif. (R$)</th><th class="num">Mix GA</th><th class="num">Nd</th>'
+        : '<th>Posto</th><th class="num">Combust. (L)</th><th class="num">Lubrif. (R$)</th><th class="num">Mix GA (dia)</th>';
+      inner = '<table class="rel-table"><thead><tr>' + head + '</tr></thead><tbody>' + linhas + total + '</tbody></table>';
+    }
+
+    return '<div class="card" id="rel-card-consolidado">' +
+      '<div class="chdr" style="display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem;flex-wrap:wrap">' +
+        '<div><div class="ctitle">Consolidado da rede</div>' + (sub ? '<div class="csub">' + sub + '</div>' : '') + '</div>' +
+        '<div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap">' +
+          toggle + controles +
+          '<button class="rel-copy" onclick="__relCopiar(\'consolidado\', this)">📋 Copiar p/ WhatsApp</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cbody" style="overflow-x:auto">' + inner + '</div>' +
+    '</div>';
   }
 
   // Card do Mix: janela PRÓPRIA (dois date inputs) + ranking agregado do
@@ -286,7 +365,26 @@
   const HR = '━━━━━━━━━━━━━━━';
 
   function textoConsolidado() {
-    const d = _dados; if (!d) return '';
+    const d = _consModo === 'periodo' ? _consDados : _dados;
+    if (!d) return '';
+    // Modo PERÍODO: intervalo no cabeçalho + valores do período (gasolina).
+    if (d.modo === 'periodo') {
+      const linhas = ['📊 *RELATÓRIO — ' + brData(d.inicio) + ' a ' + brData(d.fim) + '*', HR];
+      (d.postos || []).slice()
+        .sort((a, b) => nomeExib(a.posto).localeCompare(nomeExib(b.posto)))
+        .forEach(p => {
+          const g = p.gasolina_litros == null ? '—' : fmtL(p.gasolina_litros) + 'L';
+          const r = p.lubrificantes_rs == null ? '—' : fmtRS(p.lubrificantes_rs);
+          const m = p.mix == null ? '—' : fmtPct(p.mix);
+          linhas.push('- ' + nomeExib(p.posto) + ': ' + g + ' | ' + r + ' | ' + m);
+        });
+      const t = d.totais || {};
+      linhas.push(HR, '🏆 *TOTAL REDE*',
+        '⛽ Gasolina: *' + fmtL(t.gasolina_litros) + ' L*',
+        '🛢️ Produtos: *' + fmtRS(t.lubrificantes_rs) + '*');
+      return linhas.join('\n');
+    }
+    // Modo DIA (formato atual, inalterado).
     const linhas = ['📊 *RELATÓRIO DIÁRIO — ' + brData(d.data) + '*', HR];
     (d.postos || []).forEach(p => {
       const l = p.litros == null ? '—' : fmtL(p.litros) + 'L';
@@ -326,6 +424,28 @@
   window.__relScroll = function (tipo) {
     const el = document.getElementById('rel-card-' + tipo);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // Alterna o modo do Consolidado. Período usa o MESMO ciclo do card Mix
+  // (janela que o backend devolveu, guardada em _mixInicio/_mixFim).
+  window.__relConsModo = function (m) {
+    if (m !== 'dia' && m !== 'periodo') return;
+    _consModo = m;
+    if (m === 'periodo') {
+      if (!_consInicio || !_consFim) {
+        _consInicio = _mixInicio || ontemISO();
+        _consFim    = _mixFim    || ontemISO();
+      }
+      if (!_consDados) carregarConsPeriodo(_consInicio, _consFim);
+      else renderVista();
+    } else {
+      if (!_dados) carregar(_dataISO); else renderVista();
+    }
+  };
+  window.__relConsPeriodoInput = function () {
+    const i = document.getElementById('rel-cons-ini');
+    const f = document.getElementById('rel-cons-fim');
+    if (i && f && i.value && f.value) carregarConsPeriodo(i.value, f.value);
   };
 
   window.__relCopiar = function (tipo, btn) {
