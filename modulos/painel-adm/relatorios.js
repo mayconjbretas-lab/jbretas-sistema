@@ -241,47 +241,17 @@
       sub   = '% do volume de gasolina';
       inner = '<div class="empty" style="color:var(--dg)">Erro ao carregar: ' + d._erro + '</div>';
     } else {
-      const tot = d.total || {};
+      const tot  = d.total || {};
+      const rank = (d.postos || []).filter(p => p.mix != null);  // backend já ordena; null fora
       sub = 'ciclo ' + brDataCurta(d.inicio) + ' a ' + brDataCurta(d.fim) + ' · ' + (tot.dias_max || 0) + ' dias lançados';
-      // TODOS os postos do período (não só os com mix). Mix decrescente, com
-      // os de mix null empurrados pro FIM da lista.
-      const linhas = (d.postos || []).slice().sort((a, b) => {
-        if (a.mix == null && b.mix == null) return 0;
-        if (a.mix == null) return 1;
-        if (b.mix == null) return -1;
-        return b.mix - a.mix;
-      });
-      // "Nd" com o mesmo visual do antigo badge .rk-dias (inline, pois aquela
-      // classe é escopada em .rel-rank e não vale dentro de .rel-table).
-      const nd = (v) => '<span style="font-family:var(--mono);font-size:.7rem;color:var(--tx3);white-space:nowrap">' + v + 'd</span>';
-      if (!linhas.length) {
-        inner = '<div class="empty">Sem dados de mix para este período.</div>';
-      } else {
-        const corpo = linhas.map(p =>
-          '<tr>' +
-            '<td class="nome">' + nomeExib(p.nome) + '</td>' +
-            '<td class="num">' + (p.gasolina_litros == null ? '—' : fmtL(p.gasolina_litros) + ' L') + '</td>' +
-            '<td class="num">' + fmtRS(p.lubrificantes_rs) + '</td>' +
-            '<td class="num">' + fmtPct(p.mix) + '</td>' +
-            '<td class="num">' + nd(p.dias) + '</td>' +
-          '</tr>'
-        ).join('');
-        const total =
-          '<tr class="rel-total">' +
-            '<td>🏆 TOTAL REDE</td>' +
-            '<td class="num">' + (tot.gasolina_litros == null ? '—' : fmtL(tot.gasolina_litros) + ' L') + '</td>' +
-            '<td class="num">' + fmtRS(tot.lubrificantes_rs) + '</td>' +
-            '<td class="num">' + fmtPct(tot.mix) + '</td>' +
-            '<td class="num">' + nd(tot.dias_max || 0) + '</td>' +
-          '</tr>';
-        inner =
-          '<table class="rel-table">' +
-            '<thead><tr>' +
-              '<th>Posto</th><th class="num">Gasolina (L)</th><th class="num">Lubrif. (R$)</th><th class="num">Mix GA</th><th class="num">Nd</th>' +
-            '</tr></thead>' +
-            '<tbody>' + corpo + total + '</tbody>' +
-          '</table>';
-      }
+      inner = rank.length
+        ? '<ul class="rel-rank">' + rank.map((p, i) =>
+            '<li><span class="rk-pos">' + (i + 1) + '.</span>' +
+            '<span class="rk-nome">' + nomeExib(p.nome) + '</span>' +
+            '<span class="rk-dias">' + p.dias + 'd</span>' +
+            '<span class="rk-val">' + fmtPct(p.mix) + '</span></li>'
+          ).join('') + '</ul>'
+        : '<div class="empty">Sem dados de mix para este período.</div>';
     }
     return '<div class="card" id="rel-card-mix">' +
       '<div class="chdr" style="display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem;flex-wrap:wrap">' +
