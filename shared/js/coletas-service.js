@@ -82,9 +82,10 @@ function ehColetaPropria(registro) {
 // Busca coletas (via GET /coletas, já autenticado) e agrupa por posto
 // normalizado: { [postoNormalizado]: { proprio: [...], concorrentes: [...] } }.
 // Cada lista mantém a ordem que a API já retorna (mais recente primeiro).
-async function buscarColetasAgrupadas({ posto = null, dias = 15 } = {}) {
+async function buscarColetasAgrupadas({ posto = null, dias = 15, data = null } = {}) {
   const params = new URLSearchParams();
   if (posto) params.set('posto', posto);
+  if (data) params.set('data', data);   // data específica: backend ignora `dias`
   params.set('dias', dias);
   const resp = await apiFetch(`/coletas?${params.toString()}`);
   const registros = resp.registros || [];

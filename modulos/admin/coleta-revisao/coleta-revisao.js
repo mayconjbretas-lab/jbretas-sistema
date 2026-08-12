@@ -28,6 +28,10 @@ let CS_MODO_DIFF  = 'hoje';
 let CS_FILTRO_SUP = '';
 let CS_SWIPE_INIT = false;
 let CS_REVISOES   = {};  // { postoKey: { combustivel: linha } } — o que o ADM já editou hoje (chave = mp.k)
+// Data selecionada (YYYY-MM-DD). Default = hoje. Permite navegar dias
+// anteriores e flagrar FOTO REPETIDA — se o gerente manda a mesma foto todo
+// dia, só dá pra perceber comparando datas.
+let CS_DATA       = '';
 let csSX = 0, csDragging = false, csDelta = 0, csHintShown = false;
 
 // ── Ponto de entrada ──────────────────────────────────────────────
@@ -36,6 +40,7 @@ function renderColetaRevisao(ctx) {
   CS_CONC_IDX  = 0;
   CS_FILTRO_SUP = '';
   CS_MODO_DIFF  = 'hoje';
+  CS_DATA       = '';   // '' = modo janela (dias), ancorado em hoje; data concreta só via picker
   csHintShown   = false;
   window._csPillAtivo = 'todos';
 
@@ -44,7 +49,8 @@ function renderColetaRevisao(ctx) {
       <div id="cs-topbar">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span style="color:var(--ac);font-weight:600;font-size:13px">Coleta de Preços</span>
-          <span class="cs-chip">Data: <b id="cs-data">—</b></span>
+          <span class="cs-chip" id="cs-chip-data" style="cursor:pointer" onclick="csAbrirData()" title="Escolher data — compare dias anteriores (foto repetida)">Data: <b id="cs-data">—</b></span>
+          <input type="date" id="cs-data-input" onchange="csMudarData(this.value)" style="display:none">
           <span class="cs-chip"><b id="cs-qtd-postos">—</b> postos</span>
         </div>
       </div>
@@ -57,11 +63,12 @@ function renderColetaRevisao(ctx) {
         <span class="cs-pill" id="cspill-pend"  onclick="csSetPill('pend',this)">⏳ Pendentes</span>
         <span class="cs-pill" id="cspill-ok"    onclick="csSetPill('ok',this)">✓ Ok</span>
         <span class="cs-pill danger" id="cspill-flag" onclick="csSetPill('flag',this)">⚠ Margem</span>
-        <select class="cs-sel" id="cs-flt-dias" onchange="csCarregar()">
+        <select class="cs-sel" id="cs-flt-dias" onchange="csFltDiasChange(this.value)">
           <option value="1" selected>Hoje</option>
           <option value="3">3 dias</option>
           <option value="7">7 dias</option>
           <option value="15">15 dias</option>
+          <option value="escolher">Escolher data...</option>
         </select>
       </div>
 
@@ -148,18 +155,19 @@ function renderColetaRevisao(ctx) {
 
 // ── Carregamento (Opção A: deriva hoje+ontem no módulo) ───────────
 async function csCarregar() {
-  const diasEl = document.getElementById('cs-flt-dias');
-  const dias   = diasEl ? parseInt(diasEl.value) : 1;
+  const diasEl  = document.getElementById('cs-flt-dias');
+  const diasRaw = diasEl ? parseInt(diasEl.value) : 1;
+  const dias    = Number.isFinite(diasRaw) ? diasRaw : 1;  // 'escolher' → NaN → 1
   const listaEl = document.getElementById('cs-lista');
   if (listaEl) listaEl.innerHTML = '<div class="cs-estado"><div class="cs-spin"></div>Carregando...</div>';
 
   try {
-    const dataISO = hojeISO();
+    const dataISO = CS_DATA || hojeISO();   // data selecionada (default hoje)
     // precisa de >=2 dias pra ter "ontem" na comparação do toggle.
-    // Em paralelo, carrega as revisões já salvas hoje. O backend resolve
+    // Em paralelo, carrega as revisões já salvas na data. O backend resolve
     // nome->id no POST, então o frontend não precisa lidar com posto_id.
     const [porPosto, respRev] = await Promise.all([
-      buscarColetasAgrupadas({ dias: Math.max(dias, 2) }),
+      buscarColetasAgrupadas({ dias: Math.max(dias, 2), data: CS_DATA || null }),
       apiFetch('/coleta-revisao?data=' + dataISO).catch(err => {
         console.warn('Não foi possível carregar revisões salvas:', err.message);
         return { linhas: [] };
@@ -250,6 +258,15 @@ async function csCarregar() {
     const datas = CS_POSTOS.map(p => p.data).filter(Boolean);
     const dataEl = document.getElementById('cs-data');
     if (dataEl) dataEl.textContent = datas.length ? (datas.includes(hoje) ? hoje : datas.sort().pop()) : '—';
+    // Destaque âmbar quando NÃO é hoje — evita tirar conclusão errada olhando
+    // dia passado achando que é o corrente.
+    const chipData = document.getElementById('cs-chip-data');
+    if (chipData) {
+      const passado = !!CS_DATA && CS_DATA !== hojeISO();
+      chipData.style.background = passado ? 'var(--wn)' : '';
+      chipData.style.color      = passado ? '#0a0d0f' : '';
+      chipData.style.fontWeight = passado ? '700' : '';
+    }
 
   } catch (e) {
     const el = document.getElementById('cs-lista');
@@ -259,6 +276,35 @@ async function csCarregar() {
       <button onclick="csCarregar()" style="background:var(--sf2);border:none;border-radius:6px;color:var(--tx);padding:6px 12px;font-size:12px;cursor:pointer">↻ Tentar novamente</button>
     </div>`;
   }
+}
+
+// ── Seletor de data ───────────────────────────────────────────────
+// Mostra/esconde o <input type="date"> (max = hoje). Nasce no valor atual.
+function csAbrirData() {
+  const inp = document.getElementById('cs-data-input');
+  if (!inp) return;
+  inp.max = hojeISO();
+  inp.value = CS_DATA || hojeISO();
+  const abrindo = (inp.style.display === 'none' || !inp.style.display);
+  inp.style.display = abrindo ? 'inline-block' : 'none';
+  if (abrindo) { try { inp.showPicker ? inp.showPicker() : inp.focus(); } catch (e) { inp.focus(); } }
+}
+// Trocou a data no input: atualiza estado, recarrega e fecha o input.
+function csMudarData(v) {
+  if (!v) return;
+  CS_DATA = v;
+  const inp = document.getElementById('cs-data-input');
+  if (inp) inp.style.display = 'none';
+  const sel = document.getElementById('cs-flt-dias');
+  if (sel) sel.value = 'escolher';
+  csCarregar();
+}
+// Select de período: 'escolher' abre o input; Hoje/3/7/15 voltam ao modo
+// janela (data corrente) e recarregam.
+function csFltDiasChange(v) {
+  if (v === 'escolher') { csAbrirData(); return; }
+  CS_DATA = '';   // volta ao modo janela (dias); backend usa gte(hoje - dias)
+  csCarregar();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────
