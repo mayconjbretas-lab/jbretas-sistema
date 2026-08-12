@@ -163,3 +163,106 @@ body {
 }
 .toast.show { opacity: 1; }
 .toast .ttitle { font-family: var(--mono); font-weight: 700; font-size: .72rem; color: var(--accent); margin-bottom: 2px; }
+
+/* ================================================================
+   MATRIZ / MEDIÇÃO (mobile) — mínimo p/ a tabela funcionar aqui.
+   A matriz é montada por window.matrizMedicao dentro de #mb-matriz;
+   o tema completo (cores de cabeçalho h-med/h-ven/…, cell-diff, etc.)
+   vive em logistica.css e NÃO é carregado no mobile. Aqui só o
+   essencial: scroll horizontal no container + coluna DIA fixa.
+   ================================================================ */
+
+/* Seletor de posto — alvo de toque cheio. */
+.mb-posto {
+  width: 100%;
+  min-height: 44px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: .85rem;
+  padding: .5rem .7rem;
+  margin-bottom: .8rem;
+}
+
+/* Folga no fim p/ os últimos itens não ficarem sob a barra fixa. */
+.mb-matriz { margin-bottom: 60px; }
+
+/* O subtítulo/título que a matriz monta (reaproveita classes do shell). */
+#mb-matriz .table-title { font-family: var(--mono); font-size: .85rem; font-weight: 700; color: var(--text); margin-bottom: .3rem; }
+#mb-matriz .mm-subtitle { font-weight: 400; color: var(--text3); font-size: .72rem; }
+#mb-matriz .scroll-indicator { font-family: var(--mono); font-size: .6rem; color: var(--text3); margin: .2rem 0 .5rem; }
+
+/* Scroll horizontal fica no frame da tabela (o título acima não rola junto). */
+#mb-matriz .spreadsheet-frame {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+#mb-matriz .ss-table {
+  border-collapse: collapse;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: .72rem;
+  color: var(--text);
+}
+#mb-matriz .ss-table th,
+#mb-matriz .ss-table td {
+  padding: .35rem .5rem;
+  border: 1px solid var(--border);
+  text-align: center;
+}
+#mb-matriz .ss-table th { background: var(--surface2); color: var(--text2); font-weight: 700; }
+
+/* Coluna DIA fixa à esquerda ao rolar na horizontal. Precisa de fundo
+   opaco pra não deixar o conteúdo passar por trás. */
+#mb-matriz .sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface2);
+}
+#mb-matriz thead .sticky-col { z-index: 3; }
+
+/* Células editáveis (inputs) — sem borda própria, herdam a da td. */
+#mb-matriz .cell-in {
+  width: 68px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: .72rem;
+  text-align: right;
+  padding: 0;
+}
+#mb-matriz .cell-in.cell-dirty { color: var(--accent); font-weight: 700; }
+
+/* ── Barra fixa (Desfazer / Salvar) acima do bnav ── */
+.mb-actions {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: calc(48px + env(safe-area-inset-bottom));  /* encosta no topo do bnav */
+  display: flex;
+  gap: .6rem;
+  padding: .55rem 1rem;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  z-index: 15;                                        /* acima do bnav (z:10) */
+}
+.mb-btn {
+  flex: 1;
+  min-height: 44px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: .8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mb-btn:disabled { opacity: .5; cursor: not-allowed; }
+.mb-btn-primary { background: var(--accent); border-color: var(--accent); color: #0a0d0f; }
+.mb-btn-primary:disabled { background: var(--surface3); border-color: var(--border); color: var(--text3); }

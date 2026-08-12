@@ -504,10 +504,13 @@
     _subtitle = container.querySelector('.mm-subtitle');
     _thead    = container.querySelector('.mm-thead');
     _tbody    = container.querySelector('.mm-tbody');
-    // O consumidor é dono dos botões; a matriz só os posiciona e controla estado.
+    // O consumidor é dono dos botões; a matriz só controla o estado deles.
+    // Se ele JÁ os posicionou (ex.: barra fixa do mobile — o botão já tem
+    // parentNode), não realoca; senão (desktop, botões recém-criados sem pai),
+    // coloca-os na barra de ações da própria matriz.
     const actions = container.querySelector('.mm-actions');
-    if (actions && _btnUndo)   actions.appendChild(_btnUndo);
-    if (actions && _btnSalvar) actions.appendChild(_btnSalvar);
+    if (actions && _btnUndo   && !_btnUndo.parentNode)   actions.appendChild(_btnUndo);
+    if (actions && _btnSalvar && !_btnSalvar.parentNode) actions.appendChild(_btnSalvar);
     atualizarBotoesSalvar();
     atualizarBotaoUndo();
   }

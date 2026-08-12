@@ -46,7 +46,18 @@
 
   <!-- MAIN -->
   <main class="main" id="main">
-    <section class="scr active" id="s-medicao"></section>
+    <section class="scr active" id="s-medicao">
+      <select id="mb-posto" class="mb-posto" onchange="onPostoChangeMobile()">
+        <option value="">Carregando postos...</option>
+      </select>
+      <!-- Matriz montada por window.matrizMedicao.montar() (shared/js/matriz-medicao.js) -->
+      <div id="mb-matriz" class="mb-matriz"></div>
+      <!-- Barra fixa acima do bnav (só visível na aba Medição) -->
+      <div class="mb-actions">
+        <button id="mb-undo" class="mb-btn" disabled>↶ Desfazer</button>
+        <button id="mb-salvar" class="mb-btn mb-btn-primary" disabled>💾 Salvar</button>
+      </div>
+    </section>
     <section class="scr" id="s-precos"></section>
     <section class="scr" id="s-custo"></section>
   </main>
@@ -92,6 +103,7 @@
 <script src="../../shared/js/solicitacoes-logistica.js?v=202608121958"></script>
 <script src="../../shared/js/push-inscricao.js?v=202608121958"></script>
 <script src="../logistica/custo-margem.js?v=202608121958"></script>
+<script src="../../shared/js/matriz-medicao.js?v=202608121958"></script>
 <script src="app.js?v=202608121958"></script>
 </body>
 </html>
