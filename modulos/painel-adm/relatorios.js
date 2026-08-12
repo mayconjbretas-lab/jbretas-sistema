@@ -56,19 +56,6 @@
   const fmtPct = (v) => (v === null || v === undefined)
     ? '—' : (Number(v) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
 
-  // Δ da gasolina (gerente − TecnoX), com sinal, e o semáforo sobre |Δ|/TecnoX:
-  // verde ≤2%, âmbar ≤10%, vermelho >10%. Sem valor/cor ("—") quando um dos
-  // lados é null ou o divisor (TecnoX) é 0 — divergência não medível.
-  function deltaGas(gerente, tecnox) {
-    const g  = (gerente == null) ? null : Number(gerente);
-    const tx = (tecnox  == null) ? null : Number(tecnox);
-    if (g == null || tx == null || tx === 0) return { txt: '—', cor: null };
-    const d = g - tx;
-    const sinal = d > 0 ? '+' : (d < 0 ? '−' : '');
-    const r = Math.abs(d) / tx;
-    const cor = r <= 0.02 ? 'var(--ok)' : (r <= 0.10 ? 'var(--wn)' : 'var(--dg)');
-    return { txt: sinal + fmtL(Math.abs(d)) + ' L', cor };
-  }
 
   // ── Shell da aba (topo + chips + corpo), montado uma vez ─────────
   function montarShell(sec) {
@@ -214,37 +201,25 @@
     const d = _dados;
     if (!d) return cardCabecalho('Consolidado da rede', '', 'consolidado', '<div class="empty">Carregando…</div>');
     const linhas = (d.postos || []).map(p => {
-      const gasTx = (p.tecnox && p.tecnox.litros_gas != null) ? p.tecnox.litros_gas : null;
-      const dg = deltaGas(p.gasolina_litros, gasTx);
       return '<tr>' +
         '<td class="nome">' + nomeExib(p.posto) + '</td>' +
         '<td class="num">' + (p.litros == null ? '—' : fmtL(p.litros) + ' L') + '</td>' +
-        '<td class="num">' + (gasTx == null ? '—' : fmtL(gasTx) + ' L') + '</td>' +
-        '<td class="num"' + (dg.cor ? ' style="color:' + dg.cor + '"' : '') + '>' + dg.txt + '</td>' +
         '<td class="num">' + fmtRS(p.lubrificantes_rs) + '</td>' +
         '<td class="num">' + fmtPct(p.mix) + '</td>' +
       '</tr>';
     }).join('');
     const t = d.totais || {};
-    // Total da gasolina do gerente = soma dos postos com medição (null se nenhum).
-    let somaGasVal = 0, temGas = false;
-    (d.postos || []).forEach(p => { if (p.gasolina_litros != null) { somaGasVal += Number(p.gasolina_litros); temGas = true; } });
-    const somaGas = temGas ? somaGasVal : null;
-    const txGasTot = (t.tecnox_litros_gas == null) ? null : t.tecnox_litros_gas;
-    const dgTot = deltaGas(somaGas, txGasTot);
     const total =
       '<tr class="rel-total">' +
         '<td>🏆 TOTAL REDE</td>' +
         '<td class="num">' + fmtL(t.litros) + ' L</td>' +
-        '<td class="num">' + (txGasTot == null ? '—' : fmtL(txGasTot) + ' L') + '</td>' +
-        '<td class="num"' + (dgTot.cor ? ' style="color:' + dgTot.cor + '"' : '') + '>' + dgTot.txt + '</td>' +
         '<td class="num">' + fmtRS(t.lubrificantes_rs) + '</td>' +
         '<td class="num">' + fmtPct(t.mix) + '</td>' +
       '</tr>';
     const tabela =
       '<table class="rel-table">' +
         '<thead><tr>' +
-          '<th>Posto</th><th class="num">Combust. (L)</th><th class="num">Gas. Tecnox</th><th class="num">Δ</th><th class="num">Lubrif. (R$)</th><th class="num">Mix GA</th>' +
+          '<th>Posto</th><th class="num">Combust. (L)</th><th class="num">Lubrif. (R$)</th><th class="num">Mix GA (dia)</th>' +
         '</tr></thead>' +
         '<tbody>' + linhas + total + '</tbody>' +
       '</table>';
