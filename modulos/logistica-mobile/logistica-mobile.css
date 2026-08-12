@@ -165,11 +165,11 @@ body {
 .toast .ttitle { font-family: var(--mono); font-weight: 700; font-size: .72rem; color: var(--accent); margin-bottom: 2px; }
 
 /* ================================================================
-   MATRIZ / MEDIÇÃO (mobile) — mínimo p/ a tabela funcionar aqui.
-   A matriz é montada por window.matrizMedicao dentro de #mb-matriz;
-   o tema completo (cores de cabeçalho h-med/h-ven/…, cell-diff, etc.)
-   vive em logistica.css e NÃO é carregado no mobile. Aqui só o
-   essencial: scroll horizontal no container + coluna DIA fixa.
+   MATRIZ / MEDIÇÃO (mobile) — só o específico do mobile.
+   O tema/grid da tabela (cores de cabeçalho, sticky, cell-in, etc.)
+   vem de shared/css/matriz.css (carregado após base.css). Aqui ficam
+   apenas: seletor de posto, folga da barra fixa e o scroll-x do frame
+   com inércia de toque.
    ================================================================ */
 
 /* Seletor de posto — alvo de toque cheio. */
@@ -189,55 +189,16 @@ body {
 /* Folga no fim p/ os últimos itens não ficarem sob a barra fixa. */
 .mb-matriz { margin-bottom: 60px; }
 
-/* O subtítulo/título que a matriz monta (reaproveita classes do shell). */
-#mb-matriz .table-title { font-family: var(--mono); font-size: .85rem; font-weight: 700; color: var(--text); margin-bottom: .3rem; }
-#mb-matriz .mm-subtitle { font-weight: 400; color: var(--text3); font-size: .72rem; }
-#mb-matriz .scroll-indicator { font-family: var(--mono); font-size: .6rem; color: var(--text3); margin: .2rem 0 .5rem; }
-
-/* Scroll horizontal fica no frame da tabela (o título acima não rola junto). */
+/* O frame vira o container de rolagem nos DOIS eixos (como no desktop), pra o
+   sticky do cabeçalho se ancorar AQUI e não na página. Sem altura limitada, o
+   frame cresce com o conteúdo e quem rola na vertical é a .main — aí o sticky
+   perde a âncora e o cabeçalho rola pra fora. Altura = viewport menos topbar +
+   seletor de posto + barra de ações + bnav (+ safe-areas). Ajustável. */
 #mb-matriz .spreadsheet-frame {
-  overflow-x: auto;
+  height: calc(100dvh - 250px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow: auto;
   -webkit-overflow-scrolling: touch;
-  border: 1px solid var(--border);
-  border-radius: 10px;
 }
-#mb-matriz .ss-table {
-  border-collapse: collapse;
-  white-space: nowrap;
-  font-family: var(--mono);
-  font-size: .72rem;
-  color: var(--text);
-}
-#mb-matriz .ss-table th,
-#mb-matriz .ss-table td {
-  padding: .35rem .5rem;
-  border: 1px solid var(--border);
-  text-align: center;
-}
-#mb-matriz .ss-table th { background: var(--surface2); color: var(--text2); font-weight: 700; }
-
-/* Coluna DIA fixa à esquerda ao rolar na horizontal. Precisa de fundo
-   opaco pra não deixar o conteúdo passar por trás. */
-#mb-matriz .sticky-col {
-  position: sticky;
-  left: 0;
-  z-index: 2;
-  background: var(--surface2);
-}
-#mb-matriz thead .sticky-col { z-index: 3; }
-
-/* Células editáveis (inputs) — sem borda própria, herdam a da td. */
-#mb-matriz .cell-in {
-  width: 68px;
-  background: transparent;
-  border: none;
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: .72rem;
-  text-align: right;
-  padding: 0;
-}
-#mb-matriz .cell-in.cell-dirty { color: var(--accent); font-weight: 700; }
 
 /* ── Barra fixa (Desfazer / Salvar) acima do bnav ── */
 .mb-actions {

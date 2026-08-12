@@ -5,16 +5,8 @@
    Logística é o único módulo desktop (os demais são mobile-first).
    ================================================================ */
 
-/* Cores por categoria da matriz (locais deste módulo) */
-:root {
-  --c-med:  var(--info);            --c-med-d:  rgba(72,149,239,.12);
-  --c-ven:  var(--ok);              --c-ven-d:  rgba(0,229,160,.12);
-  --c-carga:#c77dff;                --c-carga-d:rgba(199,125,255,.12);
-  --c-dif:  var(--danger);          --c-dif-d:  rgba(255,77,109,.12);
-  --c-prev: #4cc9f0;                --c-prev-d: rgba(76,201,240,.12);
-  --c-pre:  var(--warning);         --c-pre-d:  rgba(249,199,79,.12);
-  --c-ped:  #ff9e00;                --c-ped-d:  rgba(255,158,0,.12);
-}
+/* Cores por categoria e grid da Matriz agora vivem em shared/css/matriz.css
+   (carregado ANTES deste arquivo). Aqui fica só o layout desktop + botões. */
 
 /* ===== Layout desktop: sidebar + workspace =====
    Só o .spreadsheet-frame deve rolar. Prende a página (base.css deixa
@@ -71,99 +63,6 @@ html, body { height: 100%; overflow: hidden; }
   font-size: .9rem; text-align: center; padding: 3rem;
 }
 
-/* ===== Cabeçalho da tabela ===== */
-.table-actions {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 12px 12px 0 0; border-bottom: none;
-  padding: .8rem 1.2rem; display: flex; justify-content: space-between;
-  align-items: center; flex-shrink: 0;
-}
-.table-title {
-  font-family: var(--mono); font-size: .85rem; font-weight: 700;
-  display: flex; align-items: center; gap: .5rem; color: var(--text);
-}
-.table-title span { color: var(--text3); font-size: .7rem; font-weight: 400; }
-.scroll-indicator {
-  font-size: .65rem; color: var(--text3); font-family: var(--mono);
-  text-transform: uppercase; letter-spacing: .05em;
-}
-
-/* ===== Planilha (matriz) ===== */
-.spreadsheet-frame {
-  flex: 1; min-height: 0; background: var(--surface); border: 1px solid var(--border);
-  border-radius: 0 0 12px 12px; overflow: auto; position: relative;
-}
-.ss-table {
-  border-collapse: collapse; text-align: center;
-  font-size: .85rem; width: max-content; min-width: 100%;
-}
-.ss-table th, .ss-table td {
-  padding: .5rem .7rem; border: 1px solid var(--border); text-align: center;
-  min-width: 74px; white-space: nowrap;
-}
-.ss-table tbody tr:nth-child(even) { background: var(--surface2); }
-.ss-table tbody tr:hover { background: var(--accent-dim2) !important; }
-
-/* Coluna DIA fixa à esquerda */
-.sticky-col {
-  position: sticky; left: 0; background: var(--surface); z-index: 5;
-  font-weight: 700; width: 62px; min-width: 62px; font-family: var(--mono);
-  box-shadow: 2px 0 5px rgba(0,0,0,.25);
-}
-th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
-
-/* ===== Cabeçalho fixo no topo (2 linhas, <tr> separados; DIA com rowspan=2) =====
-   Alturas fixas (32px cada) para o top da 2ª linha ser exato. Fundo SÓLIDO
-   em todas as th (nada transparente) pra número nenhum vazar por trás. */
-.mm-thead th {
-  height: 32px; box-sizing: border-box; position: sticky; z-index: 18;
-  background: var(--surface2);   /* fundo sólido base — sobrescrito nas categorias */
-}
-/* 1ª linha (categorias) gruda no topo */
-.mm-thead tr:first-child th {
-  top: 0; z-index: 20;
-  font-family: var(--mono); font-size: .68rem; text-transform: uppercase;
-  font-weight: 700; letter-spacing: .3px;
-}
-/* 2ª linha (códigos S10/GA/ET/GC) gruda logo abaixo, na altura da 1ª */
-.mm-thead tr:last-child th {
-  top: 32px; z-index: 19;
-  background: var(--surface2); color: var(--text2);
-  font-family: var(--mono); font-size: .7rem; font-weight: 700;
-}
-
-/* Separador visual entre grupos de categoria */
-.ss-table td.grp-end, .ss-table th.grp-end { border-right: 16px solid var(--bg); }
-
-/* Cabeçalhos coloridos por categoria — tom translúcido SOBRE --surface2 sólido
-   (linear-gradient do tom + fallback opaco), pro fundo nunca deixar ver as células. */
-.h-med   { background: linear-gradient(var(--c-med-d),   var(--c-med-d)),   var(--surface2) !important; color: var(--c-med)   !important; border-bottom: 2px solid var(--c-med)   !important; }
-.h-ven   { background: linear-gradient(var(--c-ven-d),   var(--c-ven-d)),   var(--surface2) !important; color: var(--c-ven)   !important; border-bottom: 2px solid var(--c-ven)   !important; }
-.h-carga { background: linear-gradient(var(--c-carga-d), var(--c-carga-d)), var(--surface2) !important; color: var(--c-carga) !important; border-bottom: 2px solid var(--c-carga) !important; }
-.h-dif   { background: linear-gradient(var(--c-dif-d),   var(--c-dif-d)),   var(--surface2) !important; color: var(--c-dif)   !important; border-bottom: 2px solid var(--c-dif)   !important; }
-.h-prev  { background: linear-gradient(var(--c-prev-d),  var(--c-prev-d)),  var(--surface2) !important; color: var(--c-prev)  !important; border-bottom: 2px solid var(--c-prev)  !important; }
-.h-pre   { background: linear-gradient(var(--c-pre-d),   var(--c-pre-d)),   var(--surface2) !important; color: var(--c-pre)   !important; border-bottom: 2px solid var(--c-pre)   !important; }
-.h-ped   { background: linear-gradient(var(--c-ped-d),   var(--c-ped-d)),   var(--surface2) !important; color: var(--c-ped)   !important; border-bottom: 2px solid var(--c-ped)   !important; }
-
-/* Célula de valor (read-only) */
-.cell-val { font-family: var(--mono); font-size: .84rem; font-weight: 600; color: var(--text); }
-.cell-vazia { color: var(--text3); }
-.cell-diff { font-weight: 700; }
-
-/* Célula editável (Medição/Venda/Carga) */
-.cell-in {
-  width: 62px; background: transparent; border: none; color: var(--text);
-  text-align: center; font-family: var(--mono); font-size: .82rem; font-weight: 600;
-  outline: none; padding: 2px; border-radius: 4px;
-}
-.cell-in:focus { background: var(--surface3); box-shadow: 0 0 0 1.5px var(--accent); color: var(--text); }
-.cell-in.cell-dirty {
-  background: var(--accent-dim); box-shadow: 0 0 0 1.5px var(--accent); color: var(--accent);
-}
-/* Linha em edição destacada */
-.ss-table tbody tr.linha-ativa { background: var(--accent-dim2) !important; box-shadow: inset 3px 0 0 var(--accent); }
-.ss-table tbody tr.linha-ativa .sticky-col { background: var(--accent-dim) !important; }
-
 /* Botões da topbar / matriz */
 .theme-btn {
   background: var(--surface2); border: 1px solid var(--border); color: var(--text);
@@ -191,19 +90,6 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
 }
 .btn-undo:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .btn-undo:disabled { color: var(--text3); cursor: not-allowed; opacity: .6; }
-
-/* Pré-pedido: SOMENTE LEITURA — visual distinto das editáveis (hachura + cursor). */
-.td-ro {
-  cursor: not-allowed;
-  background-image: repeating-linear-gradient(45deg,
-    transparent, transparent 5px,
-    var(--accent-dim2) 5px, var(--accent-dim2) 6px);
-}
-.cell-ro { color: var(--text3); }
-.cell-total-venda { font-weight: 700; color: var(--c-ven); }
-.cell-total-venda.cell-vazia { font-weight: 600; color: var(--text3); }
-
-.matriz-erro { color: var(--danger); text-align: center; padding: 2rem; font-family: var(--mono); font-size: .8rem; }
 
 /* ===== Tela de escolha Desktop/Mobile (portada do painel-adm, tokens longos) ===== */
 .escolha-overlay {
