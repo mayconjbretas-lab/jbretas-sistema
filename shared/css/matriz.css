@@ -3,7 +3,7 @@
    Grid da Matriz / Medição — compartilhado entre logistica (desktop)
    e logistica-mobile. Extraído de modulos/logistica/logistica.css SEM
    mudar aparência do desktop. Usa APENAS tokens LONGOS do base.css
-   (--surface/--border/--text*/--accent…), que os dois módulos carregam.
+   (--surface, --border, --text, --accent, etc.), que os dois módulos carregam.
    Casa com a marcação que window.matrizMedicao.montar() gera:
    .table-actions > .table-title/.scroll-indicator + .spreadsheet-frame >
    table.ss-table > thead.mm-thead + tbody.mm-tbody.
