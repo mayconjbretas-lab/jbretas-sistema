@@ -43,6 +43,8 @@ function switchMainTab(tabId, el) {
   if (el) el.classList.add('active');
   // Custo & Margem — render próprio (custo-margem.js expõe renderCustoMargem).
   if (tabId === 'tab-custo' && window.renderCustoMargem) renderCustoMargem(document.getElementById('tab-custo'));
+  // Escala — render próprio (escala.js expõe renderEscala).
+  if (tabId === 'tab-escala' && window.renderEscala) renderEscala(document.getElementById('tab-escala'));
 }
 
 // ── Filtro encadeado bandeira → posto (GET /postos) ─────────────

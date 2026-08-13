@@ -167,3 +167,54 @@ html, body { height: 100%; overflow: hidden; }
 .fx-bl-val { font-family: var(--mono); font-size: .95rem; font-weight: 700; color: var(--text); margin-top: 2px; }
 .fx-bloco-total { background: var(--accent-dim); border-color: var(--accent); }
 .fx-bloco-total .fx-bl-lbl, .fx-bloco-total .fx-bl-val { color: var(--accent); }
+
+/* ===== Aba ESCALA (escala.js) — um card por motorista ===== */
+.esc-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.esc-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; flex-shrink: 0; }
+.esc-title { font-family: var(--mono); font-size: 1rem; font-weight: 700; color: var(--text); }
+.esc-head-right { display: flex; align-items: center; gap: .7rem; }
+.esc-data { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: .8rem; padding: .4rem .6rem; }
+.esc-btn { background: var(--accent); color: #1a1206; border: none; font-family: var(--mono); font-size: .76rem; font-weight: 700; padding: .5rem .9rem; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.esc-btn:hover { opacity: .9; }
+.esc-btn.ghost { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+.esc-btn.ghost:hover { border-color: var(--accent); color: var(--accent); }
+.esc-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; }
+.esc-vazio, .esc-msg, .esc-erro { color: var(--text3); font-family: var(--mono); font-size: .85rem; text-align: center; padding: 2rem; }
+.esc-erro { color: var(--danger); }
+
+.esc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.esc-card-hd { display: flex; align-items: center; gap: 1rem; padding: .7rem 1rem; background: var(--surface2); border-bottom: 1px solid var(--border); }
+.esc-mot { font-family: var(--mono); font-weight: 700; font-size: .9rem; color: var(--text); }
+.esc-placa { font-family: var(--mono); font-size: .78rem; color: var(--text2); background: var(--surface3); border-radius: 6px; padding: .15rem .5rem; }
+.esc-turno { margin-left: auto; font-family: var(--mono); font-size: .78rem; color: var(--accent); font-weight: 700; }
+.esc-viagens { display: flex; flex-direction: column; }
+.esc-viagem { display: flex; align-items: center; gap: .8rem; padding: .6rem 1rem; border-top: 1px solid var(--border); }
+.esc-viagem:first-child { border-top: none; }
+.esc-vg-n { font-family: var(--mono); font-size: .7rem; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; min-width: 70px; }
+.esc-chip { font-family: var(--mono); font-size: .68rem; font-weight: 700; color: var(--accent); background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 999px; padding: .15rem .55rem; white-space: nowrap; }
+.esc-posto { font-size: .82rem; color: var(--text); font-weight: 600; }
+.esc-itens { font-family: var(--mono); font-size: .78rem; color: var(--text2); margin-left: auto; text-align: right; }
+.esc-acoes { display: flex; gap: .3rem; }
+.esc-ico { background: transparent; border: none; cursor: pointer; font-size: .9rem; padding: .2rem .3rem; border-radius: 6px; color: var(--text3); line-height: 1; }
+.esc-ico:hover { background: var(--surface2); color: var(--text); }
+
+/* Modal do form (nova/edição de viagem) */
+.esc-modal { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+.esc-form { width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.3rem; }
+.esc-form-hd { display: flex; align-items: center; justify-content: space-between; font-family: var(--mono); font-size: .95rem; font-weight: 700; color: var(--text); margin-bottom: 1rem; }
+.esc-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+.esc-field { display: flex; flex-direction: column; gap: .3rem; }
+.esc-field > span { font-family: var(--mono); font-size: .64rem; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; }
+.esc-field select, .esc-field input { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--sans); font-size: .85rem; padding: .5rem .6rem; outline: none; }
+.esc-field select:focus, .esc-field input:focus { border-color: var(--accent); }
+.esc-field input[readonly] { color: var(--text2); }
+.esc-itens-lbl { font-family: var(--mono); font-size: .7rem; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; font-weight: 700; margin: 1rem 0 .5rem; }
+.esc-itens-edit { display: flex; flex-direction: column; gap: .5rem; }
+.esc-item { display: flex; gap: .5rem; align-items: center; }
+.esc-item input { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: .82rem; padding: .45rem .5rem; outline: none; min-width: 0; }
+.esc-item input:focus { border-color: var(--accent); }
+.esc-it-comb { flex: 1.4; }
+.esc-it-litros { flex: 1; }
+.esc-add { margin-top: .6rem; }
+.esc-form-erro { color: var(--danger); font-size: .78rem; margin-top: .7rem; }
+.esc-form-acoes { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1.2rem; }
