@@ -239,3 +239,12 @@ body {
    ================================================================ */
 #mb-precos .sl-aprovar { min-height: 44px; }   /* botão "Aprovar todos" tocável */
 #mb-precos .sl-data    { min-height: 44px; }   /* seletor de data do histórico tocável */
+
+/* Miniatura da placa: 44px no mobile. E o corpo empilha em coluna única —
+   o preço vai ABAIXO do horário (não cabe na mesma linha em ~340px). */
+#mb-precos .sl-thumb { width: 44px; height: 44px; }
+#mb-precos .sl-linha-corpo {
+  grid-template-columns: 1fr;
+  grid-template-areas: "fuel" "tempos" "precos";
+}
+#mb-precos .sl-precos { justify-self: start; }

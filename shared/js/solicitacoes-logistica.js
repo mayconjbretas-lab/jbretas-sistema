@@ -177,11 +177,18 @@
       '.sl-hd-canc{background:var(--surface3);color:var(--text3)}' +
       '.sl-card-body{padding:.8rem .9rem}' +
       '.sl-linhas{display:flex;flex-direction:column;gap:.55rem}' +
-      '.sl-linha-top{display:flex;justify-content:space-between;gap:.6rem;align-items:baseline;flex-wrap:wrap}' +
-      '.sl-fuel{font-weight:600;color:var(--text);font-size:.82rem}' +
-      '.sl-precos{font-family:var(--mono);font-size:.86rem;color:var(--text3)}' +
+      // Linha = miniatura opcional à esquerda + corpo em grid. No corpo (desktop):
+      // combustível à esquerda, preço à direita (linha 1) e horário abaixo (linha 2).
+      // No mobile, o override em #mb-precos empilha combustível/horário/preço.
+      '.sl-linha{display:flex;gap:.6rem;align-items:flex-start}' +
+      '.sl-thumb{width:52px;height:52px;flex-shrink:0;object-fit:cover;border-radius:8px;' +
+        'border:1px solid var(--border);cursor:pointer}' +
+      '.sl-linha-corpo{flex:1;min-width:0;display:grid;grid-template-columns:1fr auto;' +
+        'grid-template-areas:"fuel precos" "tempos tempos";column-gap:.6rem;align-items:baseline}' +
+      '.sl-fuel{grid-area:fuel;font-weight:600;color:var(--text);font-size:.82rem}' +
+      '.sl-precos{grid-area:precos;justify-self:end;font-family:var(--mono);font-size:.86rem;color:var(--text3)}' +
       '.sl-novo{color:var(--accent);font-weight:700}' +
-      '.sl-tempos{font-family:var(--mono);font-size:.62rem;color:var(--text3);margin-top:2px}' +
+      '.sl-tempos{grid-area:tempos;font-family:var(--mono);font-size:.62rem;color:var(--text3);margin-top:2px}' +
       '.sl-aprovar{width:100%;margin-top:.8rem;background:var(--accent);color:#0a0d0f;border:none;' +
         'border-radius:8px;padding:.7rem;font-family:var(--mono);font-size:.76rem;font-weight:700;' +
         'letter-spacing:.04em;text-transform:uppercase;cursor:pointer}' +
@@ -269,10 +276,19 @@
       parts.push(s.confirmado_em ? 'placa trocada ' + horaDe(s.confirmado_em) : 'placa pendente');
       tempos = parts.join(' · ');
     }
-    return '<div class="sl-linha">' +
-        '<div class="sl-linha-top"><span class="sl-fuel">' + escapeHtml(fuel) + '</span>' +
-          '<span class="sl-precos">' + precos + '</span></div>' +
-        '<div class="sl-tempos">' + escapeHtml(tempos) + '</div>' +
+    // Miniatura da placa: só no HISTÓRICO, na linha CONFIRMADA (placa trocada)
+    // e se houver foto. Aprovada-sem-confirmação (âmbar) e pendente NÃO recebem;
+    // sem foto (s.foto null) não renderiza o espaço — a linha volta ao layout base.
+    const thumb = (isHist && s.confirmado_em && s.foto)
+      ? '<img class="sl-thumb" loading="lazy" src="' + escapeHtml(s.foto) + '" ' +
+        'data-foto="' + escapeHtml(s.foto) + '" alt="foto da placa">'
+      : '';
+    return '<div class="sl-linha">' + thumb +
+        '<div class="sl-linha-corpo">' +
+          '<span class="sl-fuel">' + escapeHtml(fuel) + '</span>' +
+          '<span class="sl-precos">' + precos + '</span>' +
+          '<div class="sl-tempos">' + escapeHtml(tempos) + '</div>' +
+        '</div>' +
       '</div>';
   }
 
@@ -325,6 +341,9 @@
     // delegação de clique (uma vez só — innerHTML troca filhos, não o host)
     if (!host._slLigado) {
       host.addEventListener('click', (e) => {
+        // Miniatura → abre a foto assinada em nova aba (mesmo padrão do ADM).
+        const foto = e.target.closest && e.target.closest('[data-foto]');
+        if (foto) { window.open(foto.getAttribute('data-foto'), '_blank'); return; }
         const ap = e.target.closest && e.target.closest('[data-aprovar]');
         if (ap) aprovarPosto(ap.getAttribute('data-aprovar'));
       });
