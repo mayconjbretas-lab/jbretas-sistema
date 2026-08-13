@@ -205,7 +205,10 @@ html, body { height: 100%; overflow: hidden; }
 .esc-modal { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.6); display: flex; align-items: flex-start; justify-content: center; padding: 1.5rem; overflow-y: auto; }
 .esc-form { width: 100%; max-width: 560px; max-height: calc(100vh - 3rem); overflow-y: auto; margin: auto 0; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.3rem; }
 .esc-form-hd { display: flex; align-items: center; justify-content: space-between; font-family: var(--mono); font-size: .95rem; font-weight: 700; color: var(--text); margin-bottom: 1rem; }
-.esc-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+/* 1 coluna: campos empilhados na ordem do escala.js (motorista, caminhão,
+   placa, turno início, turno fim, distribuidora, posto, hora). Mais legível
+   que 2 colunas. O .esc-form já tem max-height + overflow-y, então rola. */
+.esc-form-grid { display: grid; grid-template-columns: 1fr; gap: .8rem; }
 .esc-field { display: flex; flex-direction: column; gap: .3rem; }
 .esc-field > span { font-family: var(--mono); font-size: .64rem; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; }
 .esc-field select, .esc-field input { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--sans); font-size: .85rem; padding: .5rem .6rem; outline: none; }

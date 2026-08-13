@@ -330,6 +330,11 @@ body {
 .esc-field select, .esc-field input { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--sans); font-size: .85rem; padding: .55rem .6rem; outline: none; min-height: 44px; }
 .esc-field select:focus, .esc-field input:focus { border-color: var(--accent); }
 .esc-field input[readonly] { color: var(--text2); }
+/* iOS Safari não renderiza bem inputs time estilizados sem appearance explícito
+   (o valor sai vazio). appearance:none normaliza o box — o valor aparece e o
+   seletor nativo (roda de hora) ainda abre no toque. O ícone de relógio inline
+   NÃO existe no iOS (é coisa do Chromium); nada no CSS o esconde. */
+.esc-field input[type="time"] { -webkit-appearance: none; appearance: none; }
 .esc-itens-lbl { font-family: var(--mono); font-size: .68rem; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; font-weight: 700; margin: 1rem 0 .5rem; }
 .esc-itens-edit { display: flex; flex-direction: column; gap: .5rem; }
 .esc-item { display: flex; gap: .4rem; align-items: center; }
