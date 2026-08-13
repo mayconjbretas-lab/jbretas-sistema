@@ -199,8 +199,11 @@ html, body { height: 100%; overflow: hidden; }
 .esc-ico:hover { background: var(--surface2); color: var(--text); }
 
 /* Modal do form (nova/edição de viagem) */
-.esc-modal { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
-.esc-form { width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.3rem; }
+/* align-items:flex-start (não center) evita que um form alto seja cortado no
+   topo sem como rolar; margin:auto centra quando cabe. O form limita a altura
+   ao viewport (menos o padding do overlay) e rola por dentro. */
+.esc-modal { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.6); display: flex; align-items: flex-start; justify-content: center; padding: 1.5rem; overflow-y: auto; }
+.esc-form { width: 100%; max-width: 560px; max-height: calc(100vh - 3rem); overflow-y: auto; margin: auto 0; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.3rem; }
 .esc-form-hd { display: flex; align-items: center; justify-content: space-between; font-family: var(--mono); font-size: .95rem; font-weight: 700; color: var(--text); margin-bottom: 1rem; }
 .esc-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
 .esc-field { display: flex; flex-direction: column; gap: .3rem; }
@@ -211,8 +214,8 @@ html, body { height: 100%; overflow: hidden; }
 .esc-itens-lbl { font-family: var(--mono); font-size: .7rem; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; font-weight: 700; margin: 1rem 0 .5rem; }
 .esc-itens-edit { display: flex; flex-direction: column; gap: .5rem; }
 .esc-item { display: flex; gap: .5rem; align-items: center; }
-.esc-item input { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: .82rem; padding: .45rem .5rem; outline: none; min-width: 0; }
-.esc-item input:focus { border-color: var(--accent); }
+.esc-item select, .esc-item input { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: .82rem; padding: .45rem .5rem; outline: none; min-width: 0; }
+.esc-item select:focus, .esc-item input:focus { border-color: var(--accent); }
 .esc-it-comb { flex: 1.4; }
 .esc-it-litros { flex: 1; }
 .esc-add { margin-top: .6rem; }

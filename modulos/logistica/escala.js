@@ -139,9 +139,20 @@
       return '<option value="' + esc(d) + '"' + sel + '>' + esc(d) + '</option>';
     }).join('');
   }
+  // Combustíveis: value = CÓDIGO gravado em escala_itens.combustivel; label = nome.
+  // Lista fixa — evita grafias diferentes que não somam depois.
+  const FUEIS = [
+    ['GC', 'Gasolina Comum'], ['GA', 'Gasolina Aditivada'], ['ET', 'Etanol'],
+    ['ETAD', 'Etanol Aditivado'], ['S10', 'Diesel S-10'], ['S500', 'Diesel S-500'],
+    ['GNV', 'GNV'], ['OCT', 'Gasolina Octapro'], ['POD', 'Gasolina Podium'],
+  ];
   function itemRow(it) {
+    const cod = String(it.combustivel || '');
+    const opts = '<option value="">—</option>' + FUEIS.map(function (f) {
+      return '<option value="' + f[0] + '"' + (f[0] === cod ? ' selected' : '') + '>' + esc(f[1]) + '</option>';
+    }).join('');
     return '<div class="esc-item">' +
-      '<input class="esc-it-comb" placeholder="combustível (ex.: GC)" value="' + esc(it.combustivel || '') + '">' +
+      '<select class="esc-it-comb">' + opts + '</select>' +
       '<input class="esc-it-litros" type="number" inputmode="numeric" placeholder="litros" value="' + esc(it.litros == null ? '' : it.litros) + '">' +
       '<button class="esc-ico esc-it-rem" title="Remover" onclick="window.__escRemItem(this)">✕</button>' +
     '</div>';
