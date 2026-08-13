@@ -80,6 +80,17 @@
     <!-- SIDEBAR -->
     <aside class="logi-sidebar">
       <div class="sb-block">
+        <div class="sb-section-title">Bandeira</div>
+        <select class="sel-posto" id="sel-bandeira" onchange="onBandeiraChange()">
+          <option value="">Todas</option>
+          <option value="Ipiranga">Ipiranga</option>
+          <option value="Vibra">Vibra</option>
+          <option value="Rio Branco">Rio Branco</option>
+          <option value="Ale">Ale</option>
+          <option value="Bandeira Branca">Bandeira Branca</option>
+        </select>
+      </div>
+      <div class="sb-block">
         <div class="sb-section-title">Posto</div>
         <select class="sel-posto" id="sel-posto" onchange="onPostoChange()">
           <option value="">Carregando postos...</option>
@@ -99,9 +110,15 @@
     <!-- WORKSPACE -->
     <main class="logi-workspace">
 
-      <!-- ABA 1: MATRIZ / MEDIÇÃO — montada por window.matrizMedicao.montar()
-           (shared/js/matriz-medicao.js). Container vazio de propósito. -->
-      <section id="tab-matriz" class="view-panel active"></section>
+      <!-- ABA 1: MATRIZ / MEDIÇÃO — faixa de total de pedido no topo + host da matriz.
+           A matriz é montada por window.matrizMedicao.montar() DENTRO de #matriz-host
+           (montar sobrescreve o container, por isso a matriz tem sub-container próprio);
+           a faixa e a mensagem de "sem posto" são renderizadas pelo app.js. -->
+      <section id="tab-matriz" class="view-panel active">
+        <div id="faixa-pedido" class="faixa-pedido"></div>
+        <div id="matriz-host" class="matriz-host"></div>
+        <div id="matriz-vazio" class="matriz-vazio" style="display:none">Selecione um posto para ver a matriz</div>
+      </section>
 
       <!-- ABA 2: MOTORISTA / CONCILIAÇÃO (Fase 2) -->
       <section id="tab-motorista" class="view-panel">

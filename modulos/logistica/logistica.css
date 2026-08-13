@@ -132,3 +132,38 @@ html, body { height: 100%; overflow: hidden; }
   padding: .45rem .8rem; border-radius: 8px; cursor: pointer; white-space: nowrap;
 }
 .btn-mobile:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ===== Aba Matriz: faixa de total + host da matriz ===== */
+/* A matriz (montada por matrizMedicao dentro de #matriz-host) precisa ocupar o
+   resto da altura e rolar internamente — mesma cadeia flex de antes, só que
+   agora #matriz-host é o nível intermediário. */
+.matriz-host { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.matriz-vazio {
+  margin: auto; color: var(--text3); font-family: var(--mono);
+  font-size: .9rem; text-align: center; padding: 3rem;
+}
+
+/* Faixa de total de PEDIDO FINAL do dia (não rola; fica fixa acima da matriz) */
+.faixa-pedido {
+  flex-shrink: 0; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: .8rem 1rem; margin-bottom: 1rem;
+}
+.fx-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.fx-title {
+  font-family: var(--mono); font-size: .82rem; font-weight: 700; color: var(--accent);
+  letter-spacing: .04em; text-transform: uppercase;
+}
+.fx-data {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: var(--mono); font-size: .74rem; padding: .35rem .5rem;
+}
+.fx-sub { font-family: var(--mono); font-size: .66rem; color: var(--text3); margin: .3rem 0 .7rem; }
+.fx-blocos { display: flex; gap: .6rem; flex-wrap: wrap; }
+.fx-bloco {
+  flex: 1; min-width: 84px; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; padding: .55rem .7rem; text-align: center;
+}
+.fx-bl-lbl { font-family: var(--mono); font-size: .6rem; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; }
+.fx-bl-val { font-family: var(--mono); font-size: .95rem; font-weight: 700; color: var(--text); margin-top: 2px; }
+.fx-bloco-total { background: var(--accent-dim); border-color: var(--accent); }
+.fx-bloco-total .fx-bl-lbl, .fx-bloco-total .fx-bl-val { color: var(--accent); }
