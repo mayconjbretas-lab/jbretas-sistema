@@ -16,7 +16,8 @@
 // Ação: POST /solicitacoes-preco/:id/aprovar (SEM corpo/foto). Aprovar libera
 // a troca na bomba e só então o gerente é avisado (backend).
 //
-// Expõe window.solicitacoesLogistica = { refresh, abrir }.
+// Expõe window.solicitacoesLogistica = { refresh, abrir, montarEm(container) }.
+// Sem montarEm, renderPagina escreve no #sl-pagina do document (desktop).
 // CSS injetado via <style> com os tokens LONGOS do base.css (dual-theme).
 // ================================================================
 (function () {
@@ -33,6 +34,14 @@
   let _ultimoRenderSig = null;// evita re-render desnecessário a cada poll
   let _ctx = null;            // AudioContext único/persistente (lazy)
   let _somPendente = false;   // poll tocou com áudio travado → toca no 1º gesto
+  let _container = null;      // se montarEm() foi chamado, renderPagina escreve aqui
+                              // (senão, cai no #sl-pagina do document — desktop)
+
+  // Host da página: o container passado via montarEm() ou, na falta dele, o
+  // #sl-pagina do document (comportamento do desktop, inalterado).
+  function hostPagina() {
+    return _container || document.getElementById('sl-pagina');
+  }
 
   function ehLogistica() {
     try { return (getUsuarioLogado() || {}).perfil === 'LOGISTICA'; }
@@ -307,7 +316,7 @@
   }
 
   function renderPagina() {
-    const host = document.getElementById('sl-pagina');
+    const host = hostPagina();
     if (!host) return;
     const sig = assinatura();
     if (sig === _ultimoRenderSig) return; // nada mudou → não mexe no DOM
@@ -358,7 +367,7 @@
   }
 
   function mostrarErroPosto(postoId, msg) {
-    const host = document.getElementById('sl-pagina');
+    const host = hostPagina();
     if (!host) return;
     const el = host.querySelector('[data-erro="' + postoId + '"]');
     if (el) { el.textContent = msg; el.classList.add('on'); }
@@ -370,7 +379,7 @@
     const itens = _solicitacoes.filter(s =>
       s.status === 'aguardando_logistica' && String(s.posto_id) === String(postoId));
     if (!itens.length) return;
-    const host = document.getElementById('sl-pagina');
+    const host = hostPagina();
     const btn = host && host.querySelector('button[data-aprovar="' + postoId + '"]');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Aprovando…'; }
     let falhas = 0;
@@ -424,7 +433,16 @@
     setInterval(refresh, INTERVALO_MS);
   }
 
-  window.solicitacoesLogistica = { refresh, abrir };
+  // Monta o render num container próprio (mobile). Guarda a referência e força
+  // um render limpo nele — reseta a assinatura pra ignorar o guard de idempotência
+  // na 1ª pintura do novo host (o host._slLigado religa a delegação de clique).
+  function montarEm(container) {
+    _container = container || null;
+    _ultimoRenderSig = null;
+    renderPagina();
+  }
+
+  window.solicitacoesLogistica = { refresh, abrir, montarEm };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

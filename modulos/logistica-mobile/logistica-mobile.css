@@ -227,3 +227,15 @@ body {
 .mb-btn:disabled { opacity: .5; cursor: not-allowed; }
 .mb-btn-primary { background: var(--accent); border-color: var(--accent); color: #0a0d0f; }
 .mb-btn-primary:disabled { background: var(--surface3); border-color: var(--border); color: var(--text3); }
+
+/* ================================================================
+   ABA PREÇOS (mobile) — renderizada pelo shared solicitacoes-logistica.js
+   (prefixo sl-, tokens LONGOS já providos pelo base.css → sem alias).
+   O tema/cards/cores vêm do <style> que o próprio módulo injeta; aqui só
+   garanto alvos de toque de 44px. Escopado em #mb-precos DE PROPÓSITO: o
+   módulo injeta o <style> em runtime (depois deste arquivo no <head>), então
+   preciso de especificidade maior (id+classe) pra vencer as regras .sl-*.
+   Layout confere a ~375px: sem overflow horizontal, cards não estouram.
+   ================================================================ */
+#mb-precos .sl-aprovar { min-height: 44px; }   /* botão "Aprovar todos" tocável */
+#mb-precos .sl-data    { min-height: 44px; }   /* seletor de data do histórico tocável */

@@ -31,6 +31,11 @@ function setTab(btn, tab) {
   btn.classList.add('active');
   const sec = document.getElementById('s-' + tab);
   if (sec) sec.classList.add('active');
+  // Preços: monta o render da Logística no container próprio. Pode chamar
+  // toda vez — o módulo tem guarda de idempotência (_ultimoRenderSig/_slLigado).
+  if (tab === 'precos' && window.solicitacoesLogistica) {
+    window.solicitacoesLogistica.montarEm(document.getElementById('mb-precos'));
+  }
 }
 
 // Volta pra versão desktop da Logística. Só reescreve a preferência se a
