@@ -36,6 +36,11 @@ function setTab(btn, tab) {
   if (tab === 'precos' && window.solicitacoesLogistica) {
     window.solicitacoesLogistica.montarEm(document.getElementById('mb-precos'));
   }
+  // Custo & Margem: render próprio no #s-custo (custo-margem.js já carregado).
+  // Editável aqui (perfil LOGISTICA); o read-only é por perfil dentro do módulo.
+  if (tab === 'custo' && window.renderCustoMargem) {
+    window.renderCustoMargem(document.getElementById('s-custo'));
+  }
 }
 
 // Volta pra versão desktop da Logística. Só reescreve a preferência se a
