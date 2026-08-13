@@ -13,9 +13,9 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/shared/icon-192.png">
 <link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
-<link rel="stylesheet" href="../../shared/css/base.css?v=202608131529">
-<link rel="stylesheet" href="../../shared/css/matriz.css?v=202608131529">
-<link rel="stylesheet" href="logistica-mobile.css?v=202608131529">
+<link rel="stylesheet" href="../../shared/css/base.css?v=202608131923">
+<link rel="stylesheet" href="../../shared/css/matriz.css?v=202608131923">
+<link rel="stylesheet" href="logistica-mobile.css?v=202608131923">
 <script>
   // Pre-paint: aplica o tema salvo antes de renderizar (evita flash).
   (function(){
@@ -48,11 +48,35 @@
   <!-- MAIN -->
   <main class="main" id="main">
     <section class="scr active" id="s-medicao">
-      <select id="mb-posto" class="mb-posto" onchange="onPostoChangeMobile()">
-        <option value="">Carregando postos...</option>
-      </select>
-      <!-- Matriz montada por window.matrizMedicao.montar() (shared/js/matriz-medicao.js) -->
+      <!-- Filtros: bandeira + posto lado a lado -->
+      <div class="mb-filtros">
+        <select id="mb-bandeira" class="mb-posto mb-fil-band" onchange="onBandeiraChangeMobile()">
+          <option value="">Todas</option>
+          <option value="Ipiranga">Ipiranga</option>
+          <option value="Vibra">Vibra</option>
+          <option value="Rio Branco">Rio Branco</option>
+          <option value="Ale">Ale</option>
+          <option value="Bandeira Branca">Bandeira Branca</option>
+        </select>
+        <select id="mb-posto" class="mb-posto mb-fil-posto" onchange="onPostoChangeMobile()">
+          <option value="">Carregando postos...</option>
+        </select>
+      </div>
+
+      <!-- Faixa de PEDIDO FINAL do dia — recolhível (toque no cabeçalho abre/fecha) -->
+      <div id="mb-faixa" class="mb-faixa">
+        <div id="mb-faixa-cab" class="mb-faixa-cab" onclick="toggleFaixaMobile()">
+          <span class="mb-fx-tit">PEDIDO FINAL</span>
+          <span class="mb-fx-resumo" id="mb-fx-resumo">— L · —</span>
+          <span class="mb-fx-chev" id="mb-fx-chev">▸</span>
+        </div>
+        <div id="mb-faixa-corpo" class="mb-faixa-corpo" style="display:none"></div>
+      </div>
+
+      <!-- Matriz montada por window.matrizMedicao.montar() dentro de #mb-matriz -->
       <div id="mb-matriz" class="mb-matriz"></div>
+      <div id="mb-matriz-vazio" class="mb-matriz-vazio" style="display:none">Selecione um posto para ver a matriz</div>
+
       <!-- Barra fixa acima do bnav (só visível na aba Medição) -->
       <div class="mb-actions">
         <button id="mb-undo" class="mb-btn" disabled>↶ Desfazer</button>
@@ -102,13 +126,13 @@
   <div id="t-msg"></div>
 </div>
 
-<script src="../../shared/js/config.js?v=202608131529"></script>
-<script src="../../shared/js/api.js?v=202608131529"></script>
-<script src="../../shared/js/auth.js?v=202608131529"></script>
-<script src="../../shared/js/solicitacoes-logistica.js?v=202608131529"></script>
-<script src="../../shared/js/push-inscricao.js?v=202608131529"></script>
-<script src="../logistica/custo-margem.js?v=202608131529"></script>
-<script src="../../shared/js/matriz-medicao.js?v=202608131529"></script>
-<script src="app.js?v=202608131529"></script>
+<script src="../../shared/js/config.js?v=202608131923"></script>
+<script src="../../shared/js/api.js?v=202608131923"></script>
+<script src="../../shared/js/auth.js?v=202608131923"></script>
+<script src="../../shared/js/solicitacoes-logistica.js?v=202608131923"></script>
+<script src="../../shared/js/push-inscricao.js?v=202608131923"></script>
+<script src="../logistica/custo-margem.js?v=202608131923"></script>
+<script src="../../shared/js/matriz-medicao.js?v=202608131923"></script>
+<script src="app.js?v=202608131923"></script>
 </body>
 </html>

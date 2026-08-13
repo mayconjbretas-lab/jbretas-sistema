@@ -189,13 +189,45 @@ body {
 /* Folga no fim p/ os últimos itens não ficarem sob a barra fixa. */
 .mb-matriz { margin-bottom: 60px; }
 
+/* ── Filtros bandeira + posto lado a lado ── */
+.mb-filtros { display: flex; gap: .6rem; margin-bottom: .8rem; }
+.mb-filtros .mb-posto { width: auto; min-width: 0; margin-bottom: 0; }  /* o flex controla a largura */
+.mb-fil-band  { flex: 1; }
+.mb-fil-posto { flex: 1.3; }
+
+/* ── Faixa de PEDIDO FINAL do dia — recolhível ── */
+.mb-faixa { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); margin-bottom: .8rem; overflow: hidden; }
+.mb-faixa-cab {                    /* cabeçalho sempre visível — alvo de toque 44px */
+  display: flex; align-items: center; gap: .6rem;
+  min-height: 44px; padding: .5rem .8rem; cursor: pointer;
+}
+.mb-fx-tit    { font-family: var(--mono); font-size: .72rem; font-weight: 700; color: var(--accent); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.mb-fx-resumo { flex: 1; text-align: right; font-family: var(--mono); font-size: .8rem; font-weight: 700; color: var(--text); }
+.mb-fx-chev   { color: var(--text3); font-size: .8rem; width: 1rem; text-align: center; }
+.mb-faixa-corpo { padding: 0 .8rem .8rem; }
+.mb-fx-data {
+  width: 100%; min-height: 40px; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: .8rem;
+  padding: .4rem .5rem; margin-bottom: .6rem;
+}
+.mb-fx-grid   { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+.mb-fx-bloco  { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: .45rem .3rem; text-align: center; }
+.mb-fx-bl-lbl { font-family: var(--mono); font-size: .58rem; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; }
+.mb-fx-bl-val { font-family: var(--mono); font-size: .82rem; font-weight: 700; color: var(--text); margin-top: 2px; }
+.mb-fx-bloco-total { background: var(--accent-dim); border-color: var(--accent); }
+.mb-fx-bloco-total .mb-fx-bl-lbl, .mb-fx-bloco-total .mb-fx-bl-val { color: var(--accent); }
+.mb-fx-erro   { color: var(--danger); font-size: .78rem; padding: .3rem 0; }
+
+/* Mensagem "sem posto" (mesmo padrão do desktop). */
+.mb-matriz-vazio { color: var(--text3); font-family: var(--mono); font-size: .85rem; text-align: center; padding: 2rem 1rem; }
+
 /* O frame vira o container de rolagem nos DOIS eixos (como no desktop), pra o
    sticky do cabeçalho se ancorar AQUI e não na página. Sem altura limitada, o
    frame cresce com o conteúdo e quem rola na vertical é a .main — aí o sticky
    perde a âncora e o cabeçalho rola pra fora. Altura = viewport menos topbar +
-   seletor de posto + barra de ações + bnav (+ safe-areas). Ajustável. */
+   filtros + faixa (recolhida) + barra de ações + bnav (+ safe-areas). Ajustável. */
 #mb-matriz .spreadsheet-frame {
-  height: calc(100dvh - 250px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  height: calc(100dvh - 384px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   overflow: auto;
   -webkit-overflow-scrolling: touch;
 }
