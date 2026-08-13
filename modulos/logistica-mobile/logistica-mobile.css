@@ -280,3 +280,64 @@ body {
   grid-template-areas: "fuel" "tempos" "precos";
 }
 #mb-precos .sl-precos { justify-self: start; }
+
+/* ================================================================
+   ABA ESCALA (mobile) — o escala.js usa classes esc-* estilizadas em
+   logistica.css (desktop), que NÃO é carregado aqui. Então trago o
+   necessário para o mobile: os cards escopados em #mb-escala e o modal
+   GLOBAL (o escala.js o injeta em <body>, fora do #mb-escala, então não
+   dá pra escopar). Tokens LONGOS do base.css. Ajustado p/ ~380px:
+   form em 1 coluna e itens compactos. Não toca no CSS do desktop.
+   ================================================================ */
+
+/* ── Cards (dentro de #mb-escala) ── */
+#mb-escala .esc-wrap { display: flex; flex-direction: column; }
+#mb-escala .esc-head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; margin-bottom: .8rem; }
+#mb-escala .esc-title { font-family: var(--mono); font-size: .9rem; font-weight: 700; color: var(--text); }
+#mb-escala .esc-head-right { display: flex; align-items: center; gap: .5rem; }
+#mb-escala .esc-data { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: .78rem; padding: .45rem .5rem; min-height: 40px; }
+#mb-escala .esc-body { display: flex; flex-direction: column; gap: .8rem; padding-bottom: 1rem; }
+#mb-escala .esc-vazio, #mb-escala .esc-msg, #mb-escala .esc-erro { color: var(--text3); font-family: var(--mono); font-size: .82rem; text-align: center; padding: 2rem 1rem; }
+#mb-escala .esc-erro { color: var(--danger); }
+#mb-escala .esc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+#mb-escala .esc-card-hd { display: flex; align-items: center; gap: .6rem; padding: .6rem .8rem; background: var(--surface2); border-bottom: 1px solid var(--border); }
+#mb-escala .esc-mot { font-family: var(--mono); font-weight: 700; font-size: .86rem; color: var(--text); }
+#mb-escala .esc-placa { font-family: var(--mono); font-size: .74rem; color: var(--text2); background: var(--surface3); border-radius: 6px; padding: .1rem .45rem; }
+#mb-escala .esc-turno { margin-left: auto; font-family: var(--mono); font-size: .74rem; color: var(--accent); font-weight: 700; }
+#mb-escala .esc-viagens { display: flex; flex-direction: column; }
+/* Em ~380px a viagem quebra: 1ª linha nº · chip · posto · ações; itens abaixo. */
+#mb-escala .esc-viagem { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem .6rem; padding: .55rem .8rem; border-top: 1px solid var(--border); }
+#mb-escala .esc-viagem:first-child { border-top: none; }
+#mb-escala .esc-vg-n { font-family: var(--mono); font-size: .66rem; color: var(--text3); text-transform: uppercase; letter-spacing: .03em; }
+#mb-escala .esc-chip { font-family: var(--mono); font-size: .64rem; font-weight: 700; color: var(--accent); background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 999px; padding: .12rem .5rem; white-space: nowrap; }
+#mb-escala .esc-posto { font-size: .8rem; color: var(--text); font-weight: 600; }
+#mb-escala .esc-acoes { margin-left: auto; display: flex; gap: .2rem; }
+#mb-escala .esc-itens { order: 10; flex-basis: 100%; margin-left: 0; text-align: left; font-family: var(--mono); font-size: .76rem; color: var(--text2); }
+
+/* ── Botões/ícones (usados nos cards E no modal — precisam ser globais) ── */
+.esc-btn { background: var(--accent); color: #1a1206; border: none; font-family: var(--mono); font-size: .76rem; font-weight: 700; padding: .5rem .8rem; border-radius: 8px; cursor: pointer; white-space: nowrap; min-height: 40px; }
+.esc-btn:hover { opacity: .9; }
+.esc-btn.ghost { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+.esc-ico { background: transparent; border: none; cursor: pointer; font-size: .95rem; padding: .3rem .4rem; border-radius: 6px; color: var(--text3); line-height: 1; }
+
+/* ── Modal do form (injetado em <body> → global; 1 coluna no mobile) ── */
+.esc-modal { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.6); display: flex; align-items: flex-start; justify-content: center; padding: .8rem; overflow-y: auto; }
+.esc-form { width: 100%; max-width: 520px; max-height: calc(100dvh - 1.6rem); overflow-y: auto; margin: auto 0; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1rem; }
+.esc-form-hd { display: flex; align-items: center; justify-content: space-between; font-family: var(--mono); font-size: .9rem; font-weight: 700; color: var(--text); margin-bottom: .8rem; }
+.esc-form-grid { display: grid; grid-template-columns: 1fr; gap: .7rem; }   /* 1 coluna em mobile */
+.esc-field { display: flex; flex-direction: column; gap: .3rem; }
+.esc-field > span { font-family: var(--mono); font-size: .62rem; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; }
+.esc-field select, .esc-field input { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--sans); font-size: .85rem; padding: .55rem .6rem; outline: none; min-height: 44px; }
+.esc-field select:focus, .esc-field input:focus { border-color: var(--accent); }
+.esc-field input[readonly] { color: var(--text2); }
+.esc-itens-lbl { font-family: var(--mono); font-size: .68rem; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; font-weight: 700; margin: 1rem 0 .5rem; }
+.esc-itens-edit { display: flex; flex-direction: column; gap: .5rem; }
+.esc-item { display: flex; gap: .4rem; align-items: center; }
+.esc-item select, .esc-item input { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: .8rem; padding: .5rem .45rem; outline: none; min-width: 0; min-height: 44px; }
+.esc-item select:focus, .esc-item input:focus { border-color: var(--accent); }
+.esc-it-comb { flex: 1.5; }
+.esc-it-litros { flex: 1; }
+.esc-item .esc-ico { flex-shrink: 0; }
+.esc-add { margin-top: .6rem; }
+.esc-form-erro { color: var(--danger); font-size: .78rem; margin-top: .7rem; }
+.esc-form-acoes { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1.2rem; }

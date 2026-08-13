@@ -36,11 +36,21 @@ function setTab(btn, tab) {
   if (tab === 'precos' && window.solicitacoesLogistica) {
     window.solicitacoesLogistica.montarEm(document.getElementById('mb-precos'));
   }
-  // Custo & Margem: render próprio no #s-custo (custo-margem.js já carregado).
-  // Editável aqui (perfil LOGISTICA); o read-only é por perfil dentro do módulo.
-  if (tab === 'custo' && window.renderCustoMargem) {
-    window.renderCustoMargem(document.getElementById('s-custo'));
+  // Escala: render próprio no #mb-escala (escala.js já carregado).
+  if (tab === 'escala' && window.renderEscala) {
+    window.renderEscala(document.getElementById('mb-escala'));
   }
+}
+
+// Custo & Margem — aberto pelo Mais+ (NÃO é aba do bnav). Espelha o
+// modulos/admin/app.js: fecha o modal, limpa .active de .scr/.nbtn, ativa
+// #s-custo e renderiza. LOGISTICA edita; o read-only é por perfil no módulo.
+function abrirCustoMobile() {
+  document.getElementById('modal-mais').classList.remove('open');
+  document.querySelectorAll('.scr').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.nbtn').forEach(x => x.classList.remove('active'));
+  document.getElementById('s-custo').classList.add('active');
+  if (window.renderCustoMargem) renderCustoMargem(document.getElementById('s-custo'));
 }
 
 // Volta pra versão desktop da Logística. Só reescreve a preferência se a

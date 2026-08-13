@@ -88,6 +88,9 @@
            window.solicitacoesLogistica.montarEm() (shared/js/solicitacoes-logistica.js) -->
       <div id="mb-precos"></div>
     </section>
+    <!-- Aba Escala — renderizada por window.renderEscala() (../logistica/escala.js) -->
+    <section class="scr" id="s-escala"><div id="mb-escala"></div></section>
+    <!-- Custo & Margem — não é aba do bnav; entra pelo Mais+ (abrirCustoMobile). -->
     <section class="scr" id="s-custo"></section>
   </main>
 
@@ -96,11 +99,11 @@
     <button class="nbtn active" onclick="setTab(this,'medicao')">
       <span class="ni">📊</span><span class="nl">Medição</span>
     </button>
+    <button class="nbtn" onclick="setTab(this,'escala')">
+      <span class="ni">🗓️</span><span class="nl">Escala</span>
+    </button>
     <button class="nbtn" onclick="setTab(this,'precos')">
       <span class="ni">💲</span><span class="nl">Preços</span>
-    </button>
-    <button class="nbtn" onclick="setTab(this,'custo')">
-      <span class="ni">💰</span><span class="nl">Custo</span>
     </button>
     <button class="nbtn" onclick="abrirMais()">
       <span class="ni">➕</span><span class="nl">Mais</span>
@@ -113,6 +116,10 @@
   <div class="msheet">
     <button class="mclose" onclick="fecharMaisBtn()">✕</button>
     <div class="mtitle">Mais funções</div>
+    <div class="mitem" onclick="abrirCustoMobile()">
+      <span class="mic">💰</span>
+      Custo &amp; Margem
+    </div>
     <div class="mitem mitem-off" aria-disabled="true">
       <span class="mic">🚚</span>
       Motorista / Conciliação — em breve
@@ -133,6 +140,7 @@
 <script src="../../shared/js/push-inscricao.js?v=202608132156"></script>
 <script src="../logistica/custo-margem.js?v=202608132156"></script>
 <script src="../../shared/js/matriz-medicao.js?v=202608132156"></script>
+<script src="../logistica/escala.js?v=202608132156"></script>
 <script src="app.js?v=202608132156"></script>
 </body>
 </html>
