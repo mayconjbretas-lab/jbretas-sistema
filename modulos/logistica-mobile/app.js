@@ -127,6 +127,7 @@ function onPostoChangeMobile() {
     window.matrizMedicao.carregar(POSTO_ATUAL);
   }
   atualizarFaixaMobile();
+  requestAnimationFrame(medirAlturas);   // matriz apareceu/sumiu → remede o topo do #mb-matriz
 }
 
 // ── Faixa de PEDIDO FINAL do dia (GET /medicao/pedido-dia) ──────
@@ -174,13 +175,31 @@ function mbBloco(label, val, isTotal) {
 }
 function onFaixaDataMobile(input) { FAIXA_DATA = input.value || hojeISO(); atualizarFaixaMobile(); }
 
-// Toque no cabeçalho abre/fecha o corpo e troca o chevron.
+// Mede as alturas reais do shell e publica em CSS vars — o frame da matriz, a
+// .mb-actions e o padding do .main se dimensionam sem número mágico. Só grava
+// quando o elemento está visível (>0): assim uma medição feita em outra aba
+// (onde a matriz/actions ficam display:none) não zera a var — mantém o último
+// valor bom. --mb-topo-h = topo da viewport até o topo do #mb-matriz (cobre
+// topbar + padding do main + filtros + faixa de uma vez).
+function medirAlturas() {
+  const root = document.documentElement;
+  const bnav    = document.querySelector('.bnav');
+  const actions = document.querySelector('.mb-actions');
+  const matriz  = document.getElementById('mb-matriz');
+  if (bnav)    { const h = bnav.getBoundingClientRect().height;    if (h > 0) root.style.setProperty('--mb-bnav-h',    Math.round(h) + 'px'); }
+  if (actions) { const h = actions.getBoundingClientRect().height; if (h > 0) root.style.setProperty('--mb-actions-h', Math.round(h) + 'px'); }
+  if (matriz)  { const t = matriz.getBoundingClientRect().top;     if (t > 0) root.style.setProperty('--mb-topo-h',    Math.round(t) + 'px'); }
+}
+
+// Toque no cabeçalho abre/fecha o corpo e troca o chevron. A faixa muda de
+// altura → o topo do #mb-matriz muda → remede (rAF, após o layout aplicar).
 function toggleFaixaMobile() {
   const corpo = document.getElementById('mb-faixa-corpo');
   const chev  = document.getElementById('mb-fx-chev');
   const aberto = corpo.style.display !== 'none';
   corpo.style.display = aberto ? 'none' : 'block';
   if (chev) chev.textContent = aberto ? '▸' : '▾';
+  requestAnimationFrame(medirAlturas);
 }
 
 // ── Init ────────────────────────────────────────────────────────
@@ -197,4 +216,11 @@ document.addEventListener('DOMContentLoaded', () => {
   window.matrizMedicao.montar(document.getElementById('mb-matriz'), { btnSalvar, btnUndo });
 
   carregarPostosMobile();
+  requestAnimationFrame(medirAlturas);   // 1ª medição depois de montar o shell
 });
+
+// Remede quando a geometria muda por fora dos fluxos acima. Listeners
+// registrados UMA vez no nível do módulo — não empilham a cada render.
+window.addEventListener('resize', () => requestAnimationFrame(medirAlturas));
+window.addEventListener('orientationchange', () => requestAnimationFrame(medirAlturas));
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(medirAlturas);

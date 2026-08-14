@@ -64,7 +64,7 @@ body {
   -webkit-overflow-scrolling: touch;
   padding: 1rem;
   /* Folga p/ o conteúdo não ficar sob o bnav ao rolar até o fim. */
-  padding-bottom: calc(1rem + 64px + env(safe-area-inset-bottom));
+  padding-bottom: calc(1rem + var(--mb-bnav-h, 48px) + env(safe-area-inset-bottom));
 }
 .scr { display: none; }
 .scr.active { display: block; }
@@ -187,7 +187,7 @@ body {
 }
 
 /* Folga no fim p/ os últimos itens não ficarem sob a barra fixa. */
-.mb-matriz { margin-bottom: 60px; }
+.mb-matriz { margin-bottom: 0; }
 
 /* ── Filtros bandeira + posto lado a lado ── */
 .mb-filtros { display: flex; gap: .6rem; margin-bottom: .8rem; }
@@ -227,7 +227,8 @@ body {
    perde a âncora e o cabeçalho rola pra fora. Altura = viewport menos topbar +
    filtros + faixa (recolhida) + barra de ações + bnav (+ safe-areas). Ajustável. */
 #mb-matriz .spreadsheet-frame {
-  height: calc(100dvh - 384px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  height: calc(100dvh - var(--mb-topo-h, 300px) - var(--mb-actions-h, 60px)
+               - var(--mb-bnav-h, 48px) - env(safe-area-inset-bottom));
   overflow: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -236,7 +237,7 @@ body {
 .mb-actions {
   position: fixed;
   left: 0; right: 0;
-  bottom: calc(48px + env(safe-area-inset-bottom));  /* encosta no topo do bnav */
+  bottom: calc(var(--mb-bnav-h, 48px) + env(safe-area-inset-bottom));  /* encosta no topo do bnav */
   display: flex;
   gap: .6rem;
   padding: .55rem 1rem;
