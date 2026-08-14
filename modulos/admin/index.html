@@ -27,6 +27,9 @@
 <!-- Medição (aba do ADM via Mais+): CSS de componente do painel-adm, sem fork.
      Usa tokens longos que resolvem via bloco #s-medicao do admin.css. -->
 <link rel="stylesheet" href="../painel-adm/medicao.css?v=202608142055">
+<!-- KPI (aba do ADM via Mais+): CSS de componente do painel-adm, sem fork.
+     Usa tokens longos que resolvem via bloco #s-kpi do admin.css. -->
+<link rel="stylesheet" href="../painel-adm/kpi.css?v=202608142055">
 <script>
   (function(){
     var t = localStorage.getItem('jb_theme') || 'dark';
@@ -231,6 +234,10 @@
          Aba do bnav (setTab 'medicao'). Tokens longos do medicao.css resolvem via #s-medicao no admin.css. -->
     <section class="scr" id="s-medicao"></section>
 
+    <!-- ═══ ABA: KPI ═══ (compartilha ../painel-adm/kpi.js, sem fork; sugestão de pedido).
+         Entra pelo Mais+ (abrirKpiMobile). Tokens longos do kpi.css resolvem via #s-kpi no admin.css. -->
+    <section class="scr" id="s-kpi"></section>
+
     <!-- ═══ ABA: FORNECEDORES ═══ (compartilha ../painel-adm/fornecedores.js, sem fork) -->
     <section class="scr" id="s-forn"></section>
     <section class="scr" id="s-compra"></section>
@@ -293,6 +300,10 @@
       <span class="mic">📈</span>
       Histórico
     </div>
+    <div class="mitem" onclick="abrirKpiMobile()">
+      <span class="mic">📊</span>
+      KPI · Sugestão de pedido
+    </div>
   </div>
 </div>
 
@@ -335,6 +346,7 @@
 <script src="../logistica/custo-margem.js?v=202608142055"></script>
 <script src="../../shared/js/nav-custo.js?v=202608142055"></script>
 <script src="../painel-adm/medicao.js?v=202608142055"></script>
+<script src="../painel-adm/kpi.js?v=202608142055"></script>
 <script src="../painel-adm/fornecedores.js?v=202608142055"></script>
 <script src="../painel-adm/compra.js?v=202608142055"></script>
 <script src="../painel-adm/simulador.js?v=202608142055"></script>

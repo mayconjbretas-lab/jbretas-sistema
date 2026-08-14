@@ -73,7 +73,9 @@ function setTab(btn, tab) {
   if (tab === 'relat') renderRelatorios(document.getElementById('s-relat'));
   // Custo & Margem — mesmo JS da Logística; ADM entra em modo só-leitura (sem edição).
   if (tab === 'custo') renderCustoMargem(document.getElementById('s-custo'));
-  // Demais abas (mapa/histórico/mais) entram nos próximos blocos.
+  // Mais+ — aba KPI (sugestão de pedido; kpi.js expõe renderKpi em window).
+  if (tab === 'mais') renderKpi(document.getElementById('s-mais'));
+  // Demais abas (mapa/histórico) entram nos próximos blocos.
 }
 
 // ================================================================

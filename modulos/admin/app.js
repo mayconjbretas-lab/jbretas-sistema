@@ -112,6 +112,16 @@ function abrirHistoricoMobile() {
   document.getElementById('s-hist').classList.add('active');
   carregarHistorico();
 }
+
+// KPI — sugestão de pedido (kpi.js expõe renderKpi). Entra pelo Mais+, mesmo
+// padrão do Custo/Histórico. Tokens longos do kpi.css resolvem via #s-kpi (admin.css).
+function abrirKpiMobile() {
+  document.getElementById('modal-mais').classList.remove('open');
+  document.querySelectorAll('.scr').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.nbtn').forEach(x => x.classList.remove('active'));
+  document.getElementById('s-kpi').classList.add('active');
+  renderKpi(document.getElementById('s-kpi'));
+}
 function fecharMais(e) { if (e.target.id === 'modal-mais') fecharMaisBtn(); }
 function fecharMaisBtn() { document.getElementById('modal-mais').classList.remove('open'); }
 

@@ -1,0 +1,80 @@
+/* ================================================================
+   JBRETAS SISTEMA — modulos/painel-adm/kpi.css
+   Aba KPI (sugestão de pedido). Escopado em .kpi-wrap. Usa tokens LONGOS
+   (--surface/--border/--text/--accent…): nativos no painel-adm (base.css);
+   no admin resolvem via ponte #s-kpi do admin.css. Gráficos em div+CSS,
+   mesmo padrão de barras do compra.js / fornecedores.js (sem biblioteca).
+   ================================================================ */
+.kpi-wrap { padding: .2rem 0; font-family: var(--sans); }
+
+/* Filtros */
+.kpi-filtros { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: .9rem; }
+.kpi-f { display: flex; flex-direction: column; gap: .2rem; font-size: .6rem; }
+.kpi-f > span { font-family: var(--mono); color: var(--text3); text-transform: uppercase; letter-spacing: .06em; }
+.kpi-inp {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: var(--sans); font-size: .82rem; padding: .45rem .6rem; outline: none;
+}
+.kpi-inp:focus { border-color: var(--accent); }
+
+/* Métricas */
+.kpi-metricas { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; margin-bottom: 1rem; }
+.kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius, 10px); padding: .7rem .8rem; }
+.kpi-card-lbl { font-family: var(--mono); font-size: .58rem; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; }
+.kpi-card-val { font-family: var(--mono); font-size: 1.5rem; font-weight: 700; color: var(--text); margin-top: 2px; }
+.kpi-card-sub { font-size: .62rem; color: var(--text3); margin-top: 2px; }
+.kpi-m-crit .kpi-card-val { color: var(--danger); }
+
+/* Mensagens */
+.kpi-msg  { padding: 1.5rem; text-align: center; font-family: var(--mono); font-size: .8rem; color: var(--text3); }
+.kpi-erro { padding: 1.5rem; text-align: center; font-family: var(--mono); font-size: .8rem; color: var(--danger); }
+
+/* Tabela */
+.kpi-tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius, 10px); }
+.kpi-tbl { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.kpi-tbl th, .kpi-tbl td { padding: .5rem .7rem; border-bottom: 1px solid var(--border); white-space: nowrap; text-align: left; }
+.kpi-tbl th { font-family: var(--mono); font-size: .62rem; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; background: var(--surface2); position: sticky; top: 0; }
+.kpi-tbl tbody tr:hover { background: var(--surface2); }
+.kpi-num { text-align: right !important; font-family: var(--mono); }
+.kpi-td-posto { font-weight: 600; color: var(--text); }
+.kpi-td-sug { font-weight: 700; color: var(--accent); }
+.kpi-td-giro { text-align: center; }
+
+/* Chip de giro */
+.kpi-chip { display: inline-block; font-family: var(--mono); font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+.kpi-chip-crit   { background: var(--danger);  color: #fff; }
+.kpi-chip-alerta { background: var(--warning); color: #1a1206; }
+.kpi-chip-neutro { background: var(--surface2); color: var(--text3); border: 1px solid var(--border); }
+
+/* Marcador "teto" (limitado pelo espaço do tanque) */
+.kpi-teto { font-family: var(--mono); font-size: .56rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--warning); border: 1px solid var(--warning); border-radius: 4px; padding: 0 3px; margin-left: 4px; }
+
+/* Gráficos: dois blocos lado a lado no desktop, empilhados no mobile */
+.kpi-grafs { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin-top: 1rem; }
+.kpi-graf { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius, 10px); padding: .8rem .9rem; }
+.kpi-graf-tit { font-family: var(--mono); font-size: .68rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; margin-bottom: .7rem; }
+
+/* Barras divergentes (pico por dia da semana) */
+.kpi-div-row { display: grid; grid-template-columns: 44px 1fr 70px; align-items: center; gap: .5rem; margin-bottom: .4rem; }
+.kpi-div-lbl { font-family: var(--mono); font-size: .68rem; color: var(--text2); }
+.kpi-div-track { position: relative; height: 16px; background: var(--surface2); border-radius: 4px; }
+.kpi-div-center { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--border2); }
+.kpi-div-bar { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; min-width: 2px; }
+.kpi-div-bar.kpi-pos { background: var(--ok); }
+.kpi-div-bar.kpi-neg { background: var(--danger); }
+.kpi-div-num { text-align: right; font-family: var(--mono); font-size: .68rem; color: var(--text); }
+.kpi-sembase { font-size: .58rem; color: var(--text3); font-style: italic; }
+
+/* Barras horizontais (volume por posto) */
+.kpi-hb-row { display: grid; grid-template-columns: 1fr 90px 64px; align-items: center; gap: .5rem; margin-bottom: .35rem; }
+.kpi-hb-lbl { font-size: .72rem; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kpi-hb-track { height: 14px; background: var(--surface2); border-radius: 4px; }
+.kpi-hb-bar { height: 100%; background: var(--accent); border-radius: 4px; min-width: 2px; }
+.kpi-hb-num { text-align: right; font-family: var(--mono); font-size: .7rem; color: var(--text); }
+
+/* Mobile (~390px): métricas em 2 col, gráficos empilhados */
+@media (max-width: 620px) {
+  .kpi-metricas { grid-template-columns: repeat(2, 1fr); }
+  .kpi-grafs { grid-template-columns: 1fr; }
+}

@@ -76,6 +76,19 @@ html[data-theme="light"]{
   --c-med:var(--inf); --c-pre:var(--wn); --c-dif:var(--dg);
 }
 
+/* Ponte de tokens — KPI (aba do ADM via Mais+). Mesmo motivo do #s-medicao:
+   o kpi.css usa o vocabulário LONGO e o admin não carrega base.css. Mapeia
+   longo→curto ESCOPADO em #s-kpi. --ok/--mono/--sans não entram (mesmo nome
+   nos dois). */
+#s-kpi{
+  --surface:var(--sf); --surface2:var(--sf2);
+  --border:var(--bd); --border2:var(--bd2);
+  --accent:var(--ac);
+  --text:var(--tx); --text2:var(--tx2); --text3:var(--tx3);
+  --danger:var(--dg); --warning:var(--wn);
+  --radius:var(--r);
+}
+
 /* ══════════════════════════════════════════════════
    BASE
    ══════════════════════════════════════════════════ */
