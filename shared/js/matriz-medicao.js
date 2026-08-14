@@ -186,43 +186,70 @@
     dados.dias.forEach((_, diaIdx) => recalcularPrevisaoEDiff(diaIdx));
   }
 
-  // Previsão = medição(dia anterior) + carga − venda; Diferença = medição(hoje) − previsão.
-  function recalcularPrevisaoEDiff(diaIdx) {
-    if (!DADOS_ATUAIS) return;
+  // "Tem valor" para as fórmulas: null/undefined/'' contam como vazio.
+  function temValor(v) { return v !== null && v !== undefined && v !== ''; }
+
+  // PREVISÃO MED. = medição(dia anterior) + pedido(dia atual). `pedido` é a coluna
+  // medicao.pedido (Pedido Final). Vazia se faltar a medição de ontem OU o pedido.
+  function _prevCelula(diaIdx, i) {
+    const dias = DADOS_ATUAIS.dias;
+    const diaOntem   = dias[diaIdx - 1];
+    const medOntem   = diaOntem ? diaOntem.medicao[i] : null;
+    const pedidoHoje = dias[diaIdx].pedido ? dias[diaIdx].pedido[i] : null;
+    if (!temValor(medOntem) || !temValor(pedidoHoje)) return null;
+    return Number(medOntem) + Number(pedidoHoje);
+  }
+
+  // Δ DIFERENÇA = medição(hoje) − [ medição(ontem) + carga(hoje) − venda(hoje) ].
+  // Calcula SOZINHA (não lê a coluna Previsão). Venda usa combustiveisVenda; as
+  // demais categorias usam grupos.
+  //   Obrigatórias: SÓ medição(hoje) e medição(ontem) — sem uma delas, vazia.
+  //   carga/venda AUSENTES contam como 0: dia sem descarga é normal e a conta
+  //   "o tanque só perdeu o que vendeu" continua válida — é justamente ela que
+  //   denuncia carga que não desceu (ex.: o +67 do P. ARAPONGA 09/AGO).
+  function _diffCelula(diaIdx, i) {
     const dias = DADOS_ATUAIS.dias;
     const dia  = dias[diaIdx];
-    if (!dia) return;
-    const diaOntem  = dias[diaIdx - 1];
-    const grupos    = DADOS_ATUAIS.grupos;
-    const vendaCols = DADOS_ATUAIS.combustiveisVenda;
-    grupos.forEach((g, i) => {
-      let prevVal = null;
-      if (diaOntem) {
-        const medOntem = diaOntem.medicao[i];
-        if (medOntem !== null && medOntem !== undefined) {
-          const carga    = Number(dia.carga[i]) || 0;
-          const idxVenda = vendaCols.findIndex(c => c.comb === g.comb);
-          const venda    = (idxVenda === -1 || dia.venda[idxVenda] === null) ? 0 : Number(dia.venda[idxVenda]);
-          prevVal = Number(medOntem) + carga - venda;
-        }
-      }
-      dia.previsao[i] = prevVal;
-      const medHoje = dia.medicao[i];
-      const diffVal = (prevVal !== null && medHoje !== null && medHoje !== undefined)
-        ? Number(medHoje) - prevVal : null;
-      dia.diferenca[i] = diffVal;
+    const diaOntem = dias[diaIdx - 1];
+    const g = DADOS_ATUAIS.grupos[i];
+    const medHoje  = dia.medicao[i];
+    const medOntem = diaOntem ? diaOntem.medicao[i] : null;
+    if (!temValor(medHoje) || !temValor(medOntem)) return null;
+    const carga    = temValor(dia.carga[i]) ? Number(dia.carga[i]) : 0;
+    const idxVenda = DADOS_ATUAIS.combustiveisVenda.findIndex(c => c.comb === g.comb);
+    const venda    = (idxVenda !== -1 && temValor(dia.venda[idxVenda])) ? Number(dia.venda[idxVenda]) : 0;
+    return Number(medHoje) - (Number(medOntem) + carga - venda);
+  }
 
-      const prevEl = document.getElementById('prev_' + diaIdx + '_' + i);
-      if (prevEl) {
-        prevEl.textContent = fmtL(prevVal);
-        prevEl.classList.toggle('cell-vazia', prevVal === null);
-      }
-      const diffEl = document.getElementById('diff_' + diaIdx + '_' + i);
-      if (diffEl) {
-        const cor = diffVal > 0 ? 'var(--ok)' : (diffVal < 0 ? 'var(--danger)' : 'var(--text3)');
-        diffEl.style.color = cor;
-        diffEl.textContent = (diffVal === null ? '—' : ((diffVal > 0 ? '+' : '') + fmtL(diffVal)));
-      }
+  // Pinta a Previsão (coluna normal, sem destaque).
+  function _pintarPrev(diaIdx, i, prevVal) {
+    const el = document.getElementById('prev_' + diaIdx + '_' + i);
+    if (!el) return;
+    el.textContent = fmtL(prevVal);
+    el.classList.toggle('cell-vazia', prevVal === null);
+  }
+
+  // Pinta a Diferença (verde/vermelho/cinza + sinal).
+  function _pintarDiff(diaIdx, i, diffVal) {
+    const el = document.getElementById('diff_' + diaIdx + '_' + i);
+    if (!el) return;
+    const cor = diffVal > 0 ? 'var(--ok)' : (diffVal < 0 ? 'var(--danger)' : 'var(--text3)');
+    el.style.color = cor;
+    el.textContent = (diffVal === null ? '—' : ((diffVal > 0 ? '+' : '') + fmtL(diffVal)));
+  }
+
+  // Recalcula Previsão + Diferença de um dia (todas as colunas de combustível).
+  function recalcularPrevisaoEDiff(diaIdx) {
+    if (!DADOS_ATUAIS) return;
+    const dia = DADOS_ATUAIS.dias[diaIdx];
+    if (!dia) return;
+    DADOS_ATUAIS.grupos.forEach((g, i) => {
+      const prevVal = _prevCelula(diaIdx, i);
+      dia.previsao[i] = prevVal;
+      const diffVal = _diffCelula(diaIdx, i);
+      dia.diferenca[i] = diffVal;
+      _pintarPrev(diaIdx, i, prevVal);
+      _pintarDiff(diaIdx, i, diffVal);
     });
   }
 
@@ -249,25 +276,16 @@
     }
   }
 
-  // Atualiza só a DIFERENÇA de um dia (diff = med_hoje − prev_hoje). Portado do antigo.
+  // Atualiza só a DIFERENÇA de um dia. Agora ela calcula sozinha (_diffCelula),
+  // sem depender do que está na coluna Previsão.
   function _atualizarDiffDia(diaIdx) {
     if (!DADOS_ATUAIS) return;
     const dia = DADOS_ATUAIS.dias[diaIdx];
     if (!dia) return;
     DADOS_ATUAIS.grupos.forEach((g, i) => {
-      const medHoje  = dia.medicao[i];
-      const prevHoje = dia.previsao[i];
-      let diffVal = null;
-      if (medHoje !== null && medHoje !== undefined && prevHoje !== null && prevHoje !== undefined) {
-        diffVal = Number(medHoje) - Number(prevHoje);
-      }
+      const diffVal = _diffCelula(diaIdx, i);
       dia.diferenca[i] = diffVal;
-      const diffEl = document.getElementById('diff_' + diaIdx + '_' + i);
-      if (diffEl) {
-        const cor = diffVal > 0 ? 'var(--ok)' : (diffVal < 0 ? 'var(--danger)' : 'var(--text3)');
-        diffEl.style.color = cor;
-        diffEl.textContent = (diffVal === null ? '—' : ((diffVal > 0 ? '+' : '') + fmtL(diffVal)));
-      }
+      _pintarDiff(diaIdx, i, diffVal);
     });
   }
 
@@ -383,16 +401,23 @@
     atualizarBotoesSalvar();
   }
 
-  // Recalcula previsão/diferença dos dias afetados por uma mudança em (dia, campo).
-  // A medição de hoje é a "med_ontem" de amanhã. Pedido não afeta previsão/diferença.
+  // Recalcula Previsão/Diferença dos dias afetados por uma mudança em (dia, campo),
+  // segundo as fórmulas novas:
+  //   previsão[d]  = med[d-1] + pedido[d]
+  //   diferença[d] = med[d] − (med[d-1] + carga[d] − venda[d])
   function _recalcAfeta(diaIdx, campo) {
     if (campo === 'medicao') {
+      // med[d] entra na diferença de HOJE e, como med(ontem), na previsão E na
+      // diferença de AMANHÃ.
       _atualizarDiffDia(diaIdx);
       recalcularPrevisaoEDiff(diaIdx + 1);
-    } else if (campo === 'carga' || campo === 'venda') {
-      recalcularPrevisaoEDiff(diaIdx);
-      _atualizarDiffDia(diaIdx + 1);
-      if (campo === 'venda') recalcularTotalVenda(diaIdx);
+    } else if (campo === 'carga') {
+      _atualizarDiffDia(diaIdx);            // carga[d] só entra na diferença de hoje
+    } else if (campo === 'venda') {
+      _atualizarDiffDia(diaIdx);            // venda[d] só entra na diferença de hoje
+      recalcularTotalVenda(diaIdx);
+    } else if (campo === 'pedido') {
+      recalcularPrevisaoEDiff(diaIdx);      // pedido[d] agora entra na PREVISÃO de hoje
     }
   }
 
