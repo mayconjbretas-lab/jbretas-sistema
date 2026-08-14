@@ -182,8 +182,8 @@
     });
     _tbody.innerHTML = html ||
       '<tr><td style="padding:1.5rem;color:var(--text3);">Sem dados.</td></tr>';
-    // Calcula Previsão + Diferença de todos os dias (client-side).
-    dados.dias.forEach((_, diaIdx) => recalcularPrevisaoEDiff(diaIdx));
+    // Calcula Previsão + Diferença de todos os dias e colore a Carga vs Pedido.
+    dados.dias.forEach((_, diaIdx) => { recalcularPrevisaoEDiff(diaIdx); _recolorirCarga(diaIdx); });
   }
 
   // "Tem valor" para as fórmulas: null/undefined/'' contam como vazio.
@@ -286,6 +286,31 @@
       const diffVal = _diffCelula(diaIdx, i);
       dia.diferenca[i] = diffVal;
       _pintarDiff(diaIdx, i, diffVal);
+    });
+  }
+
+  // Colore o TEXTO da célula de CARGA quando ela diverge do PEDIDO do mesmo
+  // dia+combustível além da tolerância. Só quando AMBOS existem (falta um → normal).
+  // Texto, não fundo — o fundo é da zebra/linha ativa. Aplicado inline (vence a
+  // cor da classe .cell-dirty): carga < pedido−500 = vermelho (chegou menos);
+  // carga > pedido+500 = âmbar (chegou mais); dentro da tolerância = neutro.
+  const TOLERANCIA_CARGA = 500;
+  function _recolorirCarga(diaIdx) {
+    if (!DADOS_ATUAIS) return;
+    const dia = DADOS_ATUAIS.dias[diaIdx];
+    if (!dia) return;
+    DADOS_ATUAIS.grupos.forEach((g, i) => {
+      const input = _acharInput(diaIdx, 'carga', g.comb);
+      if (!input) return;
+      const carga  = dia.carga[i];
+      const pedido = dia.pedido ? dia.pedido[i] : null;
+      let cor = '';
+      if (temValor(carga) && temValor(pedido)) {
+        const diff = Number(carga) - Number(pedido);
+        if (diff < -TOLERANCIA_CARGA) cor = 'var(--danger)';
+        else if (diff > TOLERANCIA_CARGA) cor = 'var(--warning)';
+      }
+      input.style.color = cor;
     });
   }
 
@@ -413,11 +438,13 @@
       recalcularPrevisaoEDiff(diaIdx + 1);
     } else if (campo === 'carga') {
       _atualizarDiffDia(diaIdx);            // carga[d] só entra na diferença de hoje
+      _recolorirCarga(diaIdx);              // carga mudou → recolore vs pedido do dia
     } else if (campo === 'venda') {
       _atualizarDiffDia(diaIdx);            // venda[d] só entra na diferença de hoje
       recalcularTotalVenda(diaIdx);
     } else if (campo === 'pedido') {
       recalcularPrevisaoEDiff(diaIdx);      // pedido[d] agora entra na PREVISÃO de hoje
+      _recolorirCarga(diaIdx);              // pedido é a referência da carga → recolore
     }
   }
 
