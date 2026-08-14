@@ -55,18 +55,14 @@
     return raw === '' ? null : Number(raw);
   }
 
-  // Data EXIBIDA na Medição do ADM = data real + 1 dia.
-  // O gerente grava o fechamento com a data de ONTEM; o ADM raciocina em HOJE
-  // e lança o pré-pedido pro pedido de amanhã. Então a tela mostra dia+1 (o Date
-  // resolve a virada de mês: 31/07 -> 01/08). Recebe "DD/MM/AAAA", devolve "DD/MM/AAAA".
-  function dataMais1(dataBR) {
-    const p = String(dataBR).split('/');
-    if (p.length !== 3) return dataBR;
-    const d = new Date(Number(p[2]), Number(p[1]) - 1, Number(p[0]));
-    d.setDate(d.getDate() + 1);
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    return dd + '/' + mm + '/' + d.getFullYear();
+  // Soma da Venda de um dia (null-aware): ignora vazios; se nenhum combustível
+  // tem valor, devolve null (célula TOTAL fica "—"). Espelha somaVendaDia da
+  // matriz da Logística.
+  function somaVenda(arr) {
+    if (!Array.isArray(arr)) return null;
+    let algum = false, soma = 0;
+    arr.forEach(v => { if (v !== null && v !== undefined && v !== '') { algum = true; soma += Number(v) || 0; } });
+    return algum ? soma : null;
   }
 
   function difClass(v) {
@@ -271,53 +267,77 @@
       { k: 'diferenca', lbl: 'Diferença',    cls: 'h-dif',   edit: false },
     ];
     const h = hojeInfo();
+    // Medição de ONTEM (mesmo mês) para a projeção da linha de hoje. No dia 1
+    // não existe no array do mês → sem projeção (tratado adiante).
+    const diaOntem = d.dias.find(x => x.dia === h.dia - 1) || null;
 
-    // Cabeçalho de 2 linhas (categoria em cima, combustível embaixo)
+    // Cabeçalho de 2 linhas (categoria em cima, combustível embaixo). A Venda
+    // ganha uma coluna TOTAL extra no fim do grupo.
     let thead = '<tr><th class="sticky-col" rowspan="2">DIA</th>';
     cats.forEach((c, ci) => {
-      thead += '<th class="' + c.cls + (ci < cats.length - 1 ? ' grp-end' : '') + '" colspan="' + fuels.length + '">' + c.lbl + '</th>';
+      const nCols = fuels.length + (c.k === 'venda' ? 1 : 0);
+      thead += '<th class="' + c.cls + (ci < cats.length - 1 ? ' grp-end' : '') + '" colspan="' + nCols + '">' + c.lbl + '</th>';
     });
     thead += '</tr><tr>';
     cats.forEach((c, ci) => {
+      const ehVenda = c.k === 'venda';
+      const ultima  = ci === cats.length - 1;
       fuels.forEach((f, fi) => {
-        thead += '<th class="' + ((fi === fuels.length - 1 && ci < cats.length - 1) ? 'grp-end' : '') + '">' + f.abv + '</th>';
+        // Na Venda o grp-end vai pro TOTAL (após o loop), não no último combustível.
+        const grpEnd = (fi === fuels.length - 1 && !ultima && !ehVenda) ? 'grp-end' : '';
+        thead += '<th class="' + grpEnd + '">' + f.abv + '</th>';
       });
+      if (ehVenda) thead += '<th class="grp-end">TOTAL</th>';
     });
     thead += '</tr>';
 
-    // Corpo (uma linha por dia do mês)
+    // Corpo: uma linha por dia, cada dia na SUA PRÓPRIA data (sem deslocamento).
     let body = '';
     d.dias.forEach(dia => {
-      const dataExib = dataMais1(dia.data);       // data mostrada na tela = real + 1
-      const ddExib = dataExib.split('/')[0];       // dia exibido (ex.: 08)
-      const ehHoje = parseInt(ddExib, 10) === h.dia;
-      body += '<tr class="' + (ehHoje ? 'row-hoje' : '') + '" id="med-row-' + ddExib + '">';
-      body += '<td class="sticky-col">' + ddExib + '</td>';
+      const dd = String(dia.dia).padStart(2, '0');
+      const ehHoje = dia.dia === h.dia;
+      body += '<tr class="' + (ehHoje ? 'row-hoje' : '') + '" id="med-row-' + dd + '">';
+      body += '<td class="sticky-col">' + dd + '</td>';
       cats.forEach((c, ci) => {
+        const ehVenda = c.k === 'venda';
+        const ultima  = ci === cats.length - 1;
         fuels.forEach((f, fi) => {
-          const grp = (fi === fuels.length - 1 && ci < cats.length - 1) ? 'grp-end' : '';
+          const grp = (fi === fuels.length - 1 && !ultima && !ehVenda) ? 'grp-end' : '';
           const val = dia[c.k] ? dia[c.k][f.idx] : null;
           if (c.edit) {
-            // Pré-pedido: SALVA na data EXIBIDA (08), não na real (07) — cai no dia do
-            // lançamento pra Logística fazer o pedido final. As demais colunas (leitura)
-            // continuam vindo do dia real; só o input do pré-pedido usa a data deslocada.
+            // Pré-pedido: salva na própria data da linha (data real do dia).
             body += '<td class="cel-pre ' + grp + '">' +
               '<input class="med-in" inputmode="decimal" value="' + (val == null ? '' : fmt(val)) + '" ' +
-              'data-data="' + dataExib + '" data-comb="' + f.comb + '" ' +
+              'data-data="' + dia.data + '" data-comb="' + f.comb + '" ' +
               'oninput="__medDirty(this)" onfocus="this.select()"></td>';
           } else if (c.k === 'diferenca') {
             body += '<td class="' + grp + '"><span class="' + difClass(val) + ' cell-diff">' + difTxt(val) + '</span></td>';
+          } else if (c.k === 'medicao' && ehHoje && val == null) {
+            // Projeção do dia de hoje (ainda sem medição real): medicao(ontem) +
+            // pedido(hoje). Só projeta se AMBOS existirem — senão vazio, não inventa.
+            const ontem = diaOntem && diaOntem.medicao ? diaOntem.medicao[f.idx] : null;
+            const ped   = dia.pedido ? dia.pedido[f.idx] : null;
+            if (ontem != null && ped != null) {
+              body += '<td class="' + grp + ' med-cel-proj"><span class="med-proj">' + fmt(Number(ontem) + Number(ped)) + '</span></td>';
+            } else {
+              body += '<td class="' + grp + '"><span class="cell-vazia">—</span></td>';
+            }
           } else {
             body += '<td class="' + grp + '"><span class="' + (val == null ? 'cell-vazia' : 'cell-val') + '">' + (val == null ? '—' : fmt(val)) + '</span></td>';
           }
         });
+        if (ehVenda) {
+          const tot = somaVenda(dia.venda);
+          body += '<td class="grp-end"><span class="' + (tot == null ? 'cell-vazia' : 'med-vtot') + '">' +
+            (tot == null ? '—' : fmt(tot)) + '</span></td>';
+        }
       });
       body += '</tr>';
     });
 
     frame.innerHTML = '<table class="med-table"><thead id="med-thead">' + thead + '</thead><tbody>' + body + '</tbody></table>';
 
-    // Rola até o dia de hoje (usa o dia EXIBIDO)
+    // Rola até o dia de hoje
     const rowHoje = document.getElementById('med-row-' + h.dd);
     if (rowHoje) rowHoje.scrollIntoView({ block: 'center' });
   }

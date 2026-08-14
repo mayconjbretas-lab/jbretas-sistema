@@ -76,6 +76,15 @@ html[data-theme="light"] { --c-carga: #8b5cf6; --c-carga-d: rgba(139,92,246,.10)
 .med-table tr.row-hoje { background: var(--accent-dim2) !important; }
 .med-table tr.row-hoje .sticky-col { background: var(--accent-dim) !important; color: var(--accent); box-shadow: inset 3px 0 0 var(--accent), 2px 0 5px rgba(0,0,0,.25); }
 
+/* Projeção da linha de hoje na coluna Medição: medicao(ontem) + pedido(hoje).
+   É PROJEÇÃO, não medição — fundo tênue + número itálico na cor da Medição.
+   Especificidade acima de tr.row-hoje (que pinta a linha com !important). */
+.med-table td.med-cel-proj { background: var(--c-med-d) !important; }
+.med-proj { font-family: var(--mono); font-weight: 600; font-style: italic; color: var(--c-med); }
+
+/* TOTAL do grupo Venda (soma do dia) — na cor da Venda. */
+.med-vtot { font-family: var(--mono); font-weight: 700; color: var(--c-ven); }
+
 /* Legenda */
 .med-legenda { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: .7rem; font-size: .66rem; font-family: var(--mono); color: var(--text3); }
 .med-legenda .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
