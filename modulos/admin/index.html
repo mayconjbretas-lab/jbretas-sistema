@@ -24,6 +24,9 @@
      base.css normalmente; só o admin usa esse visual. -->
 <link rel="stylesheet" href="admin.css?v=202608141428">
 <link rel="stylesheet" href="coleta-revisao/coleta-revisao.css?v=202608141428">
+<!-- Medição (aba do ADM via Mais+): CSS de componente do painel-adm, sem fork.
+     Usa tokens longos que resolvem via bloco #s-medicao do admin.css. -->
+<link rel="stylesheet" href="../painel-adm/medicao.css?v=202608141428">
 <script>
   (function(){
     var t = localStorage.getItem('jb_theme') || 'dark';
@@ -224,6 +227,10 @@
     <!-- ═══ ABA: CUSTO & MARGEM ═══ (compartilha ../logistica/custo-margem.js, sem fork; ADM = leitura) -->
     <section class="scr" id="s-custo"></section>
 
+    <!-- ═══ ABA: MEDIÇÃO ═══ (compartilha ../painel-adm/medicao.js, sem fork; ADM define o pré-pedido).
+         Aba do bnav (setTab 'medicao'). Tokens longos do medicao.css resolvem via #s-medicao no admin.css. -->
+    <section class="scr" id="s-medicao"></section>
+
     <!-- ═══ ABA: FORNECEDORES ═══ (compartilha ../painel-adm/fornecedores.js, sem fork) -->
     <section class="scr" id="s-forn"></section>
     <section class="scr" id="s-compra"></section>
@@ -246,6 +253,10 @@
       <span class="ni">📋</span>
       <span class="nl">Coleta</span>
     </button>
+    <button class="nbtn" onclick="setTab(this,'medicao')">
+      <span class="ni">🛢️</span>
+      <span class="nl">Medição</span>
+    </button>
     <button class="nbtn" onclick="setTab(this,'forn')">
       <span class="ni">📊</span>
       <span class="nl">Fornecedores</span>
@@ -253,10 +264,6 @@
     <button class="nbtn active" onclick="setTab(this,'mapa')">
       <span class="ni">📍</span>
       <span class="nl">Mapa</span>
-    </button>
-    <button class="nbtn" onclick="setTab(this,'hist')">
-      <span class="ni">📈</span>
-      <span class="nl">Histórico</span>
     </button>
     <button class="nbtn" onclick="setTab(this,'relat')">
       <span class="ni">📊</span>
@@ -281,6 +288,10 @@
     <div class="mitem" onclick="abrirRegionalMobile()">
       <span class="mic">🌍</span>
       Regional
+    </div>
+    <div class="mitem" onclick="abrirHistoricoMobile()">
+      <span class="mic">📈</span>
+      Histórico
     </div>
   </div>
 </div>
@@ -323,6 +334,7 @@
 <script src="../../shared/js/push-inscricao.js?v=202608141428"></script>
 <script src="../logistica/custo-margem.js?v=202608141428"></script>
 <script src="../../shared/js/nav-custo.js?v=202608141428"></script>
+<script src="../painel-adm/medicao.js?v=202608141428"></script>
 <script src="../painel-adm/fornecedores.js?v=202608141428"></script>
 <script src="../painel-adm/compra.js?v=202608141428"></script>
 <script src="../painel-adm/simulador.js?v=202608141428"></script>

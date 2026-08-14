@@ -90,6 +90,10 @@
     sel.innerHTML = '<option value="">Selecione…</option>' +
       postos.map(p => '<option value="' + p + '">' + p + '</option>').join('');
     sel.onchange = () => carregar(sel.value);
+    // Default: na 1ª montagem (nenhum posto escolhido ainda) já assume o 1º posto
+    // da lista, para abrir com a medição carregada em vez de "Selecione…". Se já
+    // havia posto (_postoAtual), renderMedicao restaura esse logo em seguida.
+    if (!_postoAtual && postos.length) _postoAtual = postos[0];
     _shellPronto = true;
   }
 

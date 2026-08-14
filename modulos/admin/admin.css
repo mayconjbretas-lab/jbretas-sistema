@@ -55,6 +55,28 @@ html[data-theme="light"]{
 }
 
 /* ══════════════════════════════════════════════════
+   PONTE DE TOKENS — Medição (aba do ADM via Mais+)
+   O medicao.css (../painel-adm/) usa o vocabulário LONGO (--surface/--border/
+   --text/--accent...) de base.css, que o admin NÃO carrega. Aqui mapeamos
+   longo→curto ESCOPADO em #s-medicao, para o efeito ficar contido na Medição
+   e não vazar para as outras abas do admin (onde o vocabulário é o curto).
+   --bg/--ok/--mono não precisam: mesmo nome nos dois. --border-solid não é
+   usado pelo medicao.css.
+   ══════════════════════════════════════════════════ */
+#s-medicao{
+  --surface:var(--sf); --surface2:var(--sf2); --surface3:var(--sf3);
+  --border:var(--bd); --border2:var(--bd2);
+  --accent:var(--ac); --accent-dim:var(--acd);
+  --accent-dim2:var(--acd);  /* aprox.: base.css usa alpha .07; --acd é .12 — tint quase invisível, o admin não tem token exato */
+  --text:var(--tx); --text2:var(--tx2); --text3:var(--tx3);
+  --danger:var(--dg); --info:var(--inf); --warning:var(--wn);
+  /* O medicao.css declara os --c-* no :root DELE, apontando p/ --info/--warning/
+     --danger — que não existem no admin em :root, então herdariam inválidos.
+     Redeclarados aqui (em #s-medicao) resolvem, apontando aos curtos do admin. */
+  --c-med:var(--inf); --c-pre:var(--wn); --c-dif:var(--dg);
+}
+
+/* ══════════════════════════════════════════════════
    BASE
    ══════════════════════════════════════════════════ */
 html,body{height:100%;overflow:hidden;background:var(--bg)}
