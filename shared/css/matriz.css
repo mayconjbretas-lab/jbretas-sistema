@@ -27,12 +27,11 @@
   /* A linha entre o cabeçalho e a tabela agora é desenhada AQUI (opaca), não
      mais pelo border-top do frame — assim o header sticky (top:0) gruda flush
      no topo do frame (sem a fresta de 1px da borda). Mesma cor do seam da 2ª
-     linha do cabeçalho: composto de --border sobre --surface2, opaco. */
-  border-bottom: 1px solid #413b3f;   /* dark */
+     linha do cabeçalho: --border composto sobre --surface2, opaco. */
+  border-bottom: 1px solid var(--border-solid);
   padding: .8rem 1.2rem; display: flex; justify-content: space-between;
   align-items: center; flex-shrink: 0;
 }
-html[data-theme="light"] .table-actions { border-bottom-color: #ddd3bf; }  /* light */
 .table-title {
   font-family: var(--mono); font-size: .85rem; font-weight: 700;
   display: flex; align-items: center; gap: .5rem; color: var(--text);
@@ -90,11 +89,8 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
   font-family: var(--mono); font-size: .7rem; font-weight: 700;
   /* Sela a borda que encara o corpo. --border é translúcido (alpha .18) e,
      com border-collapse, deixa o corpo vazar sob a linha sticky. Usa a MESMA
-     cor da grade, porém OPACA: hex = --border composto sobre --surface2. */
-  border-bottom: 1px solid #413b3f;   /* dark: rgba(242,176,61,.18) sobre #1a2140 */
-}
-html[data-theme="light"] .mm-thead tr:last-child th {
-  border-bottom-color: #ddd3bf;       /* light: --border já é opaco (#ddd3bf) */
+     cor da grade, porém OPACA: --border composto sobre --surface2. */
+  border-bottom: 1px solid var(--border-solid);
 }
 
 /* Separação visual entre grupos: coluna final de cada grupo (S10 de Medição,
