@@ -79,3 +79,29 @@ html[data-theme="light"] { --c-carga: #8b5cf6; --c-carga-d: rgba(139,92,246,.10)
 /* Legenda */
 .med-legenda { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: .7rem; font-size: .66rem; font-family: var(--mono); color: var(--text3); }
 .med-legenda .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+/* ── Faixa de PEDIDO do dia seguinte (entre os filtros e a grade) ──
+   Mesma linguagem visual dos blocos fx- da Logística; prefixo med-fx- porque
+   não havia faixa no medicao.css para reusar. */
+.med-fx { margin-bottom: .8rem; }
+.med-fx-head { display: flex; align-items: center; justify-content: space-between; gap: .8rem; flex-wrap: wrap; }
+.med-fx-title { font-family: var(--mono); font-size: .82rem; font-weight: 700; color: var(--accent); letter-spacing: .04em; text-transform: uppercase; }
+.med-fx-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.med-fx-tgl { background: var(--surface2); color: var(--text3); border: none; font-family: var(--mono); font-size: .68rem; font-weight: 700; padding: .38rem .7rem; cursor: pointer; white-space: nowrap; }
+.med-fx-tgl + .med-fx-tgl { border-left: 1px solid var(--border); }
+.med-fx-tgl:hover { color: var(--text); }
+.med-fx-tgl.on { background: var(--accent-dim); color: var(--accent); }
+.med-fx-sub { font-family: var(--mono); font-size: .66rem; color: var(--text3); margin: .3rem 0 .6rem; }
+.med-fx-grid { display: flex; gap: .5rem; flex-wrap: wrap; }
+.med-fx-bloco { flex: 1; min-width: 84px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: .5rem .6rem; text-align: center; }
+.med-fx-bl-lbl { font-family: var(--mono); font-size: .58rem; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; }
+.med-fx-bl-val { font-family: var(--mono); font-size: .92rem; font-weight: 700; color: var(--text); margin-top: 2px; }
+.med-fx-bloco-total { background: var(--accent-dim); border-color: var(--accent); }
+.med-fx-bloco-total .med-fx-bl-lbl, .med-fx-bloco-total .med-fx-bl-val { color: var(--accent); }
+
+/* Mobile do admin (~390px): grade de 3 colunas fixas, para os blocos não
+   ficarem desproporcionais no flex-wrap. */
+@media (max-width: 430px) {
+  .med-fx-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .med-fx-bloco { min-width: 0; }
+}

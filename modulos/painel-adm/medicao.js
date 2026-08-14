@@ -12,9 +12,29 @@
 // ================================================================
 (function () {
   let _shellPronto = false;
-  let _postoAtual  = null;
+  let _postoAtual  = '';               // nome do posto ('' = Todos os postos)
   let _dados       = null;             // resposta do GET /medicao
   const _dirty     = new Map();        // "data|comb" -> { data, comb, valor }
+  let TODOS_POSTOS = [];               // GET /postos (id, nome, bandeira) — fonte do filtro e do posto_id da faixa
+  let _postosPront = false;            // /postos já carregado
+  let _bandeira    = '';               // bandeira selecionada ('' = todas)
+  let _campoFaixa  = 'pedido';         // toggle da faixa: 'pedido' (Logística) | 'pre_pedido' (Meus pedidos)
+
+  // Escapa texto para inserção em HTML (nomes de posto/bandeira nas options e blocos).
+  const esc = (s) => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  // Número pt-BR para a faixa (valor sempre presente: por_combustivel[cod] || 0).
+  const fmtNum = (n) => Number(n || 0).toLocaleString('pt-BR');
+
+  // A faixa é SEMPRE D+1 (o agendamento só existe para o dia seguinte). Usa Date
+  // local (o usuário está no fuso de SP, como o resto do arquivo já assume).
+  function amanha() {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return { iso: d.getFullYear() + '-' + mm + '-' + dd, dd, mm };
+  }
 
   function hojeInfo() {
     const d = new Date();
@@ -58,14 +78,17 @@
     return (v > 0 ? '+' : '') + Number(v).toLocaleString('pt-BR');
   }
 
-  // ── Shell da aba (barra + frame + legenda), montado uma vez ──────
+  // ── Shell da aba (barra + faixa + frame + legenda), montado uma vez ─
+  // Selects começam vazios; carregarPostos() (GET /postos) popula bandeira/posto,
+  // define o default e dispara a 1ª carga da grade + faixa.
   function montarShell(sec) {
-    const postos = [...MAP_POSTOS].map(p => p.ap).sort((a, b) => a.localeCompare(b));
     const h = hojeInfo();
     sec.innerHTML =
       '<div class="med-wrap">' +
         '<div class="med-bar">' +
           '<div class="med-bar-left">' +
+            '<span class="med-lbl">Bandeira</span>' +
+            '<select class="sel" id="med-bandeira"></select>' +
             '<span class="med-lbl">Posto</span>' +
             '<select class="sel" id="med-posto"></select>' +
             '<span class="med-data" id="med-data">📅 Referência: hoje · ' + h.dd + '/' + h.mm + '/' + h.aaaa + '</span>' +
@@ -75,8 +98,9 @@
             '<button class="med-salvar" id="med-salvar" disabled onclick="__medSalvar()">💾 Salvar pré-pedido</button>' +
           '</div>' +
         '</div>' +
+        '<div class="med-fx" id="med-fx"></div>' +
         '<div class="med-frame" id="med-frame">' +
-          '<div class="med-msg">Selecione um posto para carregar a medição.</div>' +
+          '<div class="med-msg">Selecione um posto para ver a medição.</div>' +
         '</div>' +
         '<div class="med-legenda">' +
           '<span><span class="dot" style="background:var(--c-med)"></span>Medição</span>' +
@@ -86,32 +110,148 @@
           '<span><span class="dot" style="background:var(--c-dif)"></span>Diferença</span>' +
         '</div>' +
       '</div>';
-    const sel = sec.querySelector('#med-posto');
-    sel.innerHTML = '<option value="">Selecione…</option>' +
-      postos.map(p => '<option value="' + p + '">' + p + '</option>').join('');
-    sel.onchange = () => carregar(sel.value);
-    // Default: na 1ª montagem (nenhum posto escolhido ainda) já assume o 1º posto
-    // da lista, para abrir com a medição carregada em vez de "Selecione…". Se já
-    // havia posto (_postoAtual), renderMedicao restaura esse logo em seguida.
-    if (!_postoAtual && postos.length) _postoAtual = postos[0];
+    sec.querySelector('#med-bandeira').onchange = onBandeiraChange;
+    sec.querySelector('#med-posto').onchange    = onPostoChange;
     _shellPronto = true;
   }
 
-  // ── Carrega os dados de um posto (GET /medicao/:posto, mês atual) ─
-  async function carregar(postoAp) {
-    _postoAtual = postoAp;
+  // ── Filtro encadeado bandeira → posto (GET /postos) ──────────────
+  async function carregarPostos() {
+    const selP = document.getElementById('med-posto');
+    const selB = document.getElementById('med-bandeira');
+    try {
+      const resp = await apiFetch('/postos');
+      TODOS_POSTOS = resp.postos || [];       // já vem com p.bandeira e p.id
+      _postosPront = true;
+      if (!TODOS_POSTOS.length) { selP.innerHTML = '<option value="">Nenhum posto</option>'; return; }
+      // Bandeiras distintas dos postos ATIVOS — casam com o filtro da pedido-dia
+      // (postos.bandeira), diferente da taxonomia do MAP_POSTOS.
+      const bandeiras = [...new Set(TODOS_POSTOS.map(p => p.bandeira).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b));
+      selB.innerHTML = '<option value="">Todas as bandeiras</option>' +
+        bandeiras.map(b => '<option value="' + esc(b) + '">' + esc(b) + '</option>').join('');
+      selB.value = _bandeira;
+      popularSelPosto();
+      // Default: 1º posto da lista (abre com a grade carregada; ver histórico da
+      // tela — pedido explícito de não abrir em "Selecione…").
+      _postoAtual = TODOS_POSTOS[0].nome;
+      selP.value = _postoAtual;
+      onPostoChange();
+    } catch (err) {
+      selP.innerHTML = '<option value="">Erro ao carregar</option>';
+      const frame = document.getElementById('med-frame');
+      if (frame) frame.innerHTML = '<div class="med-erro">Erro ao carregar postos: ' + esc(err.message || err) + '</div>';
+    }
+  }
+
+  // Popula #med-posto com "Todos os postos" + os postos da bandeira atual
+  // (ou todos, se Todas). Sempre volta a seleção para "Todos os postos".
+  function popularSelPosto() {
+    const sel = document.getElementById('med-posto');
+    const lista = _bandeira ? TODOS_POSTOS.filter(p => p.bandeira === _bandeira) : TODOS_POSTOS;
+    sel.innerHTML = '<option value="">Todos os postos</option>' +
+      lista.map(p => '<option value="' + esc(p.nome) + '">' + esc(p.nome) + '</option>').join('');
+    sel.value = '';
+    _postoAtual = '';
+  }
+
+  // Trocar a bandeira: refiltra os postos e volta pra "Todos os postos".
+  function onBandeiraChange() {
+    _bandeira = document.getElementById('med-bandeira').value;   // '' = Todas
+    popularSelPosto();
+    onPostoChange();   // Todos → esconde grade + mensagem; recarrega a faixa (bandeira)
+  }
+
+  // Trocar o posto. "Todos os postos" (value '') NÃO carrega a grade: mostra a
+  // mensagem — nunca deixa a grade de um posto junto com o total de outra seleção.
+  function onPostoChange() {
+    _postoAtual = document.getElementById('med-posto').value;
     _dirty.clear();
     atualizarBotoes();
     const frame = document.getElementById('med-frame');
-    if (!postoAp) { frame.innerHTML = '<div class="med-msg">Selecione um posto para carregar a medição.</div>'; return; }
+    if (!_postoAtual) {
+      frame.innerHTML = '<div class="med-msg">Selecione um posto para ver a medição.</div>';
+    } else {
+      carregarGrade(_postoAtual);
+    }
+    atualizarFaixa();
+  }
+
+  // ── Carrega os dados de um posto (GET /medicao/:posto, mês atual) ─
+  async function carregarGrade(postoNome) {
+    const frame = document.getElementById('med-frame');
     frame.innerHTML = '<div class="med-msg">Carregando…</div>';
     try {
-      _dados = await apiFetch('/medicao/' + encodeURIComponent(postoAp));
+      _dados = await apiFetch('/medicao/' + encodeURIComponent(postoNome));
       renderGrade();
     } catch (err) {
-      frame.innerHTML = '<div class="med-erro">Erro ao carregar: ' + (err.message || err) + '</div>';
+      frame.innerHTML = '<div class="med-erro">Erro ao carregar: ' + esc(err.message || err) + '</div>';
     }
   }
+
+  // ── Faixa de PEDIDO do dia seguinte (GET /medicao/pedido-dia) ────
+  // Data fixa = D+1 (sem seletor). Escopo (mais específico → menos): posto
+  // (posto_id) > bandeira > REDE. campo = toggle Logística/Meus pedidos.
+  async function atualizarFaixa() {
+    const host = document.getElementById('med-fx');
+    if (!host) return;
+    const a = amanha();
+    let q = '/medicao/pedido-dia?data=' + encodeURIComponent(a.iso) +
+            '&campo=' + encodeURIComponent(_campoFaixa);
+    if (_postoAtual) {
+      const p = TODOS_POSTOS.find(x => x.nome === _postoAtual);
+      if (p && p.id) q += '&posto_id=' + encodeURIComponent(p.id);
+    } else if (_bandeira) {
+      q += '&bandeira=' + encodeURIComponent(_bandeira);
+    }
+    host.innerHTML = faixaHead(a) + '<div class="med-fx-sub">carregando…</div>';
+    try {
+      const resp = await apiFetch(q);
+      renderFaixa(host, a, resp);
+    } catch (err) {
+      host.innerHTML = faixaHead(a) +
+        '<div class="med-fx-sub" style="color:var(--danger)">Erro: ' + esc(err.message || err) + '</div>';
+    }
+  }
+
+  // Rótulo fixo "PEDIDO PARA DD/MM" + toggle de dois estados (Logística/Meus pedidos).
+  function faixaHead(a) {
+    return '<div class="med-fx-head">' +
+        '<div class="med-fx-title">PEDIDO PARA ' + a.dd + '/' + a.mm + '</div>' +
+        '<div class="med-fx-toggle">' +
+          '<button class="med-fx-tgl' + (_campoFaixa === 'pedido' ? ' on' : '') + '" ' +
+            'onclick="__medFaixaCampo(\'pedido\')">Logística</button>' +
+          '<button class="med-fx-tgl' + (_campoFaixa === 'pre_pedido' ? ' on' : '') + '" ' +
+            'onclick="__medFaixaCampo(\'pre_pedido\')">Meus pedidos</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  // Blocos a partir de resp.combustiveis (o que o escopo vende); valor =
+  // por_combustivel[cod] || 0; TOTAL destacado no fim (resp.total).
+  function renderFaixa(host, a, resp) {
+    const pc    = (resp && resp.por_combustivel) || {};
+    const cods  = (resp && resp.combustiveis) || [];
+    const total = (resp && resp.total) || 0;
+    const n     = (resp && resp.postos_com_pedido) || 0;
+    const blocos = cods.map(k => fxBloco(k, pc[k], false)).join('') + fxBloco('TOTAL', total, true);
+    host.innerHTML =
+      faixaHead(a) +
+      '<div class="med-fx-sub">' + n + ' postos com pedido</div>' +
+      '<div class="med-fx-grid">' + blocos + '</div>';
+  }
+  function fxBloco(label, val, isTotal) {
+    return '<div class="med-fx-bloco' + (isTotal ? ' med-fx-bloco-total' : '') + '">' +
+      '<div class="med-fx-bl-lbl">' + esc(label) + '</div>' +
+      '<div class="med-fx-bl-val">' + fmtNum(val) + '</div></div>';   // val ausente → '0'
+  }
+
+  window.__medFaixaCampo = function (campo) {
+    if (campo !== 'pedido' && campo !== 'pre_pedido') return;
+    if (_campoFaixa === campo) return;
+    _campoFaixa = campo;
+    atualizarFaixa();   // re-consulta com o novo campo e repinta
+  };
 
   // ── Monta a grade (mensal, dia a dia) ────────────────────────────
   // Ordem das colunas pedida pelo ADM: Medição · Venda · Carga · Pré-pedido · Diferença.
@@ -192,7 +332,7 @@
 
   window.__medUndo = function () {
     _dirty.clear();
-    if (_postoAtual) carregar(_postoAtual); // recarrega do banco, descarta edições
+    if (_postoAtual) carregarGrade(_postoAtual); // recarrega do banco, descarta edições
   };
 
   function atualizarBotoes() {
@@ -232,8 +372,10 @@
   // ── Entrada pública (chamada pelo setTab) ────────────────────────
   window.renderMedicao = function (sec) {
     if (!sec) return;
-    if (!_shellPronto || !sec.querySelector('#med-posto')) montarShell(sec);
-    const sel = sec.querySelector('#med-posto');
-    if (_postoAtual) { sel.value = _postoAtual; carregar(_postoAtual); }
+    // 1ª vez (ou seção recriada): monta o shell e carrega os postos (async →
+    // popula selects, define default e dispara grade + faixa).
+    if (!_shellPronto || !sec.querySelector('#med-posto')) { montarShell(sec); carregarPostos(); return; }
+    // Re-entrada: shell e selects persistem no DOM — só repinta o escopo atual.
+    onPostoChange();
   };
 })();
