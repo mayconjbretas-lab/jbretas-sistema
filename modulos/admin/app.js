@@ -29,7 +29,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   aplicarTema(temaSalvo);
 
   await carregarColetas();
-  initLeafletInstance();
+  // Compara é a aba default agora → carrega o conteúdo dela no load. O Mapa saiu
+  // do bnav: o Leaflet é criado sob demanda em abrirMapaMobile (com a section
+  // visível), não mais aqui — evita criar o mapa oculto com tamanho zero.
+  carregarDadosComparar();
   iniciarAutoRefresh();
 });
 
@@ -70,8 +73,9 @@ function setTab(btn, tab) {
   btn.classList.add('active');
   const sec = document.getElementById('s-' + tab);
   if (sec) sec.classList.add('active');
-  if (tab === 'mapa') setTimeout(() => { initLeafletInstance(); }, 150);
   if (tab === 'comp' && !comparaCarregado) carregarDadosComparar();
+  // KPI — sugestão de pedido (kpi.js expõe renderKpi). Tokens longos via #s-kpi (admin.css).
+  if (tab === 'kpi') renderKpi(document.getElementById('s-kpi'));
   if (tab === 'coleta') renderColetaRevisao(document.getElementById('s-coleta'));
   // Medição — aba do ADM (define o pré-pedido); código próprio do painel-adm
   // (medicao.js expõe renderMedicao). Tokens longos resolvem via #s-medicao (admin.css).
@@ -113,14 +117,16 @@ function abrirHistoricoMobile() {
   carregarHistorico();
 }
 
-// KPI — sugestão de pedido (kpi.js expõe renderKpi). Entra pelo Mais+, mesmo
-// padrão do Custo/Histórico. Tokens longos do kpi.css resolvem via #s-kpi (admin.css).
-function abrirKpiMobile() {
+// Mapa — Leaflet, agora pelo Mais+. initLeafletInstance() cria na 1ª vez (com a
+// section JÁ visível → tamanho certo) e faz invalidateSize() nas próximas; o
+// setTimeout deixa o layout aplicar antes de medir o container (mapa em container
+// que estava display:none renderiza com tamanho errado se medido antes).
+function abrirMapaMobile() {
   document.getElementById('modal-mais').classList.remove('open');
   document.querySelectorAll('.scr').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('.nbtn').forEach(x => x.classList.remove('active'));
-  document.getElementById('s-kpi').classList.add('active');
-  renderKpi(document.getElementById('s-kpi'));
+  document.getElementById('s-mapa').classList.add('active');
+  setTimeout(() => initLeafletInstance(), 150);
 }
 function fecharMais(e) { if (e.target.id === 'modal-mais') fecharMaisBtn(); }
 function fecharMaisBtn() { document.getElementById('modal-mais').classList.remove('open'); }

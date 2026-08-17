@@ -66,8 +66,8 @@
   <!-- MAIN -->
   <main class="main" id="main">
 
-    <!-- ═══ ABA: COMPARA ═══ -->
-    <section class="scr" id="s-comp">
+    <!-- ═══ ABA: COMPARA ═══ (default do bnav) -->
+    <section class="scr active" id="s-comp">
       <div class="kgrid">
         <div class="kbox" onclick="abrirFaltam()" style="cursor:pointer">
           <div class="klbl">Lançaram hoje</div>
@@ -154,8 +154,8 @@
       <div class="empty">🚧 Em construção</div>
     </section>
 
-    <!-- ═══ ABA: MAPA ═══ -->
-    <section class="scr active" id="s-mapa">
+    <!-- ═══ ABA: MAPA ═══ (agora via Mais+; Leaflet criado sob demanda em abrirMapaMobile) -->
+    <section class="scr" id="s-mapa">
       <div class="sdiv">Mapa de preços — BH / Grande BH</div>
       <div class="map-ctrl">
         <select class="map-sel" id="mf" onchange="mapaFuelChange(this.value)">
@@ -235,7 +235,7 @@
     <section class="scr" id="s-medicao"></section>
 
     <!-- ═══ ABA: KPI ═══ (compartilha ../painel-adm/kpi.js, sem fork; sugestão de pedido).
-         Entra pelo Mais+ (abrirKpiMobile). Tokens longos do kpi.css resolvem via #s-kpi no admin.css. -->
+         Aba do bnav (setTab 'kpi'). Tokens longos do kpi.css resolvem via #s-kpi no admin.css. -->
     <section class="scr" id="s-kpi"></section>
 
     <!-- ═══ ABA: FORNECEDORES ═══ (compartilha ../painel-adm/fornecedores.js, sem fork) -->
@@ -252,7 +252,7 @@
 
   <!-- BOTTOM NAV -->
   <nav class="bnav">
-    <button class="nbtn" onclick="setTab(this,'comp')">
+    <button class="nbtn active" onclick="setTab(this,'comp')">
       <span class="ni">⚖️</span>
       <span class="nl">Compara</span>
     </button>
@@ -268,9 +268,9 @@
       <span class="ni">📊</span>
       <span class="nl">Fornecedores</span>
     </button>
-    <button class="nbtn active" onclick="setTab(this,'mapa')">
-      <span class="ni">📍</span>
-      <span class="nl">Mapa</span>
+    <button class="nbtn" onclick="setTab(this,'kpi')">
+      <span class="ni">📦</span>
+      <span class="nl">KPI</span>
     </button>
     <button class="nbtn" onclick="setTab(this,'relat')">
       <span class="ni">📊</span>
@@ -300,9 +300,9 @@
       <span class="mic">📈</span>
       Histórico
     </div>
-    <div class="mitem" onclick="abrirKpiMobile()">
-      <span class="mic">📊</span>
-      KPI · Sugestão de pedido
+    <div class="mitem" onclick="abrirMapaMobile()">
+      <span class="mic">📍</span>
+      Mapa
     </div>
   </div>
 </div>
