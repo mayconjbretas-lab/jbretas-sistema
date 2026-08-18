@@ -18,12 +18,33 @@
 .kpi-inp:focus { border-color: var(--accent); }
 
 /* Métricas */
-.kpi-metricas { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; margin-bottom: 1rem; }
+.kpi-metricas { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; margin-bottom: .9rem; }
 .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius, 10px); padding: .7rem .8rem; }
 .kpi-card-lbl { font-family: var(--mono); font-size: .58rem; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; }
 .kpi-card-val { font-family: var(--mono); font-size: 1.5rem; font-weight: 700; color: var(--text); margin-top: 2px; }
 .kpi-card-sub { font-size: .62rem; color: var(--text3); margin-top: 2px; }
 .kpi-m-crit .kpi-card-val { color: var(--danger); }
+.kpi-card-click { cursor: pointer; transition: border-color .15s; }
+.kpi-card-click:hover { border-color: var(--accent); }
+
+/* Sub-abas (Sugestão · Pico · Giro · Volume) — abaixo dos filtros/cards fixos */
+.kpi-subabas { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: .9rem; border-bottom: 1px solid var(--border); }
+.kpi-subaba {
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  color: var(--text3); font-family: var(--mono); font-size: .74rem; font-weight: 700;
+  padding: .5rem .8rem; cursor: pointer; white-space: nowrap;
+}
+.kpi-subaba:hover { color: var(--text2); }
+.kpi-subaba.on { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Legenda do fator do dia (dentro da aba Sugestão) */
+.kpi-legenda { font-family: var(--mono); font-size: .72rem; color: var(--text2); margin-bottom: .7rem; }
+
+/* Placeholder das sub-abas ainda vazias */
+.kpi-ph { padding: 2.5rem 1rem; text-align: center; font-family: var(--mono); font-size: .8rem; color: var(--text3); }
+
+/* Giro na tabela: cor via inline (corGiro), sem chip de fundo */
+.kpi-giro { font-family: var(--mono); font-weight: 700; }
 
 /* Mensagens */
 .kpi-msg  { padding: 1.5rem; text-align: center; font-family: var(--mono); font-size: .8rem; color: var(--text3); }
@@ -66,15 +87,64 @@
 .kpi-div-num { text-align: right; font-family: var(--mono); font-size: .68rem; color: var(--text); }
 .kpi-sembase { font-size: .58rem; color: var(--text3); font-style: italic; }
 
-/* Barras horizontais (volume por posto) */
-.kpi-hb-row { display: grid; grid-template-columns: 1fr 90px 64px; align-items: center; gap: .5rem; margin-bottom: .35rem; }
+/* Barras horizontais (Volume): nome FIXO · barra flex (começa após o nome e vai
+   até o número) · valor FIXO à direita. Sem vão morto no meio. */
+.kpi-hb-row { display: grid; grid-template-columns: 140px 1fr 72px; align-items: center; gap: .5rem; margin-bottom: .35rem; }
 .kpi-hb-lbl { font-size: .72rem; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kpi-hb-track { height: 14px; background: var(--surface2); border-radius: 4px; }
 .kpi-hb-bar { height: 100%; background: var(--accent); border-radius: 4px; min-width: 2px; }
 .kpi-hb-num { text-align: right; font-family: var(--mono); font-size: .7rem; color: var(--text); }
 
-/* Mobile (~390px): métricas em 2 col, gráficos empilhados */
+/* ── Pico: gráfico de COLUNAS verticais divergindo de uma linha de base ──
+   As duas metades têm altura fixa (64px) — dimensão do gráfico, como o
+   height:160px das barras do compra.js; as colunas são % dessa altura. */
+/* Largura contida (à esquerda, acompanha título/legenda) — sem esticar na tela. */
+.kpi-pico-chart { position: relative; max-width: 560px; display: flex; align-items: stretch; gap: 6px; margin-top: .2rem; }
+/* Linha da média CONTÍNUA: um traço atrás das colunas, no topo da faixa do dia
+   (64px), da primeira à última coluna sem cortes. */
+.kpi-pico-chart::before { content: ''; position: absolute; left: 0; right: 0; top: 64px; height: 2px; background: var(--border2); z-index: 0; }
+.kpi-pc-col { flex: 1; min-width: 0; position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
+.kpi-pc-up   { height: 64px; width: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+.kpi-pc-down { height: 64px; width: 100%; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; }
+/* Faixa central: só o nome do dia (a linha vem do ::before contínuo acima). */
+.kpi-pc-day { width: 100%; text-align: center; font-family: var(--mono); font-size: .64rem; color: var(--text2);
+  line-height: 18px; height: 18px; }
+.kpi-pc-bar { width: 60%; max-width: 56px; min-height: 2px; border-radius: 3px 3px 0 0; }
+.kpi-pc-bar.up   { background: var(--ok); }
+.kpi-pc-bar.down { background: var(--danger); border-radius: 0 0 3px 3px; }
+.kpi-pc-vlbl { font-family: var(--mono); font-size: .62rem; line-height: 1.3; white-space: nowrap; }
+.kpi-pc-pos { color: var(--ok); }
+.kpi-pc-neg { color: var(--danger); }
+.kpi-pc-neu { color: var(--text3); }
+/* Legenda do Pico: separada por linha fina, texto 12px em --text2. */
+.kpi-pico-legenda { margin-top: .8rem; padding-top: .7rem; border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--text2); line-height: 1.4; }
+
+/* Container de barras (Pico e Volume) */
+.kpi-vol { display: flex; flex-direction: column; }
+
+/* Botão "Ver todos (N)" — expande a lista no lugar */
+.kpi-vertodos {
+  display: block; width: 100%; margin-top: .5rem; padding: .5rem;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text2); font-family: var(--mono); font-size: .72rem; font-weight: 700; cursor: pointer;
+}
+.kpi-vertodos:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Sub-linha mobile (COMB · tanque) sob o posto — escondida no desktop */
+.kpi-mob-sub { display: none; }
+
+/* Mobile (~390px): métricas em 2 col, gráficos empilhados; COMB e TANQUE saem
+   das colunas e descem para a sub-linha cinza sob o posto. */
 @media (max-width: 620px) {
   .kpi-metricas { grid-template-columns: repeat(2, 1fr); }
   .kpi-grafs { grid-template-columns: 1fr; }
+  .kpi-c-comb, .kpi-c-tanque { display: none; }
+  .kpi-mob-sub { display: block; font-family: var(--mono); font-size: .64rem; color: var(--text3); margin-top: 2px; }
+  /* Pico no mobile: colunas mais estreitas e rótulos menores — reduz a fonte
+     antes de esconder qualquer coisa; os 7 dias sempre aparecem. */
+  .kpi-pico-chart { gap: 3px; }
+  .kpi-pc-bar { width: 72%; }
+  .kpi-pc-vlbl { font-size: 11px; }
+  .kpi-pc-day { font-size: .58rem; }
 }
