@@ -74,6 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   montarTopbar();
   ligarControles();
   ligarControlesUsuarios();
+  ligarControlesTecnox();
   await carregarUsuarios();
 });
 
@@ -87,7 +88,7 @@ function montarTopbar() {
 // ABAS
 // ════════════════════════════════════════════════════════════════
 function switchTab(name) {
-  ['acessar', 'usuarios', 'pendencias'].forEach(t => {
+  ['acessar', 'usuarios', 'pendencias', 'tecnox'].forEach(t => {
     const panel = document.getElementById('tab-' + t);
     if (panel) panel.classList.toggle('active', t === name);
     const btn = document.getElementById('tabbtn-' + t);
@@ -95,6 +96,8 @@ function switchTab(name) {
   });
   if (name === 'usuarios') carregarGerenciar(false);
   if (name === 'pendencias') carregarItens(false);
+  // API TecnoX: ao abrir carrega SÓ o histórico (rápido). A sonda (30–60s) só no clique.
+  if (name === 'tecnox') txAoAbrir();
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -625,3 +628,225 @@ window.atualizarBloqueio = atualizarBloqueio;
 window.carregarItens     = carregarItens;
 window.renderItens       = renderItens;
 window.mudarStatusItem   = mudarStatusItem;
+
+// ════════════════════════════════════════════════════════════════
+// ABA API TecnoX — diagnóstico da sonda (POST /tecnox/sonda executa+grava;
+// GET /tecnox/sondas lê o histórico). Ao abrir carrega SÓ o histórico (rápido);
+// a sonda (30–60s) só no clique. Reusa escapeHtml/apiFetch globais.
+// ════════════════════════════════════════════════════════════════
+let _txPostos = [];
+let _txHist = [];
+let _txSonda = null;      // sonda mostrada nas tabelas de campos/soma
+let _txSondaIdx = 0;      // índice dela no histórico (p/ destacar a linha)
+let _txConsultando = false;
+// Campos que ESPERAMOS: se não vierem, aparecem como "falta" (senão o ausente
+// fica invisível — o oposto do objetivo). São campos de ITEM.
+const TX_ESPERADOS = { vendas: ['qtd_item', 'formaPagamento', 'indiceCombustivel'], compras: [] };
+
+function txDataHora(iso) {
+  try { return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+  catch (e) { return String(iso || ''); }
+}
+function txBRL(n) { return 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function txMsg(txt, tipo) {
+  const el = document.getElementById('tx-msg'); if (!el) return;
+  if (!txt) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = ''; el.textContent = txt;
+  el.className = 'tx-msg ' + (tipo === 'erro' ? 'tx-msg-erro' : 'tx-msg-ok');
+}
+
+function ligarControlesTecnox() {
+  const btn = document.getElementById('tx-btn');
+  if (btn) btn.addEventListener('click', txConsultar);
+  const selP = document.getElementById('tx-posto');
+  if (selP) selP.addEventListener('change', txCarregarHistorico);
+  const selT = document.getElementById('tx-tipo');
+  if (selT) selT.addEventListener('change', txCarregarHistorico);
+  const hist = document.getElementById('tx-hist');
+  if (hist) hist.addEventListener('click', (e) => {
+    const row = e.target.closest ? e.target.closest('.tx-hist-row') : null;
+    if (!row) return;
+    const idx = parseInt(row.getAttribute('data-idx'), 10);
+    if (!Number.isInteger(idx) || !_txHist[idx]) return;
+    _txSondaIdx = idx; _txSonda = _txHist[idx];
+    txRenderHistorico(); txRenderCampos(); txRenderSoma();
+  });
+}
+
+function txAoAbrir() {
+  if (!_txPostos.length) txCarregarPostos();  // carrega postos e, ao fim, o histórico
+  else txCarregarHistorico();
+}
+
+async function txCarregarPostos() {
+  const sel = document.getElementById('tx-posto');
+  try {
+    const resp = await apiFetch('/postos');
+    _txPostos = (resp.postos || [])
+      .filter(p => p.cnpj && String(p.cnpj).trim())
+      .sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+    if (sel) sel.innerHTML = _txPostos.length
+      ? _txPostos.map(p => '<option value="' + escapeHtml(p.cnpj) + '">' + escapeHtml(p.nome) + '</option>').join('')
+      : '<option value="">Nenhum posto com CNPJ</option>';
+    const inp = document.getElementById('tx-data');   // default: ontem
+    if (inp && !inp.value) { const d = new Date(); d.setDate(d.getDate() - 1); inp.value = d.toISOString().slice(0, 10); }
+    txCarregarHistorico();
+  } catch (err) {
+    if (sel) sel.innerHTML = '<option value="">Erro ao carregar postos</option>';
+  }
+}
+
+async function txCarregarHistorico() {
+  const cnpj = (document.getElementById('tx-posto') || {}).value || '';
+  const tipo = (document.getElementById('tx-tipo') || {}).value || 'vendas';
+  const hist = document.getElementById('tx-hist');
+  const cont = document.getElementById('tx-hist-cont');
+  if (!cnpj) { if (hist) hist.innerHTML = '<div class="empty-state">Selecione um posto.</div>'; return; }
+  try {
+    const resp = await apiFetch('/tecnox/sondas?cnpj=' + encodeURIComponent(cnpj) + '&tipo=' + encodeURIComponent(tipo) + '&limite=10');
+    _txHist = resp.sondas || [];
+    _txSondaIdx = 0;
+    _txSonda = _txHist[0] || null;
+    if (cont) cont.textContent = _txHist.length + ' sonda(s)';
+    txRenderDiff();
+    txRenderCampos();
+    txRenderSoma();
+    txRenderHistorico();
+  } catch (err) {
+    if (hist) hist.innerHTML = '<div class="empty-state">Erro ao carregar histórico: ' + escapeHtml(err.message || '') + '</div>';
+  }
+}
+
+async function txConsultar() {
+  if (_txConsultando) return;
+  const cnpj = (document.getElementById('tx-posto') || {}).value || '';
+  const data = (document.getElementById('tx-data') || {}).value || '';
+  const tipo = (document.getElementById('tx-tipo') || {}).value || 'vendas';
+  if (!cnpj) { txMsg('Selecione um posto.', 'erro'); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) { txMsg('Selecione uma data.', 'erro'); return; }
+  const btn = document.getElementById('tx-btn');
+  _txConsultando = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Consultando… (até 60s)'; }
+  txMsg('', '');
+  try {
+    await apiFetch('/tecnox/sonda', { method: 'POST', body: JSON.stringify({ tipo, cnpj, data }) });
+    txMsg('Sonda executada e gravada.', 'ok');
+  } catch (err) {
+    // A rota grava a falha mesmo assim (histórico de indisponibilidade).
+    txMsg('Falha na sonda: ' + (err.message || err) + ' — registrada no histórico.', 'erro');
+  } finally {
+    _txConsultando = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Consultar e salvar'; }
+    await txCarregarHistorico();   // recarrega: mostra a nova sonda (sucesso OU falha)
+  }
+}
+
+// Mapa campo → "chega?" (preenchidos > 0), unindo capa + itens de uma sonda.
+function txMapaChega(sonda) {
+  const m = {};
+  const c = (sonda && sonda.campos) || {};
+  const todos = [].concat(Array.isArray(c.capa) ? c.capa : [], Array.isArray(c.itens) ? c.itens : []);
+  todos.forEach(r => { if (r && r.campo) m[r.campo] = (Number(r.preenchidos) || 0) > 0; });
+  return m;
+}
+
+// Faixa de comparativo entre as 2 sondas mais recentes (só o que MUDOU).
+function txRenderDiff() {
+  const el = document.getElementById('tx-diff'); if (!el) return;
+  el.innerHTML = '';
+  if (_txHist.length < 2) return;
+  const atual = _txHist[0], anterior = _txHist[1];
+  if (atual.erro || anterior.erro) return;   // não compara contra sonda que falhou
+  const cAt = txMapaChega(atual), cAn = txMapaChega(anterior);
+  const nomes = new Set([].concat(Object.keys(cAt), Object.keys(cAn)));
+  const linhas = [];
+  nomes.forEach(nome => {
+    const antes = !!cAn[nome], agora = !!cAt[nome];
+    if (!antes && agora) linhas.push('<div class="tx-diff-add">' + escapeHtml(nome) + ' passou a chegar</div>');
+    else if (antes && !agora) linhas.push('<div class="tx-diff-rem">' + escapeHtml(nome) + ' parou de chegar</div>');
+  });
+  if (!linhas.length) return;   // nada mudou → sem faixa
+  el.innerHTML = '<div class="tx-diff-wrap">' + linhas.join('') + '</div>';
+}
+
+function txLinhaCampo(campo, preench, zeros, exemplo, status) {
+  const ex = (exemplo === null || exemplo === undefined) ? '—'
+    : escapeHtml(typeof exemplo === 'object' ? JSON.stringify(exemplo) : String(exemplo));
+  return '<tr' + (status === 'falta' ? ' class="tx-row-falta"' : '') + '>' +
+    '<td class="tx-campo">' + escapeHtml(campo) + '</td>' +
+    '<td class="tx-num">' + preench + '</td>' +
+    '<td class="tx-num">' + zeros + '</td>' +
+    '<td class="tx-ex">' + ex + '</td>' +
+    '<td><span class="tx-st tx-st-' + status + '">' + status + '</span></td>' +
+  '</tr>';
+}
+function txTabelaCampos(rows, esperados) {
+  const arr = Array.isArray(rows) ? rows : [];
+  const presentes = new Set(arr.map(r => r.campo));
+  const linhas = arr.map(r => txLinhaCampo(r.campo, r.preenchidos || 0, r.zeros || 0, r.exemplo,
+    (Number(r.preenchidos) || 0) > 0 ? 'chega' : 'vazio'));
+  (esperados || []).forEach(nome => {   // esperado ausente → "falta" (no topo, pra destacar)
+    if (!presentes.has(nome)) linhas.unshift(txLinhaCampo(nome, 0, 0, null, 'falta'));
+  });
+  if (!linhas.length) return '<div class="empty-state">Sem campos.</div>';
+  return '<div class="tx-tbl-wrap"><table class="tx-tbl"><thead><tr>' +
+    '<th>Campo</th><th class="tx-num">Preench.</th><th class="tx-num">Zeros</th><th>Exemplo</th><th>Status</th>' +
+    '</tr></thead><tbody>' + linhas.join('') + '</tbody></table></div>';
+}
+
+function txRenderCampos() {
+  const el = document.getElementById('tx-campos'); if (!el) return;
+  const s = _txSonda;
+  if (!s) { el.innerHTML = ''; return; }
+  if (s.erro) {
+    el.innerHTML = '<div class="section"><div class="section-body"><div class="tx-falhou">Sonda falhou: ' +
+      escapeHtml(s.erro) + ' — sem inventário de campos.</div></div></div>';
+    return;
+  }
+  const campos = s.campos || {};
+  const esperados = TX_ESPERADOS[s.tipo] || [];
+  el.innerHTML =
+    '<div class="section"><div class="section-header"><span class="section-icon">🧾</span>' +
+      '<span class="section-title">Campos — Capa</span></div>' +
+      '<div class="section-body">' + txTabelaCampos(campos.capa, []) + '</div></div>' +
+    '<div class="section"><div class="section-header"><span class="section-icon">📦</span>' +
+      '<span class="section-title">Campos — Itens</span></div>' +
+      '<div class="section-body">' + txTabelaCampos(campos.itens, esperados) + '</div></div>';
+}
+
+function txRenderSoma() {
+  const el = document.getElementById('tx-soma'); if (!el) return;
+  const s = _txSonda;
+  if (!s || s.erro) { el.innerHTML = ''; return; }
+  const soma = Array.isArray(s.soma_por_item) ? s.soma_por_item : [];
+  if (!soma.length) { el.innerHTML = ''; return; }
+  const semLitros = soma.every(x => !(Number(x.qtd) > 0));
+  const linhas = soma.map(x =>
+    '<tr><td class="tx-campo">' + escapeHtml(x.descricao) + '</td>' +
+    '<td class="tx-num">' + (x.itens || 0) + '</td>' +
+    '<td class="tx-num">' + txBRL(x.bruto) + '</td>' +
+    '<td class="tx-num">' + txBRL(x.desconto) + '</td>' +
+    '<td class="tx-num">' + txBRL(x.valor) + '</td></tr>').join('');
+  el.innerHTML =
+    '<div class="section"><div class="section-header"><span class="section-icon">⛽</span>' +
+      '<span class="section-title">Faturamento por combustível</span></div>' +
+      '<div class="section-body"><div class="tx-tbl-wrap"><table class="tx-tbl"><thead><tr>' +
+        '<th>Combustível</th><th class="tx-num">Itens</th><th class="tx-num">Bruto</th>' +
+        '<th class="tx-num">Desconto</th><th class="tx-num">Líquido</th>' +
+      '</tr></thead><tbody>' + linhas + '</tbody></table></div>' +
+      (semLitros ? '<div class="tx-nota">litros indisponíveis — a API não devolve quantidade</div>' : '') +
+    '</div></div>';
+}
+
+function txRenderHistorico() {
+  const el = document.getElementById('tx-hist'); if (!el) return;
+  if (!_txHist.length) { el.innerHTML = '<div class="empty-state">Nenhuma sonda ainda para este posto + tipo.</div>'; return; }
+  el.innerHTML = _txHist.map((s, i) =>
+    '<div class="tx-hist-row' + (i === _txSondaIdx ? ' on' : '') + '" data-idx="' + i + '">' +
+      '<span class="tx-h-data">' + escapeHtml(txDataHora(s.executado_em)) + '</span>' +
+      '<span class="tx-h-tipo">' + escapeHtml(s.tipo) + '</span>' +
+      '<span class="tx-h-reg">' + (s.registros != null ? s.registros : 0) + ' reg</span>' +
+      '<span class="tx-h-ms">' + (s.duracao_ms != null ? s.duracao_ms : '?') + ' ms</span>' +
+      (s.erro ? '<span class="tx-h-erro">' + escapeHtml(s.erro) + '</span>' : '<span class="tx-h-ok">ok</span>') +
+    '</div>').join('');
+}

@@ -13,8 +13,8 @@
 <link rel="apple-touch-icon" href="/shared/icon-192.png">
 <meta name="theme-color" content="#0a0d1c">
 <link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
-<link rel="stylesheet" href="../../shared/css/base.css?v=202608181427">
-<link rel="stylesheet" href="painel-ti.css?v=202608181427">
+<link rel="stylesheet" href="../../shared/css/base.css?v=202608181908">
+<link rel="stylesheet" href="painel-ti.css?v=202608181908">
 <script>
   (function(){
     var t = localStorage.getItem('jb_theme') || 'dark';
@@ -54,6 +54,7 @@
       <button class="ti-tab active" id="tabbtn-acessar"  data-tab="acessar"  type="button">👁️ Acessar como</button>
       <button class="ti-tab"        id="tabbtn-usuarios" data-tab="usuarios" type="button">👤 Usuários</button>
       <button class="ti-tab" id="tabbtn-pendencias" data-tab="pendencias" type="button">📋 Pendências</button>
+      <button class="ti-tab" id="tabbtn-tecnox" data-tab="tecnox" type="button">🔌 API TecnoX</button>
     </div>
 
     <!-- ══════════ ABA: ACESSAR COMO ══════════ -->
@@ -131,6 +132,54 @@
       <div class="ti-it-lista" id="ti-it-lista"></div>
     </section>
 
+    <!-- ══════════ ABA: API TecnoX ══════════ -->
+    <section id="tab-tecnox" class="ti-tab-panel">
+      <div class="page-header">
+        <div>
+          <div class="page-title">🔌 API TecnoX</div>
+          <div class="page-date">Sonda de diagnóstico — executa, grava e inventaria os campos do retorno</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-icon">🛰️</span>
+          <span class="section-title">Consultar</span>
+        </div>
+        <div class="section-body">
+          <div class="tx-controls">
+            <label class="tx-f"><span>Posto</span>
+              <select id="tx-posto" class="tx-inp"><option value="">Carregando…</option></select></label>
+            <label class="tx-f"><span>Data</span>
+              <input type="date" id="tx-data" class="tx-inp"></label>
+            <label class="tx-f"><span>Tipo</span>
+              <select id="tx-tipo" class="tx-inp">
+                <option value="vendas">vendas</option>
+                <option value="compras">compras</option>
+              </select></label>
+            <button id="tx-btn" class="tx-btn" type="button">Consultar e salvar</button>
+          </div>
+          <div id="tx-msg" class="tx-msg" style="display:none"></div>
+        </div>
+      </div>
+
+      <!-- Comparativo (entre as 2 sondas mais recentes), tabela de campos e soma -->
+      <div id="tx-diff"></div>
+      <div id="tx-campos"></div>
+      <div id="tx-soma"></div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-icon">🕓</span>
+          <span class="section-title">Histórico</span>
+          <span style="margin-left:auto;font-family:var(--mono);font-size:.62rem;color:var(--text3)" id="tx-hist-cont">—</span>
+        </div>
+        <div class="section-body">
+          <div id="tx-hist"><div class="empty-state">Selecione posto e tipo.</div></div>
+        </div>
+      </div>
+    </section>
+
   </div>
 
 </div>
@@ -184,9 +233,9 @@
   <div id="toast-msg"></div>
 </div>
 
-<script src="../../shared/js/config.js?v=202608181427"></script>
-<script src="../../shared/js/api.js?v=202608181427"></script>
-<script src="../../shared/js/auth.js?v=202608181427"></script>
-<script src="app.js?v=202608181427"></script>
+<script src="../../shared/js/config.js?v=202608181908"></script>
+<script src="../../shared/js/api.js?v=202608181908"></script>
+<script src="../../shared/js/auth.js?v=202608181908"></script>
+<script src="app.js?v=202608181908"></script>
 </body>
 </html>
