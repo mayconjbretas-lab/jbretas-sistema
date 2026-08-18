@@ -10,9 +10,12 @@
 <link rel="apple-touch-icon" href="/shared/icon-192.png">
 <meta name="theme-color" content="#0a0d1c">
 <link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
-<link rel="stylesheet" href="../../shared/css/base.css?v=202608181407">
-<link rel="stylesheet" href="../../shared/css/matriz.css?v=202608181407">
-<link rel="stylesheet" href="logistica.css?v=202608181407">
+<link rel="stylesheet" href="../../shared/css/base.css?v=202608181427">
+<link rel="stylesheet" href="../../shared/css/matriz.css?v=202608181427">
+<link rel="stylesheet" href="logistica.css?v=202608181427">
+<!-- KPI (Sugestão de Pedido) — componente compartilhado do painel-adm, sem fork.
+     Tokens longos resolvidos pelo base.css que a Logística já carrega. -->
+<link rel="stylesheet" href="../painel-adm/kpi.css?v=202608181427">
 <script>
   // Pre-paint: aplica o tema salvo antes de renderizar (evita flash).
   (function(){
@@ -100,6 +103,7 @@
         <div class="sb-section-title">Módulos</div>
         <ul class="nav-list">
           <li class="nav-item active" data-tab="tab-matriz" onclick="switchMainTab('tab-matriz', this)">📊 Matriz / Medição</li>
+          <li class="nav-item" data-tab="tab-kpi" onclick="switchMainTab('tab-kpi', this)">🎯 Sugestão de Pedido</li>
           <li class="nav-item" data-tab="tab-motorista" onclick="switchMainTab('tab-motorista', this)">🚚 Motorista / Conciliação</li>
           <li class="nav-item" data-tab="tab-escala" onclick="switchMainTab('tab-escala', this)">🗓️ Escala</li>
           <li class="nav-item" data-tab="tab-custo" onclick="switchMainTab('tab-custo', this)">💰 Custo &amp; Margem</li>
@@ -120,6 +124,10 @@
         <div id="matriz-host" class="matriz-host"></div>
         <div id="matriz-vazio" class="matriz-vazio" style="display:none">Selecione um posto para ver a matriz</div>
       </section>
+
+      <!-- ABA KPI — Sugestão de Pedido. Renderizada por window.renderKpi() (../painel-adm/kpi.js,
+           compartilhada sem fork). Vazia de propósito; preenchida ao abrir a aba. -->
+      <section id="tab-kpi" class="view-panel"></section>
 
       <!-- ABA 2: MOTORISTA / CONCILIAÇÃO (Fase 2) -->
       <section id="tab-motorista" class="view-panel">
@@ -143,14 +151,15 @@
 
 </div>
 
-<script src="../../shared/js/config.js?v=202608181407"></script>
-<script src="../../shared/js/api.js?v=202608181407"></script>
-<script src="../../shared/js/auth.js?v=202608181407"></script>
-<script src="../../shared/js/solicitacoes-logistica.js?v=202608181407"></script>
-<script src="../../shared/js/push-inscricao.js?v=202608181407"></script>
-<script src="custo-margem.js?v=202608181407"></script>
-<script src="../../shared/js/matriz-medicao.js?v=202608181407"></script>
-<script src="escala.js?v=202608181407"></script>
-<script src="app.js?v=202608181407"></script>
+<script src="../../shared/js/config.js?v=202608181427"></script>
+<script src="../../shared/js/api.js?v=202608181427"></script>
+<script src="../../shared/js/auth.js?v=202608181427"></script>
+<script src="../../shared/js/solicitacoes-logistica.js?v=202608181427"></script>
+<script src="../../shared/js/push-inscricao.js?v=202608181427"></script>
+<script src="custo-margem.js?v=202608181427"></script>
+<script src="../../shared/js/matriz-medicao.js?v=202608181427"></script>
+<script src="escala.js?v=202608181427"></script>
+<script src="../painel-adm/kpi.js?v=202608181427"></script>
+<script src="app.js?v=202608181427"></script>
 </body>
 </html>

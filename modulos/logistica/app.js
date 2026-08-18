@@ -45,6 +45,9 @@ function switchMainTab(tabId, el) {
   if (tabId === 'tab-custo' && window.renderCustoMargem) renderCustoMargem(document.getElementById('tab-custo'));
   // Escala — render próprio (escala.js expõe renderEscala).
   if (tabId === 'tab-escala' && window.renderEscala) renderEscala(document.getElementById('tab-escala'));
+  // Sugestão de Pedido (KPI) — componente compartilhado do painel-adm (kpi.js
+  // expõe renderKpi), sem fork. Mesmo padrão de Custo/Escala.
+  if (tabId === 'tab-kpi' && window.renderKpi) renderKpi(document.getElementById('tab-kpi'));
 }
 
 // ── Filtro encadeado bandeira → posto (GET /postos) ─────────────
