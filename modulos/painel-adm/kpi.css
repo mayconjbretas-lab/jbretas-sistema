@@ -28,8 +28,12 @@
 .kpi-card-click:hover { border-color: var(--accent); }
 
 /* Sub-abas (Sugestão · Pico · Giro · Volume) — abaixo dos filtros/cards fixos */
-.kpi-subabas { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: .9rem; border-bottom: 1px solid var(--border); }
+/* nowrap + overflow-x: em tela larga os 4 cabem (sem scroll); em tela estreita
+   a barra rola na horizontal — nunca some nem reduz abaixo de 4 abas. */
+.kpi-subabas { display: flex; gap: .4rem; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  margin-bottom: .9rem; border-bottom: 1px solid var(--border); }
 .kpi-subaba {
+  flex-shrink: 0;
   background: transparent; border: none; border-bottom: 2px solid transparent;
   color: var(--text3); font-family: var(--mono); font-size: .74rem; font-weight: 700;
   padding: .5rem .8rem; cursor: pointer; white-space: nowrap;
@@ -61,6 +65,21 @@
 .kpi-td-sug { font-weight: 700; color: var(--accent); }
 .kpi-td-giro { text-align: center; }
 
+/* Sugestão em BLOCOS (um por posto) */
+.kpi-blocos { display: flex; flex-direction: column; gap: .6rem; }
+.kpi-bloco { border: 1px solid var(--border); border-radius: var(--radius, 10px); overflow: hidden; }
+/* Cabeçalho: nome (trunca) à esquerda, total à direita — NUNCA quebra em 2 linhas. */
+.kpi-bl-cab { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem;
+  padding: .5rem .7rem; background: var(--surface2); }
+.kpi-bl-nome { font-weight: 700; color: var(--text); font-size: .84rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kpi-bl-total { flex-shrink: 0; white-space: nowrap; font-family: var(--mono); font-weight: 700; color: var(--accent); }
+/* Linha de combustível: código · giro · sugerido (à direita). */
+.kpi-bl-lin { display: grid; grid-template-columns: 60px 1fr auto; align-items: center; gap: .5rem;
+  padding: .4rem .7rem; border-top: 1px solid var(--border); font-size: .82rem; }
+.kpi-bl-comb { font-family: var(--mono); color: var(--text2); }
+.kpi-bl-giro { font-family: var(--mono); }
+.kpi-bl-sug  { text-align: right; font-family: var(--mono); font-weight: 700; color: var(--accent); white-space: nowrap; }
+
 /* Chip de giro */
 .kpi-chip { display: inline-block; font-family: var(--mono); font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
 .kpi-chip-crit   { background: var(--danger);  color: #fff; }
@@ -87,13 +106,19 @@
 .kpi-div-num { text-align: right; font-family: var(--mono); font-size: .68rem; color: var(--text); }
 .kpi-sembase { font-size: .58rem; color: var(--text3); font-style: italic; }
 
-/* Barras horizontais (Volume): nome FIXO · barra flex (começa após o nome e vai
-   até o número) · valor FIXO à direita. Sem vão morto no meio. */
-.kpi-hb-row { display: grid; grid-template-columns: 140px 1fr 72px; align-items: center; gap: .5rem; margin-bottom: .35rem; }
+/* Barras horizontais (Volume): nome FIXO · barra (teto 560px, como o Pico) ·
+   valor FIXO à direita. justify-content:start deixa tudo à esquerda; a área da
+   barra não estica além de 560px → o maior volume = 100% desse espaço. */
+.kpi-hb-row { display: grid; grid-template-columns: 140px minmax(0, 560px) 72px; justify-content: start; align-items: center; gap: .5rem; margin-bottom: .35rem; }
 .kpi-hb-lbl { font-size: .72rem; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kpi-hb-track { height: 14px; background: var(--surface2); border-radius: 4px; }
 .kpi-hb-bar { height: 100%; background: var(--accent); border-radius: 4px; min-width: 2px; }
 .kpi-hb-num { text-align: right; font-family: var(--mono); font-size: .7rem; color: var(--text); }
+.kpi-hb-un  { color: var(--text3); font-size: .82em; }
+/* Legenda do Volume: separada por linha fina, 12px em --text2 (padrão do Pico) */
+.kpi-vol-legenda { margin-top: .8rem; padding-top: .7rem; border-top: 1px solid var(--border); font-size: 12px; color: var(--text2); line-height: 1.4; }
+/* Nota de rodapé das tabelas (Giro e Sugestão) — mesmo padrão das legendas. */
+.kpi-nota { margin-top: .8rem; padding-top: .7rem; border-top: 1px solid var(--border); font-size: 12px; color: var(--text2); line-height: 1.4; }
 
 /* ── Pico: gráfico de COLUNAS verticais divergindo de uma linha de base ──
    As duas metades têm altura fixa (64px) — dimensão do gráfico, como o
@@ -139,7 +164,9 @@
 @media (max-width: 620px) {
   .kpi-metricas { grid-template-columns: repeat(2, 1fr); }
   .kpi-grafs { grid-template-columns: 1fr; }
-  .kpi-c-comb, .kpi-c-tanque { display: none; }
+  /* Tabelas (Sugestão/Giro): COMB e TANQUE descem para a sub-linha cinza; e
+     CAPACIDADE e VENDA/DIA saem — sobra o que importa: posto, giro, sugerido. */
+  .kpi-c-comb, .kpi-c-tanque, .kpi-c-cap, .kpi-c-venda { display: none; }
   .kpi-mob-sub { display: block; font-family: var(--mono); font-size: .64rem; color: var(--text3); margin-top: 2px; }
   /* Pico no mobile: colunas mais estreitas e rótulos menores — reduz a fonte
      antes de esconder qualquer coisa; os 7 dias sempre aparecem. */
@@ -147,4 +174,6 @@
   .kpi-pc-bar { width: 72%; }
   .kpi-pc-vlbl { font-size: 11px; }
   .kpi-pc-day { font-size: .58rem; }
+  /* Volume: nome mais estreito (trunca com reticências); barra e número ficam. */
+  .kpi-hb-row { grid-template-columns: 96px 1fr 64px; }
 }

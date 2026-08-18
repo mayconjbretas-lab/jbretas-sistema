@@ -106,7 +106,6 @@
             '<select id="kpi-ordenar" class="kpi-inp">' +
               '<option value="giro">Giro (menor 1º)</option>' +
               '<option value="sugerido">Sugerido (maior 1º)</option>' +
-              '<option value="venda">Venda/dia (maior 1º)</option>' +
               '<option value="posto">Posto (A–Z)</option>' +
             '</select></label>' +
         '</div>' +
@@ -172,19 +171,6 @@
     }
   }
 
-  // ── Itens filtrados/ordenados (cliente) ─────────────────────────
-  function itensView() {
-    let arr = (_resp && _resp.itens) ? _resp.itens.slice() : [];
-    if (_fComb) arr = arr.filter(i => i.combustivel === _fComb);
-    const inf = Number.POSITIVE_INFINITY;
-    // Sem-medição (e giro nulo) vão para o FIM na ordenação por giro — não são urgência.
-    const giroKey = (i) => (semMedicao(i) || i.giro == null) ? inf : i.giro;
-    if (_ordenar === 'giro')          arr.sort((a, b) => giroKey(a) - giroKey(b));
-    else if (_ordenar === 'sugerido') arr.sort((a, b) => (b.sugestao || 0) - (a.sugestao || 0));
-    else if (_ordenar === 'venda')    arr.sort((a, b) => (b.venda_media || 0) - (a.venda_media || 0));
-    else if (_ordenar === 'posto')    arr.sort((a, b) => String(a.posto_nome).localeCompare(String(b.posto_nome)));
-    return arr;
-  }
 
   function renderTudo() {
     if (!_resp) return;
@@ -271,8 +257,8 @@
       '<td class="kpi-td-posto">' + esc(i.posto_nome) + sub + '</td>' +
       '<td class="kpi-c-comb">' + esc(i.combustivel) + '</td>' +
       '<td class="kpi-num kpi-c-tanque">' + fmtL(i.medicao_atual) + '</td>' +
-      '<td class="kpi-num">' + fmtL(i.capacidade) + '</td>' +
-      '<td class="kpi-num">' + fmtL(i.venda_media) + '</td>' +
+      '<td class="kpi-num kpi-c-cap">' + fmtL(i.capacidade) + '</td>' +
+      '<td class="kpi-num kpi-c-venda">' + fmtL(i.venda_media) + '</td>' +
       '<td class="kpi-td-giro">' + giroCelula(i) + '</td>';
     if (comSug) {
       const teto = (i.limitado_por === 'espaco')
@@ -292,18 +278,66 @@
   }
 
   const THEAD_SUG  = '<tr><th class="kpi-td-posto">POSTO</th><th class="kpi-c-comb">COMB</th>' +
-    '<th class="kpi-num kpi-c-tanque">TANQUE</th><th class="kpi-num">CAPACIDADE</th>' +
-    '<th class="kpi-num">VENDA/DIA</th><th>GIRO</th><th class="kpi-num">SUGERIDO</th></tr>';
+    '<th class="kpi-num kpi-c-tanque">TANQUE</th><th class="kpi-num kpi-c-cap">CAPACIDADE</th>' +
+    '<th class="kpi-num kpi-c-venda">VENDA/DIA</th><th>GIRO</th><th class="kpi-num">SUGERIDO</th></tr>';
   const THEAD_GIRO = '<tr><th class="kpi-td-posto">POSTO</th><th class="kpi-c-comb">COMB</th>' +
-    '<th class="kpi-num kpi-c-tanque">TANQUE</th><th class="kpi-num">CAPACIDADE</th>' +
-    '<th class="kpi-num">VENDA/DIA</th><th>GIRO</th></tr>';
+    '<th class="kpi-num kpi-c-tanque">TANQUE</th><th class="kpi-num kpi-c-cap">CAPACIDADE</th>' +
+    '<th class="kpi-num kpi-c-venda">VENDA/DIA</th><th>GIRO</th></tr>';
 
-  // ── ABA SUGESTÃO ── só itens com sugerido > 0, na ordem atual (giro asc por padrão).
+  // Giro numérico p/ ordenação (sem-medição/nulo = ∞, vão pro fim).
+  const giroOrd = (i) => (semMedicao(i) || i.giro == null) ? Number.POSITIVE_INFINITY : i.giro;
+
+  // Um BLOCO por posto: cabeçalho (nome + total sugerido em --accent) e uma linha
+  // por combustível (código · giro colorido · sugerido, com "teto" se for o caso).
+  function blocoHtml(b) {
+    const linhas = b.combs.map(i => {
+      const teto = (i.limitado_por === 'espaco')
+        ? ' <span class="kpi-teto" title="Limitado pelo espaço do tanque">teto</span>' : '';
+      return '<div class="kpi-bl-lin">' +
+        '<span class="kpi-bl-comb">' + esc(i.combustivel) + '</span>' +
+        '<span class="kpi-bl-giro">' + giroCelula(i) + '</span>' +
+        '<span class="kpi-bl-sug">' + fmtL(i.sugestao) + '<span class="kpi-hb-un"> L</span>' + teto + '</span>' +
+      '</div>';
+    }).join('');
+    return '<div class="kpi-bloco">' +
+      '<div class="kpi-bl-cab"><span class="kpi-bl-nome">' + esc(b.nome) + '</span>' +
+        '<span class="kpi-bl-total">' + fmtL(b.total) + ' L</span></div>' +
+      linhas + '</div>';
+  }
+
+  // ── ABA SUGESTÃO ── um bloco por posto (só combustíveis com sugerido > 0).
+  // Legenda de entrega no TOPO + nota no rodapé. Ordena por giro/total/posto.
   function renderSugestao() {
-    const arr = itensView().filter(i => (i.sugestao || 0) > 0);
     const leg = renderLegenda();
-    if (!arr.length) return leg + '<div class="kpi-msg">Nenhum posto com sugestão de pedido.</div>';
-    return leg + tabelaLista(THEAD_SUG, arr.map(i => linhaHtml(i, true)), arr.length);
+    const nota = '<div class="kpi-nota">Quanto pedir para a data de entrega, considerando espaço no tanque e ' +
+      'venda prevista para o dia da semana. Múltiplos de 1.000 L, mínimo 2.000.</div>';
+    let itens = (_resp.itens || []).filter(i => (i.sugestao || 0) > 0);
+    if (_fComb) itens = itens.filter(i => i.combustivel === _fComb);
+    if (!itens.length) return leg + '<div class="kpi-msg">Nenhum posto com sugestão de pedido.</div>' + nota;
+
+    // Agrupa por posto.
+    const mapa = new Map();
+    itens.forEach(i => {
+      let b = mapa.get(i.posto_nome);
+      if (!b) { b = { nome: i.posto_nome, combs: [], total: 0 }; mapa.set(i.posto_nome, b); }
+      b.combs.push(i);
+      b.total += (i.sugestao || 0);
+    });
+    const blocos = [...mapa.values()];
+    blocos.forEach(b => {
+      b.combs.sort((x, y) => giroOrd(x) - giroOrd(y));   // dentro do bloco: giro asc
+      b.minGiro = Math.min.apply(null, b.combs.map(giroOrd));
+    });
+    // Ordena os BLOCOS conforme o seletor do topo. Qualquer valor fora dos casos
+    // conhecidos (ex.: 'venda' guardado de uma sessão antiga) cai no default giro.
+    if (_ordenar === 'sugerido')   blocos.sort((a, b) => b.total - a.total);       // maior total 1º
+    else if (_ordenar === 'posto') blocos.sort((a, b) => a.nome.localeCompare(b.nome));
+    else                           blocos.sort((a, b) => a.minGiro - b.minGiro);    // giro: item mais urgente 1º
+
+    const vis = _expandido ? blocos : blocos.slice(0, 10);
+    const btn = (!_expandido && blocos.length > 10)
+      ? '<button type="button" class="kpi-vertodos">Ver todos (' + blocos.length + ')</button>' : '';
+    return leg + '<div class="kpi-blocos">' + vis.map(blocoHtml).join('') + '</div>' + btn + nota;
   }
 
   // ── ABA GIRO ── lista COMPLETA (inclui sugerido 0 e sem medição), giro asc,
@@ -314,8 +348,10 @@
     const inf = Number.POSITIVE_INFINITY;
     const key = (i) => (semMedicao(i) || i.giro == null) ? inf : i.giro;
     arr.sort((a, b) => key(a) - key(b));
-    if (!arr.length) return '<div class="kpi-msg">Sem itens.</div>';
-    return tabelaLista(THEAD_GIRO, arr.map(i => linhaHtml(i, false)), arr.length);
+    const nota = '<div class="kpi-nota">Quantos dias o tanque atual dura no ritmo de venda dos últimos 30 dias. ' +
+      '“Sem medição” = tanque sem leitura registrada.</div>';
+    if (!arr.length) return '<div class="kpi-msg">Sem itens.</div>' + nota;
+    return tabelaLista(THEAD_GIRO, arr.map(i => linhaHtml(i, false)), arr.length) + nota;
   }
 
   // ── ABA VOLUME ── ranking por venda_total_30d desc, barra proporcional ao maior.
@@ -330,11 +366,16 @@
     const linhas = lista.map(([nome, v]) =>
       '<div class="kpi-hb-row"><div class="kpi-hb-lbl">' + esc(nome) + '</div>' +
       '<div class="kpi-hb-track"><div class="kpi-hb-bar" style="width:' + (v / max * 100) + '%"></div></div>' +
-      '<div class="kpi-hb-num">' + fmtL(v) + '</div></div>');
+      '<div class="kpi-hb-num">' + fmtL(v) + '<span class="kpi-hb-un"> L</span></div></div>');
     const vis = _expandido ? linhas : linhas.slice(0, 10);
     const btn = (!_expandido && linhas.length > 10)
       ? '<button type="button" class="kpi-vertodos">Ver todos (' + lista.length + ')</button>' : '';
-    return '<div class="kpi-vol">' + vis.join('') + '</div>' + btn;
+    // Legenda: "de <combustível>" só quando há filtro (muda "dos" → "nos").
+    const leg = _fComb
+      ? ('Soma da venda de ' + esc(nomeComb(_fComb)) + ' nos últimos 30 dias, por posto.')
+      : 'Soma da venda dos últimos 30 dias, por posto.';
+    return '<div class="kpi-vol">' + vis.join('') + '</div>' + btn +
+      '<div class="kpi-vol-legenda">' + leg + '</div>';
   }
 
   // Uma coluna do Pico. Metade superior (positivo, verde, rótulo acima) e inferior
