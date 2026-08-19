@@ -60,14 +60,14 @@
 .mfab-phead {
   padding: .6rem .8rem; background: var(--surface2); border-bottom: 1px solid var(--border);
   font-family: var(--mono); font-size: .8rem; font-weight: 700; color: var(--text);
-  display: flex; align-items: baseline; gap: .5rem;
+  display: flex; align-items: baseline; gap: .5rem; flex-shrink: 0;   /* cabeçalho FIXO */
 }
 .mfab-pmes { margin-left: auto; font-size: .66rem; color: var(--text3); font-weight: 500; }
-.mfab-ptot { display: flex; gap: .6rem; padding: .55rem .8rem; border-bottom: 1px solid var(--border); }
+.mfab-ptot { display: flex; gap: .6rem; padding: .55rem .8rem; border-bottom: 1px solid var(--border); flex-shrink: 0; }  /* totais FIXOS */
 .mfab-ped-kpi { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .mfab-ped-kpi span { font-family: var(--mono); font-size: .58rem; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; }
 .mfab-ped-kpi b { font-family: var(--mono); font-size: 1rem; color: var(--text); }
-.mfab-pbody { overflow-y: auto; }
+.mfab-pbody { flex: 1; min-height: 0; overflow-y: auto; }   /* só a LISTA rola (cabeçalho+totais ficam) */
 .mfab-ped-vazio { padding: 1.4rem 1rem; text-align: center; color: var(--text3); font-size: .8rem; }
 .mfab-ped-erro { color: var(--danger); }
 .mfab-ped-tbl { width: 100%; border-collapse: collapse; font-size: .78rem; }
@@ -84,5 +84,5 @@
   .mfab-calc { width: auto; }
   .mfab-key { padding: 1.05rem 0; font-size: 1.15rem; }   /* alvos maiores no toque */
   .mfab-calc-res { font-size: 1.7rem; }
-  .mfab-pedido { width: auto; max-height: 60vh; }
+  .mfab-pedido { width: auto; max-height: 55dvh; }   /* mobile: no máx. 55% da tela visível; lista rola dentro */
 }

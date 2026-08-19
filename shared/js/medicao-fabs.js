@@ -314,7 +314,10 @@
       const grupos = dados.grupos || [];
       const linhas = [];
       let totPed = 0, totCarga = 0;
-      (dados.dias || []).forEach(d => {
+      // Mais RECENTE primeiro: dias vêm do /medicao em ordem crescente; percorre
+      // ao contrário (dia mais novo → mais antigo). Sem auto-scroll/timing.
+      const dias = (dados.dias || []).slice().reverse();
+      dias.forEach(d => {
         grupos.forEach((g, i) => {
           const pedido = d.pedido ? d.pedido[i] : null;
           const carga  = d.carga  ? d.carga[i]  : null;
