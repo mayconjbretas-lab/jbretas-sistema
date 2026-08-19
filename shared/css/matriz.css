@@ -47,11 +47,11 @@
   flex: 1; min-height: 0; background: var(--surface); border: 1px solid var(--border);
   border-top: none;   /* linha do topo vem do .table-actions; sem borda aqui o sticky gruda flush */
   border-radius: 0 0 12px 12px; overflow: auto; position: relative;
-  /* Gesto de UM eixo só (mobile): o JS (ligarEixoUnico em matriz-medicao.js)
-     assume o toque e move só o eixo em que o dedo começou, matando o fling
-     diagonal. touch-action:none evita o navegador iniciar pan concorrente.
-     Não afeta desktop (só toque); overflow:auto segue rolando por roda/trackpad. */
-  touch-action: none;
+  /* Scroll NATIVO nos dois eixos (inércia do sistema preservada). O gesto de um
+     eixo só é feito em JS (ligarEixoUnico em matriz-medicao.js) fixando apenas o
+     eixo SECUNDÁRIO durante o gesto — sem touch-action:none e sem mover o eixo
+     principal, que mantém o momentum nativo. Roda/trackpad do desktop não passam
+     por touchstart, então nunca são travados. */
 }
 .ss-table {
   border-collapse: collapse; text-align: center;

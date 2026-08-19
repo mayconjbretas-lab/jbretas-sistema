@@ -578,42 +578,57 @@
     ligarEixoUnico(container.querySelector('.spreadsheet-frame'));
   }
 
-  // Scroll de UM eixo só no toque (mobile): decide o eixo pelo 1º movimento
-  // acima do limiar e move só ESSE eixo até o dedo sair — o fling diagonal
-  // deixa de arrastar os dois. O frame tem touch-action:none (CSS), então o JS
-  // é dono do gesto (sem corrida com o pan nativo) e escreve scrollLeft/scrollTop
-  // — o sticky (thead + coluna DIA) reage ao offset normalmente. Tap sem
-  // movimento não sofre preventDefault → foco/edição de célula seguem funcionando.
+  // Gesto de UM eixo só no toque (mobile) PRESERVANDO a inércia nativa. Em vez de
+  // mover o scroll por JS (o que matava o momentum), deixamos o navegador rolar os
+  // dois eixos nativamente e apenas FIXAMOS o eixo SECUNDÁRIO no valor de início do
+  // gesto — inclusive durante a inércia. O eixo PRINCIPAL nunca é tocado, então
+  // desliza e desacelera 100% nativo. Sem touch-action:none e sem preventDefault
+  // (touchmove passivo → não interfere no scroll nativo).
+  //
+  // Regras honradas:
+  //  • Só o secundário é reposto, e SÓ quando de fato saiu do lugar (compara antes
+  //    de escrever) — evita jitter e loop de eventos de scroll.
+  //  • Desktop (roda/trackpad) não dispara touchstart/touchmove → `eixo` fica null
+  //    → o listener de scroll faz early-return → dois eixos livres, nunca travados.
+  //  • Sticky (thead + coluna DIA) reage ao offset nativo normalmente.
+  // A trava vale do 1º movimento até a inércia parar (idle ~120ms sem scroll) OU
+  // até o próximo toque — assim não interfere em scrolls não-toque (ex.: foco).
   function ligarEixoUnico(frame) {
     if (!frame || frame._eixoLigado) return;   // idempotente (montar roda 1x, mas guarda)
     frame._eixoLigado = true;
     const LIMIAR = 6;   // px até decidir o eixo
-    let x0 = 0, y0 = 0, sl0 = 0, st0 = 0, eixo = null, ativo = false;
+    let x0 = 0, y0 = 0, sl0 = 0, st0 = 0, eixo = null, tocando = false, idle = null;
 
     frame.addEventListener('touchstart', function (e) {
-      if (e.touches.length !== 1) { ativo = false; return; }   // multitoque (zoom): não interfere
+      if (e.touches.length !== 1) { tocando = false; eixo = null; return; }   // multitoque (zoom): não interfere
       const t = e.touches[0];
       x0 = t.clientX; y0 = t.clientY;
-      sl0 = frame.scrollLeft; st0 = frame.scrollTop;
-      eixo = null; ativo = true;
+      sl0 = frame.scrollLeft; st0 = frame.scrollTop;   // baseline do eixo travado
+      eixo = null; tocando = true;
+      if (idle) { clearTimeout(idle); idle = null; }
     }, { passive: true });
 
+    // Só DECIDE o eixo — não mexe no scroll (nativo cuida). Passivo de propósito.
     frame.addEventListener('touchmove', function (e) {
-      if (!ativo || e.touches.length !== 1) return;
+      if (!tocando || eixo || e.touches.length !== 1) return;
       const t = e.touches[0];
       const dx = t.clientX - x0, dy = t.clientY - y0;
-      if (!eixo) {
-        if (Math.abs(dx) < LIMIAR && Math.abs(dy) < LIMIAR) return;   // ainda não decide
-        eixo = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
-      }
-      if (eixo === 'x') frame.scrollLeft = sl0 - dx;   // horizontal → trava vertical
-      else              frame.scrollTop  = st0 - dy;   // vertical → trava horizontal
-      if (e.cancelable) e.preventDefault();
-    }, { passive: false });
+      if (Math.abs(dx) < LIMIAR && Math.abs(dy) < LIMIAR) return;   // ainda não dá pra decidir
+      eixo = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+    }, { passive: true });
 
-    const soltar = function () { ativo = false; eixo = null; };
-    frame.addEventListener('touchend', soltar, { passive: true });
-    frame.addEventListener('touchcancel', soltar, { passive: true });
+    // Fixa SÓ o secundário, e só se ele mexeu. O principal fica intocado (inércia
+    // nativa). Reprograma o idle a cada scroll: quando a inércia para, solta a trava.
+    frame.addEventListener('scroll', function () {
+      if (!eixo) return;   // sem gesto de toque decidido → desktop e ocioso passam direto
+      if (eixo === 'y') { if (frame.scrollLeft !== sl0) frame.scrollLeft = sl0; }  // vertical → trava horizontal
+      else              { if (frame.scrollTop  !== st0) frame.scrollTop  = st0; }  // horizontal → trava vertical
+      if (idle) clearTimeout(idle);
+      idle = setTimeout(function () { if (!tocando) eixo = null; }, 120);   // inércia parou → libera
+    }, { passive: true });
+
+    frame.addEventListener('touchend',    function () { tocando = false; }, { passive: true });
+    frame.addEventListener('touchcancel', function () { tocando = false; eixo = null; }, { passive: true });
   }
 
   // ── Exposição ───────────────────────────────────────────────────
