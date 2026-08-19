@@ -42,8 +42,8 @@
   const CATEGORIAS_MEDICAO = [
     { chave: 'medicao',   titulo: '🛢️ MEDIÇÃO (L)',                classe: 'h-med'   },
     { chave: 'venda',     titulo: '⛽ VENDA DIÁRIA (L)',            classe: 'h-ven'   },
-    { chave: 'carga',     titulo: '🚚 CARGA RECEBIDA (L)',          classe: 'h-carga' },
     { chave: 'diferenca', titulo: 'Δ DIFERENÇA (Real − Prev)',      classe: 'h-dif'   },
+    { chave: 'carga',     titulo: '🚚 CARGA RECEBIDA (L)',          classe: 'h-carga' },
     { chave: 'previsao',  titulo: '📐 PREVISÃO MED. (L)',           classe: 'h-prev'  },
     { chave: 'prePedido', titulo: '📦 PRÉ-PEDIDO (LOGÍSTICA) (L)',  classe: 'h-pre'   },
     { chave: 'pedido',    titulo: '📋 PEDIDO FINAL (APROVADO) (L)', classe: 'h-ped'   },
@@ -189,15 +189,19 @@
   // "Tem valor" para as fórmulas: null/undefined/'' contam como vazio.
   function temValor(v) { return v !== null && v !== undefined && v !== ''; }
 
-  // PREVISÃO MED. = medição(dia anterior) + pedido(dia atual). `pedido` é a coluna
-  // medicao.pedido (Pedido Final). Vazia se faltar a medição de ontem OU o pedido.
+  // PREVISÃO MED.:
+  //  • COM pedido:  medição(ontem) + pedido(hoje)   → estilo normal
+  //  • SEM pedido:  só medição(ontem)               → cinza + itálico (semPedido)
+  //  • SEM medição de ontem: travessão              → valor null
+  // `pedido` é a coluna medicao.pedido (Pedido Final). Devolve { valor, semPedido }.
   function _prevCelula(diaIdx, i) {
     const dias = DADOS_ATUAIS.dias;
     const diaOntem   = dias[diaIdx - 1];
     const medOntem   = diaOntem ? diaOntem.medicao[i] : null;
     const pedidoHoje = dias[diaIdx].pedido ? dias[diaIdx].pedido[i] : null;
-    if (!temValor(medOntem) || !temValor(pedidoHoje)) return null;
-    return Number(medOntem) + Number(pedidoHoje);
+    if (!temValor(medOntem))   return { valor: null, semPedido: false };
+    if (!temValor(pedidoHoje)) return { valor: Number(medOntem), semPedido: true };
+    return { valor: Number(medOntem) + Number(pedidoHoje), semPedido: false };
   }
 
   // Δ DIFERENÇA = medição(hoje) − [ medição(ontem) + carga(hoje) − venda(hoje) ].
@@ -221,12 +225,14 @@
     return Number(medHoje) - (Number(medOntem) + carga - venda);
   }
 
-  // Pinta a Previsão (coluna normal, sem destaque).
-  function _pintarPrev(diaIdx, i, prevVal) {
+  // Pinta a Previsão. Normal (com pedido); cinza+itálico via .prev-sem-pedido
+  // quando é só a medição de ontem (sem pedido); travessão + cell-vazia se null.
+  function _pintarPrev(diaIdx, i, prevVal, semPedido) {
     const el = document.getElementById('prev_' + diaIdx + '_' + i);
     if (!el) return;
     el.textContent = fmtL(prevVal);
     el.classList.toggle('cell-vazia', prevVal === null);
+    el.classList.toggle('prev-sem-pedido', !!semPedido && prevVal !== null);
   }
 
   // Pinta a Diferença (verde/vermelho/cinza + sinal).
@@ -244,11 +250,11 @@
     const dia = DADOS_ATUAIS.dias[diaIdx];
     if (!dia) return;
     DADOS_ATUAIS.grupos.forEach((g, i) => {
-      const prevVal = _prevCelula(diaIdx, i);
-      dia.previsao[i] = prevVal;
+      const prev = _prevCelula(diaIdx, i);
+      dia.previsao[i] = prev.valor;
       const diffVal = _diffCelula(diaIdx, i);
       dia.diferenca[i] = diffVal;
-      _pintarPrev(diaIdx, i, prevVal);
+      _pintarPrev(diaIdx, i, prev.valor, prev.semPedido);
       _pintarDiff(diaIdx, i, diffVal);
     });
   }

@@ -110,6 +110,9 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
 /* Célula de valor (read-only) */
 .cell-val { font-family: var(--mono); font-size: .84rem; font-weight: 600; color: var(--text); }
 .cell-vazia { color: var(--text3); }
+/* PREVISÃO sem pedido: só a medição de ontem. Cinza + itálico (SEM fundo, para
+   não se confundir com a PROJEÇÃO itálica-com-fundo da medição ADM). */
+.cell-val.prev-sem-pedido { color: var(--text3); font-style: italic; }
 .cell-diff { font-weight: 700; }
 
 /* Célula editável (Medição/Venda/Carga) */
