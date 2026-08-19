@@ -125,6 +125,23 @@ async function buscarComparacaoDoDia({ dias = 15 } = {}) {
   const hoje = hojeBR();
   const ontem = ontemBR();
 
+  // Diferencial GA por posto (GA sugerido = GC + diferencial), vindo do banco via
+  // GET /postos — que faz select('*'), então a coluna diferencial_ga já vem. É
+  // chaveado igual ao `resultado` (chavePostoParaK sobre o nome do posto), para o
+  // cálculo do sugerido casar por posto. NÃO-FATAL: se /postos falhar, o mapa fica
+  // vazio e o frontend cai no padrão 0,30 — a Comparação nunca quebra por isso.
+  const difGaPorChave = {};
+  try {
+    const rp = await apiFetch('/postos');
+    (rp.postos || []).forEach(p => {
+      if (p && p.nome != null && p.diferencial_ga != null) {
+        difGaPorChave[chavePostoParaK(p.nome)] = Number(p.diferencial_ga);
+      }
+    });
+  } catch (e) {
+    console.warn('diferencial_ga dos postos indisponível (usando padrão 0,30):', e && e.message);
+  }
+
   const resultado = {};
   Object.keys(porPosto).forEach(chave => {
     const grupo = porPosto[chave];
@@ -153,7 +170,8 @@ async function buscarComparacaoDoDia({ dias = 15 } = {}) {
       };
     });
 
-    resultado[chave] = { proprio, proprioDesatualizado, concorrentes };
+    resultado[chave] = { proprio, proprioDesatualizado, concorrentes,
+      diferencial_ga: (chave in difGaPorChave) ? difGaPorChave[chave] : null };
   });
   return resultado;
 }

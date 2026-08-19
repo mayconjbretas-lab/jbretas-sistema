@@ -402,13 +402,15 @@ function cmpStatsFuel(dado, f) {
 }
 
 // Sugerido por combustível: GC/ET/S10/S500 pela estratégia global sobre os
-// próprios concorrentes; GA = alvoGC + 0,30 FIXO (ignora concorrentes de GA).
+// próprios concorrentes; GA = alvoGC + diferencial DO POSTO (dado.diferencial_ga,
+// padrão 0,30 se ausente), ignorando concorrentes de GA.
 function cmpSugeridoMatriz(dado) {
   const out = {};
   const gc = cmpStatsFuel(dado, 'GC');
   const alvoGC = gc ? cmpCalcularSugerido(gc.min, gc.avg, gc.max) : null;
   out.GC = alvoGC;
-  out.GA = (alvoGC !== null) ? alvoGC + 0.30 : null;
+  const difGa = (dado && dado.diferencial_ga != null) ? Number(dado.diferencial_ga) : 0.30;
+  out.GA = (alvoGC !== null) ? alvoGC + difGa : null;
   ['ET', 'S10', 'S500'].forEach(f => {
     const s = cmpStatsFuel(dado, f);
     out[f] = s ? cmpCalcularSugerido(s.min, s.avg, s.max) : null;
@@ -524,12 +526,15 @@ function cmpCardMatriz(posto, dado, pos) {
     ? `<tr><td class="cmpm-vazio" colspan="${cols.length + 1}">Sem concorrente coletado</td></tr>`
     : '';
 
-  // linha Sugerido (GA mostra "(GC+30)") — SEMPRE fixa no rodapé, fora do ranking.
+  // linha Sugerido — SEMPRE fixa no rodapé, fora do ranking. GA mostra o
+  // diferencial REAL do posto: "(GC+20)"/"(GC+30)"; se for 0, "(= GC)".
   const sug = cmpSugeridoMatriz(dado);
+  const difCentsGa = Math.round(((dado && dado.diferencial_ga != null) ? Number(dado.diferencial_ga) : 0.30) * 100);
+  const gaHint = difCentsGa === 0 ? '(= GC)' : (difCentsGa > 0 ? `(GC+${difCentsGa})` : `(GC-${Math.abs(difCentsGa)})`);
   const sugCells = cols.map(f => {
     const s = sug[f.key];
     if (s === null || s === undefined) return `<td class="cmpm-cell"><span class="cmpm-na">—</span></td>`;
-    const hint = f.key === 'GA' ? ` <span class="cmpm-hint">(GC+30)</span>` : '';
+    const hint = f.key === 'GA' ? ` <span class="cmpm-hint">${gaHint}</span>` : '';
     return `<td class="cmpm-cell cmpm-sug"><span class="cmpm-preco">${fmtPrecoBRL(s)}</span>${hint}</td>`;
   }).join('');
   const sugRow = `<tr class="cmpm-row-sug"><th class="cmpm-rowlbl">Sugerido</th>${sugCells}</tr>`;
@@ -594,10 +599,12 @@ async function cmpConfirmarVoce(k, f) {
         && await cmpCriarSolicitacao(posto.ap, f, orig, novo)) flashFuels.push(f);
   }
 
-  // Regra do GA — NUNCA automático: ao salvar GC, oferece GA = GC + 0,30.
+  // Regra do GA — NUNCA automático: ao salvar GC, oferece GA = GC + diferencial
+  // do posto (dado.diferencial_ga, padrão 0,30).
   if (ok && f === 'GC') {
-    const alvoGA = novo + 0.30;
-    if (window.confirm(`Aplicar também GA (aditivada) = GC + 0,30 = R$ ${alvoGA.toFixed(2).replace('.', ',')}?`)) {
+    const difGa = (dado && dado.diferencial_ga != null) ? Number(dado.diferencial_ga) : 0.30;
+    const alvoGA = novo + difGa;
+    if (window.confirm(`Aplicar também GA (aditivada) = GC + ${difGa.toFixed(2).replace('.', ',')} = R$ ${alvoGA.toFixed(2).replace('.', ',')}?`)) {
       const origGA = (dado.proprio && dado.proprio['GA'] !== null && dado.proprio['GA'] !== undefined) ? Number(dado.proprio['GA']) : null;
       const okGA = await cmpSalvarPrecoProprio(posto.ap, 'GA', alvoGA, origGA);
       if (okGA) {
