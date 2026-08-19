@@ -254,15 +254,16 @@ body {
   left: 0; right: 0;
   bottom: calc(var(--mb-bnav-h, 48px) + env(safe-area-inset-bottom));  /* encosta no topo do bnav */
   display: flex;
-  gap: .6rem;
-  padding: .55rem 1rem;
+  gap: .5rem;
+  padding: .3rem .8rem;                               /* enxuto: menos folga vertical (era .55rem) */
   background: var(--surface);
   border-top: 1px solid var(--border);
   z-index: 15;                                        /* acima do bnav (z:10) */
 }
 .mb-btn {
   flex: 1;
-  min-height: 44px;
+  min-height: 40px;                                   /* alvo de toque no mínimo seguro (era 44px) */
+  padding: .3rem .6rem;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 10px;
