@@ -66,15 +66,16 @@ function montarTopbar() {
 
 function montarDataPadrao() {
   const input = document.getElementById('card-data-input');
-  // Trava de futuro: max = HOJE no fuso LOCAL, montado a partir das partes da
-  // data (NÃO toISOString, que é UTC e desloca o dia perto da meia-noite). O
-  // passado segue liberado — sem min. Backend é a trava que vale; isto só evita
-  // o acidente na tela.
-  const agora = new Date();
-  input.max = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+  // O fechamento é do dia que já terminou → a data mais recente é ONTEM. max e
+  // value = ontem no fuso LOCAL, montados a partir das partes da data (NÃO
+  // toISOString, que é UTC e desloca o dia perto da meia-noite). O passado segue
+  // liberado — sem min. Backend é a trava que vale; isto só evita o acidente e
+  // já abre o campo na data certa (o gerente não precisa mexer).
   const ontem = new Date();
   ontem.setDate(ontem.getDate() - 1);
-  input.value = ontem.toISOString().split('T')[0];
+  const ontemLocal = `${ontem.getFullYear()}-${String(ontem.getMonth() + 1).padStart(2, '0')}-${String(ontem.getDate()).padStart(2, '0')}`;
+  input.max = ontemLocal;
+  input.value = ontemLocal;
 }
 
 async function carregarEstruturaDoPosto(nomePosto) {
