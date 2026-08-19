@@ -575,6 +575,45 @@
     if (actions && _btnSalvar && !_btnSalvar.parentNode) actions.appendChild(_btnSalvar);
     atualizarBotoesSalvar();
     atualizarBotaoUndo();
+    ligarEixoUnico(container.querySelector('.spreadsheet-frame'));
+  }
+
+  // Scroll de UM eixo só no toque (mobile): decide o eixo pelo 1º movimento
+  // acima do limiar e move só ESSE eixo até o dedo sair — o fling diagonal
+  // deixa de arrastar os dois. O frame tem touch-action:none (CSS), então o JS
+  // é dono do gesto (sem corrida com o pan nativo) e escreve scrollLeft/scrollTop
+  // — o sticky (thead + coluna DIA) reage ao offset normalmente. Tap sem
+  // movimento não sofre preventDefault → foco/edição de célula seguem funcionando.
+  function ligarEixoUnico(frame) {
+    if (!frame || frame._eixoLigado) return;   // idempotente (montar roda 1x, mas guarda)
+    frame._eixoLigado = true;
+    const LIMIAR = 6;   // px até decidir o eixo
+    let x0 = 0, y0 = 0, sl0 = 0, st0 = 0, eixo = null, ativo = false;
+
+    frame.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) { ativo = false; return; }   // multitoque (zoom): não interfere
+      const t = e.touches[0];
+      x0 = t.clientX; y0 = t.clientY;
+      sl0 = frame.scrollLeft; st0 = frame.scrollTop;
+      eixo = null; ativo = true;
+    }, { passive: true });
+
+    frame.addEventListener('touchmove', function (e) {
+      if (!ativo || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const dx = t.clientX - x0, dy = t.clientY - y0;
+      if (!eixo) {
+        if (Math.abs(dx) < LIMIAR && Math.abs(dy) < LIMIAR) return;   // ainda não decide
+        eixo = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+      }
+      if (eixo === 'x') frame.scrollLeft = sl0 - dx;   // horizontal → trava vertical
+      else              frame.scrollTop  = st0 - dy;   // vertical → trava horizontal
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+
+    const soltar = function () { ativo = false; eixo = null; };
+    frame.addEventListener('touchend', soltar, { passive: true });
+    frame.addEventListener('touchcancel', soltar, { passive: true });
   }
 
   // ── Exposição ───────────────────────────────────────────────────
