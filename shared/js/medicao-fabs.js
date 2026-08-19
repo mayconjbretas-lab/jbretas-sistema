@@ -14,7 +14,8 @@
 (function () {
   'use strict';
 
-  const POS_KEY = 'jb_logi_calc_pos';           // {x,y} da calculadora (última posição)
+  const POS_KEY_CALC   = 'jb_logi_calc_pos';    // {x,y} da calculadora (última posição)
+  const POS_KEY_PEDIDO = 'jb_logi_pedido_pos';  // {x,y} do painel Pedido final (separado!)
   const TOL = (window.matrizMedicao && window.matrizMedicao.TOLERANCIA_CARGA != null)
     ? window.matrizMedicao.TOLERANCIA_CARGA : 500;   // reuso; fallback só por segurança
 
@@ -112,13 +113,14 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
-  // ── Persistência da posição da calculadora (localStorage, convenção jb_) ──
-  function lerPos() {
-    try { const o = JSON.parse(localStorage.getItem(POS_KEY)); return (o && isFinite(o.x) && isFinite(o.y)) ? o : null; }
+  // ── Persistência da posição dos painéis (localStorage, convenção jb_).
+  // Chave SEPARADA por painel (calc vs pedido) para um não mover o outro. ──
+  function lerPos(key) {
+    try { const o = JSON.parse(localStorage.getItem(key)); return (o && isFinite(o.x) && isFinite(o.y)) ? o : null; }
     catch (e) { return null; }
   }
-  function salvarPos(x, y) {
-    try { localStorage.setItem(POS_KEY, JSON.stringify({ x: Math.round(x), y: Math.round(y) })); } catch (e) {}
+  function salvarPos(key, x, y) {
+    try { localStorage.setItem(key, JSON.stringify({ x: Math.round(x), y: Math.round(y) })); } catch (e) {}
   }
 
   // ── Montagem ────────────────────────────────────────────────────────────
@@ -146,6 +148,7 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && _aberto) fechar(); });
 
     ligarCalculadora();
+    ligarPedido();
   }
 
   function montarPainelCalc() {
@@ -167,9 +170,10 @@
   }
 
   function montarPainelPedido() {
+    // O cabeçalho É a barrinha de arrasto (mesma .mfab-handle da calculadora:
+    // grip + touch-action:none). Sem bloco de totais do mês.
     return '<div class="mfab-panel mfab-pedido" id="mfab-p-pedido">' +
-      '<div class="mfab-phead">📋 Pedido final <span class="mfab-pmes" id="mfab-ped-mes"></span></div>' +
-      '<div class="mfab-ptot" id="mfab-ped-tot"></div>' +
+      '<div class="mfab-handle" id="mfab-pedido-handle"><span class="mfab-grip"></span>📋 Pedido final <span class="mfab-pmes" id="mfab-ped-mes"></span></div>' +
       '<div class="mfab-pbody" id="mfab-ped-body"></div>' +
     '</div>';
   }
@@ -188,7 +192,8 @@
     _root.querySelector('#mfab-b-pedido').classList.toggle('on', _aberto === 'pedido');
     _root.querySelector('#mfab-p-calc').classList.toggle('aberto', _aberto === 'calc');
     _root.querySelector('#mfab-p-pedido').classList.toggle('aberto', _aberto === 'pedido');
-    if (_aberto === 'calc') posicionarCalc();
+    if (_aberto === 'calc')   posicionar(_root.querySelector('#mfab-p-calc'),   POS_KEY_CALC);
+    if (_aberto === 'pedido') posicionar(_root.querySelector('#mfab-p-pedido'), POS_KEY_PEDIDO);
   }
 
   // ── Calculadora: teclado, digitação, arrasto ──────────────────────────────
@@ -216,11 +221,20 @@
       });
     });
 
-    ligarArrasto(painel, _root.querySelector('#mfab-calc-handle'));
+    ligarArrasto(painel, _root.querySelector('#mfab-calc-handle'), POS_KEY_CALC);
   }
 
-  // Arrasto por mouse E toque; clamp na viewport (não escapa da tela).
-  function ligarArrasto(painel, handle) {
+  // Painel Pedido final: mesmo arrasto da calculadora (reaproveita ligarArrasto),
+  // com chave de posição PRÓPRIA. Clique dentro não fecha o painel.
+  function ligarPedido() {
+    const painel = _root.querySelector('#mfab-p-pedido');
+    painel.addEventListener('click', e => e.stopPropagation());
+    ligarArrasto(painel, _root.querySelector('#mfab-pedido-handle'), POS_KEY_PEDIDO);
+  }
+
+  // Arrasto por mouse E toque; clamp na viewport (não escapa da tela). `posKey` =
+  // chave de localStorage onde guardar a posição (própria de cada painel).
+  function ligarArrasto(painel, handle, posKey) {
     let arrastando = false, offX = 0, offY = 0;
     function ponto(e) { const t = e.touches ? e.touches[0] : e; return { x: t.clientX, y: t.clientY }; }
     function clamp(x, y) {
@@ -274,7 +288,7 @@
       painel.classList.remove('mfab-arrastando');
       pararEscuta();
       const r = painel.getBoundingClientRect();
-      salvarPos(r.left, r.top);
+      salvarPos(posKey, r.left, r.top);
     }
     // Só o START fica permanente — e no HANDLE (barrinha da calculadora), fora do
     // caminho da matriz. touchstart passivo:false p/ o inicio poder preventDefault.
@@ -282,10 +296,10 @@
     handle.addEventListener('touchstart', inicio, { passive: false });
   }
 
-  // Aplica a última posição salva (com clamp p/ mudança de tamanho de tela).
-  function posicionarCalc() {
-    const painel = _root.querySelector('#mfab-p-calc');
-    const pos = lerPos();
+  // Aplica a última posição salva do painel (com clamp p/ mudança de tamanho de
+  // tela). Genérico: recebe o painel e sua chave de posição.
+  function posicionar(painel, key) {
+    const pos = lerPos(key);
     if (!pos) { painel.style.left = ''; painel.style.top = ''; painel.style.right = ''; painel.style.bottom = ''; return; }
     const w = painel.offsetWidth || 260, h = painel.offsetHeight || 320;
     const x = Math.min(Math.max(0, pos.x), Math.max(0, window.innerWidth - w));
@@ -297,10 +311,8 @@
   // ── Pedido final: GET /medicao/:posto ─────────────────────────────────────
   async function carregarPedido() {
     const body = _root.querySelector('#mfab-ped-body');
-    const tot  = _root.querySelector('#mfab-ped-tot');
     const mesEl = _root.querySelector('#mfab-ped-mes');
-    _root.querySelector('#mfab-p-pedido').addEventListener('click', e => e.stopPropagation(), { once: true });
-    mesEl.textContent = ''; tot.innerHTML = '';
+    mesEl.textContent = '';
 
     const posto = _getPosto();
     if (!posto) {
@@ -313,7 +325,6 @@
       mesEl.textContent = (dados.mes || '') + (dados.ano ? '/' + dados.ano : '');
       const grupos = dados.grupos || [];
       const linhas = [];
-      let totPed = 0, totCarga = 0;
       // Mais RECENTE primeiro: dias vêm do /medicao em ordem crescente; percorre
       // ao contrário (dia mais novo → mais antigo). Sem auto-scroll/timing.
       const dias = (dados.dias || []).slice().reverse();
@@ -322,15 +333,9 @@
           const pedido = d.pedido ? d.pedido[i] : null;
           const carga  = d.carga  ? d.carga[i]  : null;
           if (!temValor(pedido) && !temValor(carga)) return;   // só linhas com pedido ou carga
-          if (temValor(pedido)) totPed += Number(pedido);
-          if (temValor(carga))  totCarga += Number(carga);
           linhas.push({ dia: d.dia, comb: g.abv || g.comb, pedido, carga });
         });
       });
-
-      tot.innerHTML =
-        '<div class="mfab-ped-kpi"><span>Pedido</span><b>' + fmtL(totPed) + ' L</b></div>' +
-        '<div class="mfab-ped-kpi"><span>Recebido</span><b>' + fmtL(totCarga) + ' L</b></div>';
 
       if (!linhas.length) { body.innerHTML = '<div class="mfab-ped-vazio">Sem pedidos neste mês.</div>'; return; }
 

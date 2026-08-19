@@ -31,7 +31,7 @@
   cursor: grab; user-select: none; touch-action: none; padding: .5rem .7rem;
   background: var(--surface2); border-bottom: 1px solid var(--border);
   font-family: var(--mono); font-size: .72rem; font-weight: 700; color: var(--text2);
-  display: flex; align-items: center; gap: .5rem;
+  display: flex; align-items: center; gap: .5rem; flex-shrink: 0;   /* fixo (lista rola abaixo) */
 }
 .mfab-panel.mfab-arrastando .mfab-handle { cursor: grabbing; }
 .mfab-grip { width: 26px; height: 4px; border-radius: 2px; background: var(--border2, var(--border)); flex-shrink: 0; }
@@ -57,17 +57,9 @@
 
 /* ── Pedido final ── */
 .mfab-pedido { width: 340px; max-height: 70vh; }
-.mfab-phead {
-  padding: .6rem .8rem; background: var(--surface2); border-bottom: 1px solid var(--border);
-  font-family: var(--mono); font-size: .8rem; font-weight: 700; color: var(--text);
-  display: flex; align-items: baseline; gap: .5rem; flex-shrink: 0;   /* cabeçalho FIXO */
-}
+/* Cabeçalho = .mfab-handle (arrastável). O mês fica à direita dentro dele. */
 .mfab-pmes { margin-left: auto; font-size: .66rem; color: var(--text3); font-weight: 500; }
-.mfab-ptot { display: flex; gap: .6rem; padding: .55rem .8rem; border-bottom: 1px solid var(--border); flex-shrink: 0; }  /* totais FIXOS */
-.mfab-ped-kpi { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.mfab-ped-kpi span { font-family: var(--mono); font-size: .58rem; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; }
-.mfab-ped-kpi b { font-family: var(--mono); font-size: 1rem; color: var(--text); }
-.mfab-pbody { flex: 1; min-height: 0; overflow-y: auto; }   /* só a LISTA rola (cabeçalho+totais ficam) */
+.mfab-pbody { flex: 1; min-height: 0; overflow-y: auto; }   /* só a LISTA rola (cabeçalho fica fixo) */
 .mfab-ped-vazio { padding: 1.4rem 1rem; text-align: center; color: var(--text3); font-size: .8rem; }
 .mfab-ped-erro { color: var(--danger); }
 .mfab-ped-tbl { width: 100%; border-collapse: collapse; font-size: .78rem; }
