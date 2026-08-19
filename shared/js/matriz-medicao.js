@@ -603,5 +603,6 @@
     carregar: carregarMatriz,
     salvar:   salvarAlteracoesMatriz,
     desfazer: desfazerUltima,
+    TOLERANCIA_CARGA: TOLERANCIA_CARGA,   // exposto p/ reuso (ex.: painel Pedido Final dos FABs)
   };
 })();

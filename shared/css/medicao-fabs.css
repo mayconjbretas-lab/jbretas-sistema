@@ -1,0 +1,88 @@
+/* JBRETAS SISTEMA — shared/css/medicao-fabs.css
+   FABs da Medição (🧮 Calculadora / 📋 Pedido final). Fixos na viewport, canto
+   inferior direito. Compartilhado por logistica (desktop) e logistica-mobile —
+   tokens LONGOS do base.css. Mobile via @media: painel estreito, teclas maiores. */
+
+.mfab-root { position: fixed; z-index: 1200; }
+.mfab-root.mfab-oculto { display: none; }   /* escondido fora da aba de Medição */
+
+/* ── Botões redondos empilhados ── */
+.mfab-btns { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 12px; z-index: 1201; }
+.mfab-btn {
+  width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--text); font-size: 1.35rem; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center;
+  transition: transform .12s, border-color .12s, background .12s;
+}
+.mfab-btn:hover { transform: translateY(-2px); }
+.mfab-btn.on { background: var(--accent-dim); border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+
+/* ── Painéis (base comum) ── */
+.mfab-panel {
+  position: fixed; right: 80px; bottom: 16px; z-index: 1202; display: none;
+  background: var(--surface); border: 1px solid var(--border-solid, var(--border)); border-radius: 14px;
+  box-shadow: 0 10px 34px rgba(0,0,0,.5); overflow: hidden;
+}
+.mfab-panel.aberto { display: flex; flex-direction: column; }
+
+/* ── Calculadora ── */
+.mfab-calc { width: 260px; }
+.mfab-handle {
+  cursor: grab; user-select: none; touch-action: none; padding: .5rem .7rem;
+  background: var(--surface2); border-bottom: 1px solid var(--border);
+  font-family: var(--mono); font-size: .72rem; font-weight: 700; color: var(--text2);
+  display: flex; align-items: center; gap: .5rem;
+}
+.mfab-panel.mfab-arrastando .mfab-handle { cursor: grabbing; }
+.mfab-grip { width: 26px; height: 4px; border-radius: 2px; background: var(--border2, var(--border)); flex-shrink: 0; }
+.mfab-calc-expr {
+  width: 100%; box-sizing: border-box; border: none; border-bottom: 1px solid var(--border);
+  background: transparent; color: var(--text); font-family: var(--mono); font-size: 1rem;
+  padding: .6rem .7rem; outline: none; text-align: right;
+}
+.mfab-calc-res {
+  padding: .35rem .7rem .55rem; text-align: right; font-family: var(--mono); font-weight: 700;
+  font-size: 1.5rem; color: var(--accent); min-height: 1.6rem; word-break: break-all;
+}
+.mfab-calc-res.mfab-res-erro { color: var(--text3); font-size: 1.2rem; }
+.mfab-calc-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); padding: 1px; }
+.mfab-key {
+  border: none; background: var(--surface2); color: var(--text); cursor: pointer;
+  font-family: var(--mono); font-size: 1.05rem; font-weight: 600; padding: .8rem 0; transition: background .1s;
+}
+.mfab-key:hover { background: var(--surface3, var(--surface2)); }
+.mfab-key:active { background: var(--accent-dim); }
+.mfab-key-op  { color: var(--accent); }
+.mfab-key-clr { color: var(--danger); }
+
+/* ── Pedido final ── */
+.mfab-pedido { width: 340px; max-height: 70vh; }
+.mfab-phead {
+  padding: .6rem .8rem; background: var(--surface2); border-bottom: 1px solid var(--border);
+  font-family: var(--mono); font-size: .8rem; font-weight: 700; color: var(--text);
+  display: flex; align-items: baseline; gap: .5rem;
+}
+.mfab-pmes { margin-left: auto; font-size: .66rem; color: var(--text3); font-weight: 500; }
+.mfab-ptot { display: flex; gap: .6rem; padding: .55rem .8rem; border-bottom: 1px solid var(--border); }
+.mfab-ped-kpi { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.mfab-ped-kpi span { font-family: var(--mono); font-size: .58rem; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; }
+.mfab-ped-kpi b { font-family: var(--mono); font-size: 1rem; color: var(--text); }
+.mfab-pbody { overflow-y: auto; }
+.mfab-ped-vazio { padding: 1.4rem 1rem; text-align: center; color: var(--text3); font-size: .8rem; }
+.mfab-ped-erro { color: var(--danger); }
+.mfab-ped-tbl { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.mfab-ped-tbl th, .mfab-ped-tbl td { padding: 5px 8px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--border); }
+.mfab-ped-tbl thead th { position: sticky; top: 0; background: var(--surface2); color: var(--text3);
+  font-family: var(--mono); font-weight: 700; font-size: .6rem; text-transform: uppercase; letter-spacing: .04em; }
+.mfab-ped-num { text-align: right !important; font-family: var(--mono); color: var(--text); }
+
+/* ── Mobile: painel estreito e teclas com alvos maiores; arrasto por toque ── */
+@media (max-width: 560px) {
+  .mfab-btns { right: 12px; bottom: 76px; }   /* acima do bnav */
+  .mfab-btn { width: 48px; height: 48px; font-size: 1.25rem; }
+  .mfab-panel { right: 10px; left: 10px; bottom: 132px; }
+  .mfab-calc { width: auto; }
+  .mfab-key { padding: 1.05rem 0; font-size: 1.15rem; }   /* alvos maiores no toque */
+  .mfab-calc-res { font-size: 1.7rem; }
+  .mfab-pedido { width: auto; max-height: 60vh; }
+}

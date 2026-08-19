@@ -48,6 +48,8 @@ function switchMainTab(tabId, el) {
   // Sugestão de Pedido (KPI) — componente compartilhado do painel-adm (kpi.js
   // expõe renderKpi), sem fork. Mesmo padrão de Custo/Escala.
   if (tabId === 'tab-kpi' && window.renderKpi) renderKpi(document.getElementById('tab-kpi'));
+  // FABs da Medição só aparecem na aba Medição (#tab-matriz).
+  if (window.medicaoFabs) window.medicaoFabs.setVisivel(tabId === 'tab-matriz');
 }
 
 // ── Filtro encadeado bandeira → posto (GET /postos) ─────────────
@@ -245,6 +247,10 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSalvar.addEventListener('click', () => window.matrizMedicao.salvar());
 
   window.matrizMedicao.montar(document.getElementById('matriz-host'), { btnSalvar, btnUndo });
+
+  // FABs da Medição (🧮/📋). Lê o posto selecionado no filtro (POSTO_ATUAL).
+  // Visível só na aba Medição (#tab-matriz), que já é a ativa no load.
+  if (window.medicaoFabs) window.medicaoFabs.montar({ getPosto: () => POSTO_ATUAL });
 
   carregarPostos();
   if (escolha !== 'desktop') {

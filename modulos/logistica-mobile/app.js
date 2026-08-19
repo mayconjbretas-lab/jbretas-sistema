@@ -31,6 +31,8 @@ function setTab(btn, tab) {
   btn.classList.add('active');
   const sec = document.getElementById('s-' + tab);
   if (sec) sec.classList.add('active');
+  // FABs da Medição só aparecem na aba Medição.
+  if (window.medicaoFabs) window.medicaoFabs.setVisivel(tab === 'medicao');
   // Preços: monta o render da Logística no container próprio. Pode chamar
   // toda vez — o módulo tem guarda de idempotência (_ultimoRenderSig/_slLigado).
   if (tab === 'precos' && window.solicitacoesLogistica) {
@@ -50,6 +52,7 @@ function abrirCustoMobile() {
   document.querySelectorAll('.scr').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('.nbtn').forEach(x => x.classList.remove('active'));
   document.getElementById('s-custo').classList.add('active');
+  if (window.medicaoFabs) window.medicaoFabs.setVisivel(false);   // saiu da Medição
   if (window.renderCustoMargem) renderCustoMargem(document.getElementById('s-custo'));
 }
 
@@ -214,6 +217,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnUndo)   btnUndo.addEventListener('click', () => window.matrizMedicao.desfazer());
   if (btnSalvar) btnSalvar.addEventListener('click', () => window.matrizMedicao.salvar());
   window.matrizMedicao.montar(document.getElementById('mb-matriz'), { btnSalvar, btnUndo });
+
+  // FABs da Medição (🧮/📋) — mesmo componente shared do desktop. Lê o posto do
+  // filtro (POSTO_ATUAL). Visível só na aba Medição (#s-medicao), a ativa no load.
+  if (window.medicaoFabs) window.medicaoFabs.montar({ getPosto: () => POSTO_ATUAL });
 
   carregarPostosMobile();
   requestAnimationFrame(medirAlturas);   // 1ª medição depois de montar o shell
