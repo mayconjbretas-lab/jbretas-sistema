@@ -325,6 +325,18 @@ function cmpMontarOrdBtns() {
 }
 function cmpToggleSoMudou(chk) { G_CMP_SO_MUDOU = chk.checked; renderComparar(); }
 
+// Chips de distância (Abaixo/Acima do nosso + Limpar) ficam INERTES com o filtro
+// "Só quem mudou" ligado — a distância até o nosso preço sai da tela. Botão que
+// não responde é pior que ausente: desabilita visualmente (.chip-inerte =
+// opacidade + cursor default + pointer-events none) e reabilita ao desligar.
+function cmpAtualizarChipsFaixa() {
+  const inerte = G_CMP_SO_MUDOU;
+  ['flt-abaixo', 'flt-acima', 'flt-todos-preco'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('chip-inerte', inerte);
+  });
+}
+
 // Chips independentes: 'abaixo' e 'acima' alternam sozinhos (podem os 2
 // ativos ao mesmo tempo); 'todos' = limpar os dois. `btn` não é mais usado
 // (o estado manda no visual), mantido só p/ compat com o onclick do HTML.
@@ -455,7 +467,6 @@ function cmpCardMatriz(posto, dado, pos) {
       // só com o filtro correspondente ligado. Mesmo critério do esconder.
       let hl = '';
       if (f.key === G_CMP_FUEL) {
-        if (G_CMP_SO_MUDOU && cmpConcMudou(c, f.key)) hl += ' cmpm-hl-mudou';
         if (ov !== null) {
           const d = cv - ov;
           if (G_CMP_ABAIXO && d < -0.005)     hl += ' cmpm-hl-abaixo';
@@ -735,10 +746,84 @@ function cmpMelhorPrecoCard(dado, f, ord) {
   return ord === 'caro' ? Math.max(...precos) : Math.min(...precos);
 }
 
+// Card do filtro "Só quem mudou". A unidade passa a ser CONCORRENTE + COMBUSTÍVEL:
+// só entra a combinação cujo preço de HOJE difere do de ONTEM, e a coluna "Mudou"
+// mostra a variação do PRÓPRIO concorrente (hoje − ontem), não a distância até o
+// nosso preço. Concorrente sem coleta de ontem NÃO some — entra como "sem base"
+// (não dá pra saber se mudou). Retorna { html:'', ... } quando o posto não tem
+// nenhuma linha (nem mudança, nem sem-base) → o card some da tela.
+// Cores da tela: verde var(--ok) subiu · vermelho var(--dg) desceu · var(--wn) sem base.
+function cmpCardMudancas(posto, dado) {
+  const num = (v) => (v !== null && v !== undefined && v !== '' && !isNaN(Number(v))) ? Number(v) : null;
+  const ordFuel = {}; CMP_FUELS_CARD.forEach((f, i) => { ordFuel[f.key] = i; });
+  const linhas = [];
+  let mudancas = 0, semBase = 0;
+
+  (dado.concorrentes || []).forEach(c => {
+    CMP_FUELS_CARD.forEach(f => {
+      const hoje = c.registro ? num(c.registro[f.key]) : null;
+      if (hoje === null) return;                          // sem preço hoje → nada a mostrar
+      const ontem = c.registroOntem ? num(c.registroOntem[f.key]) : null;
+      if (ontem === null) {
+        // Sem coleta de ontem → não dá pra saber se mudou. NÃO some junto.
+        semBase++;
+        linhas.push({ nome: c.nome, desat: !!c.desatualizado, reg: c.registro,
+          comb: f.btn, ordF: ordFuel[f.key], ontem: null, hoje,
+          mudouTxt: 'sem base', cor: 'var(--wn)' });
+        return;
+      }
+      const d = hoje - ontem;
+      if (Math.abs(d) < 0.005) return;                    // não mudou → some
+      mudancas++;
+      linhas.push({ nome: c.nome, desat: false, reg: c.registro,
+        comb: f.btn, ordF: ordFuel[f.key], ontem, hoje,
+        mudouTxt: (d > 0 ? '+' : '') + Math.round(d * 100) + 'c',
+        cor: d > 0 ? 'var(--ok)' : 'var(--dg)' });
+    });
+  });
+
+  if (!linhas.length) return { html: '', mudancas: 0, semBase: 0 };
+
+  // Concorrente (alfabético) e, dentro, ordem canônica dos combustíveis.
+  linhas.sort((a, b) => a.nome.localeCompare(b.nome) || (a.ordF - b.ordF));
+
+  // Cabeçalho: nome do posto + seus preços por combustível + contagem de mudanças.
+  const own = CMP_FUELS_CARD.map(f => {
+    const v = (dado.proprio && dado.proprio[f.key] != null) ? Number(dado.proprio[f.key]) : null;
+    return `<span class="cmpc-own"><span class="cmpc-own-f">${f.btn}</span>${v !== null ? fmtPrecoBRL(v) : '—'}</span>`;
+  }).join('');
+
+  const rows = linhas.map(l => {
+    const nomeLbl = l.nome + (l.desat ? seloDesatualizado(l.reg) : '');
+    const ontemCell = l.ontem === null ? '<span class="cmpm-na">—</span>' : fmtPrecoBRL(l.ontem);
+    return `<tr>
+      <td class="cmpc-nome" title="${l.nome}">${nomeLbl}</td>
+      <td class="cmpc-comb">${l.comb}</td>
+      <td class="cmpc-num">${ontemCell}</td>
+      <td class="cmpc-num">${fmtPrecoBRL(l.hoje)}</td>
+      <td class="cmpc-mudou" style="color:${l.cor}">${l.mudouTxt}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<div class="region-card cmpc-card" id="cmp-card-${idSafe(posto.k)}">
+    <div class="cmpc-hdr">
+      <span class="region-nome cmpc-posto">${posto.ap}</span>
+      <span class="cmpc-owns">${own}</span>
+      <span class="cmpc-count">${mudancas} mudança${mudancas === 1 ? '' : 's'}</span>
+    </div>
+    <div class="cmpc-wrap"><table class="cmpc-table">
+      <thead><tr><th>Concorrente</th><th>Comb</th><th>Ontem</th><th>Hoje</th><th>Mudou</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+  </div>`;
+  return { html, mudancas, semBase };
+}
+
 function renderComparar() {
   montarFuelTabsComparar();
   montarStratTabsComparar();
   cmpMontarOrdBtns();
+  cmpAtualizarChipsFaixa();
 
   const fuel = G_CMP_FUEL;
 
@@ -768,6 +853,7 @@ function renderComparar() {
   let somaMinha = 0, contMinha = 0, somaConc = 0, contConc = 0;
   let cardsHtml = '';
   let posOrd = 0; // posição só entre os cards efetivamente renderizados
+  let totMudancas = 0, totSemBase = 0; // só usados com o filtro ligado
 
   postos.forEach(posto => {
     const dado = G_COMPARACAO[posto.k] || { proprio: null, proprioDesatualizado: false, concorrentes: [] };
@@ -778,16 +864,30 @@ function renderComparar() {
     if (glob.ownVal !== null) { somaMinha += glob.ownVal; contMinha++; }
     glob.competidores.forEach(c => { somaConc += c.preco; contConc++; });
 
-    // Card visível se o posto tem QUALQUER dado (próprio ou concorrente)
-    // E passar nos filtros "só quem mudou" / "abaixo-acima do nosso".
+    // Card visível se o posto tem QUALQUER dado (próprio ou concorrente).
     if (!dado.proprio && !dado.concorrentes.length) return;
-    if (!cmpPostoPassaFiltros(dado)) return;
 
-    posOrd += 1;
-    cardsHtml += cmpCardMatriz(posto, dado, ordAtivo ? posOrd : null);
+    if (G_CMP_SO_MUDOU) {
+      // Filtro ligado: layout de variações (conc + comb). Some se não há
+      // nenhuma linha (nem mudança, nem sem-base). Abaixo/Acima (distância até o
+      // nosso preço) não se aplicam aqui — a distância sai da tela.
+      const r = cmpCardMudancas(posto, dado);
+      if (!r.html) return;
+      totMudancas += r.mudancas; totSemBase += r.semBase;
+      posOrd += 1;
+      cardsHtml += r.html;
+    } else {
+      // Filtro desligado: comportamento atual, intacto.
+      if (!cmpPostoPassaFiltros(dado)) return;
+      posOrd += 1;
+      cardsHtml += cmpCardMatriz(posto, dado, ordAtivo ? posOrd : null);
+    }
   });
 
   document.getElementById('cmp-regions').innerHTML = cardsHtml || '<div class="empty">Nenhum posto para esse filtro.</div>';
+  if (G_CMP_SO_MUDOU) {
+    console.info(`[Comparação] "só quem mudou": ${totMudancas} mudança(s), ${totSemBase} linha(s) sem base, ${posOrd} card(s).`);
+  }
 
   const minhaAvg = contMinha ? somaMinha / contMinha : null;
   const concAvg  = contConc  ? somaConc  / contConc  : null;

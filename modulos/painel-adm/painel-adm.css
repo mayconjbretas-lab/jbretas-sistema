@@ -191,7 +191,6 @@ html, body { height: 100%; overflow: hidden; }
 /* Destaques de filtro na matriz (só na coluna do combustível ativo).
    mudou = anel âmbar; abaixo = fundo vermelho suave (concorrente mais
    barato = perigo); acima = fundo verde suave. Combináveis. */
-.cmpm-hl-mudou  { box-shadow: inset 0 0 0 2px var(--wn); border-radius: 5px; }
 .cmpm-hl-abaixo { background: color-mix(in srgb, var(--dg) 16%, transparent); border-radius: 5px; }
 .cmpm-hl-acima  { background: color-mix(in srgb, var(--ok) 16%, transparent); border-radius: 5px; }
 .cmpm-pen { cursor: pointer; font-size: .72rem; opacity: .65; }
@@ -209,6 +208,35 @@ html, body { height: 100%; overflow: hidden; }
 .sugerido-lbl { font-size: .68rem; color: var(--tx2); font-family: var(--mono); text-transform: uppercase; letter-spacing: .05em; }
 .sugerido-val { font-family: var(--mono); font-size: 1rem; font-weight: 700; color: var(--tx); }
 .sugerido-move { font-size: .68rem; margin-left: 5px; font-weight: 600; }
+
+/* Chips de distância inertes enquanto o filtro "Só quem mudou" está ligado */
+.ftag.chip-inerte { opacity: .4; cursor: default; pointer-events: none; }
+
+/* ── Filtro "Só quem mudou": card de variação (concorrente + combustível) ── */
+.cmpc-hdr { display: flex; align-items: baseline; flex-wrap: wrap; gap: .5rem; margin-bottom: .55rem; }
+.cmpc-posto { font-weight: 700; color: var(--tx); font-size: .9rem; }
+.cmpc-owns { display: flex; flex-wrap: wrap; gap: .55rem; margin-left: .15rem; }
+.cmpc-own { font-family: var(--mono); font-size: .64rem; color: var(--tx2); }
+.cmpc-own-f { color: var(--tx3); margin-right: 3px; }
+.cmpc-count { margin-left: auto; font-family: var(--mono); font-size: .66rem; font-weight: 700; color: var(--ac); white-space: nowrap; }
+.cmpc-wrap { overflow-x: auto; }
+.cmpc-table { width: 100%; border-collapse: collapse; font-size: .76rem; }
+.cmpc-table th, .cmpc-table td { padding: 5px 8px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--bd); }
+.cmpc-table thead th { color: var(--tx3); font-family: var(--mono); font-weight: 700; font-size: .62rem; text-transform: uppercase; letter-spacing: .04em; }
+.cmpc-table tbody tr:last-child td { border-bottom: none; }
+.cmpc-nome { color: var(--tx2); font-weight: 600; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.cmpc-comb { font-family: var(--mono); font-weight: 700; color: var(--tx3); }
+.cmpc-num { font-family: var(--mono); text-align: right !important; color: var(--tx); }
+.cmpc-mudou { font-family: var(--mono); font-weight: 700; text-align: right !important; }
+
+/* Mobile / viewport estreito: mesma tabela, fonte menor, nome truncado curto */
+@media (max-width: 560px) {
+  .cmpc-table { font-size: .68rem; }
+  .cmpc-table th, .cmpc-table td { padding: 4px 5px; }
+  .cmpc-nome { max-width: 92px; }
+  .cmpc-posto { font-size: .82rem; }
+  .cmpc-count { font-size: .6rem; }
+}
 
 
 /* Modal "como a média é calculada" (centralizado no desktop) */
