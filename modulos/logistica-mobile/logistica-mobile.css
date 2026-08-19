@@ -63,8 +63,12 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 1rem;
-  /* Folga p/ o conteúdo não ficar sob o bnav ao rolar até o fim. */
-  padding-bottom: calc(1rem + var(--mb-bnav-h, 48px) + env(safe-area-inset-bottom));
+  /* Folga p/ o conteúdo não ficar sob o bnav ao rolar até o fim.
+     --mb-bnav-h já inclui a safe-area (o .bnav tem padding-bottom:env(...) e é
+     medido pelo border-box), então NÃO somamos env() de novo — era o vão duplo.
+     max() é o piso seguro: se --mb-bnav-h vier medido sem a safe-area, o floor
+     48px+env garante que ainda reservamos o espaço do bnav (sem sobreposição). */
+  padding-bottom: calc(1rem + max(var(--mb-bnav-h, 48px), 48px + env(safe-area-inset-bottom)));
 }
 .scr { display: none; }
 .scr.active { display: block; }
@@ -227,8 +231,11 @@ body {
    perde a âncora e o cabeçalho rola pra fora. Altura = viewport menos topbar +
    filtros + faixa (recolhida) + barra de ações + bnav (+ safe-areas). Ajustável. */
 #mb-matriz .spreadsheet-frame {
+  /* --mb-bnav-h já embute a safe-area (border-box do .bnav) → NÃO subtrai env()
+     de novo (era o vão duplo, que também encurtava o frame). max() = piso seguro:
+     se a medição vier sem a safe-area, reserva pelo menos 48px+env do bnav. */
   height: calc(100dvh - var(--mb-topo-h, 300px) - var(--mb-actions-h, 60px)
-               - var(--mb-bnav-h, 48px) - env(safe-area-inset-bottom));
+               - max(var(--mb-bnav-h, 48px), 48px + env(safe-area-inset-bottom)));
   overflow: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -252,7 +259,10 @@ body {
 .mb-actions {
   position: fixed;
   left: 0; right: 0;
-  bottom: calc(var(--mb-bnav-h, 48px) + env(safe-area-inset-bottom));  /* encosta no topo do bnav */
+  /* --mb-bnav-h já inclui a safe-area (border-box do .bnav) → NÃO soma env() de
+     novo (era o vão duplo). max() = piso seguro contra medição sem safe-area:
+     nunca posiciona a barra abaixo de 48px+env, evitando sobrepor o bnav. */
+  bottom: max(var(--mb-bnav-h, 48px), 48px + env(safe-area-inset-bottom));  /* encosta no topo do bnav */
   display: flex;
   gap: .5rem;
   padding: .3rem .8rem;                               /* enxuto: menos folga vertical (era .55rem) */
