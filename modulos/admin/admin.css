@@ -417,9 +417,8 @@ html:not([data-theme="light"]) body::before{
 .cmpm-diff { font-size: .62rem; font-weight: 600; margin-left: 4px; }
 .cmpm-na { color: var(--tx3); opacity: .5; }
 /* Destaques de filtro na matriz (só na coluna do combustível ativo).
-   mudou = anel âmbar; abaixo = fundo vermelho suave (concorrente mais
-   barato = perigo); acima = fundo verde suave. Combináveis. */
-.cmpm-hl-mudou  { box-shadow: inset 0 0 0 2px var(--wn); border-radius: 5px; }
+   abaixo = fundo vermelho suave (concorrente mais barato = perigo);
+   acima = fundo verde suave. Combináveis. */
 .cmpm-hl-abaixo { background: color-mix(in srgb, var(--dg) 16%, transparent); border-radius: 5px; }
 .cmpm-hl-acima  { background: color-mix(in srgb, var(--ok) 16%, transparent); border-radius: 5px; }
 .cmpm-pen { cursor: pointer; font-size: .72rem; opacity: .65; }
@@ -433,6 +432,31 @@ html:not([data-theme="light"]) body::before{
 .cmpm-sug .cmpm-preco { color: var(--ac); }
 .cmpm-hint { font-size: .56rem; color: var(--tx3); }
 .cmpm-vazio { text-align: center !important; color: var(--tx3); font-size: .72rem; padding: 6px 0; }
+
+/* Chips de distância inertes enquanto o filtro "Só quem mudou" está ligado */
+.ftag.chip-inerte { opacity: .4; cursor: default; pointer-events: none; }
+
+/* ── Filtro "Só quem mudou": card de variação (concorrente + combustível) ──
+   Mobile: tem que caber em 380px sem rolagem horizontal → fonte menor e nome
+   truncado com reticências. */
+.cmpc-hdr { display: flex; align-items: baseline; justify-content: space-between; gap: .4rem; margin-bottom: .5rem; }
+.cmpc-posto { font-weight: 700; color: var(--tx); font-size: .82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmpc-count { font-family: var(--mono); font-size: .6rem; font-weight: 700; color: var(--ac); white-space: nowrap; }
+/* Tabela "Você" (grade própria): anula o min-width 580 da .cmpm-table e as
+   larguras fixas das células, para caber no card estreito. */
+.cmpc-voce-table { min-width: 0; max-width: none; table-layout: auto; margin: 0 0 .5rem; font-size: .68rem; }
+.cmpc-voce-table .cmpm-rowlbl { width: auto; }
+.cmpc-voce-table .cmpm-preco, .cmpc-voce-table .cmpm-colh { width: auto; min-width: 0; }
+.cmpc-voce-table th, .cmpc-voce-table td { padding: 3px 5px; }
+.cmpc-wrap { overflow-x: auto; }
+.cmpc-table { width: 100%; border-collapse: collapse; font-size: .68rem; table-layout: fixed; }
+.cmpc-table th, .cmpc-table td { padding: 4px 5px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--bd); }
+.cmpc-table thead th { color: var(--tx3); font-family: var(--mono); font-weight: 700; font-size: .58rem; text-transform: uppercase; letter-spacing: .03em; }
+.cmpc-table tbody tr:last-child td { border-bottom: none; }
+.cmpc-nome { color: var(--tx2); font-weight: 600; max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
+.cmpc-comb { font-family: var(--mono); font-weight: 700; color: var(--tx3); }
+.cmpc-num { font-family: var(--mono); text-align: right !important; color: var(--tx); }
+.cmpc-mudou { font-family: var(--mono); font-weight: 700; text-align: right !important; }
 
 .sugerido-row{margin-top:.65rem;padding-top:.6rem;border-top:1px solid var(--bd);
   display:flex;justify-content:space-between;align-items:center}
