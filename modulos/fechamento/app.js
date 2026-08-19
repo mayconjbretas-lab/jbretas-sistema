@@ -66,6 +66,12 @@ function montarTopbar() {
 
 function montarDataPadrao() {
   const input = document.getElementById('card-data-input');
+  // Trava de futuro: max = HOJE no fuso LOCAL, montado a partir das partes da
+  // data (NÃO toISOString, que é UTC e desloca o dia perto da meia-noite). O
+  // passado segue liberado — sem min. Backend é a trava que vale; isto só evita
+  // o acidente na tela.
+  const agora = new Date();
+  input.max = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
   const ontem = new Date();
   ontem.setDate(ontem.getDate() - 1);
   input.value = ontem.toISOString().split('T')[0];
