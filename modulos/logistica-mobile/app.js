@@ -33,6 +33,9 @@ function setTab(btn, tab) {
   if (sec) sec.classList.add('active');
   // FABs da Medição só aparecem na aba Medição.
   if (window.medicaoFabs) window.medicaoFabs.setVisivel(tab === 'medicao');
+  // Reserva do bnav no .main é dobra na Medição (o frame já reserva) → tira lá,
+  // mantém nas outras (que rolam livres).
+  document.querySelector('.main')?.classList.toggle('sem-reserva-bnav', tab === 'medicao');
   // Preços: monta o render da Logística no container próprio. Pode chamar
   // toda vez — o módulo tem guarda de idempotência (_ultimoRenderSig/_slLigado).
   if (tab === 'precos' && window.solicitacoesLogistica) {
@@ -53,6 +56,7 @@ function abrirCustoMobile() {
   document.querySelectorAll('.nbtn').forEach(x => x.classList.remove('active'));
   document.getElementById('s-custo').classList.add('active');
   if (window.medicaoFabs) window.medicaoFabs.setVisivel(false);   // saiu da Medição
+  document.querySelector('.main')?.classList.remove('sem-reserva-bnav');   // Custo rola livre → volta a reserva
   if (window.renderCustoMargem) renderCustoMargem(document.getElementById('s-custo'));
 }
 
@@ -182,16 +186,19 @@ function onFaixaDataMobile(input) { FAIXA_DATA = input.value || hojeISO(); atual
 // .mb-actions e o padding do .main se dimensionam sem número mágico. Só grava
 // quando o elemento está visível (>0): assim uma medição feita em outra aba
 // (onde a matriz/actions ficam display:none) não zera a var — mantém o último
-// valor bom. --mb-topo-h = topo da viewport até o topo do #mb-matriz (cobre
-// topbar + padding do main + filtros + faixa de uma vez).
+// valor bom. --mb-topo-h = topo da viewport até o topo do .spreadsheet-frame
+// (cobre topbar + padding do main + filtros + faixa + o CABEÇALHO da matriz de
+// uma vez). Ancorar no FRAME (e não no #mb-matriz) faz o cabeçalho entrar no top
+// automaticamente — sem variável nova e sem remedir quando ele muda de altura.
+// Fallback no #mb-matriz caso o frame ainda não exista (antes do montar).
 function medirAlturas() {
   const root = document.documentElement;
   const bnav    = document.querySelector('.bnav');
   const actions = document.querySelector('.mb-actions');
-  const matriz  = document.getElementById('mb-matriz');
+  const topoEl  = document.querySelector('#mb-matriz .spreadsheet-frame') || document.getElementById('mb-matriz');
   if (bnav)    { const h = bnav.getBoundingClientRect().height;    if (h > 0) root.style.setProperty('--mb-bnav-h',    Math.round(h) + 'px'); }
   if (actions) { const h = actions.getBoundingClientRect().height; if (h > 0) root.style.setProperty('--mb-actions-h', Math.round(h) + 'px'); }
-  if (matriz)  { const t = matriz.getBoundingClientRect().top;     if (t > 0) root.style.setProperty('--mb-topo-h',    Math.round(t) + 'px'); }
+  if (topoEl)  { const t = topoEl.getBoundingClientRect().top;     if (t > 0) root.style.setProperty('--mb-topo-h',    Math.round(t) + 'px'); }
 }
 
 // Toque no cabeçalho abre/fecha o corpo e troca o chevron. A faixa muda de
@@ -217,6 +224,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnUndo)   btnUndo.addEventListener('click', () => window.matrizMedicao.desfazer());
   if (btnSalvar) btnSalvar.addEventListener('click', () => window.matrizMedicao.salvar());
   window.matrizMedicao.montar(document.getElementById('mb-matriz'), { btnSalvar, btnUndo });
+  // Medição é a aba ativa no load → matriz montada, tira a reserva do bnav do .main.
+  document.querySelector('.main')?.classList.add('sem-reserva-bnav');
 
   // FABs da Medição (🧮/📋) — mesmo componente shared do desktop. Lê o posto do
   // filtro (POSTO_ATUAL). Visível só na aba Medição (#s-medicao), a ativa no load.

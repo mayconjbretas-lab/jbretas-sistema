@@ -70,6 +70,11 @@ body {
      48px+env garante que ainda reservamos o espaço do bnav (sem sobreposição). */
   padding-bottom: calc(1rem + max(var(--mb-bnav-h, 48px), 48px + env(safe-area-inset-bottom)));
 }
+/* Na aba Medição a matriz tem altura fixa por calc() que JÁ reserva actions+bnav,
+   então a reserva do bnav no .main vira dobra e cria faixa vazia. Aplicada ao
+   montar a matriz e removida ao sair da aba (as outras telas rolam livres e
+   PRECISAM da reserva acima). Mantém só o respiro simétrico de 1rem. */
+.main.sem-reserva-bnav { padding-bottom: 1rem; }
 .scr { display: none; }
 .scr.active { display: block; }
 
