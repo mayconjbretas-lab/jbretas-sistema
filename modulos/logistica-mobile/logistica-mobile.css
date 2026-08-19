@@ -233,6 +233,21 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Cabeçalho da matriz ENXUTO no mobile (ganho de altura útil pro frame):
+   - título "Matriz Integrada de Suprimentos" some (font-size:0 zera o nó de texto);
+   - aviso "↔ scroll horizontal" some (display:none);
+   - posto + mês (.mm-subtitle) fica, em UMA linha, fonte menor, truncado c/ "…".
+   Escopado em #mb-matriz e neste arquivo (só o mobile carrega) → o desktop
+   (logistica.css / matriz.css base) fica exatamente como estava. */
+#mb-matriz .table-actions { padding: .3rem .7rem; }
+#mb-matriz .table-title   { font-size: 0; gap: 0; flex: 1; min-width: 0; }   /* zera o texto do título */
+#mb-matriz .mm-subtitle {
+  flex: 1; min-width: 0; display: block; max-width: 100%;
+  font-size: .68rem; font-weight: 400;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;            /* nome longo → reticências */
+}
+#mb-matriz .scroll-indicator { display: none; }
+
 /* ── Barra fixa (Desfazer / Salvar) acima do bnav ── */
 .mb-actions {
   position: fixed;
