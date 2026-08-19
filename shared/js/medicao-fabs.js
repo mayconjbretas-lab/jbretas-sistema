@@ -229,12 +229,34 @@
       const maxY = Math.max(0, window.innerHeight - h);
       return { x: Math.min(Math.max(0, x), maxX), y: Math.min(Math.max(0, y), maxY) };
     }
+    // Liga/desliga os listeners de MOVIMENTO no document. Registrados SÓ durante o
+    // arrasto (em inicio) e removidos ao soltar (em fim/touchcancel). Com a
+    // calculadora parada NÃO sobra nenhum listener — em especial nenhum touchmove
+    // não-passivo no document, que degradava o momentum do scroll da matriz.
+    // Mouse e toque seguem o MESMO esquema (uniforme; e evita mousemove global
+    // disparando à toa fora do arrasto).
+    function escutar() {
+      document.addEventListener('mousemove', mover);
+      document.addEventListener('mouseup', fim);
+      document.addEventListener('touchmove', mover, { passive: false });   // preventDefault no arrasto
+      document.addEventListener('touchend', fim);
+      document.addEventListener('touchcancel', fim);   // dedo saiu/cancelou → solta tudo
+    }
+    function pararEscuta() {
+      document.removeEventListener('mousemove', mover);
+      document.removeEventListener('mouseup', fim);
+      document.removeEventListener('touchmove', mover);
+      document.removeEventListener('touchend', fim);
+      document.removeEventListener('touchcancel', fim);
+    }
     function inicio(e) {
+      if (arrastando) return;
       arrastando = true;
       const p = ponto(e);
       const r = painel.getBoundingClientRect();
       offX = p.x - r.left; offY = p.y - r.top;
       painel.classList.add('mfab-arrastando');
+      escutar();
       if (e.cancelable) e.preventDefault();
     }
     function mover(e) {
@@ -250,15 +272,14 @@
       if (!arrastando) return;
       arrastando = false;
       painel.classList.remove('mfab-arrastando');
+      pararEscuta();
       const r = painel.getBoundingClientRect();
       salvarPos(r.left, r.top);
     }
+    // Só o START fica permanente — e no HANDLE (barrinha da calculadora), fora do
+    // caminho da matriz. touchstart passivo:false p/ o inicio poder preventDefault.
     handle.addEventListener('mousedown', inicio);
-    document.addEventListener('mousemove', mover);
-    document.addEventListener('mouseup', fim);
     handle.addEventListener('touchstart', inicio, { passive: false });
-    document.addEventListener('touchmove', mover, { passive: false });
-    document.addEventListener('touchend', fim);
   }
 
   // Aplica a última posição salva (com clamp p/ mudança de tamanho de tela).
