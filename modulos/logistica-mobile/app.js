@@ -231,6 +231,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // filtro (POSTO_ATUAL). Visível só na aba Medição (#s-medicao), a ativa no load.
   if (window.medicaoFabs) window.medicaoFabs.montar({ getPosto: () => POSTO_ATUAL });
 
+  // Faixa de alterações de medição no topo da aba Medição (#s-medicao).
+  if (window.medicaoAlteracoes) window.medicaoAlteracoes.montar(document.getElementById('s-medicao'));
+
   carregarPostosMobile();
   requestAnimationFrame(medirAlturas);   // 1ª medição depois de montar o shell
 });

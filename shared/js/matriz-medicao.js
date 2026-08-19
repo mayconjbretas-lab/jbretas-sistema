@@ -514,6 +514,12 @@
       HISTORICO_UNDO = [];
       limparDestaqueEdicoes();
       atualizarBotaoUndo();
+      // A auditoria campo a campo já foi gravada pelo POST /medicao (antes da
+      // resposta), então a faixa de alterações pode recarregar e já mostrar o que
+      // o usuário acabou de salvar. Acessório: não bloqueia nem quebra o save.
+      if (window.medicaoAlteracoes && typeof window.medicaoAlteracoes.recarregar === 'function') {
+        Promise.resolve(window.medicaoAlteracoes.recarregar()).catch(() => {});
+      }
       if (btn) btn.textContent = '✓ Salvo!';
       setTimeout(atualizarBotoesSalvar, 1800);
     } catch (err) {

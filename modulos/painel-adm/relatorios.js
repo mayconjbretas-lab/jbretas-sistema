@@ -452,18 +452,7 @@
     const texto = tipo === 'mix' ? textoMix()
                 : tipo === 'produtos' ? textoProdutos()
                 : textoConsolidado();
-    const feedback = () => {
-      const orig = btn.textContent;
-      btn.textContent = '✓ Copiado!';
-      setTimeout(() => { btn.textContent = orig; }, 2000);
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(texto).then(feedback).catch(() => {
-        window.prompt('Copie o texto abaixo:', texto);
-      });
-    } else {
-      window.prompt('Copie o texto abaixo:', texto);
-    }
+    window.jbCopiar(texto, btn);   // helper compartilhado (shared/js/clipboard.js)
   };
 
   // ── Entrada pública (chamada pelo setTab) ────────────────────────

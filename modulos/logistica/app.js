@@ -252,6 +252,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Visível só na aba Medição (#tab-matriz), que já é a ativa no load.
   if (window.medicaoFabs) window.medicaoFabs.montar({ getPosto: () => POSTO_ATUAL });
 
+  // Faixa de alterações de medição no topo da aba Medição (#tab-matriz).
+  if (window.medicaoAlteracoes) window.medicaoAlteracoes.montar(document.getElementById('tab-matriz'));
+
   carregarPostos();
   if (escolha !== 'desktop') {
     // Sem preferência salva: mostra a tela de escolha por cima do app.
