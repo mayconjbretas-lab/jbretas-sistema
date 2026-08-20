@@ -15,6 +15,7 @@ let usuarioAtual = null;
 let tanquesAtuais = [];
 let combustiveisAtuais = [];
 let cargaRespondida = null; // 'sim' | 'nao' | null
+let DATA_RELATORIO = null;  // ISO 'YYYY-MM-DD' = ontem (fuso local). Fonte única da data (não há mais input)
 let postoFechado = false;   // toggle "Posto fechado hoje?" — zera as vendas
 let fechamentoBloqueado = false;
 
@@ -64,27 +65,27 @@ function montarTopbar() {
 // Navegação entre módulos agora é pelo rodapé (shared/js/gerente-nav.js) —
 // o antigo menu de 3 pontinhos (toggleMenu + fechar-ao-clicar-fora) foi removido.
 
+// Define a DATA DO RELATÓRIO: SEMPRE ontem, no fuso LOCAL (partes da data, NÃO
+// toISOString, que é UTC e desloca perto da meia-noite). Não há input — a data é
+// imutável; mostramos como TEXTO FIXO DD/MM/AAAA. O gerente não escolhe, então o
+// picker do mobile deixa de ser um caminho para data errada (o backend segue como
+// rede de segurança contra chamada direta à API).
 function montarDataPadrao() {
-  const input = document.getElementById('card-data-input');
-  // O fechamento é EXATAMENTE de ontem (a medição dispara o pedido, então tem de
-  // ser do dia que terminou — nem futuro, nem retroativo). min E max = ontem no
-  // fuso LOCAL, montados das partes da data (NÃO toISOString, que é UTC e desloca
-  // perto da meia-noite). No mobile o picker nativo NÃO garante isso, então o
-  // backend é a trava que vale (recusa data != ontem, exceto TI); aqui é só UX.
   const ontem = new Date();
   ontem.setDate(ontem.getDate() - 1);
-  const ontemLocal = `${ontem.getFullYear()}-${String(ontem.getMonth() + 1).padStart(2, '0')}-${String(ontem.getDate()).padStart(2, '0')}`;
-  input.min = ontemLocal;
-  input.max = ontemLocal;
-  input.value = ontemLocal;
+  const y = ontem.getFullYear();
+  const mo = String(ontem.getMonth() + 1).padStart(2, '0');
+  const d = String(ontem.getDate()).padStart(2, '0');
+  DATA_RELATORIO = `${y}-${mo}-${d}`;                 // ISO, usada no POST e nas leituras
+  const txt = document.getElementById('card-data-texto');
+  if (txt) txt.textContent = `${d}/${mo}/${y}`;       // exibição DD/MM/AAAA
   atualizarPerguntaCarga();
 }
 
 // Pergunta da carga usa a DATA DO RELATÓRIO (não "hoje", que os gerentes liam
-// como o dia corrente). Atualiza ao montar e a cada troca de data.
+// como o dia corrente).
 function atualizarPerguntaCarga() {
-  const v = document.getElementById('card-data-input').value;   // YYYY-MM-DD
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ''));
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(DATA_RELATORIO || ''));
   const dia = m ? (m[3] + '/' + m[2]) : '';
   const q = document.getElementById('carga-pergunta');
   const btnNao = document.getElementById('btn-carga-nao');
@@ -110,25 +111,12 @@ async function carregarEstruturaDoPosto(nomePosto) {
     renderTanques();
     renderVendas();
     renderCarga();
-    await carregarFechamentoDoDia(document.getElementById('card-data-input').value);
+    await carregarFechamentoDoDia(DATA_RELATORIO);
   } catch (err) {
     console.error('Erro ao carregar estrutura do posto:', err);
     document.getElementById('tanques-body').innerHTML =
       `<div class="empty-state">⚠ Erro ao carregar dados: ${err.message}</div>`;
   }
-}
-
-// Chamado quando o gerente troca a "Data do Relatório" — zera o
-// formulário pro padrão e tenta pré-preencher de novo pra data nova.
-function onDataAlterada() {
-  renderTanques();
-  renderVendas();
-  renderCarga();
-  atualizarPerguntaCarga();
-  cargaRespondida = null;
-  aplicarModoBloqueio(false);
-  const dataISO = document.getElementById('card-data-input').value;
-  if (dataISO) carregarFechamentoDoDia(dataISO);
 }
 
 // ── Pré-preenchimento a partir de um fechamento já lançado ────────
@@ -506,8 +494,12 @@ async function salvarFechamento() {
   btn.disabled = true;
   btn.textContent = '⏳ Salvando...';
 
-  const dataInput = document.getElementById('card-data-input').value; // YYYY-MM-DD
-  const [ano, mes, dia] = dataInput.split('-');
+  // Recalcula a data AGORA (a tela pode ter cruzado a meia-noite aberta): sem
+  // campo/mensagem visível, uma data velha faria o backend recusar em silêncio.
+  // montarDataPadrao() reatribui DATA_RELATORIO e re-sincroniza o texto do card e
+  // a pergunta da carga — a tela nunca mostra uma data e envia outra.
+  montarDataPadrao();
+  const [ano, mes, dia] = String(DATA_RELATORIO || '').split('-'); // fonte única (sempre ontem)
   const dataBR = `${dia}/${mes}/${ano}`;
   const agora = new Date();
   const hora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
