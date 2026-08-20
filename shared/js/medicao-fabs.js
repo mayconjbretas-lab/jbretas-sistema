@@ -378,10 +378,28 @@
       mesEl.textContent = (dados.mes || '') + (dados.ano ? '/' + dados.ano : '');
       const grupos = dados.grupos || [];
       const linhas = [];
-      // Mais RECENTE primeiro: dias vêm do /medicao em ordem crescente; percorre
-      // ao contrário (dia mais novo → mais antigo). Sem auto-scroll/timing.
+
+      // DIA SEGUINTE sempre no topo, mesmo zerado: é onde se lança o próximo
+      // pedido, e se não existe linha dele o Maycon não vê o que falta. Casa por
+      // DD/MM (d.data = 'DD/MM/AAAA'); se cair em outro mês (virada) não acha na
+      // resposta e sintetiza a linha em branco a partir dos grupos do posto.
+      const amanhaDt = new Date();
+      amanhaDt.setDate(amanhaDt.getDate() + 1);
+      const amanhaDia = amanhaDt.getDate();
+      const amanhaDDMM = String(amanhaDia).padStart(2, '0') + '/' + String(amanhaDt.getMonth() + 1).padStart(2, '0');
+      const ehAmanha = d => String(d && d.data || '').slice(0, 5) === amanhaDDMM;
+      const dAmanha = (dados.dias || []).find(ehAmanha) || null;
+      grupos.forEach((g, i) => {
+        const pedido = dAmanha && dAmanha.pedido ? dAmanha.pedido[i] : null;
+        const carga  = dAmanha && dAmanha.carga  ? dAmanha.carga[i]  : null;
+        linhas.push({ dia: amanhaDia, comb: g.abv || g.comb, pedido, carga, amanha: true });
+      });
+
+      // Demais dias, mais RECENTE primeiro (dias vêm crescentes → inverte). Pula
+      // o dia seguinte (já está no topo) p/ não duplicar. Só linhas com pedido/carga.
       const dias = (dados.dias || []).slice().reverse();
       dias.forEach(d => {
+        if (ehAmanha(d)) return;
         grupos.forEach((g, i) => {
           const pedido = d.pedido ? d.pedido[i] : null;
           const carga  = d.carga  ? d.carga[i]  : null;
@@ -390,7 +408,7 @@
         });
       });
 
-      if (!linhas.length) { body.innerHTML = '<div class="mfab-ped-vazio">Sem pedidos neste mês.</div>'; return; }
+      if (!linhas.length) { body.innerHTML = '<div class="mfab-ped-vazio">Sem combustíveis neste posto.</div>'; return; }
 
       let html = '<table class="mfab-ped-tbl"><thead><tr>' +
         '<th>Data</th><th>Comb</th><th>Pedido</th><th>Carga</th><th>Dif</th></tr></thead><tbody>';
@@ -401,8 +419,8 @@
           cor = d < -TOL ? 'var(--danger)' : (d > TOL ? 'var(--warning)' : 'var(--ok)');
           dif = (d > 0 ? '+' : '') + fmtL(d);
         }
-        html += '<tr>' +
-          '<td class="mfab-ped-num">' + esc(String(l.dia).padStart(2, '0')) + '</td>' +
+        html += '<tr' + (l.amanha ? ' class="mfab-ped-amanha" title="Dia seguinte"' : '') + '>' +
+          '<td class="mfab-ped-num">' + esc(String(l.dia).padStart(2, '0')) + (l.amanha ? ' ➜' : '') + '</td>' +
           '<td>' + esc(l.comb) + '</td>' +
           '<td class="mfab-ped-num">' + fmtL(l.pedido) + '</td>' +
           '<td class="mfab-ped-num">' + fmtL(l.carga) + '</td>' +

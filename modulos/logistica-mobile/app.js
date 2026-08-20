@@ -200,7 +200,7 @@ function renderGradeMobile(resp, dataISO) {
   _gradeData = dataISO;
   if (!_gradePostos.length) {
     grade.classList.remove('grade-host');
-    grade.innerHTML = '<div class="grade-vazia">Nenhum posto com pedido em ' + fmtDataBR(dataISO) + '.</div>';
+    grade.innerHTML = '<div class="grade-vazia">Nenhum posto ativo neste escopo.</div>';
     return;
   }
   grade.classList.add('grade-host');
@@ -212,14 +212,15 @@ function renderGradeMobile(resp, dataISO) {
       '<span class="grade-cl-val">' + fmtNum(pc[k]) + '</span></div>').join('');
     const band = p.bandeira ? '<span class="grade-band">' + esc(p.bandeira) + '</span>' : '';
     const on = montado.has(String(p.posto_id)) ? ' grade-card--montado' : '';
-    return '<div class="grade-card' + on + '" data-pid="' + esc(String(p.posto_id)) + '" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeToggle(this)">' +
+    const semPed = (Number(p.total) || 0) <= 0 ? ' grade-card--sem-pedido' : '';   // borda tracejada/apagado
+    return '<div class="grade-card' + on + semPed + '" data-pid="' + esc(String(p.posto_id)) + '" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeToggle(this)">' +
       '<div class="grade-card-top">' +
         '<span class="grade-posto" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeAbrir(event, this)">' + esc(p.posto_nome || '—') + '</span>' +
         '<span class="grade-top-r"><span class="grade-check">✓</span>' + band +
           '<span class="grade-lapis" title="Editar pedido" onclick="__gradeLapis(event, this)">✏️</span></span>' +
       '</div>' +
       '<div class="grade-total">' + fmtNum(p.total) + ' L</div>' +
-      '<div class="grade-cls">' + linhas + '</div>' +
+      '<div class="grade-cls">' + (linhas || '<span class="grade-sem-tag">sem pedido</span>') + '</div>' +
     '</div>';
   }).join('');
   const head =
@@ -235,16 +236,20 @@ function renderGradeMobile(resp, dataISO) {
   recomputarTotais();
 }
 
+// "Falta montar" agrega SEM pedido (total 0) + COM pedido não confirmado (os dois
+// "ainda não fechados"); litros somam só o pedido e destaco quantos são sem pedido.
 function recomputarTotais() {
   const montado = lerMontado(_gradeData);
-  let fL = 0, fN = 0, mL = 0, mN = 0;
+  let fL = 0, fN = 0, fSem = 0, mL = 0, mN = 0;
   _gradePostos.forEach(p => {
     const t = Number(p.total) || 0;
-    if (montado.has(String(p.posto_id))) { mL += t; mN++; } else { fL += t; fN++; }
+    if (montado.has(String(p.posto_id))) { mL += t; mN++; }
+    else { fL += t; fN++; if (t <= 0) fSem++; }
   });
   const elF = document.getElementById('grade-tot-falta');
   const elM = document.getElementById('grade-tot-montado');
-  if (elF) elF.textContent = fmtNum(fL) + ' L · ' + fN + ' posto' + (fN === 1 ? '' : 's');
+  if (elF) elF.textContent = fmtNum(fL) + ' L · ' + fN + ' posto' + (fN === 1 ? '' : 's') +
+    (fSem ? ' (' + fSem + ' sem pedido)' : '');
   if (elM) elM.textContent = fmtNum(mL) + ' L · ' + mN + ' posto' + (mN === 1 ? '' : 's');
 }
 

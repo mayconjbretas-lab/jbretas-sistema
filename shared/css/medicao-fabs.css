@@ -72,6 +72,9 @@
 .mfab-ped-tbl thead th { position: sticky; top: 0; background: var(--surface2); color: var(--text3);
   font-family: var(--mono); font-weight: 700; font-size: .6rem; text-transform: uppercase; letter-spacing: .04em; }
 .mfab-ped-num { text-align: right !important; font-family: var(--mono); color: var(--text); }
+/* Linha do DIA SEGUINTE (sempre no topo): fundo suave + barra à esquerda p/ destacar. */
+.mfab-ped-amanha td { background: var(--accent-dim); }
+.mfab-ped-amanha td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
 /* ── Mobile: painel estreito e teclas com alvos maiores; arrasto por toque ── */
 @media (max-width: 560px) {

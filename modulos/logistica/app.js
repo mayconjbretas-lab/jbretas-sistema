@@ -162,9 +162,11 @@ function salvarMontado(dataISO, set) {
   try { localStorage.setItem(montadoKey(dataISO), JSON.stringify([...set])); } catch (e) {}
 }
 
-// Grade de cards (um por posto COM pedido na data), quando "Todos os postos".
-// Usa resp.postos (aditivo da /medicao/pedido-dia): já vem ordenado por total
-// desc e recortado pela bandeira do escopo. Posto específico não passa por aqui.
+// Grade de cards (um por posto do escopo), quando "Todos os postos". Usa
+// resp.postos (aditivo da /medicao/pedido-dia): já vem TODO o escopo, ordenado
+// (sem pedido primeiro, depois por volume desc) e recortado pela bandeira. Posto
+// específico não passa por aqui. Quem não tem pedido vira card "sem pedido"
+// (total 0, sem linhas de combustível) — à espera do lápis.
 function renderGrade(resp, dataISO) {
   const grade = document.getElementById('matriz-vazio');
   if (!grade) return;
@@ -172,7 +174,7 @@ function renderGrade(resp, dataISO) {
   _gradeData = dataISO;
   if (!_gradePostos.length) {
     grade.classList.remove('grade-host');   // mensagem centralizada (host original)
-    grade.innerHTML = '<div class="grade-vazia">Nenhum posto com pedido em ' + fmtDataBR(dataISO) + '.</div>';
+    grade.innerHTML = '<div class="grade-vazia">Nenhum posto ativo neste escopo.</div>';
     return;
   }
   grade.classList.add('grade-host');   // reseta margin:auto/center do .matriz-vazio → grade full-width
@@ -184,15 +186,16 @@ function renderGrade(resp, dataISO) {
       '<span class="grade-cl-val">' + fmtNum(pc[k]) + '</span></div>').join('');
     const band = p.bandeira ? '<span class="grade-band">' + esc(p.bandeira) + '</span>' : '';
     const on = montado.has(String(p.posto_id)) ? ' grade-card--montado' : '';
+    const semPed = (Number(p.total) || 0) <= 0 ? ' grade-card--sem-pedido' : '';   // borda tracejada/apagado
     // Card inteiro alterna "montado"; o NOME abre a matriz reduzida; o lápis edita.
-    return '<div class="grade-card' + on + '" data-pid="' + esc(String(p.posto_id)) + '" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeToggle(this)">' +
+    return '<div class="grade-card' + on + semPed + '" data-pid="' + esc(String(p.posto_id)) + '" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeToggle(this)">' +
       '<div class="grade-card-top">' +
         '<span class="grade-posto" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeAbrir(event, this)">' + esc(p.posto_nome || '—') + '</span>' +
         '<span class="grade-top-r"><span class="grade-check">✓</span>' + band +
           '<span class="grade-lapis" title="Editar pedido" onclick="__gradeLapis(event, this)">✏️</span></span>' +
       '</div>' +
       '<div class="grade-total">' + fmtNum(p.total) + ' L</div>' +
-      '<div class="grade-cls">' + linhas + '</div>' +
+      '<div class="grade-cls">' + (linhas || '<span class="grade-sem-tag">sem pedido</span>') + '</div>' +
     '</div>';
   }).join('');
   const head =
@@ -209,17 +212,22 @@ function renderGrade(resp, dataISO) {
 }
 
 // Dois totais do topo, recomputados a cada clique (sem refetch): FALTA MONTAR
-// (não marcados) e JÁ MONTADO (marcados, em verde).
+// (não marcados de verde) e JÁ MONTADO (marcados). "Falta montar" agrega dois
+// casos: posto SEM pedido (total 0) e posto COM pedido ainda não confirmado — os
+// dois "ainda não fechados". Litros somam só o pedido (sem-pedido entra com 0),
+// e destaco entre parênteses quantos dos que faltam são "sem pedido".
 function recomputarTotais() {
   const montado = lerMontado(_gradeData);
-  let fL = 0, fN = 0, mL = 0, mN = 0;
+  let fL = 0, fN = 0, fSem = 0, mL = 0, mN = 0;
   _gradePostos.forEach(p => {
     const t = Number(p.total) || 0;
-    if (montado.has(String(p.posto_id))) { mL += t; mN++; } else { fL += t; fN++; }
+    if (montado.has(String(p.posto_id))) { mL += t; mN++; }
+    else { fL += t; fN++; if (t <= 0) fSem++; }
   });
   const elF = document.getElementById('grade-tot-falta');
   const elM = document.getElementById('grade-tot-montado');
-  if (elF) elF.textContent = fmtNum(fL) + ' L · ' + fN + ' posto' + (fN === 1 ? '' : 's');
+  if (elF) elF.textContent = fmtNum(fL) + ' L · ' + fN + ' posto' + (fN === 1 ? '' : 's') +
+    (fSem ? ' (' + fSem + ' sem pedido)' : '');
   if (elM) elM.textContent = fmtNum(mL) + ' L · ' + mN + ' posto' + (mN === 1 ? '' : 's');
 }
 
