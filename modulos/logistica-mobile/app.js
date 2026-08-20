@@ -152,14 +152,53 @@ async function atualizarFaixaMobile() {
     q += '&bandeira=' + encodeURIComponent(BANDEIRA_ATUAL);
   }
   resumo.textContent = '… · ' + fmtDataBR(data);
+  // Com "Todos os postos", a área da matriz vira a GRADE de cards (mesmo fetch).
+  // #mb-matriz-vazio é reaproveitado como host da grade.
+  const grade = document.getElementById('mb-matriz-vazio');
+  if (!POSTO_ATUAL && grade) { grade.classList.remove('grade-host'); grade.innerHTML = '<div class="grade-vazia">Carregando pedidos…</div>'; }
   try {
     const resp = await apiFetch(q);
     renderFaixaMobile(resp, data);
+    if (!POSTO_ATUAL) renderGradeMobile(resp, data);   // grade só quando "Todos"
   } catch (err) {
     resumo.textContent = 'erro · ' + fmtDataBR(data);
     const corpo = document.getElementById('mb-faixa-corpo');
     if (corpo) corpo.innerHTML = '<div class="mb-fx-erro">Erro: ' + esc(err.message) + '</div>';
+    if (!POSTO_ATUAL && grade) grade.innerHTML =
+      '<div class="grade-vazia" style="color:var(--danger)">Erro: ' + esc(err.message) + '</div>';
   }
+}
+
+// Grade de cards (1 coluna no mobile) quando "Todos os postos". Usa resp.postos
+// (aditivo da /medicao/pedido-dia): já ordenado por total desc e recortado pela
+// bandeira. Mesmo conteúdo do desktop; o layout de 1 coluna vem do matriz.css.
+function renderGradeMobile(resp, dataISO) {
+  const grade = document.getElementById('mb-matriz-vazio');
+  if (!grade) return;
+  const postos = (resp && resp.postos) || [];
+  if (!postos.length) {
+    grade.classList.remove('grade-host');
+    grade.innerHTML = '<div class="grade-vazia">Nenhum posto com pedido em ' + fmtDataBR(dataISO) + '.</div>';
+    return;
+  }
+  grade.classList.add('grade-host');
+  const n = (resp && resp.postos_com_pedido) || postos.length;
+  const total = (resp && resp.total) || 0;
+  const head = '<div class="grade-head">Pedido do dia · ' + fmtDataBR(dataISO) + ' · ' +
+    n + ' posto' + (n === 1 ? '' : 's') + ' com pedido · total ' + fmtNum(total) + ' L</div>';
+  const cards = postos.map(p => {
+    const pc = p.por_combustivel || {};
+    const linhas = Object.keys(pc).filter(k => Number(pc[k]) > 0).map(k =>
+      '<div class="grade-cl"><span class="grade-cl-cod">' + esc(k) + '</span>' +
+      '<span class="grade-cl-val">' + fmtNum(pc[k]) + '</span></div>').join('');
+    const band = p.bandeira ? '<span class="grade-band">' + esc(p.bandeira) + '</span>' : '';
+    return '<div class="grade-card">' +
+      '<div class="grade-card-top"><span class="grade-posto">' + esc(p.posto_nome || '—') + '</span>' + band + '</div>' +
+      '<div class="grade-total">' + fmtNum(p.total) + ' L</div>' +
+      '<div class="grade-cls">' + linhas + '</div>' +
+    '</div>';
+  }).join('');
+  grade.innerHTML = head + '<div class="grade-cards">' + cards + '</div>';
 }
 
 // Blocos a partir de resp.combustiveis (o que o escopo vende); valor =
