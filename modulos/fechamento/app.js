@@ -66,16 +66,30 @@ function montarTopbar() {
 
 function montarDataPadrao() {
   const input = document.getElementById('card-data-input');
-  // O fechamento é do dia que já terminou → a data mais recente é ONTEM. max e
-  // value = ontem no fuso LOCAL, montados a partir das partes da data (NÃO
-  // toISOString, que é UTC e desloca o dia perto da meia-noite). O passado segue
-  // liberado — sem min. Backend é a trava que vale; isto só evita o acidente e
-  // já abre o campo na data certa (o gerente não precisa mexer).
+  // O fechamento é EXATAMENTE de ontem (a medição dispara o pedido, então tem de
+  // ser do dia que terminou — nem futuro, nem retroativo). min E max = ontem no
+  // fuso LOCAL, montados das partes da data (NÃO toISOString, que é UTC e desloca
+  // perto da meia-noite). No mobile o picker nativo NÃO garante isso, então o
+  // backend é a trava que vale (recusa data != ontem, exceto TI); aqui é só UX.
   const ontem = new Date();
   ontem.setDate(ontem.getDate() - 1);
   const ontemLocal = `${ontem.getFullYear()}-${String(ontem.getMonth() + 1).padStart(2, '0')}-${String(ontem.getDate()).padStart(2, '0')}`;
+  input.min = ontemLocal;
   input.max = ontemLocal;
   input.value = ontemLocal;
+  atualizarPerguntaCarga();
+}
+
+// Pergunta da carga usa a DATA DO RELATÓRIO (não "hoje", que os gerentes liam
+// como o dia corrente). Atualiza ao montar e a cada troca de data.
+function atualizarPerguntaCarga() {
+  const v = document.getElementById('card-data-input').value;   // YYYY-MM-DD
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ''));
+  const dia = m ? (m[3] + '/' + m[2]) : '';
+  const q = document.getElementById('carga-pergunta');
+  const btnNao = document.getElementById('btn-carga-nao');
+  if (q) q.textContent = 'Recebeu carga' + (dia ? ' em ' + dia : '') + '?';
+  if (btnNao) btnNao.textContent = '✗ NÃO — Sem carga' + (dia ? ' em ' + dia : '');
 }
 
 async function carregarEstruturaDoPosto(nomePosto) {
@@ -110,6 +124,7 @@ function onDataAlterada() {
   renderTanques();
   renderVendas();
   renderCarga();
+  atualizarPerguntaCarga();
   cargaRespondida = null;
   aplicarModoBloqueio(false);
   const dataISO = document.getElementById('card-data-input').value;
