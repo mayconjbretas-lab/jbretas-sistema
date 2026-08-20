@@ -81,6 +81,10 @@ html[data-theme="light"] { --c-carga: #8b5cf6; --c-carga-d: rgba(139,92,246,.10)
    Especificidade acima de tr.row-hoje (que pinta a linha com !important). */
 .med-table td.med-cel-proj { background: var(--c-med-d) !important; }
 .med-proj { font-family: var(--mono); font-weight: 600; font-style: italic; color: var(--c-med); }
+/* Projeção SEM pedido: só medicao(ontem). Cinza itálico e SEM fundo (o td não
+   recebe .med-cel-proj) — distingue do "com fundo" (que soma carga prevista).
+   --text3 existe nos dois hosts: base.css no painel-adm, ponte #s-medicao no admin. */
+.med-proj-sem-pedido { font-family: var(--mono); font-weight: 600; font-style: italic; color: var(--text3); }
 
 /* TOTAL do grupo Venda (soma do dia) — na cor da Venda. */
 .med-vtot { font-family: var(--mono); font-weight: 700; color: var(--c-ven); }

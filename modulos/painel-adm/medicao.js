@@ -313,14 +313,22 @@
           } else if (c.k === 'diferenca') {
             body += '<td class="' + grp + '"><span class="' + difClass(val) + ' cell-diff">' + difTxt(val) + '</span></td>';
           } else if (c.k === 'medicao' && ehHoje && val == null) {
-            // Projeção do dia de hoje (ainda sem medição real): medicao(ontem) +
-            // pedido(hoje). Só projeta se AMBOS existirem — senão vazio, não inventa.
+            // Projeção do dia de hoje (célula ainda VAZIA — se o gerente já lançou,
+            // o valor real manda). Puro DISPLAY: calculado aqui, não guardado nem
+            // relido por cálculo nenhum.
+            //  • COM pedido:  medicao(ontem) + pedido(hoje) → itálico COM fundo
+            //    (--c-med-d): há carga prevista somada.
+            //  • SEM pedido:  só medicao(ontem) → cinza itálico SEM fundo: é só o
+            //    tanque de ontem (mesmo tratamento da .prev-sem-pedido da Logística).
+            //  • SEM medicao(ontem): não mostra nada (não inventa).
             const ontem = diaOntem && diaOntem.medicao ? diaOntem.medicao[f.idx] : null;
             const ped   = dia.pedido ? dia.pedido[f.idx] : null;
-            if (ontem != null && ped != null) {
+            if (ontem == null) {
+              body += '<td class="' + grp + '"><span class="cell-vazia">—</span></td>';
+            } else if (ped != null) {
               body += '<td class="' + grp + ' med-cel-proj"><span class="med-proj">' + fmt(Number(ontem) + Number(ped)) + '</span></td>';
             } else {
-              body += '<td class="' + grp + '"><span class="cell-vazia">—</span></td>';
+              body += '<td class="' + grp + '"><span class="med-proj-sem-pedido">' + fmt(Number(ontem)) + '</span></td>';
             }
           } else {
             body += '<td class="' + grp + '"><span class="' + (val == null ? 'cell-vazia' : 'cell-val') + '">' + (val == null ? '—' : fmt(val)) + '</span></td>';
