@@ -21,6 +21,34 @@
   // e pre_pedido (lançados pela Logística) ficam fora — o grupo é dos gerentes.
   // A TELA continua mostrando tudo; este recorte é exclusivo da cópia.
   const CAMPOS_WHATSAPP = ['medicao', 'venda', 'carga'];
+  // Rótulo do campo no texto (só os do gerente entram na cópia).
+  const CAMPO_LABEL = { medicao: 'medição', venda: 'venda', carga: 'carga' };
+  // Nome do combustível → CÓDIGO curto para a cópia. O audit guarda o NOME por
+  // extenso (combustiveis_posto.nome) e não o código (.abv), e não há mapa
+  // nome→código reutilizável no frontend com estes códigos — daí este, local.
+  const COMB_CODIGOS = ['GC', 'GA', 'ET', 'ETAD', 'S10', 'S500', 'GNV', 'OCT', 'POD'];
+  function abrevCombustivel(nome) {
+    const n = String(nome || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toUpperCase().replace(/[^A-Z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!n) return '—';
+    if (COMB_CODIGOS.includes(n)) return n;                                  // já é código
+    if (n.includes('GNV')) return 'GNV';
+    if (n.includes('PODIUM') || n === 'POD') return 'POD';
+    if (n.includes('OCTAPRO') || n.includes('OCTA PRO') || n === 'OCT') return 'OCT';
+    if (n.includes('ETANOL') || n.startsWith('ET')) return n.includes('ADIT') ? 'ETAD' : 'ET';
+    if (/S\s*500/.test(n)) return 'S500';
+    if (/S\s*10/.test(n)) return 'S10';
+    if (n.includes('DIESEL')) return /500/.test(n) ? 'S500' : 'S10';
+    if (n.includes('GASOLINA') || n.includes('ADIT') || n.includes('COMUM')) return n.includes('ADIT') ? 'GA' : 'GC';
+    return nome;   // desconhecido: mostra como veio, sem inventar código
+  }
+  // Valor p/ o texto: vazio → "não preenchido" (NUNCA travessão nem 0); 0 real → "0".
+  function fmtValor(v) {
+    if (v === null || v === undefined || v === '') return 'não preenchido';
+    const n = Number(v);
+    if (!isFinite(n)) return String(v);
+    return n.toLocaleString('pt-BR');
+  }
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -207,26 +235,47 @@
     }
   }
 
-  // Texto p/ WhatsApp da aba ATUAL. Título reflete a aba. Linha em branco ENTRE
-  // postos; números com separador de milhar; "de" vazio → travessão.
+  // Texto p/ WhatsApp da aba ATUAL. Recorte enxuto para o grupo dos gerentes:
+  //  • só campos do gerente (CAMPOS_WHATSAPP);
+  //  • descarta ruído: antes E depois ambos vazio/zero (0→vazio, vazio→0, 0→0)
+  //    não é correção de dado — sai; 0→valor real e valor real→0 continuam;
+  //  • UM bloco por posto (todas as alterações juntas), postos A→Z, e dentro por
+  //    data mais recente primeiro; combustível abreviado; autor só se houver >1.
+  // Devolve '' se não sobrar nada (o chamador avisa em vez de copiar só o cabeçalho).
   function textoWhatsApp() {
     const dados = dadosAtuais();
-    // Só os campos do gerente (CAMPOS_WHATSAPP). Se nada sobrar, devolve '' — o
-    // chamador avisa em vez de copiar um texto só com cabeçalho.
-    const alts = ((dados && dados.alteracoes) || []).filter(a => CAMPOS_WHATSAPP.includes(a.campo));
+    const vazioOuZero = v => (v === null || v === undefined || v === '' || Number(v) === 0);
+    const alts = ((dados && dados.alteracoes) || []).filter(a =>
+      CAMPOS_WHATSAPP.includes(a.campo) &&
+      !(vazioOuZero(a.valor_antes) && vazioOuZero(a.valor_depois)));   // corta o ruído
     if (!alts.length) return '';
-    const titulo = _aba === 'hoje' ? 'de hoje' : 'últimos ' + _dias + ' dias';
-    let txt = '*Alterações de medição — ' + titulo + '*\n';
-    let postoAnt = null;
+
+    // Autor por linha só quando há MAIS DE UM no lote (senão é sempre a Logística).
+    const mostrarAutor = new Set(alts.map(a => a.quem || '—')).size > 1;
+
+    // Agrupa por posto; postos A→Z; dentro, data desc (sort estável preserva a
+    // ordem de created_at do backend no desempate de mesma data).
+    const porPosto = new Map();
     alts.forEach(a => {
-      if (postoAnt !== null && a.posto !== postoAnt) txt += '\n';
-      const de = fmtNum(a.valor_antes), para = fmtNum(a.valor_depois);
-      txt += '\n' + (a.posto || '—') + ' · ' + (a.combustivel || '—') + ' · ' + fmtDia(a.data) +
-             '\n' + (a.campo || '?') + ': ' + (de === null ? '—' : de) + ' → ' + (para === null ? '—' : para) +
-             ' (' + (a.quem || '—') + ')';
-      postoAnt = a.posto;
+      const k = a.posto || '—';
+      if (!porPosto.has(k)) porPosto.set(k, []);
+      porPosto.get(k).push(a);
     });
-    return txt.trim();
+    const postos = [...porPosto.keys()].sort((x, y) => x.localeCompare(y, 'pt-BR'));
+
+    const titulo = _aba === 'hoje' ? 'de hoje' : 'últimos ' + _dias + ' dias';
+    const blocos = postos.map(posto => {
+      const linhas = porPosto.get(posto).slice()
+        .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')))
+        .map(a => {
+          const autor = mostrarAutor ? ' (' + (a.quem || '—') + ')' : '';
+          return fmtDia(a.data) + ' · ' + abrevCombustivel(a.combustivel) + ' · ' +
+                 (CAMPO_LABEL[a.campo] || a.campo) + ': ' +
+                 fmtValor(a.valor_antes) + ' → ' + fmtValor(a.valor_depois) + autor;
+        });
+      return '*' + posto + '*\n' + linhas.join('\n');
+    });
+    return '*Alterações de medição — ' + titulo + '*\n\n' + blocos.join('\n\n');
   }
 
   window.medicaoAlteracoes = { montar: montar, recarregar: recarregar };
