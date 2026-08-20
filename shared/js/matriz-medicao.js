@@ -59,6 +59,12 @@
     if (v === null || v === undefined || v === '') return '—';
     return Math.round(Number(v)).toLocaleString('pt-BR');
   }
+  // Capacidade (recebida em LITROS) → MILHARES de litros p/ o cabeçalho: vírgula
+  // decimal, no MÁX. 1 casa e só quando necessário (45L, 40L, 7,5L — nunca 45,0L).
+  function fmtCapacidade(litros) {
+    const mil = Number(litros) / 1000;
+    return (Math.round(mil * 10) / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'L';
+  }
 
   // Parse BR de litros p/ inputs editáveis: se tem vírgula, ela é o decimal e
   // pontos são milhar; se só tem ponto, o ponto é o decimal (mesmo padrão do
@@ -126,7 +132,11 @@
       cols.forEach((g, gi) => {
         // na Venda o grp-end vai pro TOTAL (última coluna do grupo)
         const grpEnd = (gi === cols.length - 1 && !ehVenda) ? ' class="grp-end"' : '';
-        row2 += '<th' + grpEnd + '>' + g.abv + '</th>';
+        // Só no grupo MEDIÇÃO: capacidade do tanque logo após o código, em cinza
+        // menor (.mm-cap), sem espaço antes da barra (ET/45L). Sem tanque → só o código.
+        const cap = (cat.chave === 'medicao' && g.capacidade != null)
+          ? '<span class="mm-cap">/' + fmtCapacidade(g.capacidade) + '</span>' : '';
+        row2 += '<th' + grpEnd + '>' + g.abv + cap + '</th>';
       });
       if (ehVenda) row2 += '<th class="grp-end col-total-venda">TOTAL</th>';
     });

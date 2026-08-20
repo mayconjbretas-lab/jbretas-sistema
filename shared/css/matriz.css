@@ -92,6 +92,10 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
      cor da grade, porém OPACA: --border composto sobre --surface2. */
   border-bottom: 1px solid var(--border-solid);
 }
+/* Capacidade do tanque no cabeçalho do grupo MEDIÇÃO: cinza menor, ao lado do
+   código (ET/45L). font-weight normal e menor que o código, sem quebrar linha
+   (a th já é nowrap) — não altera a altura da 1ª linha medida em --thead-row1-h. */
+.mm-cap { color: var(--text2); font-weight: 400; font-size: .88em; }
 
 /* Separação visual entre grupos: coluna final de cada grupo (S10 de Medição,
    TOTAL de Venda, etc.) ganha uma faixa vertical forte na cor do fundo. */
