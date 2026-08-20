@@ -423,7 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // FABs da Medição (🧮/📋) — mesmo componente shared do desktop. Lê o posto do
   // filtro (POSTO_ATUAL). Visível só na aba Medição (#s-medicao), a ativa no load.
-  if (window.medicaoFabs) window.medicaoFabs.montar({ getPosto: () => POSTO_ATUAL });
+  if (window.medicaoFabs) window.medicaoFabs.montar({ getPosto: () => POSTO_ATUAL, getPostos: () => TODOS_POSTOS });
 
   // Faixa de alterações de medição no topo da aba Medição (#s-medicao).
   if (window.medicaoAlteracoes) window.medicaoAlteracoes.montar(document.getElementById('s-medicao'));

@@ -434,7 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // FABs da Medição (🧮/📋). Lê o posto selecionado no filtro (POSTO_ATUAL).
   // Visível só na aba Medição (#tab-matriz), que já é a ativa no load.
-  if (window.medicaoFabs) window.medicaoFabs.montar({ getPosto: () => POSTO_ATUAL });
+  if (window.medicaoFabs) window.medicaoFabs.montar({ getPosto: () => POSTO_ATUAL, getPostos: () => TODOS_POSTOS });
 
   // Faixa de alterações de medição no topo da aba Medição (#tab-matriz).
   if (window.medicaoAlteracoes) window.medicaoAlteracoes.montar(document.getElementById('tab-matriz'));

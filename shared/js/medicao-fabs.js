@@ -20,8 +20,11 @@
     ? window.matrizMedicao.TOLERANCIA_CARGA : 500;   // reuso; fallback só por segurança
 
   let _getPosto = () => '';
-  let _root = null;        // container fixo dos FABs + painéis
-  let _aberto = null;      // 'calc' | 'pedido' | null
+  let _getPostos = () => [];   // lista de postos do filtro (p/ o select do Pedido) — NÃO busca de novo
+  let _root = null;            // container fixo dos FABs + painéis
+  let _abertoCalc = false;     // os DOIS podem ficar abertos ao mesmo tempo
+  let _abertoPedido = false;
+  let _pedidoPosto = '';       // posto exibido no painel Pedido (só visualização; não mexe no filtro)
 
   // ── Parser de expressão SEM eval/Function ──────────────────────────────
   // Aceita só dígitos, ponto, parênteses e + − × ÷ (× e ÷ e − unicode também).
@@ -127,6 +130,7 @@
   function montar(opcoes) {
     opcoes = opcoes || {};
     if (typeof opcoes.getPosto === 'function') _getPosto = opcoes.getPosto;
+    if (typeof opcoes.getPostos === 'function') _getPostos = opcoes.getPostos;
     if (_root) return;   // idempotente
 
     _root = document.createElement('div');
@@ -143,9 +147,9 @@
     _root.querySelector('#mfab-b-calc').addEventListener('click', e => { e.stopPropagation(); alternar('calc'); });
     _root.querySelector('#mfab-b-pedido').addEventListener('click', e => { e.stopPropagation(); alternar('pedido'); });
 
-    // Clicar fora fecha. Cliques dentro de um painel não fecham (stopPropagation nos painéis).
-    document.addEventListener('click', () => { if (_aberto) fechar(); });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape' && _aberto) fechar(); });
+    // Fecha SÓ pelo próprio botão flutuante (ou Esc). NÃO fecha ao clicar fora —
+    // senão editar o pedido pelo card da grade fecharia o painel junto.
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharTodos(); });
 
     ligarCalculadora();
     ligarPedido();
@@ -174,26 +178,57 @@
     // grip + touch-action:none). Sem bloco de totais do mês.
     return '<div class="mfab-panel mfab-pedido" id="mfab-p-pedido">' +
       '<div class="mfab-handle" id="mfab-pedido-handle"><span class="mfab-grip"></span>📋 Pedido final <span class="mfab-pmes" id="mfab-ped-mes"></span></div>' +
+      '<div class="mfab-ped-bar"><select id="mfab-ped-posto" class="mfab-ped-sel" title="Posto (só a visualização deste painel)"></select></div>' +
       '<div class="mfab-pbody" id="mfab-ped-body"></div>' +
     '</div>';
   }
 
-  // ── Abrir/fechar ──────────────────────────────────────────────────────────
+  // ── Abrir/fechar — os DOIS painéis são independentes ──────────────────────
   function alternar(qual) {
-    if (_aberto === qual) { fechar(); return; }
-    _aberto = qual;
-    render();
-    if (qual === 'pedido') carregarPedido();
-    if (qual === 'calc') setTimeout(() => { const el = document.getElementById('mfab-calc-expr'); if (el) el.focus(); }, 0);
+    if (qual === 'calc')   { _abertoCalc   ? fecharUm('calc')   : abrir('calc'); }
+    else                   { _abertoPedido ? fecharUm('pedido') : abrir('pedido'); }
   }
-  function fechar() { _aberto = null; render(); }
-  function render() {
-    _root.querySelector('#mfab-b-calc').classList.toggle('on', _aberto === 'calc');
-    _root.querySelector('#mfab-b-pedido').classList.toggle('on', _aberto === 'pedido');
-    _root.querySelector('#mfab-p-calc').classList.toggle('aberto', _aberto === 'calc');
-    _root.querySelector('#mfab-p-pedido').classList.toggle('aberto', _aberto === 'pedido');
-    if (_aberto === 'calc')   posicionar(_root.querySelector('#mfab-p-calc'),   POS_KEY_CALC);
-    if (_aberto === 'pedido') posicionar(_root.querySelector('#mfab-p-pedido'), POS_KEY_PEDIDO);
+  function abrir(qual) {
+    if (qual === 'calc') {
+      _abertoCalc = true;
+      const p = _root.querySelector('#mfab-p-calc');
+      p.classList.add('aberto');
+      _root.querySelector('#mfab-b-calc').classList.add('on');
+      posicionar(p, POS_KEY_CALC, _root.querySelector('#mfab-p-pedido'));
+      setTimeout(() => { const el = document.getElementById('mfab-calc-expr'); if (el) el.focus(); }, 0);
+    } else {
+      _abertoPedido = true;
+      const p = _root.querySelector('#mfab-p-pedido');
+      p.classList.add('aberto');
+      _root.querySelector('#mfab-b-pedido').classList.add('on');
+      posicionar(p, POS_KEY_PEDIDO, _root.querySelector('#mfab-p-calc'));
+      // posto do painel: começa no do filtro (se específico); senão mantém o último.
+      _pedidoPosto = _getPosto() || _pedidoPosto || '';
+      popularSelectPedido();
+      carregarPedido();
+    }
+  }
+  function fecharUm(qual) {
+    if (qual === 'calc') {
+      _abertoCalc = false;
+      _root.querySelector('#mfab-p-calc').classList.remove('aberto');
+      _root.querySelector('#mfab-b-calc').classList.remove('on');
+    } else {
+      _abertoPedido = false;
+      _root.querySelector('#mfab-p-pedido').classList.remove('aberto');
+      _root.querySelector('#mfab-b-pedido').classList.remove('on');
+    }
+  }
+  function fecharTodos() { if (_abertoCalc) fecharUm('calc'); if (_abertoPedido) fecharUm('pedido'); }
+
+  // Popula o select do Pedido com a MESMA lista do filtro (não busca de novo).
+  function popularSelectPedido() {
+    const sel = _root.querySelector('#mfab-ped-posto');
+    if (!sel) return;
+    const nomes = (_getPostos() || []).map(p => (typeof p === 'string' ? p : (p && p.nome))).filter(Boolean);
+    sel.innerHTML = '<option value="">— escolha um posto —</option>' +
+      nomes.map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('');
+    sel.value = _pedidoPosto || '';
   }
 
   // ── Calculadora: teclado, digitação, arrasto ──────────────────────────────
@@ -229,6 +264,11 @@
   function ligarPedido() {
     const painel = _root.querySelector('#mfab-p-pedido');
     painel.addEventListener('click', e => e.stopPropagation());
+    // Trocar o posto no select muda SÓ a visualização do painel (não o filtro).
+    _root.querySelector('#mfab-ped-posto').addEventListener('change', e => {
+      _pedidoPosto = e.target.value || '';
+      carregarPedido();
+    });
     ligarArrasto(painel, _root.querySelector('#mfab-pedido-handle'), POS_KEY_PEDIDO);
   }
 
@@ -296,16 +336,29 @@
     handle.addEventListener('touchstart', inicio, { passive: false });
   }
 
-  // Aplica a última posição salva do painel (com clamp p/ mudança de tamanho de
-  // tela). Genérico: recebe o painel e sua chave de posição.
-  function posicionar(painel, key) {
-    const pos = lerPos(key);
-    if (!pos) { painel.style.left = ''; painel.style.top = ''; painel.style.right = ''; painel.style.bottom = ''; return; }
+  function aplicarPos(painel, x, y) {
     const w = painel.offsetWidth || 260, h = painel.offsetHeight || 320;
-    const x = Math.min(Math.max(0, pos.x), Math.max(0, window.innerWidth - w));
-    const y = Math.min(Math.max(0, pos.y), Math.max(0, window.innerHeight - h));
-    painel.style.left = x + 'px'; painel.style.top = y + 'px';
+    painel.style.left = Math.min(Math.max(0, x), Math.max(0, window.innerWidth - w)) + 'px';
+    painel.style.top  = Math.min(Math.max(0, y), Math.max(0, window.innerHeight - h)) + 'px';
     painel.style.right = 'auto'; painel.style.bottom = 'auto';
+  }
+
+  // Posiciona o painel: posição salva (com clamp) tem prioridade. Sem posição
+  // salva, usa o default do CSS (canto inferior direito / largura cheia no
+  // mobile) — EXCETO quando o OUTRO painel já está aberto: aí desloca este p/
+  // não nascer em cima (lado a lado no desktop, empilhado no mobile).
+  function posicionar(painel, key, outroPainel) {
+    const pos = lerPos(key);
+    if (pos) { aplicarPos(painel, pos.x, pos.y); return; }
+    const outroAberto = outroPainel && outroPainel.classList.contains('aberto');
+    if (!outroAberto) {   // sozinho e sem pos salva → default do CSS
+      painel.style.left = ''; painel.style.top = ''; painel.style.right = ''; painel.style.bottom = '';
+      return;
+    }
+    const w = painel.offsetWidth || 300, h = painel.offsetHeight || 320, m = 16;
+    const r = outroPainel.getBoundingClientRect();
+    if (window.innerWidth > 560) aplicarPos(painel, r.left - w - 12, r.top);        // desktop: à esquerda do outro
+    else                          aplicarPos(painel, r.left, r.top - h - 12);        // mobile: acima do outro
   }
 
   // ── Pedido final: GET /medicao/:posto ─────────────────────────────────────
@@ -314,9 +367,9 @@
     const mesEl = _root.querySelector('#mfab-ped-mes');
     mesEl.textContent = '';
 
-    const posto = _getPosto();
+    const posto = _pedidoPosto;
     if (!posto) {
-      body.innerHTML = '<div class="mfab-ped-vazio">Selecione um posto no filtro para ver os pedidos.</div>';
+      body.innerHTML = '<div class="mfab-ped-vazio">Escolha um posto no seletor acima.</div>';
       return;
     }
     body.innerHTML = '<div class="mfab-ped-vazio">Carregando…</div>';
@@ -368,7 +421,7 @@
   function setVisivel(v) {
     if (!_root) return;
     _root.classList.toggle('mfab-oculto', !v);
-    if (!v && _aberto) fechar();
+    if (!v) fecharTodos();
   }
 
   window.medicaoFabs = { montar: montar, setVisivel: setVisivel, _avaliar: avaliar };   // _avaliar exposto p/ teste

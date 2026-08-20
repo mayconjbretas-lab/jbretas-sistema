@@ -59,6 +59,11 @@
 .mfab-pedido { width: 340px; max-height: 70vh; }
 /* Cabeçalho = .mfab-handle (arrastável). O mês fica à direita dentro dele. */
 .mfab-pmes { margin-left: auto; font-size: .66rem; color: var(--text3); font-weight: 500; }
+/* Barra com o seletor de posto (só a visualização do painel; não mexe no filtro) */
+.mfab-ped-bar { flex-shrink: 0; padding: .45rem .6rem; border-bottom: 1px solid var(--border); }
+.mfab-ped-sel { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: var(--mono); font-size: .74rem; padding: .35rem .5rem; outline: none; }
+.mfab-ped-sel:focus { border-color: var(--accent); }
 .mfab-pbody { flex: 1; min-height: 0; overflow-y: auto; }   /* só a LISTA rola (cabeçalho fica fixo) */
 .mfab-ped-vazio { padding: 1.4rem 1rem; text-align: center; color: var(--text3); font-size: .8rem; }
 .mfab-ped-erro { color: var(--danger); }
