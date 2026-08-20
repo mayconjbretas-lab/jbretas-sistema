@@ -302,31 +302,10 @@ function renderVendas() {
   aplicarPostoFechado();
 }
 
-// Parse de litros dos inputs de venda: litro é INTEIRO, o ponto é SEMPRE milhar
-// (removido) e qualquer decimal é descartado. Sem heurística — só dígitos.
-// Sempre número (0 no vazio), pareado com a máscara ao vivo (mascararVenda).
-function parseLitros(str) {
-  const digitos = String(str == null ? '' : str).replace(/\D/g, '');
-  return Math.round(Number(digitos)) || 0;
-}
-
-// Máscara ao vivo do input de venda: mantém só dígitos (litro inteiro) e reinsere
-// o ponto de milhar a cada 3 casas. Preserva a posição do cursor pela distância
-// até o fim, pra digitação não "pular". Litro é sempre inteiro — vírgula/decimal
-// digitados são descartados na origem.
-function mascararVenda(el) {
-  const distFim = el.value.length - el.selectionStart; // distância do cursor até o FIM
-  let v = el.value;
-  const iVirg = v.indexOf(',');
-  if (iVirg !== -1) v = v.slice(0, iVirg);             // descarta da 1ª vírgula em diante
-  v = v.replace(/\D/g, '');                            // só dígitos
-  v = v.replace(/^0+/, '');                            // remove zeros à esquerda (vazio segue vazio)
-  if (v.length > 6) v = v.slice(0, 6);                 // teto de 6 dígitos
-  v = v.replace(/\B(?=(\d{3})+(?!\d))/g, '.');         // ponto de milhar a cada 3, da direita p/ esquerda
-  el.value = v;
-  const pos = Math.max(0, v.length - distFim);         // restaura o cursor pela distância guardada
-  try { el.setSelectionRange(pos, pos); } catch (e) { /* input pode não estar focado (ex.: carga do dia) */ }
-}
+// parseLitros e mascararVenda foram extraídos para shared/js/mascara-litros.js
+// (reuso pelo editor de pedido da Logística, sem duplicar). Carregado antes deste
+// script, expõem window.parseLitros / window.mascararVenda — os handlers inline e
+// as chamadas abaixo continuam funcionando iguais.
 
 // Formata litros p/ EDIÇÃO: vírgula decimal, SEM separador de milhar (o ponto
 // como milhar seria ambíguo com o decimal). Ex.: 5163.287 → "5163,287". Igual

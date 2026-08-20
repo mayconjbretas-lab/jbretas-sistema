@@ -180,6 +180,7 @@ async function atualizarFaixaMobile() {
 // <data>) — marcação de trabalho, sem tabela/rota. Trocar a data usa outra chave.
 let _gradePostos = [];
 let _gradeData = '';
+let _reduzidaNome = '';
 function montadoKey(dataISO) { return 'jb_logi_montado_' + dataISO; }
 function lerMontado(dataISO) {
   try { const a = JSON.parse(localStorage.getItem(montadoKey(dataISO))); return new Set(Array.isArray(a) ? a.map(String) : []); }
@@ -211,11 +212,12 @@ function renderGradeMobile(resp, dataISO) {
       '<span class="grade-cl-val">' + fmtNum(pc[k]) + '</span></div>').join('');
     const band = p.bandeira ? '<span class="grade-band">' + esc(p.bandeira) + '</span>' : '';
     const on = montado.has(String(p.posto_id)) ? ' grade-card--montado' : '';
-    return '<div class="grade-card' + on + '" data-pid="' + esc(String(p.posto_id)) + '" onclick="__gradeToggle(this)">' +
-      '<span class="grade-check">✓</span>' +
+    return '<div class="grade-card' + on + '" data-pid="' + esc(String(p.posto_id)) + '" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeToggle(this)">' +
       '<div class="grade-card-top">' +
         '<span class="grade-posto" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeAbrir(event, this)">' + esc(p.posto_nome || '—') + '</span>' +
-        band + '</div>' +
+        '<span class="grade-top-r"><span class="grade-check">✓</span>' + band +
+          '<span class="grade-lapis" title="Editar pedido" onclick="__gradeLapis(event, this)">✏️</span></span>' +
+      '</div>' +
       '<div class="grade-total">' + fmtNum(p.total) + ' L</div>' +
       '<div class="grade-cls">' + linhas + '</div>' +
     '</div>';
@@ -260,11 +262,40 @@ function __gradeAbrir(ev, nomeEl) {
   if (nome) abrirReduzida(nome);
 }
 
+// Lápis do card (mobile): edita o pedido ali, total recalcula ao digitar;
+// salvar recarrega a grade; cancelar/erro voltam ao valor anterior.
+function __gradeLapis(ev, el) {
+  ev.stopPropagation();
+  const card = el.closest('.grade-card');
+  if (!card) return;
+  const nome = card.getAttribute('data-nome');
+  const cls = card.querySelector('.grade-cls');
+  const totalEl = card.querySelector('.grade-total');
+  window.pedidoEditor.abrir({
+    posto: nome, dataISO: _gradeData, host: cls,
+    onInput: t => { if (totalEl) totalEl.textContent = fmtNum(t) + ' L'; },
+    onSalvo: (ok, err) => {
+      if (ok) { atualizarFaixaMobile(); }
+      else { renderGradeMobile({ postos: _gradePostos }, _gradeData); if (err) window.alert('Erro ao salvar: ' + err); }
+    },
+  });
+}
+
+// Refetch do pedido do dia (escopo Todos/bandeira) p/ atualizar _gradePostos sem
+// re-render (usado ao salvar dentro da matriz reduzida).
+async function recarregarGradeData() {
+  const data = FAIXA_DATA || hojeISO();
+  let q = '/medicao/pedido-dia?data=' + encodeURIComponent(data);
+  if (BANDEIRA_ATUAL) q += '&bandeira=' + encodeURIComponent(BANDEIRA_ATUAL);
+  try { const resp = await apiFetch(q); _gradePostos = (resp && resp.postos) || []; _gradeData = data; } catch (e) {}
+}
+
 // Matriz REDUZIDA (Medição · Venda · Previsão) no #mb-matriz. Acima, uma faixa
 // #mb-reduzida (pedido do dia do posto + Voltar), inserida antes do #mb-matriz;
 // a faixa de pedido normal (#mb-faixa) some enquanto isso. Matriz completa
 // (escolher posto no filtro) não muda.
 function abrirReduzida(nomePosto) {
+  _reduzidaNome = nomePosto;
   const p = _gradePostos.find(x => (x.posto_nome || '') === nomePosto);
   const grade = document.getElementById('mb-matriz-vazio');
   const host  = document.getElementById('mb-matriz');
@@ -287,12 +318,28 @@ function abrirReduzida(nomePosto) {
     '<div class="red-head">' +
       '<button type="button" class="red-voltar" onclick="voltarAosCards()">← Voltar aos cards</button>' +
       '<span class="red-posto">' + esc((p && p.posto_nome) || nomePosto) + '</span>' +
+      '<button type="button" class="red-lapis" onclick="__redLapis()" title="Editar pedido">✏️ Editar</button>' +
     '</div>' +
     '<div class="red-blocos">' + blocos +
       '<div class="red-bl red-bl-total"><div class="red-bl-lbl">TOTAL</div><div class="red-bl-val">' + fmtNum((p && p.total) || 0) + ' L</div></div>' +
     '</div>';
   window.matrizMedicao.carregar(nomePosto, { grupos: ['medicao', 'venda', 'previsao'] });
   requestAnimationFrame(medirAlturas);   // topo do #mb-matriz mudou (faixa acima)
+}
+
+// Lápis da matriz reduzida (mobile): edita o pedido na faixa; salvar recarrega
+// faixa + matriz. host = as .red-blocos dentro do #mb-reduzida.
+function __redLapis() {
+  const red = document.getElementById('mb-reduzida');
+  const host = red && red.querySelector('.red-blocos');
+  if (!host || !_reduzidaNome) return;
+  window.pedidoEditor.abrir({
+    posto: _reduzidaNome, dataISO: _gradeData, host: host,
+    onSalvo: (ok, err) => {
+      if (ok) { recarregarGradeData().then(() => abrirReduzida(_reduzidaNome)); }
+      else { abrirReduzida(_reduzidaNome); if (err) window.alert('Erro ao salvar: ' + err); }
+    },
+  });
 }
 
 function voltarAosCards() {

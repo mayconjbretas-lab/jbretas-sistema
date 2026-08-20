@@ -148,6 +148,7 @@ async function atualizarFaixa() {
 // (sem refetch) e p/ o modo reduzido usar os dados já em mão.
 let _gradePostos = [];
 let _gradeData = '';
+let _reduzidaNome = '';   // posto aberto na matriz reduzida (p/ o lápis re-renderizar)
 
 // Marcação "montado" POR DATA em localStorage (jb_logi_montado_<data>) — é
 // marcação de trabalho, não dado de negócio (sem tabela/rota). Trocar a data usa
@@ -183,12 +184,13 @@ function renderGrade(resp, dataISO) {
       '<span class="grade-cl-val">' + fmtNum(pc[k]) + '</span></div>').join('');
     const band = p.bandeira ? '<span class="grade-band">' + esc(p.bandeira) + '</span>' : '';
     const on = montado.has(String(p.posto_id)) ? ' grade-card--montado' : '';
-    // Card inteiro alterna "montado"; o NOME (data-nome) abre a matriz reduzida.
-    return '<div class="grade-card' + on + '" data-pid="' + esc(String(p.posto_id)) + '" onclick="__gradeToggle(this)">' +
-      '<span class="grade-check">✓</span>' +
+    // Card inteiro alterna "montado"; o NOME abre a matriz reduzida; o lápis edita.
+    return '<div class="grade-card' + on + '" data-pid="' + esc(String(p.posto_id)) + '" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeToggle(this)">' +
       '<div class="grade-card-top">' +
         '<span class="grade-posto" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeAbrir(event, this)">' + esc(p.posto_nome || '—') + '</span>' +
-        band + '</div>' +
+        '<span class="grade-top-r"><span class="grade-check">✓</span>' + band +
+          '<span class="grade-lapis" title="Editar pedido" onclick="__gradeLapis(event, this)">✏️</span></span>' +
+      '</div>' +
       '<div class="grade-total">' + fmtNum(p.total) + ' L</div>' +
       '<div class="grade-cls">' + linhas + '</div>' +
     '</div>';
@@ -238,10 +240,40 @@ function __gradeAbrir(ev, nomeEl) {
   if (nome) abrirReduzida(nome);
 }
 
+// Lápis do card: edita o pedido ali mesmo (todos os combustíveis). O total do
+// card recalcula ao digitar; salvar grava e recarrega a grade; cancelar/erro
+// voltam ao valor anterior (re-render do cache) — nunca deixa o número novo.
+function __gradeLapis(ev, el) {
+  ev.stopPropagation();
+  const card = el.closest('.grade-card');
+  if (!card) return;
+  const nome = card.getAttribute('data-nome');
+  const cls = card.querySelector('.grade-cls');
+  const totalEl = card.querySelector('.grade-total');
+  window.pedidoEditor.abrir({
+    posto: nome, dataISO: _gradeData, host: cls,
+    onInput: t => { if (totalEl) totalEl.textContent = fmtNum(t) + ' L'; },
+    onSalvo: (ok, err) => {
+      if (ok) { atualizarFaixa(); }                                   // refetch → grade + totais frescos
+      else { renderGrade({ postos: _gradePostos }, _gradeData); if (err) window.alert('Erro ao salvar: ' + err); }
+    },
+  });
+}
+
+// Refetch do pedido do dia (escopo Todos/bandeira) só p/ atualizar _gradePostos
+// sem re-renderizar a grade (usado ao salvar dentro da matriz reduzida).
+async function recarregarGradeData() {
+  const data = FAIXA_DATA || hojeISO();
+  let q = '/medicao/pedido-dia?data=' + encodeURIComponent(data);
+  if (BANDEIRA_ATUAL) q += '&bandeira=' + encodeURIComponent(BANDEIRA_ATUAL);
+  try { const resp = await apiFetch(q); _gradePostos = (resp && resp.postos) || []; _gradeData = data; } catch (e) {}
+}
+
 // Matriz REDUZIDA (Medição · Venda · Previsão) do posto, no #matriz-host. Acima,
 // no #faixa-pedido, a faixa do pedido do dia DAQUELE posto (dados já na grade) +
 // "Voltar aos cards". A matriz COMPLETA (escolher posto no filtro) não muda.
 function abrirReduzida(nomePosto) {
+  _reduzidaNome = nomePosto;
   const p = _gradePostos.find(x => (x.posto_nome || '') === nomePosto);
   const host = document.getElementById('matriz-host');
   const vazio = document.getElementById('matriz-vazio');
@@ -256,12 +288,28 @@ function abrirReduzida(nomePosto) {
       '<div class="red-head">' +
         '<button type="button" class="red-voltar" onclick="voltarAosCards()">← Voltar aos cards</button>' +
         '<span class="red-posto">' + esc(p.posto_nome || nomePosto) + '</span>' +
+        '<button type="button" class="red-lapis" onclick="__redLapis()" title="Editar pedido">✏️ Editar</button>' +
       '</div>' +
       '<div class="red-blocos">' + blocos +
         '<div class="red-bl red-bl-total"><div class="red-bl-lbl">TOTAL</div><div class="red-bl-val">' + fmtNum(p.total) + ' L</div></div>' +
       '</div>';
   }
   window.matrizMedicao.carregar(nomePosto, { grupos: ['medicao', 'venda', 'previsao'] });
+}
+
+// Lápis da matriz reduzida: edita o pedido na própria faixa (vendo medição/venda
+// na matriz abaixo). Salvar recarrega faixa + matriz (previsão usa o pedido).
+function __redLapis() {
+  const faixa = document.getElementById('faixa-pedido');
+  const host = faixa && faixa.querySelector('.red-blocos');
+  if (!host || !_reduzidaNome) return;
+  window.pedidoEditor.abrir({
+    posto: _reduzidaNome, dataISO: _gradeData, host: host,
+    onSalvo: (ok, err) => {
+      if (ok) { recarregarGradeData().then(() => abrirReduzida(_reduzidaNome)); }
+      else { abrirReduzida(_reduzidaNome); if (err) window.alert('Erro ao salvar: ' + err); }
+    },
+  });
 }
 
 function voltarAosCards() {
