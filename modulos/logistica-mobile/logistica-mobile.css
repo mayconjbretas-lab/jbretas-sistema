@@ -378,3 +378,6 @@ body {
 .esc-add { margin-top: .6rem; }
 .esc-form-erro { color: var(--danger); font-size: .78rem; margin-top: .7rem; }
 .esc-form-acoes { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1.2rem; }
+
+/* Faixa da matriz reduzida (inserida acima do #mb-matriz por abrirReduzida). */
+.mb-reduzida { margin-bottom: .8rem; }

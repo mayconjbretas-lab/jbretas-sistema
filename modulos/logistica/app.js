@@ -144,36 +144,132 @@ async function atualizarFaixa() {
   }
 }
 
+// Estado da grade: guardo os postos e a data p/ recomputar os totais no clique
+// (sem refetch) e p/ o modo reduzido usar os dados já em mão.
+let _gradePostos = [];
+let _gradeData = '';
+
+// Marcação "montado" POR DATA em localStorage (jb_logi_montado_<data>) — é
+// marcação de trabalho, não dado de negócio (sem tabela/rota). Trocar a data usa
+// outra chave, então cada dia tem a sua (a visual zera sozinha).
+function montadoKey(dataISO) { return 'jb_logi_montado_' + dataISO; }
+function lerMontado(dataISO) {
+  try { const a = JSON.parse(localStorage.getItem(montadoKey(dataISO))); return new Set(Array.isArray(a) ? a.map(String) : []); }
+  catch (e) { return new Set(); }
+}
+function salvarMontado(dataISO, set) {
+  try { localStorage.setItem(montadoKey(dataISO), JSON.stringify([...set])); } catch (e) {}
+}
+
 // Grade de cards (um por posto COM pedido na data), quando "Todos os postos".
 // Usa resp.postos (aditivo da /medicao/pedido-dia): já vem ordenado por total
 // desc e recortado pela bandeira do escopo. Posto específico não passa por aqui.
 function renderGrade(resp, dataISO) {
   const grade = document.getElementById('matriz-vazio');
   if (!grade) return;
-  const postos = (resp && resp.postos) || [];
-  if (!postos.length) {
+  _gradePostos = (resp && resp.postos) || [];
+  _gradeData = dataISO;
+  if (!_gradePostos.length) {
     grade.classList.remove('grade-host');   // mensagem centralizada (host original)
     grade.innerHTML = '<div class="grade-vazia">Nenhum posto com pedido em ' + fmtDataBR(dataISO) + '.</div>';
     return;
   }
   grade.classList.add('grade-host');   // reseta margin:auto/center do .matriz-vazio → grade full-width
-  const n = (resp && resp.postos_com_pedido) || postos.length;
-  const total = (resp && resp.total) || 0;
-  const head = '<div class="grade-head">Pedido do dia · ' + fmtDataBR(dataISO) + ' · ' +
-    n + ' posto' + (n === 1 ? '' : 's') + ' com pedido · total ' + fmtNum(total) + ' L</div>';
-  const cards = postos.map(p => {
+  const montado = lerMontado(dataISO);
+  const cards = _gradePostos.map(p => {
     const pc = p.por_combustivel || {};
     const linhas = Object.keys(pc).filter(k => Number(pc[k]) > 0).map(k =>
       '<div class="grade-cl"><span class="grade-cl-cod">' + esc(k) + '</span>' +
       '<span class="grade-cl-val">' + fmtNum(pc[k]) + '</span></div>').join('');
     const band = p.bandeira ? '<span class="grade-band">' + esc(p.bandeira) + '</span>' : '';
-    return '<div class="grade-card">' +
-      '<div class="grade-card-top"><span class="grade-posto">' + esc(p.posto_nome || '—') + '</span>' + band + '</div>' +
+    const on = montado.has(String(p.posto_id)) ? ' grade-card--montado' : '';
+    // Card inteiro alterna "montado"; o NOME (data-nome) abre a matriz reduzida.
+    return '<div class="grade-card' + on + '" data-pid="' + esc(String(p.posto_id)) + '" onclick="__gradeToggle(this)">' +
+      '<span class="grade-check">✓</span>' +
+      '<div class="grade-card-top">' +
+        '<span class="grade-posto" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeAbrir(event, this)">' + esc(p.posto_nome || '—') + '</span>' +
+        band + '</div>' +
       '<div class="grade-total">' + fmtNum(p.total) + ' L</div>' +
       '<div class="grade-cls">' + linhas + '</div>' +
     '</div>';
   }).join('');
+  const head =
+    '<div class="grade-head">' +
+      '<div class="grade-head-data">Pedido do dia · ' + fmtDataBR(dataISO) + '</div>' +
+      '<div class="grade-tots">' +
+        '<div class="grade-tot"><span class="grade-tot-lbl">FALTA MONTAR</span><b class="grade-tot-val" id="grade-tot-falta">—</b></div>' +
+        '<div class="grade-tot grade-tot--montado"><span class="grade-tot-lbl">JÁ MONTADO</span><b class="grade-tot-val" id="grade-tot-montado">—</b></div>' +
+      '</div>' +
+    '</div>';
   grade.innerHTML = head + '<div class="grade-cards">' + cards + '</div>';
+  recomputarTotais();
+}
+
+// Dois totais do topo, recomputados a cada clique (sem refetch): FALTA MONTAR
+// (não marcados) e JÁ MONTADO (marcados, em verde).
+function recomputarTotais() {
+  const montado = lerMontado(_gradeData);
+  let fL = 0, fN = 0, mL = 0, mN = 0;
+  _gradePostos.forEach(p => {
+    const t = Number(p.total) || 0;
+    if (montado.has(String(p.posto_id))) { mL += t; mN++; } else { fL += t; fN++; }
+  });
+  const elF = document.getElementById('grade-tot-falta');
+  const elM = document.getElementById('grade-tot-montado');
+  if (elF) elF.textContent = fmtNum(fL) + ' L · ' + fN + ' posto' + (fN === 1 ? '' : 's');
+  if (elM) elM.textContent = fmtNum(mL) + ' L · ' + mN + ' posto' + (mN === 1 ? '' : 's');
+}
+
+// Clique no CARD: alterna montado (persiste + recomputa totais). Global p/ o onclick inline.
+function __gradeToggle(cardEl) {
+  const pid = cardEl.getAttribute('data-pid');
+  if (!pid) return;
+  const montado = lerMontado(_gradeData);
+  if (montado.has(pid)) montado.delete(pid); else montado.add(pid);
+  salvarMontado(_gradeData, montado);
+  cardEl.classList.toggle('grade-card--montado', montado.has(pid));
+  recomputarTotais();
+}
+
+// Clique no NOME: abre a matriz reduzida (não alterna o montado — stopPropagation).
+function __gradeAbrir(ev, nomeEl) {
+  ev.stopPropagation();
+  const nome = nomeEl.getAttribute('data-nome');
+  if (nome) abrirReduzida(nome);
+}
+
+// Matriz REDUZIDA (Medição · Venda · Previsão) do posto, no #matriz-host. Acima,
+// no #faixa-pedido, a faixa do pedido do dia DAQUELE posto (dados já na grade) +
+// "Voltar aos cards". A matriz COMPLETA (escolher posto no filtro) não muda.
+function abrirReduzida(nomePosto) {
+  const p = _gradePostos.find(x => (x.posto_nome || '') === nomePosto);
+  const host = document.getElementById('matriz-host');
+  const vazio = document.getElementById('matriz-vazio');
+  const faixa = document.getElementById('faixa-pedido');
+  if (vazio) vazio.style.display = 'none';
+  if (host)  host.style.display  = '';
+  if (faixa && p) {
+    const pc = p.por_combustivel || {};
+    const blocos = Object.keys(pc).filter(k => Number(pc[k]) > 0).map(k =>
+      '<div class="red-bl"><div class="red-bl-lbl">' + esc(k) + '</div><div class="red-bl-val">' + fmtNum(pc[k]) + '</div></div>').join('');
+    faixa.innerHTML =
+      '<div class="red-head">' +
+        '<button type="button" class="red-voltar" onclick="voltarAosCards()">← Voltar aos cards</button>' +
+        '<span class="red-posto">' + esc(p.posto_nome || nomePosto) + '</span>' +
+      '</div>' +
+      '<div class="red-blocos">' + blocos +
+        '<div class="red-bl red-bl-total"><div class="red-bl-lbl">TOTAL</div><div class="red-bl-val">' + fmtNum(p.total) + ' L</div></div>' +
+      '</div>';
+  }
+  window.matrizMedicao.carregar(nomePosto, { grupos: ['medicao', 'venda', 'previsao'] });
+}
+
+function voltarAosCards() {
+  const host = document.getElementById('matriz-host');
+  const vazio = document.getElementById('matriz-vazio');
+  if (host)  host.style.display  = 'none';
+  if (vazio) vazio.style.display = '';
+  atualizarFaixa();   // restaura a faixa de escopo (REDE/bandeira) + re-renderiza a grade
 }
 
 function faixaHead(titulo, dataISO) {

@@ -167,3 +167,32 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
 .grade-vazia { padding: 2rem 1rem; text-align: center; color: var(--text3); font-family: var(--mono); font-size: .82rem; }
 
 @media (max-width: 560px) { .grade-cards { grid-template-columns: 1fr; } }
+
+/* ── Grade: card MONTADO (verde suave via color-mix, padrão painel-ti) + check ── */
+.grade-card { position: relative; cursor: pointer; }
+.grade-card--montado { background: color-mix(in srgb, var(--ok) 14%, transparent); border-color: var(--ok); }
+.grade-check { position: absolute; top: .5rem; right: .6rem; color: var(--ok); font-weight: 700; font-size: .9rem; display: none; }
+.grade-card--montado .grade-check { display: block; }
+.grade-posto { cursor: pointer; }                 /* clicável: abre a matriz reduzida */
+.grade-posto:hover { text-decoration: underline; }
+
+/* Dois totais do topo: FALTA MONTAR / JÁ MONTADO (verde) */
+.grade-head-data { font-family: var(--mono); font-size: .66rem; color: var(--text3); margin-bottom: .45rem; }
+.grade-tots { display: flex; gap: .7rem; flex-wrap: wrap; }
+.grade-tot { flex: 1; min-width: 150px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: .5rem .75rem; }
+.grade-tot-lbl { display: block; font-family: var(--mono); font-size: .56rem; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; }
+.grade-tot-val { font-family: var(--mono); font-weight: 700; font-size: .95rem; color: var(--text); }
+.grade-tot--montado { border-color: var(--ok); }
+.grade-tot--montado .grade-tot-lbl, .grade-tot--montado .grade-tot-val { color: var(--ok); }
+
+/* Faixa da matriz REDUZIDA: pedido do dia do posto (accent) + Voltar aos cards */
+.red-head { display: flex; align-items: center; gap: .7rem; margin-bottom: .5rem; flex-wrap: wrap; }
+.red-voltar { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text2); font-family: var(--mono); font-size: .72rem; font-weight: 700; padding: .35rem .7rem; cursor: pointer; }
+.red-voltar:hover { border-color: var(--accent); color: var(--accent); }
+.red-posto { font-family: var(--mono); font-weight: 700; color: var(--text); font-size: .84rem; }
+.red-blocos { display: flex; gap: .5rem; flex-wrap: wrap; }
+.red-bl { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: .35rem .6rem; text-align: center; min-width: 54px; }
+.red-bl-lbl { font-family: var(--mono); font-size: .56rem; color: var(--text3); text-transform: uppercase; }
+.red-bl-val { font-family: var(--mono); font-weight: 700; color: var(--text); font-size: .82rem; margin-top: 2px; }
+.red-bl-total { background: var(--accent-dim); border-color: var(--accent); }
+.red-bl-total .red-bl-lbl, .red-bl-total .red-bl-val { color: var(--accent); }

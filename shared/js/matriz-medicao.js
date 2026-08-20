@@ -54,6 +54,19 @@
     return chave === 'venda' ? combustiveisVenda : grupos;
   }
 
+  // Filtro de grupos a renderizar (null = todos os 7). Definido POR carregamento
+  // em carregarMatriz(posto, { grupos }) e usado no cabeçalho e nas linhas — assim
+  // a matriz reduzida (ex.: só Medição/Venda/Previsão) sai da MESMA função, sem
+  // fork. Os dados vêm completos do GET; esconder um grupo não remove o campo do
+  // DADOS_ATUAIS, então cálculos que leem o dado (ex.: Previsão = med(ontem)+
+  // pedido(hoje)) seguem certos mesmo com Pedido oculto.
+  let _gruposVisiveis = null;
+  function categoriasVisiveis() {
+    return _gruposVisiveis
+      ? CATEGORIAS_MEDICAO.filter(c => _gruposVisiveis.includes(c.chave))
+      : CATEGORIAS_MEDICAO;
+  }
+
   // ── Helpers de formatação ───────────────────────────────────────
   function fmtL(v) {
     if (v === null || v === undefined || v === '') return '—';
@@ -89,8 +102,13 @@
   }
 
   // ── Matriz — carga (GET /medicao/:posto) ────────────────────────
-  async function carregarMatriz(posto) {
+  async function carregarMatriz(posto, opcoes) {
     if (!_tbody) return;            // montar() ainda não chamado
+    // Grupos a renderizar nesta carga: opcoes.grupos (array de chaves) → reduzida;
+    // ausente → matriz COMPLETA (reseta o filtro, então o caminho normal do filtro
+    // de posto sempre volta aos 7 grupos).
+    _gruposVisiveis = (opcoes && Array.isArray(opcoes.grupos) && opcoes.grupos.length)
+      ? opcoes.grupos : null;
     _postoAtual = posto;
     _subtitle.innerHTML = '• Carregando ' + posto + '...';
     _thead.innerHTML = '';
@@ -117,16 +135,17 @@
 
   // Cabeçalho de 2 linhas: categorias (colspan) + combustíveis por categoria.
   function montarCabecalhoMedicao(grupos, combustiveisVenda) {
+    const cats = categoriasVisiveis();
     let row1 = '<tr><th rowspan="2" class="sticky-col">DIA</th>';
-    CATEGORIAS_MEDICAO.forEach((cat, ci) => {
+    cats.forEach((cat, ci) => {
       let n = colunasDaCategoria(cat.chave, grupos, combustiveisVenda).length;
       if (cat.chave === 'venda') n += 1; // + coluna TOTAL
-      const grpEnd = (ci < CATEGORIAS_MEDICAO.length - 1) ? ' grp-end' : '';
+      const grpEnd = (ci < cats.length - 1) ? ' grp-end' : '';
       row1 += '<th colspan="' + n + '" class="' + cat.classe + grpEnd + '">' + cat.titulo + '</th>';
     });
     row1 += '</tr>';
     let row2 = '<tr>';
-    CATEGORIAS_MEDICAO.forEach(cat => {
+    cats.forEach(cat => {
       const cols = colunasDaCategoria(cat.chave, grupos, combustiveisVenda);
       const ehVenda = cat.chave === 'venda';
       cols.forEach((g, gi) => {
@@ -149,10 +168,11 @@
     const grupos    = dados.grupos;
     const vendaCols = dados.combustiveisVenda;
     let html = '';
+    const cats = categoriasVisiveis();
     dados.dias.forEach((d, diaIdx) => {
       html += '<tr><td class="sticky-col">' +
         String(d.dia).padStart(2, '0') + '/' + dados.mes + '</td>';
-      CATEGORIAS_MEDICAO.forEach(cat => {
+      cats.forEach(cat => {
         const cols    = colunasDaCategoria(cat.chave, grupos, vendaCols);
         const valores = d[cat.chave] || [];
         const ehVenda = cat.chave === 'venda';
