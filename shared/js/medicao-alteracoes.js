@@ -17,6 +17,10 @@
   let _cacheHoje = null, _cacheHist = null;
 
   const PERIODOS = [3, 7, 15];
+  // Campos que ENTRAM no texto do WhatsApp: só os que o GERENTE preenche. Pedido
+  // e pre_pedido (lançados pela Logística) ficam fora — o grupo é dos gerentes.
+  // A TELA continua mostrando tudo; este recorte é exclusivo da cópia.
+  const CAMPOS_WHATSAPP = ['medicao', 'venda', 'carga'];
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -111,7 +115,11 @@
       document.body.appendChild(_modal);
       _modal.addEventListener('click', e => { if (e.target === _modal) fechar(); });
       _modal.querySelector('#malt-x').addEventListener('click', fechar);
-      _modal.querySelector('#malt-copiar').addEventListener('click', e => window.jbCopiar(textoWhatsApp(), e.currentTarget));
+      _modal.querySelector('#malt-copiar').addEventListener('click', e => {
+        const txt = textoWhatsApp();
+        if (!txt) { window.alert('Nada para enviar: nenhuma alteração de medição, venda ou carga nesta lista (alterações de pedido ficam fora do texto).'); return; }
+        window.jbCopiar(txt, e.currentTarget);
+      });
       _modal.querySelector('#malt-limpar').addEventListener('click', limpar);
       _modal.querySelectorAll('.malt-aba').forEach(b => b.addEventListener('click', () => trocarAba(b.getAttribute('data-aba'))));
       _modal.querySelectorAll('.malt-per').forEach(b => b.addEventListener('click', () => trocarPeriodo(Number(b.getAttribute('data-d')))));
@@ -203,7 +211,10 @@
   // postos; números com separador de milhar; "de" vazio → travessão.
   function textoWhatsApp() {
     const dados = dadosAtuais();
-    const alts = (dados && dados.alteracoes) || [];
+    // Só os campos do gerente (CAMPOS_WHATSAPP). Se nada sobrar, devolve '' — o
+    // chamador avisa em vez de copiar um texto só com cabeçalho.
+    const alts = ((dados && dados.alteracoes) || []).filter(a => CAMPOS_WHATSAPP.includes(a.campo));
+    if (!alts.length) return '';
     const titulo = _aba === 'hoje' ? 'de hoje' : 'últimos ' + _dias + ' dias';
     let txt = '*Alterações de medição — ' + titulo + '*\n';
     let postoAnt = null;
