@@ -149,6 +149,13 @@ html, body { height: 100%; overflow: hidden; }
   margin: auto; color: var(--text3); font-family: var(--mono);
   font-size: .9rem; text-align: center; padding: 3rem;
 }
+/* Grade de cards (Todos os postos): nasce no #matriz-vazio, dentro do
+   .view-panel de altura fixa + overflow:hidden. Precisa ser o SCROLLER PRÓPRIO
+   da aba (mesmo papel do .esc-body/Escala e da KPI). Só quando há cards
+   (.grade-host, aplicada pelo JS) — a mensagem "nenhum posto" não recebe a
+   classe e segue centralizada. Desktop-only DE PROPÓSITO: esta regra vive no
+   logistica.css; no mobile a página rola pela .main, então lá NÃO se aplica. */
+.matriz-vazio.grade-host { flex: 1; min-height: 0; overflow-y: auto; }
 
 /* Faixa de total de PEDIDO FINAL do dia (não rola; fica fixa acima da matriz) */
 .faixa-pedido {
