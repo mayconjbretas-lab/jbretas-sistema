@@ -230,7 +230,8 @@ function renderGradeMobile(resp, dataISO) {
         '<div class="grade-tot grade-tot--montado"><span class="grade-tot-lbl">JÁ MONTADO</span><b class="grade-tot-val" id="grade-tot-montado">—</b></div>' +
       '</div>' +
     '</div>';
-  grade.innerHTML = head + '<div class="grade-cards">' + cards + '</div>';
+  // head (dois totais) sticky no topo (mobile: página rola); cards em .grade-scroll.
+  grade.innerHTML = head + '<div class="grade-scroll"><div class="grade-cards">' + cards + '</div></div>';
   recomputarTotais();
 }
 

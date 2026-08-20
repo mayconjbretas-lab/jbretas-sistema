@@ -381,3 +381,12 @@ body {
 
 /* Faixa da matriz reduzida (inserida acima do #mb-matriz por abrirReduzida). */
 .mb-reduzida { margin-bottom: .8rem; }
+
+/* Grade (Todos os postos): no mobile quem rola é a .main (página), então os dois
+   totais (.grade-head) ficam FIXOS via sticky no topo do #mb-matriz-vazio, com
+   fundo opaco (--bg) p/ os cards não aparecerem por baixo. (No desktop o fixo
+   vem do split .grade-head/.grade-scroll no logistica.css.) */
+#mb-matriz-vazio .grade-head {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--bg); padding-bottom: .5rem;
+}

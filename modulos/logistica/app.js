@@ -203,7 +203,8 @@ function renderGrade(resp, dataISO) {
         '<div class="grade-tot grade-tot--montado"><span class="grade-tot-lbl">JÁ MONTADO</span><b class="grade-tot-val" id="grade-tot-montado">—</b></div>' +
       '</div>' +
     '</div>';
-  grade.innerHTML = head + '<div class="grade-cards">' + cards + '</div>';
+  // head (dois totais) FIXO fora do scroller; só os cards rolam em .grade-scroll.
+  grade.innerHTML = head + '<div class="grade-scroll"><div class="grade-cards">' + cards + '</div></div>';
   recomputarTotais();
 }
 
