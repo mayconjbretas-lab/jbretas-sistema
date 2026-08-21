@@ -13,12 +13,19 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* App em coluna: topbar fixa em cima, main rola, bnav fixa embaixo. */
+/* App em coluna: topbar fixa em cima, main rola, bnav fixa embaixo.
+   Altura TRAVADA em 100dvh (não só min-height): sem isso, em conteúdo alto o
+   #screen-app cresce e quem rola vira o body — o .main deixa de ser o scroller e
+   o position:sticky do .grade-head não tem em que ancorar (rola junto no iPhone).
+   Travando, o .main (flex:1; overflow-y:auto) é sempre o scroller. Todas as abas
+   são .scr DENTRO do .main, então rolam por ele; nada é cortado. */
 #screen-app {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
 }
 
 /* ── TOPBAR ── */
