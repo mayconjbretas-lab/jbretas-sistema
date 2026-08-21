@@ -394,11 +394,7 @@ function medirAlturas() {
   const root = document.documentElement;
   const bnav    = document.querySelector('.bnav');
   const actions = document.querySelector('.mb-actions');
-  const topbar  = document.querySelector('.topbar');
   const topoEl  = document.querySelector('#mb-matriz .spreadsheet-frame') || document.getElementById('mb-matriz');
-  // topbar é position:fixed → o .main precisa de padding-top = altura dela (com
-  // safe-area embutida). Medida aqui como --mb-topbar-h (usada tb no sticky dos totais).
-  if (topbar)  { const h = topbar.getBoundingClientRect().height;  if (h > 0) root.style.setProperty('--mb-topbar-h',  Math.round(h) + 'px'); }
   if (bnav)    { const h = bnav.getBoundingClientRect().height;    if (h > 0) root.style.setProperty('--mb-bnav-h',    Math.round(h) + 'px'); }
   if (actions) { const h = actions.getBoundingClientRect().height; if (h > 0) root.style.setProperty('--mb-actions-h', Math.round(h) + 'px'); }
   if (topoEl)  { const t = topoEl.getBoundingClientRect().top;     if (t > 0) root.style.setProperty('--mb-topo-h',    Math.round(t) + 'px'); }
