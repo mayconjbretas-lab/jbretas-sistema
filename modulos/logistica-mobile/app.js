@@ -119,6 +119,18 @@ function onBandeiraChangeMobile() {
   onPostoChangeMobile();
 }
 
+// A barra Desfazer/Salvar (.mb-actions) só faz sentido com a MATRIZ visível
+// (editando um posto — inclusive no modo reduzido). Com "Todos" (grade) ela some
+// e devolve a altura à grade. Ao ESCONDER, zera --mb-actions-h já: o guard h>0 do
+// medirAlturas não zeraria, e o calc reservaria ~50px fantasma. Ao MOSTRAR, deixa
+// o medirAlturas (rAF, depois do layout) medir a altura real.
+function mostrarAcoesMobile(visivel) {
+  const acts = document.querySelector('.mb-actions');
+  if (!acts) return;
+  acts.style.display = visivel ? '' : 'none';
+  if (!visivel) document.documentElement.style.setProperty('--mb-actions-h', '0px');
+}
+
 // "Todos os postos" NÃO carrega matriz: esconde a tabela e mostra a mensagem
 // (nunca deixa a matriz de um posto junto com o total de outra seleção).
 function onPostoChangeMobile() {
@@ -140,6 +152,7 @@ function onPostoChangeMobile() {
     if (host)  host.style.display  = '';
     window.matrizMedicao.carregar(POSTO_ATUAL);
   }
+  mostrarAcoesMobile(!!POSTO_ATUAL);     // barra Desfazer/Salvar só com a matriz visível
   atualizarFaixaMobile();
   requestAnimationFrame(medirAlturas);   // matriz apareceu/sumiu → remede o topo do #mb-matriz
 }
@@ -330,6 +343,7 @@ function abrirReduzida(nomePosto) {
       '<div class="red-bl red-bl-total"><div class="red-bl-lbl">TOTAL</div><div class="red-bl-val">' + fmtNum((p && p.total) || 0) + ' L</div></div>' +
     '</div>';
   window.matrizMedicao.carregar(nomePosto, { grupos: ['medicao', 'venda', 'previsao'] });
+  mostrarAcoesMobile(true);              // reduzido = matriz editável → barra visível
   requestAnimationFrame(medirAlturas);   // topo do #mb-matriz mudou (faixa acima)
 }
 
@@ -357,6 +371,7 @@ function voltarAosCards() {
   if (host)  host.style.display  = 'none';
   if (faixa) faixa.style.display = '';
   if (grade) grade.style.display = '';
+  mostrarAcoesMobile(false);            // voltou pra grade → sem barra Desfazer/Salvar
   atualizarFaixaMobile();               // restaura a faixa de pedido + re-render da grade
   requestAnimationFrame(medirAlturas);
 }
