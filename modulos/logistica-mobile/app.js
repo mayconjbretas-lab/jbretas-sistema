@@ -394,7 +394,14 @@ function medirAlturas() {
   const root = document.documentElement;
   const bnav    = document.querySelector('.bnav');
   const actions = document.querySelector('.mb-actions');
-  const topoEl  = document.querySelector('#mb-matriz .spreadsheet-frame') || document.getElementById('mb-matriz');
+  // --mb-topo-h = topo do bloco de conteúdo, p/ o calc de altura da matriz E da
+  // grade. Mede o que estiver VISÍVEL: em "Todos" a matriz fica display:none
+  // (rect 0), então cai no host da grade — sem isso o topo ficaria velho/fallback
+  // e a grade nasceria com altura errada. Matriz de posto segue idêntica (preferida
+  // quando visível). Os dois são irmãos, mesma posição no fluxo.
+  const frame     = document.querySelector('#mb-matriz .spreadsheet-frame') || document.getElementById('mb-matriz');
+  const gradeHost = document.getElementById('mb-matriz-vazio');
+  const topoEl    = (frame && frame.getBoundingClientRect().height > 0) ? frame : gradeHost;
   if (bnav)    { const h = bnav.getBoundingClientRect().height;    if (h > 0) root.style.setProperty('--mb-bnav-h',    Math.round(h) + 'px'); }
   if (actions) { const h = actions.getBoundingClientRect().height; if (h > 0) root.style.setProperty('--mb-actions-h', Math.round(h) + 'px'); }
   if (topoEl)  { const t = topoEl.getBoundingClientRect().top;     if (t > 0) root.style.setProperty('--mb-topo-h',    Math.round(t) + 'px'); }

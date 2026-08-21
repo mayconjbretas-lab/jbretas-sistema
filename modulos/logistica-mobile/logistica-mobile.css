@@ -382,11 +382,25 @@ body {
 /* Faixa da matriz reduzida (inserida acima do #mb-matriz por abrirReduzida). */
 .mb-reduzida { margin-bottom: .8rem; }
 
-/* Grade (Todos os postos): no mobile quem rola é a .main (página), então os dois
-   totais (.grade-head) ficam FIXOS via sticky no topo do #mb-matriz-vazio, com
-   fundo opaco (--bg) p/ os cards não aparecerem por baixo. (No desktop o fixo
-   vem do split .grade-head/.grade-scroll no logistica.css.) */
-#mb-matriz-vazio .grade-head {
-  position: sticky; top: 0; z-index: 5;
+/* Grade (Todos os postos): replica o DESKTOP — o host vira coluna flex com ALTURA
+   constrangida (viewport menos topo + barra de ações + bnav, as MESMAS vars que a
+   matriz de posto único usa), o .grade-head fica fixo no topo (flex-shrink:0) e SÓ
+   o .grade-scroll rola por dentro. Assim a página não rola na grade (a bnav fica no
+   rodapé) e os totais ficam fixos — sem sticky e sem travar o #screen-app.
+   Escopado em .grade-host: a mensagem "nenhum posto" (sem essa classe) não muda. */
+#mb-matriz-vazio.grade-host {
+  display: flex; flex-direction: column;
+  /* Mesmo calc do #mb-matriz .spreadsheet-frame. --mb-bnav-h já embute a safe-area
+     (border-box do .bnav) → NÃO somar env() de novo; max() é o piso seguro se a
+     medição vier sem a safe-area. --mb-topo-h agora mede o host visível (ver medirAlturas). */
+  height: calc(100dvh - var(--mb-topo-h, 300px) - var(--mb-actions-h, 60px)
+               - max(var(--mb-bnav-h, 48px), 48px + env(safe-area-inset-bottom)));
+  overflow: hidden;   /* o scroll acontece no .grade-scroll, não aqui */
+}
+#mb-matriz-vazio.grade-host .grade-head {
+  flex-shrink: 0;                                   /* topo FIXO (não rola) */
   background: var(--bg); padding-bottom: .5rem;
+}
+#mb-matriz-vazio.grade-host .grade-scroll {
+  flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
 }
