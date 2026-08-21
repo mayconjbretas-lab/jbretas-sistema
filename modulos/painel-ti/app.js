@@ -756,6 +756,7 @@ function txRenderDiff() {
   el.innerHTML = '';
   if (_txHist.length < 2) return;
   const atual = _txHist[0], anterior = _txHist[1];
+  if (atual.tipo !== anterior.tipo) return;  // só compara sondas do MESMO tipo (vendas×vendas, compras×compras)
   if (atual.erro || anterior.erro) return;   // não compara contra sonda que falhou
   const cAt = txMapaChega(atual), cAn = txMapaChega(anterior);
   const nomes = new Set([].concat(Object.keys(cAt), Object.keys(cAn)));
