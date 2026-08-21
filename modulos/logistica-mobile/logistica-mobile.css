@@ -5,6 +5,12 @@
    O conteúdo das telas vem depois; aqui não há estilo de card/tabela.
    ================================================================ */
 
+/* Documento TRAVADO na viewport: sem isto, no Safari iOS o body rola junto e
+   arrasta a topbar/bnav (sticky, filhas do #screen-app) — só os position:fixed
+   ficavam parados. Travando html/body, o único scroller é o .main. Escopado:
+   este CSS só é carregado pela página mobile da Logística. */
+html, body { height: 100%; overflow: hidden; }
+
 body {
   margin: 0;
   background: var(--bg);
@@ -13,12 +19,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* App em coluna: topbar fixa em cima, main rola, bnav fixa embaixo.
-   Altura TRAVADA em 100dvh (não só min-height): sem isso, em conteúdo alto o
-   #screen-app cresce e quem rola vira o body — o .main deixa de ser o scroller e
-   o position:sticky do .grade-head não tem em que ancorar (rola junto no iPhone).
-   Travando, o .main (flex:1; overflow-y:auto) é sempre o scroller. Todas as abas
-   são .scr DENTRO do .main, então rolam por ele; nada é cortado. */
+/* App em coluna: topbar em cima, .main rola, bnav embaixo. Altura travada em
+   100dvh para o .main (flex:1; min-height:0; overflow-y:auto) ser o scroller. */
 #screen-app {
   display: flex;
   flex-direction: column;
@@ -26,11 +28,6 @@ body {
   min-height: 100dvh;
   height: 100vh;
   height: 100dvh;
-  /* overflow:hidden clampa qualquer transbordo do .main: sem isto, no Safari iOS
-     o conteúdo alto vaza da caixa de 100dvh e quem rola vira o BODY — aí a .bnav
-     (sticky bottom:0) sobe pro meio ao chegar no fim da lista. Com o clamp, o
-     único scroller é o .main (overflow-y:auto); body/html não rolam. */
-  overflow: hidden;
 }
 
 /* ── TOPBAR ── */
