@@ -40,8 +40,10 @@ body {
   padding-top: calc(.7rem + env(safe-area-inset-top));
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  position: sticky;
+  position: fixed;   /* fora do fluxo: sticky rolava junto com o body no iOS */
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 10;
 }
 .tb-brand { display: flex; align-items: center; gap: .55rem; min-width: 0; }
@@ -72,6 +74,11 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 1rem;
+  /* Topbar e bnav são position:fixed (fora do fluxo) → o .main reserva o espaço
+     das duas. padding-top = altura da topbar (var --mb-topbar-h, medida por
+     getBoundingClientRect e JÁ com a safe-area; fallback 3.5rem+env) + 1rem de
+     respiro, senão o conteúdo/filtros ficam atrás da topbar fixa. */
+  padding-top: calc(var(--mb-topbar-h, calc(3.5rem + env(safe-area-inset-top))) + 1rem);
   /* Folga p/ o conteúdo não ficar sob o bnav ao rolar até o fim.
      --mb-bnav-h já inclui a safe-area (o .bnav tem padding-bottom:env(...) e é
      medido pelo border-box), então NÃO somamos env() de novo — era o vão duplo.
@@ -93,8 +100,10 @@ body {
   background: var(--surface);
   border-top: 1px solid var(--border);
   padding-bottom: env(safe-area-inset-bottom);
-  position: sticky;
+  position: fixed;   /* fora do fluxo: sticky rolava junto com o body no iOS */
   bottom: 0;
+  left: 0;
+  right: 0;
   z-index: 10;
 }
 .nbtn {
@@ -396,6 +405,13 @@ body {
    fundo opaco (--bg) p/ os cards não aparecerem por baixo. (No desktop o fixo
    vem do split .grade-head/.grade-scroll no logistica.css.) */
 #mb-matriz-vazio .grade-head {
-  position: sticky; top: 0; z-index: 5;
+  /* topbar agora é position:fixed → o sticky cola ABAIXO dela (top = altura da
+     topbar); em top:0 ficaria escondido atrás da topbar fixa. */
+  position: sticky; top: var(--mb-topbar-h, calc(3.5rem + env(safe-area-inset-top))); z-index: 5;
   background: var(--bg); padding-bottom: .5rem;
 }
+/* A grade rola dentro do .main, mas na aba Medição o .sem-reserva-bnav zera a
+   reserva do bnav no .main (é p/ a matriz, que tem altura própria por calc).
+   Como agora a bnav é FIXED (sobrepõe), o host da grade reserva a altura dela
+   p/ o último card não ficar atrás. --mb-bnav-h já embute a safe-area; env só no piso. */
+#mb-matriz-vazio.grade-host { padding-bottom: max(var(--mb-bnav-h, 48px), 48px + env(safe-area-inset-bottom)); }
