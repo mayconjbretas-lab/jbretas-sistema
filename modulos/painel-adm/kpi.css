@@ -80,21 +80,6 @@
 .kpi-bl-giro { font-family: var(--mono); }
 .kpi-bl-sug  { text-align: right; font-family: var(--mono); font-weight: 700; color: var(--accent); white-space: nowrap; }
 
-/* ── Logística (#tab-kpi): colunas PEDIDO e Δ na Sugestão ─────────────
-   Escopado em #tab-kpi p/ NÃO vazar ao painel-adm (#s-mais) nem ao admin
-   mobile (#s-kpi): lá a linha continua com 3 colunas (60px 1fr auto). Aqui
-   vira 5; gap menor p/ não apertar em desktop estreito. Fundo levemente
-   destacado agrupa PEDIDO+Δ, separando-os visualmente do SUGERIDO. */
-#tab-kpi .kpi-bl-lin { grid-template-columns: 60px 1fr auto auto auto; gap: .45rem; }
-#tab-kpi .kpi-bl-ped,
-#tab-kpi .kpi-bl-delta {
-  text-align: right; font-family: var(--mono); font-weight: 700; white-space: nowrap;
-  padding: 2px 7px; border-radius: 6px; background: var(--surface2); }
-#tab-kpi .kpi-bl-ped        { color: var(--text2); }
-#tab-kpi .kpi-bl-delta.pos  { color: var(--ok); }
-#tab-kpi .kpi-bl-delta.neg  { color: var(--danger); }
-#tab-kpi .kpi-bl-delta.zero { color: var(--text3); }
-
 /* Chip de giro */
 .kpi-chip { display: inline-block; font-family: var(--mono); font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
 .kpi-chip-crit   { background: var(--danger);  color: #fff; }
