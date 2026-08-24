@@ -32,6 +32,11 @@
     return new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
   }
 
+  // Hoje em Brasília (en-CA) — p/ detectar ciclo de Mix "em andamento" (fim futuro).
+  function hojeISO() {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  }
+
   // "2026-07-15" -> "15/07/2026"
   function brData(iso) {
     const p = String(iso || '').split('-');
@@ -322,7 +327,16 @@
     } else {
       const tot  = d.total || {};
       const rank = (d.postos || []).filter(p => p.mix != null);  // backend já ordena; null fora
-      sub = 'ciclo ' + brDataCurta(d.inicio) + ' a ' + brDataCurta(d.fim) + ' · ' + (tot.dias_max || 0) + ' dias lançados';
+      // Ciclo "em andamento" = fim ainda não passou (hoje <= fim): a cobertura é
+      // PARCIAL e cresce a cada dia. Deixar explícito — o "1 dias lançados" cru era
+      // lido como dado faltando, quando é ciclo aberto há 1 dia. Também mostra
+      // quantos postos já têm mix (o denominador da rede não vem no payload).
+      const emAndamento = d.fim >= hojeISO();
+      const dias = tot.dias_max || 0;
+      const diasTxt = dias + (dias === 1 ? ' dia' : ' dias') + ' lançados';
+      const estado = emAndamento ? ('🟡 em andamento · ' + diasTxt + ' até agora') : diasTxt;
+      const nPostos = rank.length + (rank.length === 1 ? ' posto' : ' postos') + ' com mix';
+      sub = 'ciclo ' + brDataCurta(d.inicio) + ' a ' + brDataCurta(d.fim) + ' · ' + estado + ' · ' + nPostos;
       inner = rank.length
         ? '<ul class="rel-rank">' + rank.map((p, i) =>
             '<li><span class="rk-pos">' + (i + 1) + '.</span>' +
