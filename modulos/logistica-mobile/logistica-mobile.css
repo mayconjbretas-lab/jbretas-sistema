@@ -404,3 +404,41 @@ body {
 #mb-matriz-vazio.grade-host .grade-scroll {
   flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
 }
+
+/* ═══ Aba SUGESTÃO DE PEDIDO (Mais+ → #s-sugestao, sugestao-mobile.js) ═══
+   Layout empilhado (mobile ~380px): por posto um bloco; por combustível uma
+   linha de 4 colunas [COMB 30 · giro 1fr · sug 62 · ped 62]. Sugestão é
+   referência (cinza); pedido em caixa destacada com o Δ menor logo abaixo.
+   Tokens LONGOS do base.css. */
+.mbsug { padding: .6rem .7rem 1rem; }
+.mbsug-msg { padding: 1.6rem 1rem; text-align: center; font-family: var(--mono); font-size: .8rem; color: var(--text3); }
+
+/* Topo: data de entrega + dois totais da rede */
+.mbsug-topo { display: flex; align-items: flex-end; justify-content: space-between; gap: .7rem; flex-wrap: wrap; margin-bottom: .8rem; }
+.mbsug-data { display: flex; flex-direction: column; gap: .25rem; font-family: var(--mono); font-size: .58rem; color: var(--text3); letter-spacing: .06em; }
+.mbsug-data input { font-family: var(--sans); font-size: .82rem; color: var(--text); background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: .4rem .5rem; outline: none; }
+.mbsug-data input:focus { border-color: var(--accent); }
+.mbsug-rede { display: flex; gap: .9rem; }
+.mbsug-rede span { font-family: var(--mono); font-size: .56rem; color: var(--text3); letter-spacing: .06em; display: flex; flex-direction: column; text-align: right; }
+.mbsug-rede b { font-size: .98rem; color: var(--text); margin-top: 1px; }
+.mbsug-rede-ped b { color: var(--accent); }
+
+/* Blocos por posto */
+.mbsug-blocos { display: flex; flex-direction: column; gap: .55rem; }
+.mbsug-bloco { border: 1px solid var(--border); border-radius: var(--radius, 10px); overflow: hidden; }
+.mbsug-cab { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; padding: .45rem .6rem; background: var(--surface2); }
+.mbsug-nome { font-weight: 700; color: var(--text); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mbsug-tot { flex-shrink: 0; white-space: nowrap; font-family: var(--mono); font-size: .78rem; color: var(--text3); }
+.mbsug-seta { color: var(--text3); }
+.mbsug-tot-ped { color: var(--accent); font-weight: 700; }
+
+/* Linha por combustível: COMB · giro · sug · ped(+Δ). giro (1fr) encolhe. */
+.mbsug-lin { display: grid; grid-template-columns: 30px 1fr 62px 62px; align-items: center; gap: .4rem; padding: .35rem .6rem; border-top: 1px solid var(--border); }
+.mbsug-comb { font-family: var(--mono); font-size: .72rem; color: var(--text2); overflow: hidden; text-overflow: ellipsis; }
+.mbsug-giro { font-family: var(--mono); font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mbsug-sug { text-align: right; font-family: var(--mono); font-size: .8rem; font-weight: 700; color: var(--text3); white-space: nowrap; }
+.mbsug-ped-cell { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; background: var(--surface2); border-radius: 6px; padding: 2px 6px; }
+.mbsug-ped { font-family: var(--mono); font-size: .8rem; font-weight: 700; color: var(--text); white-space: nowrap; }
+.mbsug-delta { font-family: var(--mono); font-size: .6rem; font-weight: 700; white-space: nowrap; }
+.mbsug-delta.pos { color: var(--ok); }
+.mbsug-delta.neg { color: var(--danger); }
