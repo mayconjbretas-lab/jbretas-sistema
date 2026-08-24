@@ -290,13 +290,33 @@
   // Um BLOCO por posto: cabeçalho (nome + total sugerido em --accent) e uma linha
   // por combustível (código · giro colorido · sugerido, com "teto" se for o caso).
   function blocoHtml(b) {
+    // Colunas PEDIDO e Δ só na Logística desktop (container #tab-kpi). No
+    // painel-adm (#s-mais) e no admin mobile (#s-kpi) a linha fica com 3 spans.
+    const comPedido = !!(_sec && _sec.id === 'tab-kpi');
     const linhas = b.combs.map(i => {
       const teto = (i.limitado_por === 'espaco')
         ? ' <span class="kpi-teto" title="Limitado pelo espaço do tanque">teto</span>' : '';
+      // PEDIDO: fmtL já mostra "—" p/ null ("não pedi") e "0" p/ zero ("decidi
+      // não pedir"). Δ = pedido − sugestão: "—" se não há pedido OU se Δ==0;
+      // senão o valor com sinal, verde (--ok) se positivo, vermelho (--danger).
+      let extra = '';
+      if (comPedido) {
+        const ped = i.pedido;
+        const d = (ped == null) ? null : (Number(ped) - (Number(i.sugestao) || 0));
+        let dTxt = '—', dCls = 'zero';
+        if (d != null && d !== 0) {
+          dTxt = (d > 0 ? '+' : '−') + fmtL(Math.abs(d));
+          dCls = d > 0 ? 'pos' : 'neg';
+        }
+        extra =
+          '<span class="kpi-bl-ped">' + fmtL(ped) + '</span>' +
+          '<span class="kpi-bl-delta ' + dCls + '">' + dTxt + '</span>';
+      }
       return '<div class="kpi-bl-lin">' +
         '<span class="kpi-bl-comb">' + esc(i.combustivel) + '</span>' +
         '<span class="kpi-bl-giro">' + giroCelula(i) + '</span>' +
         '<span class="kpi-bl-sug">' + fmtL(i.sugestao) + '<span class="kpi-hb-un"> L</span>' + teto + '</span>' +
+        extra +
       '</div>';
     }).join('');
     return '<div class="kpi-bloco">' +
@@ -311,7 +331,11 @@
     const leg = renderLegenda();
     const nota = '<div class="kpi-nota">Quanto pedir para a data de entrega, considerando espaço no tanque e ' +
       'venda prevista para o dia da semana. Múltiplos de 1.000 L, mínimo 2.000.</div>';
-    let itens = (_resp.itens || []).filter(i => (i.sugestao || 0) > 0);
+    // Base: só combustíveis com sugerido > 0. Na Logística (comPedido), afrouxa
+    // p/ mostrar TAMBÉM linhas com sugerido 0 QUANDO há pedido lançado (o caso de
+    // maior divergência). sugerido 0 E sem pedido continua escondido em todo host.
+    const comPedido = !!(_sec && _sec.id === 'tab-kpi');
+    let itens = (_resp.itens || []).filter(i => (i.sugestao || 0) > 0 || (comPedido && i.pedido != null));
     if (_fComb) itens = itens.filter(i => i.combustivel === _fComb);
     if (!itens.length) return leg + '<div class="kpi-msg">Nenhum posto com sugestão de pedido.</div>' + nota;
 
