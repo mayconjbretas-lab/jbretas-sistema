@@ -252,8 +252,14 @@
   // ── Shell (montado uma vez) ──────────────────────────────────────
   function montarShell(sec) {
     _dataISO = _dataISO || hojeISO();
-    // ADM abre a aba só pra leitura (Logística edita). Detecta pela sessão.
-    _readonly = !!(window.getUsuarioLogado && getUsuarioLogado() && getUsuarioLogado().perfil === 'ADM');
+    // Leitura decidida pelo HOST, não pelo perfil: edita só nos módulos de
+    // Logística (desktop /logistica/ e mobile /logistica-mobile/); qualquer outro
+    // host — o painel-adm (#s-custo) inclusive — fica leitura (fail-closed). O id
+    // do container não serve: #s-custo é compartilhado por logistica-mobile E
+    // painel-adm; o módulo (URL) é o discriminador confiável. Alinha com o backend
+    // (POST /custos/importar aceita ADM+LOGISTICA) sem abrir nada pra GERENTE, que
+    // não acessa nenhum desses módulos (logística exige LOGISTICA/ADM; adm é ADM).
+    _readonly = !/\/logistica(-mobile)?\//.test(window.location.pathname);
     injetarEstilo();
     sec.innerHTML =
       '<div class="cm-wrap">' +
