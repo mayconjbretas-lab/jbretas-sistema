@@ -80,6 +80,33 @@
 .kpi-bl-giro { font-family: var(--mono); }
 .kpi-bl-sug  { text-align: right; font-family: var(--mono); font-weight: 700; color: var(--accent); white-space: nowrap; }
 
+/* ── Logística (#tab-kpi): Sugestão em formato-tabela com PEDIDO e Δ ──────
+   Escopado em #tab-kpi p/ NÃO vazar ao painel-adm (#s-mais) nem ao admin
+   mobile (#s-kpi), onde o bloco segue com 3 colunas (60px 1fr auto).
+   Larguras FIXAS em SUG/PED/Δ p/ as colunas alinharem entre as linhas e com
+   o header; GIRO é o único 1fr → é ele que encolhe/quebra em tela estreita.
+   Δ = 84px: comporta "−10.000" (e até "−999.999") sem cortar. teto vai na
+   6ª coluna (auto), no fim da linha, fora da sequência de números. */
+#tab-kpi .kpi-bl-lin,
+#tab-kpi .kpi-bl-head { grid-template-columns: 60px 1fr 78px 74px 84px auto; gap: .45rem; }
+#tab-kpi .kpi-bl-head { display: grid; align-items: center; padding: .3rem .7rem;
+  border-top: 1px solid var(--border); }
+#tab-kpi .kpi-bl-head > span { font-family: var(--mono); font-size: .56rem; font-weight: 700;
+  color: var(--text3); text-transform: uppercase; letter-spacing: .05em; }
+#tab-kpi .kpi-bl-head .kpi-bl-h-num { text-align: right; }
+#tab-kpi .kpi-bl-ped,
+#tab-kpi .kpi-bl-delta {
+  text-align: right; font-family: var(--mono); font-weight: 700; white-space: nowrap;
+  padding: 2px 7px; border-radius: 6px; background: var(--surface2); }
+#tab-kpi .kpi-bl-ped        { color: var(--text2); }
+#tab-kpi .kpi-bl-delta.pos  { color: var(--ok); }
+#tab-kpi .kpi-bl-delta.neg  { color: var(--danger); }
+#tab-kpi .kpi-bl-delta.zero { color: var(--text3); }
+#tab-kpi .kpi-bl-teto       { text-align: left; white-space: nowrap; }
+#tab-kpi .kpi-bl-teto .kpi-teto { margin-left: 0; }
+/* total do posto: SUG (accent, herda de .kpi-bl-total) · PED (cinza) */
+#tab-kpi .kpi-bl-tot-ped    { color: var(--text2); font-weight: 700; }
+
 /* Chip de giro */
 .kpi-chip { display: inline-block; font-family: var(--mono); font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
 .kpi-chip-crit   { background: var(--danger);  color: #fff; }

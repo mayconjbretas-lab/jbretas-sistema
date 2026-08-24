@@ -290,19 +290,65 @@
   // Um BLOCO por posto: cabeçalho (nome + total sugerido em --accent) e uma linha
   // por combustível (código · giro colorido · sugerido, com "teto" se for o caso).
   function blocoHtml(b) {
+    // Colunas PEDIDO/Δ + header de coluna SÓ na Logística desktop (#tab-kpi).
+    // No painel-adm (#s-mais) e admin mobile (#s-kpi) o bloco fica IDÊNTICO ao
+    // de antes (3 spans, teto inline no sugerido).
+    const comPedido = !!(_sec && _sec.id === 'tab-kpi');
+
     const linhas = b.combs.map(i => {
-      const teto = (i.limitado_por === 'espaco')
-        ? ' <span class="kpi-teto" title="Limitado pelo espaço do tanque">teto</span>' : '';
+      const chipTeto = (i.limitado_por === 'espaco')
+        ? '<span class="kpi-teto" title="Limitado pelo espaço do tanque">teto</span>' : '';
+      if (comPedido) {
+        // Δ = pedido − sugestão; "—" se não há pedido OU se Δ==0; senão com sinal
+        // (verde --ok / vermelho --danger). teto vai na 6ª coluna, DEPOIS do Δ,
+        // fora da sequência de números.
+        const ped = i.pedido;
+        const d = (ped == null) ? null : (Number(ped) - (Number(i.sugestao) || 0));
+        let dTxt = '—', dCls = 'zero';
+        if (d != null && d !== 0) {
+          dTxt = (d > 0 ? '+' : '−') + fmtL(Math.abs(d));
+          dCls = d > 0 ? 'pos' : 'neg';
+        }
+        return '<div class="kpi-bl-lin">' +
+          '<span class="kpi-bl-comb">' + esc(i.combustivel) + '</span>' +
+          '<span class="kpi-bl-giro">' + giroCelula(i) + '</span>' +
+          '<span class="kpi-bl-sug">' + fmtL(i.sugestao) + '<span class="kpi-hb-un"> L</span></span>' +
+          '<span class="kpi-bl-ped">' + fmtL(ped) + '</span>' +
+          '<span class="kpi-bl-delta ' + dCls + '">' + dTxt + '</span>' +
+          '<span class="kpi-bl-teto">' + chipTeto + '</span>' +
+        '</div>';
+      }
+      const teto = chipTeto ? ' ' + chipTeto : '';
       return '<div class="kpi-bl-lin">' +
         '<span class="kpi-bl-comb">' + esc(i.combustivel) + '</span>' +
         '<span class="kpi-bl-giro">' + giroCelula(i) + '</span>' +
         '<span class="kpi-bl-sug">' + fmtL(i.sugestao) + '<span class="kpi-hb-un"> L</span>' + teto + '</span>' +
       '</div>';
     }).join('');
+
+    // Header de coluna (1× por bloco, minimalista) — só na Logística.
+    const head = comPedido
+      ? '<div class="kpi-bl-head"><span>COMB</span><span>GIRO</span>' +
+        '<span class="kpi-bl-h-num">SUG</span><span class="kpi-bl-h-num">PED</span>' +
+        '<span class="kpi-bl-h-num">Δ</span><span></span></div>'
+      : '';
+
+    // Total do posto: sempre o SUG total; na Logística soma também o PED (só os
+    // lançados — ausente NÃO conta como zero; se nenhum, "PED —").
+    let totalHtml;
+    if (comPedido) {
+      const temPed = b.combs.some(i => i.pedido != null);
+      const pedTot = b.combs.reduce((s, i) => i.pedido != null ? s + Number(i.pedido) : s, 0);
+      totalHtml = '<span class="kpi-bl-tot-sug">SUG ' + fmtL(b.total) + ' L</span>' +
+        '<span class="kpi-bl-tot-ped"> · PED ' + (temPed ? fmtL(pedTot) + ' L' : '—') + '</span>';
+    } else {
+      totalHtml = fmtL(b.total) + ' L';
+    }
+
     return '<div class="kpi-bloco">' +
       '<div class="kpi-bl-cab"><span class="kpi-bl-nome">' + esc(b.nome) + '</span>' +
-        '<span class="kpi-bl-total">' + fmtL(b.total) + ' L</span></div>' +
-      linhas + '</div>';
+        '<span class="kpi-bl-total">' + totalHtml + '</span></div>' +
+      head + linhas + '</div>';
   }
 
   // ── ABA SUGESTÃO ── um bloco por posto (só combustíveis com sugerido > 0).
@@ -311,7 +357,11 @@
     const leg = renderLegenda();
     const nota = '<div class="kpi-nota">Quanto pedir para a data de entrega, considerando espaço no tanque e ' +
       'venda prevista para o dia da semana. Múltiplos de 1.000 L, mínimo 2.000.</div>';
-    let itens = (_resp.itens || []).filter(i => (i.sugestao || 0) > 0);
+    // Base: só sugerido > 0. Na Logística (comPedido) afrouxa p/ mostrar TAMBÉM
+    // linhas com sugerido 0 QUANDO há pedido lançado (maior divergência). sugerido
+    // 0 E sem pedido continua escondido em todo host.
+    const comPedido = !!(_sec && _sec.id === 'tab-kpi');
+    let itens = (_resp.itens || []).filter(i => (i.sugestao || 0) > 0 || (comPedido && i.pedido != null));
     if (_fComb) itens = itens.filter(i => i.combustivel === _fComb);
     if (!itens.length) return leg + '<div class="kpi-msg">Nenhum posto com sugestão de pedido.</div>' + nota;
 
