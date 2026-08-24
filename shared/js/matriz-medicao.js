@@ -569,9 +569,13 @@
   // arredondaria. Grava em :root; o CSS lê via var(--thead-row1-h) no top da 2ª linha.
   function ajustarSticky() {
     const linha1 = _thead && _thead.querySelector('tr:first-child');
-    if (linha1) {
-      document.documentElement.style.setProperty(
-        '--thead-row1-h', linha1.getBoundingClientRect().height + 'px');
+    if (!linha1) return;
+    const h = linha1.getBoundingClientRect().height;
+    // GUARD: altura 0 = matriz oculta (aba inativa é display:none) → NÃO grava.
+    // Gravar 0 anularia o fallback de 32px do CSS (top: var(--thead-row1-h, 32px))
+    // e quebraria o sticky. Sem gravar, o valor anterior (ou o fallback) vale.
+    if (h > 0) {
+      document.documentElement.style.setProperty('--thead-row1-h', h + 'px');
     }
   }
 
@@ -639,6 +643,7 @@
     carregar: carregarMatriz,
     salvar:   salvarAlteracoesMatriz,
     desfazer: desfazerUltima,
+    ajustarSticky: ajustarSticky,   // p/ re-medir o offset do cabeçalho ao reexibir a aba (ver switchMainTab)
     TOLERANCIA_CARGA: TOLERANCIA_CARGA,   // exposto p/ reuso (ex.: painel Pedido Final dos FABs)
   };
 })();

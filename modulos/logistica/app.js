@@ -48,6 +48,14 @@ function switchMainTab(tabId, el) {
   // Sugestão de Pedido (KPI) — componente compartilhado do painel-adm (kpi.js
   // expõe renderKpi), sem fork. Mesmo padrão de Custo/Escala.
   if (tabId === 'tab-kpi' && window.renderKpi) renderKpi(document.getElementById('tab-kpi'));
+  // Matriz — re-mede o offset do cabeçalho sticky (--thead-row1-h). A medida pode
+  // ter saído 0 enquanto a aba estava oculta (ex.: troca de posto na Sugestão
+  // dispara carregar→ajustarSticky com #tab-matriz display:none). O .active acima
+  // já aplicou display:flex; o rAF garante medir com a matriz VISÍVEL. NÃO chama
+  // carregar (não refaz o fetch à toa) — só re-mede.
+  if (tabId === 'tab-matriz' && window.matrizMedicao && window.matrizMedicao.ajustarSticky) {
+    requestAnimationFrame(() => window.matrizMedicao.ajustarSticky());
+  }
   // FABs da Medição só aparecem na aba Medição (#tab-matriz).
   if (window.medicaoFabs) window.medicaoFabs.setVisivel(tabId === 'tab-matriz');
 }
