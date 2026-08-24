@@ -236,11 +236,11 @@ body {
    perde a âncora e o cabeçalho rola pra fora. Altura = viewport menos topbar +
    filtros + faixa (recolhida) + barra de ações + bnav (+ safe-areas). Ajustável. */
 #mb-matriz .spreadsheet-frame {
-  /* --mb-bnav-h já embute a safe-area (border-box do .bnav) → NÃO subtrai env()
-     de novo (era o vão duplo, que também encurtava o frame). max() = piso seguro:
-     se a medição vier sem a safe-area, reserva pelo menos 48px+env do bnav. */
-  height: calc(100dvh - var(--mb-topo-h, 300px) - var(--mb-actions-h, 60px)
-               - max(var(--mb-bnav-h, 48px), 48px + env(safe-area-inset-bottom)));
+  /* Reserva SÓ a barra de ações (.mb-actions é position:fixed → overlay, fora do
+     fluxo, precisa do espaço). A bnav NÃO entra: é position:sticky (in-flow), então
+     a altura do .main já a exclui — descontá-la aqui reservava a bnav 2x e deixava
+     faixa fina. --mb-actions-h vai a 0 quando a barra some no "Todos" (medirAlturas). */
+  height: calc(100dvh - var(--mb-topo-h, 300px) - var(--mb-actions-h, 60px));
   overflow: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -390,11 +390,11 @@ body {
    Escopado em .grade-host: a mensagem "nenhum posto" (sem essa classe) não muda. */
 #mb-matriz-vazio.grade-host {
   display: flex; flex-direction: column;
-  /* Mesmo calc do #mb-matriz .spreadsheet-frame. --mb-bnav-h já embute a safe-area
-     (border-box do .bnav) → NÃO somar env() de novo; max() é o piso seguro se a
-     medição vier sem a safe-area. --mb-topo-h agora mede o host visível (ver medirAlturas). */
-  height: calc(100dvh - var(--mb-topo-h, 300px) - var(--mb-actions-h, 60px)
-               - max(var(--mb-bnav-h, 48px), 48px + env(safe-area-inset-bottom)));
+  /* Mesmo calc do #mb-matriz .spreadsheet-frame: reserva SÓ a barra de ações
+     (.mb-actions é fixed/overlay). A bnav NÃO entra — é sticky (in-flow), já
+     excluída pela altura do .main; descontá-la aqui reservava 2x e deixava faixa
+     fina. --mb-topo-h mede o host visível; --mb-actions-h vai a 0 no "Todos". */
+  height: calc(100dvh - var(--mb-topo-h, 300px) - var(--mb-actions-h, 60px));
   overflow: hidden;   /* o scroll acontece no .grade-scroll, não aqui */
 }
 #mb-matriz-vazio.grade-host .grade-head {
