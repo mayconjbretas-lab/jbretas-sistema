@@ -54,13 +54,9 @@
     <section class="scr active" id="s-medicao">
       <!-- Filtros: bandeira + posto lado a lado -->
       <div class="mb-filtros">
+        <!-- opções populadas por popularSelBandeiraMobile() a partir de postos.bandeira (banco) -->
         <select id="mb-bandeira" class="mb-posto mb-fil-band" onchange="onBandeiraChangeMobile()">
           <option value="">Todas</option>
-          <option value="Ipiranga">Ipiranga</option>
-          <option value="Vibra">Vibra</option>
-          <option value="Rio Branco">Rio Branco</option>
-          <option value="Ale">Ale</option>
-          <option value="Bandeira Branca">Bandeira Branca</option>
         </select>
         <select id="mb-posto" class="mb-posto mb-fil-posto" onchange="onPostoChangeMobile()">
           <option value="">Carregando postos...</option>

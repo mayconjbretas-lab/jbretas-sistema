@@ -94,11 +94,25 @@ async function carregarPostosMobile() {
     const resp = await apiFetch('/postos');
     TODOS_POSTOS = resp.postos || [];      // já vem com p.bandeira e p.id
     if (!TODOS_POSTOS.length) { sel.innerHTML = '<option value="">Nenhum posto</option>'; return; }
+    popularSelBandeiraMobile();   // opções de bandeira do BANCO (case exata) — não hardcoded
     popularSelPostoMobile();   // "Todos os postos" + os da bandeira atual
     onPostoChangeMobile();     // Todos → sem matriz + mensagem + faixa da REDE
   } catch (err) {
     sel.innerHTML = '<option value="">Erro ao carregar</option>';
   }
+}
+
+// Opções de bandeira do BANCO (postos.bandeira), não hardcoded no HTML — value
+// casa exato com o DB (MAIÚSCULO) e o filtro (p.bandeira === BANDEIRA_ATUAL)
+// volta a bater. Preserva a seleção atual se ainda existir; senão "Todas".
+function popularSelBandeiraMobile() {
+  const sel = document.getElementById('mb-bandeira');
+  if (!sel) return;
+  const bandeiras = [...new Set(TODOS_POSTOS.map(p => p.bandeira).filter(Boolean))].sort();
+  if (BANDEIRA_ATUAL && !bandeiras.includes(BANDEIRA_ATUAL)) BANDEIRA_ATUAL = '';
+  sel.innerHTML = '<option value="">Todas</option>' +
+    bandeiras.map(b => '<option value="' + esc(b) + '">' + esc(b) + '</option>').join('');
+  sel.value = BANDEIRA_ATUAL;
 }
 
 // #mb-posto = "Todos os postos" + postos da BANDEIRA_ATUAL (ou todos). Reseta pra Todos.

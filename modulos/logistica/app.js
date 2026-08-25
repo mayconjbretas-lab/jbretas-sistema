@@ -67,12 +67,27 @@ async function carregarPostos() {
     const resp = await apiFetch('/postos');
     TODOS_POSTOS = resp.postos || [];       // já vem com p.bandeira
     if (!TODOS_POSTOS.length) { sel.innerHTML = '<option value="">Nenhum posto</option>'; return; }
+    popularSelBandeira();   // opções de bandeira do BANCO (case exata) — não hardcoded
     popularSelPosto();   // "Todos os postos" + os da bandeira atual; reseta pra "Todos"
     onPostoChange();     // estado inicial: Todos → sem matriz + mensagem + faixa da REDE
   } catch (err) {
     sel.innerHTML = '<option value="">Erro ao carregar</option>';
     mostrarErroMatriz('Erro ao carregar postos: ' + err.message);
   }
+}
+
+// Opções de bandeira vindas do BANCO (postos.bandeira), não hardcoded no HTML.
+// Assim o value casa EXATAMENTE com o DB (hoje em MAIÚSCULO) e o filtro
+// client-side (p.bandeira === BANDEIRA_ATUAL) volta a bater. Preserva a seleção
+// atual se ainda existir; senão cai em "Todas".
+function popularSelBandeira() {
+  const sel = document.getElementById('sel-bandeira');
+  if (!sel) return;
+  const bandeiras = [...new Set(TODOS_POSTOS.map(p => p.bandeira).filter(Boolean))].sort();
+  if (BANDEIRA_ATUAL && !bandeiras.includes(BANDEIRA_ATUAL)) BANDEIRA_ATUAL = '';
+  sel.innerHTML = '<option value="">Todas</option>' +
+    bandeiras.map(b => '<option value="' + esc(b) + '">' + esc(b) + '</option>').join('');
+  sel.value = BANDEIRA_ATUAL;
 }
 
 // Popula #sel-posto com "Todos os postos" + os postos da BANDEIRA_ATUAL
