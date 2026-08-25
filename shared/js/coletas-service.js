@@ -164,6 +164,8 @@ async function buscarComparacaoDoDia({ dias = 15 } = {}) {
       return {
         nome,
         bandeira: (ultimo.bandeira && ultimo.bandeira !== '-') ? ultimo.bandeira : null,
+        // rede vem normalizada do master (GET /coletas junta concorrentes); '-' = sem rede.
+        rede: (ultimo.rede && ultimo.rede !== '-') ? ultimo.rede : null,
         registro: ultimo,
         desatualizado: ultimo.data !== hoje,
         registroOntem: registros.find(r => r.data === ontem) || null,

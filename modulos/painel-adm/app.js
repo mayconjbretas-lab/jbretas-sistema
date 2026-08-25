@@ -113,6 +113,7 @@ let G_CMP_FUEL = 'GC';
 let G_CMP_STRAT = 'avg';
 let G_CMP_REG = '';
 let G_CMP_BAND = '';
+let G_CMP_REDE = '';   // filtro de REDE do concorrente ('' = todas)
 let G_CMP_POSTO = '';
 let G_CMP_SO_MUDOU = false;
 let G_CMP_ABAIXO = false; // chip "abaixo do nosso" (independente do "acima")
@@ -146,13 +147,19 @@ function popularFiltrosComparar() {
   const selPosto = document.getElementById('cmp-posto');
   const selReg = document.getElementById('cmp-sup'); // id mantido; agora é filtro de REGIÃO
   const selBand = document.getElementById('cmp-band');
-  const bandas = [...new Set(MAP_POSTOS.map(p => p.banda))].sort();
+  const selRede = document.getElementById('cmp-rede');
+  // Bandeira e rede saem dos CONCORRENTES carregados (banco, via /coletas →
+  // concorrentes), NÃO do MAP_POSTOS estático. Só valores realmente presentes.
+  const conc = Object.values(G_COMPARACAO).flatMap(d => (d && d.concorrentes) || []);
+  const bandas = [...new Set(conc.map(c => c.bandeira).filter(Boolean))].sort();
+  const redes  = [...new Set(conc.map(c => c.rede).filter(Boolean))].sort();
   selPosto.innerHTML = '<option value="">Todos os postos</option>' +
     MAP_POSTOS.slice().sort((a, b) => a.ap.localeCompare(b.ap)).map(p => `<option value="${p.k}">${p.ap}</option>`).join('');
   selReg.innerHTML = '<option value="">Todas regiões</option>'
     + '<option value="metro">Metropolitana</option>'
     + '<option value="sjdr">São João del Rei</option>';
   selBand.innerHTML = '<option value="">Todas bandeiras</option>' + bandas.map(b => `<option value="${b}">${b}</option>`).join('');
+  if (selRede) selRede.innerHTML = '<option value="">Todas redes</option>' + redes.map(r => `<option value="${r}">${r}</option>`).join('');
   selPosto.dataset.populado = '1';
 }
 
@@ -303,6 +310,7 @@ function cmpSetFuel(key)  { G_CMP_FUEL  = key; renderComparar(); }
 function cmpSetStrat(key) { G_CMP_STRAT = key; renderComparar(); }
 function cmpSetReg(val)   { G_CMP_REG   = val; renderComparar(); }
 function cmpSetBand(val)  { G_CMP_BAND  = val; renderComparar(); }
+function cmpSetRede(val)  { G_CMP_REDE  = val; renderComparar(); }
 function cmpSetPosto(val) { G_CMP_POSTO = val; renderComparar(); }
 // Toggle: clicar no botão ativo desliga (volta pro alfabético).
 function cmpSetOrd(val)   { G_CMP_ORD = (G_CMP_ORD === val) ? '' : val; renderComparar(); }
@@ -834,18 +842,28 @@ function renderComparar() {
 
   const ordAtivo = (G_CMP_ORD === 'barato' || G_CMP_ORD === 'caro');
 
+  // Bandeira e REDE recortam os CONCORRENTES (não os nossos postos): o card do
+  // meu posto continua, somem as linhas de concorrente fora do grupo; posto sem
+  // nenhum concorrente no grupo some inteiro (no loop). Alimenta também as médias
+  // e a ordenação, pra comparar meu preço SÓ contra o grupo selecionado.
+  const filtroConcAtivo = !!(G_CMP_BAND || G_CMP_REDE);
+  const concPassa = (c) => (!G_CMP_BAND || c.bandeira === G_CMP_BAND) && (!G_CMP_REDE || c.rede === G_CMP_REDE);
+  const dadoFiltrado = (k) => {
+    const d = G_COMPARACAO[k] || { proprio: null, proprioDesatualizado: false, concorrentes: [] };
+    return filtroConcAtivo ? { ...d, concorrentes: (d.concorrentes || []).filter(concPassa) } : d;
+  };
+
   const postos = MAP_POSTOS.filter(p => {
     if (G_CMP_POSTO && p.k !== G_CMP_POSTO) return false;
     if (G_CMP_REG  && p.reg  !== G_CMP_REG)  return false;
-    if (G_CMP_BAND && p.banda !== G_CMP_BAND) return false;
     return true;
   });
   if (ordAtivo) {
     // Ranking pelo MELHOR preço do card no fuel ativo (min no 'barato', max no
     // 'caro'). Cards sem preço nenhum no fuel vão pro fim; entre eles, alfabético.
     postos.sort((a, b) => {
-      const pa = cmpMelhorPrecoCard(G_COMPARACAO[a.k], fuel, G_CMP_ORD);
-      const pb = cmpMelhorPrecoCard(G_COMPARACAO[b.k], fuel, G_CMP_ORD);
+      const pa = cmpMelhorPrecoCard(dadoFiltrado(a.k), fuel, G_CMP_ORD);
+      const pb = cmpMelhorPrecoCard(dadoFiltrado(b.k), fuel, G_CMP_ORD);
       if (pa === null && pb === null) return a.ap.localeCompare(b.ap);
       if (pa === null) return 1;
       if (pb === null) return -1;
@@ -861,10 +879,15 @@ function renderComparar() {
   let totMudancas = 0, totOmitidas = 0; // só usados com o filtro ligado
 
   postos.forEach(posto => {
-    const dado = G_COMPARACAO[posto.k] || { proprio: null, proprioDesatualizado: false, concorrentes: [] };
+    const dado = dadoFiltrado(posto.k);
+
+    // Filtro de grupo ativo e sem NENHUM concorrente no grupo → card some inteiro
+    // (e o posto não entra nas médias do rodapé).
+    if (filtroConcAtivo && !dado.concorrentes.length) return;
 
     // Agregados do rodapé (Minha média / Média concorrência) continuam no
-    // combustível GLOBAL (G_CMP_FUEL) — a matriz não altera isso.
+    // combustível GLOBAL (G_CMP_FUEL) — a matriz não altera isso. Com filtro
+    // ligado, refletem só o grupo selecionado (dado já vem recortado).
     const glob = cmpCalcCard(dado, fuel);
     if (glob.ownVal !== null) { somaMinha += glob.ownVal; contMinha++; }
     glob.competidores.forEach(c => { somaConc += c.preco; contConc++; });

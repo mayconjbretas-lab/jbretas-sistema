@@ -117,6 +117,12 @@
                 <option value="">Todas bandeiras</option>
               </select>
             </div>
+            <div>
+              <label class="filtro-lbl">Rede</label>
+              <select class="sel" id="cmp-rede" style="margin-bottom:0" onchange="cmpSetRede(this.value)">
+                <option value="">Todas redes</option>
+              </select>
+            </div>
           </div>
           <label style="display:flex;align-items:center;gap:.4rem;font-size:.74rem;color:var(--tx2);margin:.45rem 0">
             <input type="checkbox" id="cmp-so-mudou" onchange="cmpToggleSoMudou(this)"> Só quem mudou desde ontem
