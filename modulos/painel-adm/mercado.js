@@ -7,8 +7,9 @@
 // camada de alias do painel-adm.css.
 // Expõe window.renderMercado(sec).
 //
-// PARTE (a): só o LANÇAMENTO. O painel (gráfico + termômetro +
-// ranking) entra na parte (b), no lugar marcado por #mrc-painel.
+// Duas metades: LANÇAMENTO dos preços de bandeira branca do dia, e
+// PAINEL (#mrc-painel) com um velocímetro por combustível + ranking.
+// Sem lib de gráfico — os velocímetros são SVG inline.
 //
 // GUARD PRÓPRIO (não reusa o do custo-margem): o custo-margem decide
 // leitura por HOST (readonly fora de /logistica/), o que tornaria esta
@@ -65,7 +66,6 @@
   let _pComb  = null;           // combustível ativo — controla gráfico, termômetro e ranking
   let _pA     = MRC_MENOR;                     // esquerda: o piso do mercado
   let _pB     = MRC_PFX_BAND + 'IPIRANGA';     // direita: minha bandeira
-  let _chart  = null;           // instância Chart.js (destruída antes de recriar)
 
   // ── Helpers ──────────────────────────────────────────────────────
   const esc = (s) => String(s == null ? '' : s)
@@ -99,10 +99,6 @@
   function brData(iso) {
     const p = String(iso || '').split('-');
     return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(iso || '');
-  }
-  function brDataCurta(iso) {              // eixo X do gráfico: "26/08"
-    const p = String(iso || '').split('-');
-    return p.length === 3 ? p[2] + '/' + p[1] : String(iso || '');
   }
   function podeEditar() {
     const u = (typeof getUsuarioLogado === 'function') ? getUsuarioLogado() : null;
@@ -164,24 +160,29 @@
       '.mrc-cmp-box select{font-family:var(--sans);font-size:.8rem;color:var(--tx);background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:.4rem .5rem;outline:none}' +
       '.mrc-cmp-box select:focus{border-color:var(--ac)}' +
       '.mrc-cmp-x{font-family:var(--mono);font-size:1rem;color:var(--tx3);padding-bottom:.45rem}' +
-      // Chips de combustível — controlam gráfico + termômetro + ranking.
-      '.mrc-fuels{display:flex;gap:6px;flex-wrap:wrap;margin-top:.9rem}' +
+      // Nota sob os seletores: a dupla vale pros 5 velocímetros + legenda das faixas.
+      '.mrc-cmp-nota{font-size:.66rem;color:var(--tx3);margin-top:.7rem}' +
+      // Chips de combustível — controlam SÓ o ranking. Vivem no cabeçalho do
+      // card de ranking, não no topo (ver comentário no renderPainel).
+      '.mrc-fuels{display:flex;gap:6px;flex-wrap:wrap}' +
       '.mrc-chip{background:var(--sf2);border:1px solid var(--bd);border-radius:20px;padding:5px 14px;font-size:.7rem;font-family:var(--mono);font-weight:700;color:var(--tx3);cursor:pointer;transition:all .15s}' +
       '.mrc-chip:hover{border-color:var(--bd2);color:var(--tx2)}' +
       '.mrc-chip.on{background:var(--acd);border-color:var(--ac);color:var(--ac)}' +
-      // Corpo em duas colunas: gráfico (elástico) + termômetro (fixo). Abaixo de
-      // 1040px empilha, senão o velocímetro come a largura do gráfico.
-      '.mrc-grid2{display:grid;grid-template-columns:1fr 300px;gap:.9rem;align-items:start}' +
-      '@media(max-width:1040px){.mrc-grid2{grid-template-columns:1fr}}' +
-      // Altura DEFINIDA no pai: Chart.js com maintainAspectRatio:false precisa dela.
-      '.mrc-chart-box{position:relative;height:300px}' +
-      // ── Termômetro ───────────────────────────────────────────────
+      '.mrc-rank-hdr{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:.9rem}' +
+      // ── Velocímetros: um por combustível, todos na mesma tela ────
+      // auto-fit: 5 em linha no desktop largo, quebra sozinho em telas menores
+      // (em 800px ficam 3 + 2) sem esmagar o SVG.
+      '.mrc-gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(206px,1fr));gap:.9rem}' +
+      '.mrc-gcard{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:.8rem .7rem 1rem;display:flex;flex-direction:column}' +
+      '.mrc-gcard-hdr{display:flex;flex-direction:column;gap:1px;margin-bottom:.3rem;text-align:center}' +
+      '.mrc-gcard-cod{font-family:var(--mono);font-size:.82rem;font-weight:700;color:var(--tx)}' +
+      '.mrc-gcard-nome{font-size:.58rem;color:var(--tx3)}' +
+      // Estado vazio DENTRO do card: o combustível não some da tela.
+      '.mrc-gvazio{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;font-family:var(--mono);font-size:.66rem;color:var(--tx3);padding:1.8rem .4rem;line-height:1.5}' +
       '.mrc-gauge-wrap{display:flex;flex-direction:column;align-items:center;gap:.2rem}' +
-      '.mrc-gauge svg{display:block;width:100%;height:auto;max-width:270px}' +
-      '.mrc-g-val{font-family:var(--mono);font-size:1.7rem;font-weight:700;line-height:1.1}' +
-      '.mrc-g-cap{font-size:.66rem;color:var(--tx3);text-align:center;line-height:1.45;padding:0 .3rem}' +
-      '.mrc-g-cap b{color:var(--tx2)}' +
-      '.mrc-g-precos{display:flex;gap:.6rem;width:100%;margin-top:.7rem;border-top:1px solid var(--bd);padding-top:.7rem}' +
+      '.mrc-gauge svg{display:block;width:100%;height:auto;max-width:230px}' +
+      '.mrc-g-val{font-family:var(--mono);font-size:1.5rem;font-weight:700;line-height:1.1}' +
+      '.mrc-g-precos{display:flex;gap:.5rem;width:100%;margin-top:.6rem;border-top:1px solid var(--bd);padding-top:.6rem}' +
       '.mrc-g-p{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}' +
       '.mrc-g-p-nome{font-size:.6rem;color:var(--tx3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       '.mrc-g-p-val{font-family:var(--mono);font-size:.95rem;font-weight:700;color:var(--tx)}' +
@@ -434,28 +435,47 @@
   // mostraria duas linhas "RIO BRANCO" idênticas e o seletor duas opções de
   // mesmo nome. SÓ texto — não muda ordenação, valor nem id.
   const rotuloEnt = (id) => nomeEnt(id) + (ehBandeira(id) ? ' ·minha·' : '');
-  // Valor de uma entidade no último dia COM dado do combustível ativo.
-  function valorAtual(id) {
-    const c = combAtual();
+  // Valor de uma entidade no último dia COM dado de UM combustível. Recebe o
+  // combustível por parâmetro (não usa _pComb): os 5 velocímetros da tela leem
+  // combustíveis diferentes com a MESMA dupla selecionada.
+  function valorEm(comb, id) {
+    const c = (_pData && _pData.combustiveis) ? _pData.combustiveis[comb] : null;
     if (!c || c.ultimo_idx == null || c.ultimo_idx < 0) return null;
     const s = c.series[id];
     return s ? s[c.ultimo_idx] : null;
   }
+  // Entidades de TODOS os combustíveis (união). A dupla dos seletores vale para
+  // os 5 velocímetros, então precisa ser escolhível mesmo que só exista em
+  // alguns — onde não existir, aquele velocímetro mostra estado vazio.
+  function entidadesGlobais() {
+    const vistos = new Set();
+    Object.keys((_pData && _pData.combustiveis) || {}).forEach(cb => {
+      const c = _pData.combustiveis[cb];
+      Object.keys((c && c.series) || {}).forEach(id => {
+        if (!ehDerivada(id) && !ehIdReservado(id)) vistos.add(id);
+      });
+    });
+    return vistos;
+  }
 
   // Opções dos seletores: derivadas num optgroup (são referência, não empresa) e
-  // as demais ORDENADAS DO MENOR PARA O MAIOR preço do combustível ativo.
-  // SÓ O NOME no rótulo — sem preço: o preço de cada uma já está no ranking
-  // abaixo, e a ordem da lista já mostra quem é mais barato.
-  // Entidade com série mas sem preço no último dia vai pro fim, alfabética.
+  // as demais ORDENADAS DO MENOR PARA O MAIOR preço do combustível EM FOCO
+  // (_pComb, o do ranking). SÓ O NOME no rótulo — sem preço: os preços estão no
+  // ranking abaixo e nos velocímetros.
+  // A lista sai da UNIÃO de todos os combustíveis, não só do que está em foco:
+  // a dupla vale para os 5 velocímetros, então uma distribuidora que só tem
+  // preço no ET precisa ser escolhível com o GC em foco. Quem não aparece no
+  // ranking do foco entra no fim, em ordem alfabética.
   function opcoesHtml(selecionado) {
+    if (!_pData) return '';
     const c = combAtual();
-    if (!c) return '';
-    const ranking = c.ranking || [];
+    const ranking = (c && c.ranking) || [];
     // filter(r.id): linha de ranking sem id (payload de outra versão da API) não
     // vira <option value="undefined">.
     const ranked = ranking.filter(r => r && r.id).map(r => r.id);
-    const resto = Object.keys(c.series || {})
-      .filter(id => !ehDerivada(id) && !ehIdReservado(id) && ranked.indexOf(id) < 0)
+    const todas = entidadesGlobais();
+    const resto = [...todas]
+      .filter(id => ranked.indexOf(id) < 0)
       .sort((a, b) => nomeEnt(a).localeCompare(nomeEnt(b)));
     const opt = (id, rotulo) => '<option value="' + esc(id) + '"' +
       (id === selecionado ? ' selected' : '') + '>' + esc(rotulo) + '</option>';
@@ -486,10 +506,23 @@
   // 0¢ = 180° (esquerda) … GAUGE_MAX¢ = 0° (direita).
   const angDe = (cent) => 180 - (Math.min(GAUGE_MAX, Math.max(0, cent)) / GAUGE_MAX) * 180;
 
-  function gaugeHtml() {
-    const vA = valorAtual(_pA), vB = valorAtual(_pB);
+  // UM velocímetro para UM combustível, com a dupla global (_pA × _pB). Card
+  // sempre renderiza: combustível sem preço dos dois lados mostra estado vazio
+  // em vez de sumir — a ausência é informação (não lancei ainda).
+  function gaugeCard(comb) {
+    const cab = '<div class="mrc-gcard-hdr">' +
+        '<span class="mrc-gcard-cod">' + esc(comb) + '</span>' +
+        '<span class="mrc-gcard-nome">' + esc(NOME_COMB[comb] || '') + '</span>' +
+      '</div>';
+    return '<div class="mrc-gcard">' + cab + gaugeHtml(comb) + '</div>';
+  }
+
+  function gaugeHtml(comb) {
+    const vA = valorEm(comb, _pA), vB = valorEm(comb, _pB);
     if (vA == null || vB == null) {
-      return '<div class="mrc-placeholder">Sem preço dos dois lados no último dia com dado.</div>';
+      const qual = (vA == null && vB == null) ? 'nenhum dos dois lados'
+                 : (vA == null ? rotuloEnt(_pA) : rotuloEnt(_pB));
+      return '<div class="mrc-gvazio">sem preço de ' + esc(qual) + '</div>';
     }
     // diff = quanto o lado DIREITO está acima do ESQUERDO. A ordem dos exemplos
     // do negócio é "branca × minha bandeira", então positivo = minha bandeira
@@ -513,14 +546,16 @@
           '" stroke="' + cor + '" stroke-width="4" stroke-linecap="round"/>' +
         '<circle cx="' + cx + '" cy="' + cy + '" r="6" fill="' + cor + '"/>' +
       '</svg>';
+    // Sinal no valor: '+' quando o lado DIREITO está mais caro, '−' quando mais
+    // barato. Com 5 velocímetros na tela a legenda longa ("X está Y acima de Z")
+    // repetiria 5 vezes a mesma frase — quem compara com quem já está nos dois
+    // seletores do topo. rotuloEnt (não nomeEnt) nos nomes dos preços: sem a
+    // marca ·minha·, mercado e bandeira RIO BRANCO ficariam idênticos.
+    const sinal = (cent > 0 ? '+' : (cent < 0 ? '−' : ''));
     return '<div class="mrc-gauge-wrap">' +
       '<div class="mrc-gauge">' + svg + '</div>' +
-      '<div class="mrc-g-val" style="color:' + cor + '">' + esc(fmtCent(Math.abs(cent))) + '¢</div>' +
-      // rotuloEnt (não nomeEnt): com mercado RIO BRANCO de um lado e bandeira
-      // RIO BRANCO do outro, a legenda leria "RIO BRANCO está X acima de
-      // RIO BRANCO". A marca ·minha· desfaz a ambiguidade.
-      '<div class="mrc-g-cap"><b>' + esc(rotuloEnt(_pB)) + '</b> está ' + esc(fmtCent(Math.abs(cent))) + '¢ ' +
-        (cent >= 0 ? 'acima' : 'abaixo') + ' de <b>' + esc(rotuloEnt(_pA)) + '</b></div>' +
+      '<div class="mrc-g-val" style="color:' + cor + '">' +
+        sinal + esc(fmtCent(Math.abs(cent))) + '¢</div>' +
       '<div class="mrc-g-precos">' +
         '<div class="mrc-g-p"><div class="mrc-g-p-nome">' + esc(rotuloEnt(_pA)) + '</div>' +
           '<div class="mrc-g-p-val">' + esc(fmtTela(vA)) + '</div></div>' +
@@ -549,75 +584,6 @@
     }).join('') + '</div>';
   }
 
-  // ── Gráfico (Chart.js vendorizado em shared/vendor) ──────────────
-  // Token CSS resolvido em tempo de render, então o gráfico acompanha o tema
-  // claro/escuro a cada re-render (troca de combustível, seletor, recarga).
-  function tok(nome) {
-    const v = getComputedStyle(document.documentElement).getPropertyValue(nome).trim();
-    return v || '#888888';
-  }
-  // Terceira série = referência de mercado, na ordem de preferência abaixo:
-  // pega a PRIMEIRA que não estiver já num dos dois seletores, então nunca
-  // desenha linha repetida. "Menor do dia" segue sendo a preferida (é o piso do
-  // mercado). Com 3 candidatas e 2 seletores sempre sobra uma, então o gráfico
-  // agora tem sempre 3 séries — antes, com só 2 candidatas, escolher as duas
-  // derivadas deixava o gráfico com 2.
-  function terceiraSerie() {
-    const pref = [MRC_MENOR, MRC_MEDIA3, MRC_MEDIATODAS];
-    for (const id of pref) if (_pA !== id && _pB !== id) return id;
-    return null;
-  }
-  function desenharChart() {
-    // Sem destroy o Chart.js lança "Canvas is already in use" no re-render.
-    if (_chart) { _chart.destroy(); _chart = null; }
-    const cv = document.getElementById('mrc-canvas');
-    const c = combAtual();
-    if (!cv || !c) return;
-    if (typeof Chart === 'undefined') {
-      // Pelo id, não por parentNode: se a lib não carregou, o que importa é a
-      // mensagem aparecer, sem depender de travessia do DOM.
-      const box = document.getElementById('mrc-chart-box');
-      if (box) {
-        box.innerHTML = '<div class="mrc-placeholder">Chart.js não carregou ' +
-          '(shared/vendor/chart.umd.min.js).</div>';
-      }
-      return;
-    }
-    const ref = terceiraSerie();
-    const defs = [
-      { id: _pA, cor: tok('--ac'),  dash: [] },
-      { id: _pB, cor: tok('--inf'), dash: [] },
-    ];
-    if (ref) defs.push({ id: ref, cor: tok('--tx3'), dash: [5, 4] });
-    const grade = tok('--bd'), texto = tok('--tx3');
-    _chart = new Chart(cv, {
-      type: 'line',
-      data: {
-        labels: (_pData.datas || []).map(brDataCurta),
-        datasets: defs.filter(d => c.series[d.id]).map(d => ({
-          label: nomeEnt(d.id),
-          data: c.series[d.id],
-          borderColor: d.cor, backgroundColor: d.cor,
-          borderWidth: 2, borderDash: d.dash,
-          pointRadius: 0, pointHoverRadius: 4, tension: 0.25,
-          spanGaps: true,   // dia sem lançamento não corta a linha
-        })),
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: { labels: { color: texto, boxWidth: 10, font: { size: 10 } } },
-          tooltip: { callbacks: { label: (ctx) => ctx.dataset.label + ': ' + fmtTela(ctx.parsed.y) } },
-        },
-        scales: {
-          x: { grid: { color: grade }, ticks: { color: texto, font: { size: 9 }, maxRotation: 0, autoSkipPadding: 16 } },
-          y: { grid: { color: grade }, ticks: { color: texto, font: { size: 9 }, callback: (v) => fmtTela(v) } },
-        },
-      },
-    });
-  }
-
   function renderPainel() {
     const el = document.getElementById('mrc-painel');
     if (!el) return;
@@ -625,21 +591,27 @@
     const c = combAtual();
     if (!c) { el.innerHTML = '<div class="mrc-vazio">Sem dados de mercado no período.</div>'; return; }
 
-    // Seleção que não existe NESTE combustível volta para um default utilizável
-    // (senão o <select> mostraria a 1ª opção enquanto o estado apontava pra outra).
-    const validos = Object.keys(c.series || {});
-    if (validos.indexOf(_pA) < 0) _pA = MRC_MENOR;
-    if (validos.indexOf(_pB) < 0) {
+    // A dupla vale para os 5 velocímetros, então a validade é GLOBAL (união de
+    // todos os combustíveis), não por combustível: uma distribuidora que só tem
+    // preço no ET continua escolhível com o GC em foco — o velocímetro do GC
+    // mostra estado vazio, que é informação, não erro.
+    const validos = entidadesGlobais();
+    const derivOk = (id) => ehDerivada(id);
+    if (!validos.has(_pA) && !derivOk(_pA)) _pA = MRC_MENOR;
+    if (!validos.has(_pB) && !derivOk(_pB)) {
       _pB = null;
-      for (const b of (_pData.bandeiras || [])) if (c.series[b.id]) { _pB = b.id; break; }
-      if (!_pB) _pB = ((c.ranking || [])[0] && c.ranking[0].id) || MRC_MEDIA3;
+      for (const b of (_pData.bandeiras || [])) if (validos.has(b.id)) { _pB = b.id; break; }
+      if (!_pB) _pB = MRC_MEDIA3;
     }
 
+    // Chips no CABEÇALHO DO RANKING, não no topo: eles controlam SÓ o ranking
+    // agora que os 5 velocímetros aparecem juntos. No topo, ao lado dos
+    // seletores, iam ser lidos como "filtra os velocímetros" e o clique pareceria
+    // não fazer nada.
     const chips = Object.keys(_pData.combustiveis || {}).map(k =>
       '<button class="mrc-chip' + (k === _pComb ? ' on' : '') + '" onclick="__mrcComb(\'' + esc(k) + '\')">' +
       esc(k) + '</button>'
     ).join('');
-    const dias = (_pData.periodo && _pData.periodo.dias) || '';
     const ultima = c.ultima_data ? ' — ' + brData(c.ultima_data) : '';
 
     el.innerHTML =
@@ -655,23 +627,20 @@
             '<select onchange="__mrcCmp(\'b\', this.value)">' + opcoesHtml(_pB) + '</select>' +
           '</div>' +
         '</div>' +
-        '<div class="mrc-fuels">' + chips + '</div>' +
+        '<div class="mrc-cmp-nota">Vale para os cinco combustíveis abaixo. ' +
+          'Verde até ' + FAIXA_OK + '¢ · âmbar ' + FAIXA_OK + '–' + FAIXA_ATN + '¢ · vermelho acima de ' + FAIXA_ATN + '¢.</div>' +
       '</div>' +
-      '<div class="mrc-grid2" style="margin-top:.9rem">' +
-        '<div class="mrc-card">' +
-          '<div class="mrc-card-title">Evolução — ' + esc(_pComb) + ' · ' + esc(String(dias)) + ' dias</div>' +
-          '<div class="mrc-chart-box" id="mrc-chart-box"><canvas id="mrc-canvas"></canvas></div>' +
-        '</div>' +
-        '<div class="mrc-card">' +
-          '<div class="mrc-card-title">Diferença' + esc(ultima) + '</div>' +
-          gaugeHtml() +
-        '</div>' +
+      // Um velocímetro por combustível, na ordem do backend (GC GA ET S10 S500).
+      '<div class="mrc-gauges">' +
+        Object.keys(_pData.combustiveis || {}).map(gaugeCard).join('') +
       '</div>' +
-      '<div class="mrc-card" style="margin-top:.9rem">' +
-        '<div class="mrc-card-title">Ranking ' + esc(_pComb) + esc(ultima) + '</div>' +
+      '<div class="mrc-card">' +
+        '<div class="mrc-rank-hdr">' +
+          '<div class="mrc-card-title" style="margin:0">Ranking ' + esc(_pComb) + esc(ultima) + '</div>' +
+          '<div class="mrc-fuels">' + chips + '</div>' +
+        '</div>' +
         rankHtml() +
       '</div>';
-    desenharChart();
   }
 
   // ── Coleta do payload ────────────────────────────────────────────
@@ -813,7 +782,6 @@
     injetarEstilo();
     // Guard de largura: a grade de lançamento não cabe em tela estreita.
     if (window.innerWidth < MIN_LARGURA) {
-      if (_chart) { _chart.destroy(); _chart = null; }   // canvas vai embora com o innerHTML
       sec.innerHTML = '<div class="mrc-wrap">' +
         (window.navCustoHTML ? window.navCustoHTML('mercado') : '') +
         '<div class="mrc-vazio">O Mercado é só na versão desktop — são 20 preços por dia.<br>' +
