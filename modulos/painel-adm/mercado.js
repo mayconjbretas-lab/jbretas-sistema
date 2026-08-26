@@ -55,6 +55,7 @@
   };
 
   let _shellPronto = false;
+  let _modo        = null;      // 'completo' (lançamento+painel) | 'painel' (leitura)
   let _dataISO     = null;
   let _combs       = [];        // códigos, do backend
   let _distrs      = [];        // distribuidoras canônicas, do backend
@@ -109,11 +110,20 @@
   // ── CSS (escopo .mrc-*, tokens curtos) ───────────────────────────
   function injetarEstilo() {
     if (document.getElementById('mercado-style')) return;
+    // No admin mobile o .scr já tem padding próprio (.7rem); somado ao do wrap
+    // sobrariam ~320px dos 380. Detecta o host pela AUSÊNCIA do token LONGO: o
+    // admin.css não declara --surface global (só escopado em #s-medicao/#s-kpi),
+    // o painel-adm.css declara via alias. Mesmo truque do fornecedores.js.
+    // NÃO declaramos alias nenhum aqui: este módulo usa só tokens CURTOS
+    // (--sf/--bd/--ac/--tx…), que o admin.css já tem no :root — nada a vazar.
+    const emAdmin = getComputedStyle(document.documentElement)
+      .getPropertyValue('--surface').trim() === '';
     const st = document.createElement('style');
     st.id = 'mercado-style';
     st.textContent =
       '#s-mercado{height:auto;min-height:100%}' +
       '#s-mercado.active{display:block}' +
+      (emAdmin ? '.scr .mrc-wrap{padding:.2rem 0}' : '') +
       '.mrc-wrap{flex:1;min-height:0;padding:1.1rem 1.2rem;display:flex;flex-direction:column;gap:1rem}' +
       '.mrc-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}' +
       '.mrc-title{font-family:var(--mono);font-size:1rem;font-weight:700;color:var(--tx)}' +
@@ -196,13 +206,45 @@
       '.mrc-rank-nome{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx2)}' +
       '.mrc-rank-l.band .mrc-rank-nome{color:var(--ac);font-weight:700}' +
       '.mrc-rank-preco{font-family:var(--mono);font-weight:700;color:var(--tx)}' +
-      '.mrc-rank-d{font-family:var(--mono);font-size:.68rem;text-align:right;color:var(--tx3)}';
+      '.mrc-rank-d{font-family:var(--mono);font-size:.68rem;text-align:right;color:var(--tx3)}' +
+
+      // ── Estreito (admin mobile, ~380px) ──────────────────────────
+      // Único bloco específico de mobile. Nada de JS: o shell só-painel é o
+      // mesmo componente, só mais apertado.
+      '@media(max-width:520px){' +
+        // Velocímetros 2×2 (GC ET / S10 S500, na ordem do backend). O auto-fit
+        // com minmax(206px) daria 1 coluna em 380px e empilharia os 4.
+        '.mrc-gauges{grid-template-columns:1fr 1fr;gap:.5rem}' +
+        '.mrc-gcard{padding:.6rem .4rem .7rem}' +
+        '.mrc-gauge svg{max-width:150px}' +
+        '.mrc-g-val{font-size:1.15rem}' +
+        '.mrc-g-precos{gap:.3rem;margin-top:.45rem;padding-top:.45rem}' +
+        '.mrc-g-p-nome{font-size:.52rem}' +
+        '.mrc-g-p-val{font-size:.8rem}' +
+        '.mrc-gvazio{padding:1.1rem .3rem;font-size:.6rem}' +
+        // Os dois seletores lado a lado com o × entre eles: o min-width de 190px
+        // somava 380+ e os jogava em linhas separadas.
+        '.mrc-cmp{gap:.4rem;flex-wrap:nowrap}' +
+        '.mrc-cmp-box{min-width:0}' +
+        '.mrc-cmp-box select{font-size:.72rem;padding:.35rem .3rem}' +
+        '.mrc-cmp-x{padding-bottom:.4rem;font-size:.8rem}' +
+        // Ranking: aperta colunas e gap em vez de esconder o Δ — o delta em ¢ é
+        // metade da informação da linha. O nome corta com ellipsis (já tem).
+        '.mrc-rank-l{grid-template-columns:20px 1fr auto 52px;gap:.35rem;padding:.35rem .3rem;font-size:.72rem}' +
+        '.mrc-rank-hdr{gap:.5rem}' +
+        '.mrc-chip{padding:4px 10px;font-size:.64rem}' +
+      '}';
     document.head.appendChild(st);
   }
 
-  // ── Shell ────────────────────────────────────────────────────────
-  function montarShell(sec) {
-    injetarEstilo();
+  // ── Shells ───────────────────────────────────────────────────────
+  // DOIS shells, UM núcleo. Tudo abaixo dos shells (carregarPainel, opcoesHtml,
+  // entidadesGlobais, gaugeCard, gaugeHtml, rankHtml, corFaixa, centavos, os
+  // handlers e o estado) é compartilhado sem uma linha duplicada — o que muda é
+  // só QUAIS blocos entram no DOM.
+
+  // COMPLETO (painel-adm em tela larga): lançamento + painel.
+  function montarShellCompleto(sec) {
     sec.innerHTML =
       '<div class="mrc-wrap">' +
         '<div class="mrc-head">' +
@@ -219,7 +261,20 @@
         '<div id="mrc-lanc"></div>' +
         '<div id="mrc-painel"></div>' +
       '</div>';
-    _shellPronto = true;
+  }
+
+  // SÓ-PAINEL (tela estreita — admin mobile): leitura.
+  // SEM seletor de data: é tela de bater o olho de manhã, e o painel já mostra o
+  // último dia COM dado de cada combustível. Outro dia se vê no desktop.
+  // SEM botão de lançar e SEM grade: o lançamento segue exclusivo do painel-adm
+  // em tela larga (são 16 preços — não se digita isso no celular).
+  function montarShellPainel(sec) {
+    sec.innerHTML =
+      '<div class="mrc-wrap">' +
+        '<div class="mrc-head"><div class="mrc-title">Mercado</div></div>' +
+        (window.navCustoHTML ? window.navCustoHTML('mercado') : '') +
+        '<div id="mrc-painel"></div>' +
+      '</div>';
   }
 
   function msg(texto, classe) {
@@ -783,21 +838,27 @@
   };
 
   // ── Entrada pública ──────────────────────────────────────────────
+  // Entrada única dos DOIS hosts (painel-adm desktop e admin mobile). O modo sai
+  // da LARGURA, não do host: o lançamento precisa de tela larga, o painel não.
+  // Em tela estreita entra o shell só-leitura — antes era uma tela de bloqueio,
+  // que virava beco sem saída no celular.
   window.renderMercado = function (sec) {
     if (!sec) return;
     injetarEstilo();
-    // Guard de largura: a grade de lançamento não cabe em tela estreita.
-    if (window.innerWidth < MIN_LARGURA) {
-      sec.innerHTML = '<div class="mrc-wrap">' +
-        (window.navCustoHTML ? window.navCustoHTML('mercado') : '') +
-        '<div class="mrc-vazio">O Mercado é só na versão desktop — são 20 preços por dia.<br>' +
-        'Abra o painel num computador para lançar e ver o painel.</div>' +
-      '</div>';
-      _shellPronto = false;   // força remontar o shell ao voltar pro desktop
-      return;
+    const modo = (window.innerWidth >= MIN_LARGURA) ? 'completo' : 'painel';
+    // Remonta quando o MODO muda (girar o aparelho, redimensionar a janela): os
+    // dois shells têm DOM diferente, então reaproveitar o anterior deixaria
+    // #mrc-lanc órfão num sentido e ausente no outro.
+    if (!_shellPronto || _modo !== modo || !sec.querySelector('.mrc-wrap')) {
+      (modo === 'completo' ? montarShellCompleto : montarShellPainel)(sec);
+      _modo = modo;
+      _shellPronto = true;
     }
-    if (!_shellPronto || !sec.querySelector('.mrc-wrap')) montarShell(sec);
-    if (!_dataISO) _dataISO = hojeISO();
-    carregar();
+    if (modo === 'completo') {
+      if (!_dataISO) _dataISO = hojeISO();
+      carregar();          // dia (lançamento) + painel
+    } else {
+      carregarPainel();    // só o painel
+    }
   };
 })();
