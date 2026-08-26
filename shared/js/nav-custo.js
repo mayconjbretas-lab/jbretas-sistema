@@ -10,7 +10,15 @@
     { id: 'compra',    sec: 's-compra',    icone: '\u{1F9FE}', rotulo: 'Compra',       render: 'renderCompra', glow: true },
     { id: 'forn',      sec: 's-forn',      icone: '\u{1F4CA}', rotulo: 'Fornecedores', render: 'renderFornecedores' },
     { id: 'simulador', sec: 's-simulador', icone: '\u2696\uFE0F', rotulo: 'Simulador', render: 'renderSimulador' },
+    // Mercado de custo de compra (bandeira branca). desktopOnly: lancar 20 precos
+    // por dia nao cabe em celular, entao no admin mobile o botao nem e renderizado
+    // (em vez de ficar um botao morto). Ver modulos/painel-adm/mercado.js.
+    { id: 'mercado',   sec: 's-mercado',   icone: '\u{1F3F7}\uFE0F', rotulo: 'Mercado', render: 'renderMercado', desktopOnly: true },
   ];
+
+  // Largura minima para as telas marcadas desktopOnly. Casa com o MIN_LARGURA
+  // do mercado.js, que tem o mesmo guard na entrada.
+  var MIN_DESKTOP = 900;
 
   var estiloInjetado = false;
   function injetarEstilo() {
@@ -34,6 +42,8 @@
   window.navCustoHTML = function (ativa) {
     injetarEstilo();
     return '<div class="navc">' + TELAS.map(function (t) {
+      // Tela so-desktop em viewport estreita: nao renderiza o botao.
+      if (t.desktopOnly && window.innerWidth < MIN_DESKTOP) return '';
       var pronta = (typeof window[t.render] === 'function');
       return '<button class="navc-btn' + (t.id === ativa ? ' on' : '') + '"' +
         (pronta ? '' : ' disabled') +
