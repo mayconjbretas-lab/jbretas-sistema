@@ -754,6 +754,14 @@
     if (status === 413) return 'Arquivo maior que 7 MB. Reduza a planilha e importe de novo.';
     if (status === 400) return base ? ('Não foi possível ler a planilha: ' + base) : 'O arquivo não é um .xlsx válido.';
     if (status === 409) return 'Importação bloqueada pelos avisos da planilha.';
+    // 429: este wrapper não passa pelo apiFetch, então a mensagem de rate limit
+    // precisa existir aqui também. `retry_apos` vem no corpo (ver handler429 na API).
+    if (status === 429) {
+      const seg = Number(json && json.retry_apos) || 0;
+      const espera = seg <= 0 ? ''
+        : (seg >= 60 ? ' Tente em ' + Math.ceil(seg / 60) + ' min.' : ' Tente em ' + seg + 's.');
+      return (base || 'Muitas requisições. Aguarde um instante.') + espera;
+    }
     return base ? ('Erro: ' + base) : ('Erro inesperado (HTTP ' + status + ').');
   }
 

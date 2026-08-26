@@ -61,6 +61,26 @@ async function apiFetch(path, options = {}, _jaTentouRefresh = false) {
     throw new Error('Sessão expirada');
   }
 
+  // 429 = rate limit. Tratado AQUI, explicitamente, e não pelo genérico abaixo:
+  // não é para "consertar" o caminho de sessão (o bloco 401 acima já casa por
+  // igualdade EXATA, então 429 nunca entrou nele, e o jbretasRefresh só limpa a
+  // sessão em 401/403). É para duas coisas concretas:
+  //  1) mensagem clara e SEMPRE presente, mesmo se algum limiter esquecer o
+  //     campo `erro` — o gerente nunca vê "Erro 429" cru;
+  //  2) a contagem de quanto falta, de `retry_apos` (segundos) que a API manda
+  //     no CORPO. Não usamos o header Retry-After porque lê-lo exigiria
+  //     `exposedHeaders` no cors() da API, e mexer em CORS é commit próprio.
+  // Deixar isto explícito também blinda contra refator futuro do bloco 401
+  // engolir o 429 por engano — que aí SIM deslogaria o gerente no meio do
+  // fechamento. A sessão não é tocada em nenhum caminho daqui.
+  if (resp.status === 429) {
+    const j = await resp.json().catch(() => ({}));
+    const seg = Number(j.retry_apos) || 0;
+    const espera = seg <= 0 ? ''
+      : (seg >= 60 ? ` Tente em ${Math.ceil(seg / 60)} min.` : ` Tente em ${seg}s.`);
+    throw new Error((j.erro || 'Muitas requisições. Aguarde um instante.') + espera);
+  }
+
   const json = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     throw new Error(json.erro || `Erro ${resp.status}`);
