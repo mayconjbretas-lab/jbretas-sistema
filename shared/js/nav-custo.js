@@ -17,8 +17,10 @@
   ];
 
   // Largura minima para as telas marcadas desktopOnly. Casa com o MIN_LARGURA
-  // do mercado.js, que tem o mesmo guard na entrada.
-  var MIN_DESKTOP = 900;
+  // do mercado.js, que tem o mesmo guard na entrada. 800: janela nao-maximizada
+  // de ~835px util precisa passar (900 bloqueava), e a grade de lancamento cabe
+  // em 800 porque os slots quebram em duas linhas (.mrc-slots e auto-fit).
+  var MIN_DESKTOP = 800;
 
   var estiloInjetado = false;
   function injetarEstilo() {
