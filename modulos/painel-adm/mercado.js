@@ -45,11 +45,12 @@
   const FAIXA_ATN = 15;
   const GAUGE_MAX = 25;
 
-  // Rótulo de exibição dos 5 códigos. A lista AUTORITATIVA de códigos e de
-  // distribuidoras vem do GET /custos-mercado (fonte única, no backend) —
-  // isto aqui é só o nome bonito.
+  // Rótulo de exibição. A lista AUTORITATIVA de códigos e de distribuidoras vem
+  // do GET /custos-mercado (fonte única, no backend) — isto aqui é só o nome
+  // bonito. Sem GA: aditivada não é cotada no mercado de bandeira branca (o
+  // corte é só deste painel; o GA segue normal no resto do sistema).
   const NOME_COMB = {
-    GC: 'Gasolina comum', GA: 'Gasolina aditivada', ET: 'Etanol',
+    GC: 'Gasolina comum', ET: 'Etanol',
     S10: 'Diesel S-10', S500: 'Diesel S-500',
   };
 
@@ -170,8 +171,9 @@
       '.mrc-chip.on{background:var(--acd);border-color:var(--ac);color:var(--ac)}' +
       '.mrc-rank-hdr{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:.9rem}' +
       // ── Velocímetros: um por combustível, todos na mesma tela ────
-      // auto-fit: 5 em linha no desktop largo, quebra sozinho em telas menores
-      // (em 800px ficam 3 + 2) sem esmagar o SVG.
+      // auto-fit: todos em linha no desktop largo, quebra sozinho em telas
+      // menores sem esmagar o SVG. Não depende da quantidade — a lista vem do
+      // backend (hoje 4: GC, ET, S10, S500).
       '.mrc-gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(206px,1fr));gap:.9rem}' +
       '.mrc-gcard{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:.8rem .7rem 1rem;display:flex;flex-direction:column}' +
       '.mrc-gcard-hdr{display:flex;flex-direction:column;gap:1px;margin-bottom:.3rem;text-align:center}' +
@@ -608,7 +610,9 @@
     // agora que os 5 velocímetros aparecem juntos. No topo, ao lado dos
     // seletores, iam ser lidos como "filtra os velocímetros" e o clique pareceria
     // não fazer nada.
-    const chips = Object.keys(_pData.combustiveis || {}).map(k =>
+    const combs = Object.keys(_pData.combustiveis || {});
+    const nComb = combs.length;
+    const chips = combs.map(k =>
       '<button class="mrc-chip' + (k === _pComb ? ' on' : '') + '" onclick="__mrcComb(\'' + esc(k) + '\')">' +
       esc(k) + '</button>'
     ).join('');
@@ -627,12 +631,14 @@
             '<select onchange="__mrcCmp(\'b\', this.value)">' + opcoesHtml(_pB) + '</select>' +
           '</div>' +
         '</div>' +
-        '<div class="mrc-cmp-nota">Vale para os cinco combustíveis abaixo. ' +
+        // Contagem dinâmica: a lista de combustíveis vem do backend, então o
+        // texto não pode dizer "cinco" fixo (o GA saiu em 26/08).
+        '<div class="mrc-cmp-nota">Vale para os ' + nComb + ' combustíveis abaixo. ' +
           'Verde até ' + FAIXA_OK + '¢ · âmbar ' + FAIXA_OK + '–' + FAIXA_ATN + '¢ · vermelho acima de ' + FAIXA_ATN + '¢.</div>' +
       '</div>' +
-      // Um velocímetro por combustível, na ordem do backend (GC GA ET S10 S500).
+      // Um velocímetro por combustível, na ordem do backend (GC ET S10 S500).
       '<div class="mrc-gauges">' +
-        Object.keys(_pData.combustiveis || {}).map(gaugeCard).join('') +
+        combs.map(gaugeCard).join('') +
       '</div>' +
       '<div class="mrc-card">' +
         '<div class="mrc-rank-hdr">' +
