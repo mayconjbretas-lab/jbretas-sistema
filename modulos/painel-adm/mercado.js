@@ -406,18 +406,29 @@
   function combAtual() {
     return (_pData && _pComb && _pData.combustiveis) ? _pData.combustiveis[_pComb] : null;
   }
+  // Bandeira própria se reconhece pelo PREFIXO do id — não depende de _pData
+  // já ter carregado nem de varrer a lista.
+  const ehBandeira = (id) => String(id || '').indexOf(MRC_PFX_BAND) === 0;
+  // Id RESERVADO do protocolo (__ALGO__): as referências derivadas. Nunca vai
+  // pra tela como texto. Se a API passar a mandar uma referência que ESTE front
+  // não conhece, ela é ignorada na lista em vez de virar rótulo cru — foi
+  // exatamente esse vazamento (__MEDIATODAS__ aparecendo escrito) que surgiu
+  // quando o JS servido estava mais antigo que a API.
+  const ehIdReservado = (id) => /^__.+__$/.test(String(id || ''));
+
   // Rótulo de exibição de uma entidade. Derivada e bandeira têm id != nome (a
   // bandeira vem prefixada); distribuidora de mercado usa o próprio nome como id.
+  // O fallback do prefixo é a rede de segurança: se _pData.bandeiras não trouxer
+  // o id (payload de uma versão diferente da API), ainda mostra 'IPIRANGA' e não
+  // '__B__IPIRANGA'.
   function nomeEnt(id) {
     for (const d of ((_pData && _pData.derivadas) || [])) if (d.id === id) return d.nome;
     for (const b of ((_pData && _pData.bandeiras) || [])) if (b.id === id) return b.nome;
+    if (ehBandeira(id)) return String(id).slice(MRC_PFX_BAND.length);
     return id;
   }
   const ehDerivada = (id) =>
     ((_pData && _pData.derivadas) || []).some(d => d.id === id);
-  // Bandeira própria se reconhece pelo PREFIXO do id — não depende de _pData
-  // já ter carregado nem de varrer a lista.
-  const ehBandeira = (id) => String(id || '').indexOf(MRC_PFX_BAND) === 0;
   // Rótulo COM a marca de bandeira própria. Necessário porque 'RIO BRANCO'
   // existe nos dois lados (mercado e bandeira nossa): sem a marca, o ranking
   // mostraria duas linhas "RIO BRANCO" idênticas e o seletor duas opções de
@@ -432,29 +443,27 @@
   }
 
   // Opções dos seletores: derivadas num optgroup (são referência, não empresa) e
-  // as demais ORDENADAS DO MENOR PARA O MAIOR preço do combustível ativo, com o
-  // preço no rótulo pra a ordenação ficar legível. Entidade sem preço no último
-  // dia vai pro fim, em ordem alfabética.
+  // as demais ORDENADAS DO MENOR PARA O MAIOR preço do combustível ativo.
+  // SÓ O NOME no rótulo — sem preço: o preço de cada uma já está no ranking
+  // abaixo, e a ordem da lista já mostra quem é mais barato.
+  // Entidade com série mas sem preço no último dia vai pro fim, alfabética.
   function opcoesHtml(selecionado) {
     const c = combAtual();
     if (!c) return '';
     const ranking = c.ranking || [];
-    const ranked = ranking.map(r => r.id);
-    // Entidade com série mas sem preço no último dia vai pro fim, alfabética.
+    // filter(r.id): linha de ranking sem id (payload de outra versão da API) não
+    // vira <option value="undefined">.
+    const ranked = ranking.filter(r => r && r.id).map(r => r.id);
     const resto = Object.keys(c.series || {})
-      .filter(id => !ehDerivada(id) && ranked.indexOf(id) < 0)
+      .filter(id => !ehDerivada(id) && !ehIdReservado(id) && ranked.indexOf(id) < 0)
       .sort((a, b) => nomeEnt(a).localeCompare(nomeEnt(b)));
     const opt = (id, rotulo) => '<option value="' + esc(id) + '"' +
       (id === selecionado ? ' selected' : '') + '>' + esc(rotulo) + '</option>';
-    const precoDe = (id) => {
-      for (const r of ranking) if (r.id === id) return ' — ' + fmtTela(r.preco);
-      return '';
-    };
     return '<optgroup label="Referências">' +
         ((_pData.derivadas || []).map(d => opt(d.id, d.nome)).join('')) +
       '</optgroup>' +
       '<optgroup label="Distribuidoras e bandeiras">' +
-        ranked.concat(resto).map(id => opt(id, rotuloEnt(id) + precoDe(id))).join('') +
+        ranked.concat(resto).map(id => opt(id, rotuloEnt(id))).join('') +
       '</optgroup>';
   }
 
