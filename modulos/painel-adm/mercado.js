@@ -30,9 +30,14 @@
   const PERFIS_EDITAM = ['ADM', 'LOGISTICA'];
 
   // ── Painel (parte b) ─────────────────────────────────────────────
-  // Ids reservados das referências derivadas — espelham o backend.
-  const MRC_MENOR  = '__MENOR__';
-  const MRC_MEDIA3 = '__MEDIA3__';
+  // Ids reservados — espelham o backend. As derivadas são as 3 referências de
+  // mercado; MRC_PFX_BAND prefixa a série de BANDEIRA PRÓPRIA, porque
+  // 'RIO BRANCO' é bandeira nossa E nome de distribuidora de mercado: sem o
+  // prefixo as duas origens cairiam na mesma série.
+  const MRC_MENOR      = '__MENOR__';
+  const MRC_MEDIA3     = '__MEDIA3__';
+  const MRC_MEDIATODAS = '__MEDIATODAS__';
+  const MRC_PFX_BAND   = '__B__';
   // Faixas do termômetro, em CENTAVOS. Regra do negócio: verde até 10, âmbar de
   // 10 a 15, vermelho acima de 15. MAX = fim de escala do velocímetro.
   const FAIXA_OK  = 10;
@@ -58,8 +63,8 @@
   // Painel (parte b)
   let _pData  = null;           // resposta de GET /mercado-dashboard
   let _pComb  = null;           // combustível ativo — controla gráfico, termômetro e ranking
-  let _pA     = MRC_MENOR;      // seletor da esquerda (default: o piso do mercado)
-  let _pB     = 'IPIRANGA';     // seletor da direita (default: minha bandeira)
+  let _pA     = MRC_MENOR;                     // esquerda: o piso do mercado
+  let _pB     = MRC_PFX_BAND + 'IPIRANGA';     // direita: minha bandeira
   let _chart  = null;           // instância Chart.js (destruída antes de recriar)
 
   // ── Helpers ──────────────────────────────────────────────────────
@@ -401,12 +406,23 @@
   function combAtual() {
     return (_pData && _pComb && _pData.combustiveis) ? _pData.combustiveis[_pComb] : null;
   }
-  // Rótulo de exibição de uma entidade (distribuidora, bandeira ou derivada).
+  // Rótulo de exibição de uma entidade. Derivada e bandeira têm id != nome (a
+  // bandeira vem prefixada); distribuidora de mercado usa o próprio nome como id.
   function nomeEnt(id) {
-    const ds = (_pData && _pData.derivadas) || [];
-    for (const d of ds) if (d.id === id) return d.nome;
+    for (const d of ((_pData && _pData.derivadas) || [])) if (d.id === id) return d.nome;
+    for (const b of ((_pData && _pData.bandeiras) || [])) if (b.id === id) return b.nome;
     return id;
   }
+  const ehDerivada = (id) =>
+    ((_pData && _pData.derivadas) || []).some(d => d.id === id);
+  // Bandeira própria se reconhece pelo PREFIXO do id — não depende de _pData
+  // já ter carregado nem de varrer a lista.
+  const ehBandeira = (id) => String(id || '').indexOf(MRC_PFX_BAND) === 0;
+  // Rótulo COM a marca de bandeira própria. Necessário porque 'RIO BRANCO'
+  // existe nos dois lados (mercado e bandeira nossa): sem a marca, o ranking
+  // mostraria duas linhas "RIO BRANCO" idênticas e o seletor duas opções de
+  // mesmo nome. SÓ texto — não muda ordenação, valor nem id.
+  const rotuloEnt = (id) => nomeEnt(id) + (ehBandeira(id) ? ' ·minha·' : '');
   // Valor de uma entidade no último dia COM dado do combustível ativo.
   function valorAtual(id) {
     const c = combAtual();
@@ -423,20 +439,22 @@
     const c = combAtual();
     if (!c) return '';
     const ranking = c.ranking || [];
-    const ranked = ranking.map(r => r.nome);
-    const todas = Object.keys(c.series || {}).filter(k => k !== MRC_MENOR && k !== MRC_MEDIA3);
-    const resto = todas.filter(n => ranked.indexOf(n) < 0).sort();
+    const ranked = ranking.map(r => r.id);
+    // Entidade com série mas sem preço no último dia vai pro fim, alfabética.
+    const resto = Object.keys(c.series || {})
+      .filter(id => !ehDerivada(id) && ranked.indexOf(id) < 0)
+      .sort((a, b) => nomeEnt(a).localeCompare(nomeEnt(b)));
     const opt = (id, rotulo) => '<option value="' + esc(id) + '"' +
       (id === selecionado ? ' selected' : '') + '>' + esc(rotulo) + '</option>';
-    const precoDe = (n) => {
-      for (const r of ranking) if (r.nome === n) return ' — ' + fmtTela(r.preco);
+    const precoDe = (id) => {
+      for (const r of ranking) if (r.id === id) return ' — ' + fmtTela(r.preco);
       return '';
     };
     return '<optgroup label="Referências">' +
         ((_pData.derivadas || []).map(d => opt(d.id, d.nome)).join('')) +
       '</optgroup>' +
       '<optgroup label="Distribuidoras e bandeiras">' +
-        ranked.concat(resto).map(n => opt(n, n + precoDe(n))).join('') +
+        ranked.concat(resto).map(id => opt(id, rotuloEnt(id) + precoDe(id))).join('') +
       '</optgroup>';
   }
 
@@ -489,12 +507,15 @@
     return '<div class="mrc-gauge-wrap">' +
       '<div class="mrc-gauge">' + svg + '</div>' +
       '<div class="mrc-g-val" style="color:' + cor + '">' + esc(fmtCent(Math.abs(cent))) + '¢</div>' +
-      '<div class="mrc-g-cap"><b>' + esc(nomeEnt(_pB)) + '</b> está ' + esc(fmtCent(Math.abs(cent))) + '¢ ' +
-        (cent >= 0 ? 'acima' : 'abaixo') + ' de <b>' + esc(nomeEnt(_pA)) + '</b></div>' +
+      // rotuloEnt (não nomeEnt): com mercado RIO BRANCO de um lado e bandeira
+      // RIO BRANCO do outro, a legenda leria "RIO BRANCO está X acima de
+      // RIO BRANCO". A marca ·minha· desfaz a ambiguidade.
+      '<div class="mrc-g-cap"><b>' + esc(rotuloEnt(_pB)) + '</b> está ' + esc(fmtCent(Math.abs(cent))) + '¢ ' +
+        (cent >= 0 ? 'acima' : 'abaixo') + ' de <b>' + esc(rotuloEnt(_pA)) + '</b></div>' +
       '<div class="mrc-g-precos">' +
-        '<div class="mrc-g-p"><div class="mrc-g-p-nome">' + esc(nomeEnt(_pA)) + '</div>' +
+        '<div class="mrc-g-p"><div class="mrc-g-p-nome">' + esc(rotuloEnt(_pA)) + '</div>' +
           '<div class="mrc-g-p-val">' + esc(fmtTela(vA)) + '</div></div>' +
-        '<div class="mrc-g-p"><div class="mrc-g-p-nome">' + esc(nomeEnt(_pB)) + '</div>' +
+        '<div class="mrc-g-p"><div class="mrc-g-p-nome">' + esc(rotuloEnt(_pB)) + '</div>' +
           '<div class="mrc-g-p-val">' + esc(fmtTela(vB)) + '</div></div>' +
       '</div>' +
     '</div>';
@@ -512,7 +533,7 @@
       const d = centavos(r.preco, menor);
       return '<div class="mrc-rank-l' + (r.tipo === 'bandeira' ? ' band' : '') + '">' +
         '<div class="mrc-rank-pos">' + (i + 1) + '</div>' +
-        '<div class="mrc-rank-nome">' + esc(r.nome) + '</div>' +
+        '<div class="mrc-rank-nome">' + esc(rotuloEnt(r.id)) + '</div>' +
         '<div class="mrc-rank-preco">' + esc(fmtTela(r.preco)) + '</div>' +
         '<div class="mrc-rank-d">' + (d < 0.05 ? 'menor' : '+' + esc(fmtCent(d)) + '¢') + '</div>' +
       '</div>';
@@ -526,12 +547,15 @@
     const v = getComputedStyle(document.documentElement).getPropertyValue(nome).trim();
     return v || '#888888';
   }
-  // Terceira série = referência de mercado. "Menor do dia", a não ser que já
-  // esteja num dos seletores — aí "Média das 3 menores". Com as duas derivadas
-  // escolhidas, o gráfico fica com 2 séries em vez de repetir uma linha.
+  // Terceira série = referência de mercado, na ordem de preferência abaixo:
+  // pega a PRIMEIRA que não estiver já num dos dois seletores, então nunca
+  // desenha linha repetida. "Menor do dia" segue sendo a preferida (é o piso do
+  // mercado). Com 3 candidatas e 2 seletores sempre sobra uma, então o gráfico
+  // agora tem sempre 3 séries — antes, com só 2 candidatas, escolher as duas
+  // derivadas deixava o gráfico com 2.
   function terceiraSerie() {
-    if (_pA !== MRC_MENOR  && _pB !== MRC_MENOR)  return MRC_MENOR;
-    if (_pA !== MRC_MEDIA3 && _pB !== MRC_MEDIA3) return MRC_MEDIA3;
+    const pref = [MRC_MENOR, MRC_MEDIA3, MRC_MEDIATODAS];
+    for (const id of pref) if (_pA !== id && _pB !== id) return id;
     return null;
   }
   function desenharChart() {
@@ -598,8 +622,8 @@
     if (validos.indexOf(_pA) < 0) _pA = MRC_MENOR;
     if (validos.indexOf(_pB) < 0) {
       _pB = null;
-      for (const b of (_pData.bandeiras || [])) if (c.series[b]) { _pB = b; break; }
-      if (!_pB) _pB = ((c.ranking || [])[0] && c.ranking[0].nome) || MRC_MEDIA3;
+      for (const b of (_pData.bandeiras || [])) if (c.series[b.id]) { _pB = b.id; break; }
+      if (!_pB) _pB = ((c.ranking || [])[0] && c.ranking[0].id) || MRC_MEDIA3;
     }
 
     const chips = Object.keys(_pData.combustiveis || {}).map(k =>
