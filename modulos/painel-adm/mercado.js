@@ -63,6 +63,14 @@
   let _originais   = new Set(); // "COMB|DISTR" que existiam no dia carregado
   let _lancando    = false;     // form de lançamento aberto?
   let _salvando    = false;
+  // Nomes NOVOS que o usuário confirmou nesta sessão de lançamento, por chave de
+  // comparação. Só o que está aqui vai com `permitir_nova` no POST — o backend
+  // recusa nome desconhecido sem essa flag (409), então esquecer de preencher
+  // isto não grava lixo em silêncio: dá erro.
+  let _novasOk     = new Set();
+  // Confirmação pendente: { cb, i, nome, similar, anterior }. `anterior` é pra o
+  // Cancelar devolver a célula ao que estava, sem re-render da grade toda.
+  let _pendNova    = null;
   // Painel (parte b)
   let _pData  = null;           // resposta de GET /mercado-dashboard
   let _pComb  = null;           // combustível ativo — controla gráfico, termômetro e ranking
@@ -102,6 +110,82 @@
     const p = String(iso || '').split('-');
     return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(iso || '');
   }
+  // ── Nome de distribuidora ────────────────────────────────────────
+  // ESPELHO de chaveDistr()/DISTR_SUFIXO_IGNORADO do server.js. Duplicado de
+  // propósito: o aviso "já existe RODOIL" tem que aparecer na hora em que a
+  // célula perde o foco, sem ida ao servidor. O backend continua sendo a
+  // autoridade — ele revalida e devolve 409 se isto aqui divergir. Mexeu num,
+  // mexe no outro.
+  const DISTR_SUFIXO_IGNORADO = ['LTDA', 'SA', 'ME', 'MEI', 'EIRELI', 'EPP', 'EI', 'CIA',
+    'DISTRIBUIDORA', 'DISTRIBUIDORAS', 'DISTRIB', 'DIST',
+    'COMBUSTIVEIS', 'COMBUSTIVEL', 'DERIVADOS', 'PETROLEO', 'COMERCIO'];
+  const DISTR_LIGACAO_FINAL = ['DE', 'DO', 'DA', 'DOS', 'DAS', 'E'];
+
+  // Grafia que vai pro banco: UPPER, espaço colapsado, ACENTO PRESERVADO
+  // (TORRÃO segue TORRÃO). Espelha normDistribuidora() do server.js — sem a
+  // tabela de apelidos, que é decisão do backend.
+  function nomeDistr(v) {
+    return String(v == null ? '' : v).trim().toUpperCase().replace(/\s+/g, ' ');
+  }
+  // Chave só de COMPARAÇÃO — nunca gravada.
+  function chaveDistr(v) {
+    let toks = String(v == null ? '' : v)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[.\/\-]/g, ' ')
+      .replace(/\s+/g, ' ').trim()
+      .split(' ').filter(Boolean);
+    let mexeu = true;
+    while (mexeu && toks.length > 1) {
+      mexeu = false;
+      if (toks.length > 2 && toks[toks.length - 2] === 'S' && toks[toks.length - 1] === 'A') {
+        toks.pop(); toks.pop(); mexeu = true; continue;
+      }
+      if (DISTR_SUFIXO_IGNORADO.indexOf(toks[toks.length - 1]) >= 0) { toks.pop(); mexeu = true; continue; }
+      if (DISTR_LIGACAO_FINAL.indexOf(toks[toks.length - 1]) >= 0) { toks.pop(); mexeu = true; }
+    }
+    return toks.join(' ');
+  }
+  function distEdicao(a, b, teto) {
+    const la = a.length, lb = b.length;
+    if (Math.abs(la - lb) > teto) return teto + 1;
+    let ant = new Array(lb + 1), atu = new Array(lb + 1);
+    for (let j = 0; j <= lb; j++) ant[j] = j;
+    for (let i = 1; i <= la; i++) {
+      atu[0] = i;
+      let melhor = atu[0];
+      for (let j = 1; j <= lb; j++) {
+        const custo = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+        atu[j] = Math.min(ant[j] + 1, atu[j - 1] + 1, ant[j - 1] + custo);
+        if (atu[j] < melhor) melhor = atu[j];
+      }
+      if (melhor > teto) return teto + 1;
+      const t = ant; ant = atu; atu = t;
+    }
+    return ant[lb];
+  }
+  // Nome já cadastrado que se pareça com `chave`, ou null. Prefixo (mínimo 4,
+  // pra 'RDP' não casar com tudo) + distância curta.
+  function distrParecida(chave) {
+    if (!chave) return null;
+    for (let n = 0; n < _distrs.length; n++) {
+      const k = chaveDistr(_distrs[n]);
+      if (k === chave) continue;
+      const menor = Math.min(k.length, chave.length);
+      if (menor >= 4 && (k.indexOf(chave) === 0 || chave.indexOf(k) === 0)) return _distrs[n];
+      const teto = menor <= 6 ? 1 : 2;
+      if (distEdicao(k, chave, teto) <= teto) return _distrs[n];
+    }
+    return null;
+  }
+  // Nome canônico já na lista para essa chave, ou null.
+  function distrConhecida(chave) {
+    for (let n = 0; n < _distrs.length; n++) {
+      if (chaveDistr(_distrs[n]) === chave) return _distrs[n];
+    }
+    return null;
+  }
+
   function podeEditar() {
     const u = (typeof getUsuarioLogado === 'function') ? getUsuarioLogado() : null;
     return !!(u && PERFIS_EDITAM.indexOf(u.perfil) >= 0);
@@ -159,6 +243,11 @@
       '.mrc-msg{font-size:.74rem;font-family:var(--mono);padding:.5rem 0}' +
       '.mrc-msg.erro{color:var(--dg)}' +
       '.mrc-msg.ok{color:var(--ok)}' +
+      // Barra de confirmacao de nome novo. Fica no fluxo (nao e modal) pra nao
+      // tampar a grade: quem confirma quer ver em que celula esta mexendo.
+      '.mrc-conf{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;font-size:.74rem;font-family:var(--mono);color:var(--tx);background:var(--sf2);border:1px solid var(--wn);border-radius:8px;padding:.6rem .7rem;margin:.5rem 0;line-height:1.5}' +
+      '.mrc-conf b{color:var(--ac)}' +
+      '.mrc-conf .mrc-btn{padding:.3rem .6rem;font-size:.68rem}' +
       '.mrc-resumo{font-size:.72rem;font-family:var(--mono);color:var(--tx2)}' +
       '.mrc-resumo .menor{color:var(--ok);font-weight:700}' +
       '.mrc-vazio{text-align:center;color:var(--tx3);padding:2rem;font-size:.82rem;line-height:1.6}' +
@@ -365,18 +454,24 @@
       const cels = [];
       for (let i = 0; i < total; i++) {
         const s = slots[i] || { distr: '', preco: '', prefill: '', cheio: null };
-        const opcoes = '<option value=""></option>' + _distrs.map(d =>
-          '<option value="' + esc(d) + '"' + (d === s.distr ? ' selected' : '') + '>' + esc(d) + '</option>'
-        ).join('');
         // title com as 4 casas: a tela mostra 2 (pedido do negócio), mas o valor
         // cheio fica conferível sem abrir o banco.
         const title = (s.cheio != null) ? ' title="Gravado: ' + esc(fmtCheio(s.cheio)) + '"' : '';
+        // <input list> em vez de <select>: aceita nome que ainda não existe (o
+        // mercado muda), e o autocomplete nativo do datalist é o que evita a maior
+        // parte do erro de digitação. O `oninput` só espelha o estado (sem
+        // re-render, pra não perder o cursor); a validação de nome novo é no
+        // `onchange`, que dispara ao sair da célula ou escolher da lista.
         cels.push(
           '<div class="mrc-slot">' +
-            '<select class="mrc-sel" data-cb="' + esc(cb) + '" data-i="' + i + '" onchange="__mrcSlot(this)">' +
-              opcoes +
-            '</select>' +
-            '<input class="mrc-inp" data-cb="' + esc(cb) + '" data-i="' + i + '" inputmode="decimal" ' +
+            '<input class="mrc-sel" list="mrc-dl" data-k="d" autocomplete="off" ' +
+              'data-cb="' + esc(cb) + '" data-i="' + i + '" placeholder="Distribuidora" ' +
+              // data-ant = último nome ACEITO nesta célula, pro Cancelar restaurar.
+              // Não serve olhar _grade: o oninput já sobrescreveu s.distr com o
+              // texto cru a cada tecla, antes do onchange validar.
+              'data-ant="' + esc(s.distr) + '" ' +
+              'value="' + esc(s.distr) + '" oninput="__mrcSlot(this)" onchange="__mrcDistr(this)">' +
+            '<input class="mrc-inp" data-k="p" data-cb="' + esc(cb) + '" data-i="' + i + '" inputmode="decimal" ' +
               'placeholder="0,00" value="' + esc(s.preco) + '"' + title + ' oninput="__mrcSlot(this)">' +
           '</div>'
         );
@@ -390,8 +485,14 @@
       '</div>';
     }).join('');
 
+    // UM datalist para a grade toda (os ~20 inputs apontam pro mesmo id).
+    const datalist = '<datalist id="mrc-dl">' +
+      _distrs.map(d => '<option value="' + esc(d) + '"></option>').join('') +
+      '</datalist>';
+
     box.innerHTML =
       '<div class="mrc-card">' +
+        datalist +
         '<div class="mrc-card-title">Lançar preços — ' + esc(brData(_dataISO)) + '</div>' +
         linhas +
         '<div class="mrc-hint">' +
@@ -720,10 +821,14 @@
       for (let si = 0; si < slots.length; si++) {
         const s = slots[si];
         if (!s.distr) continue;
-        if (vistos.has(s.distr)) {
+        // Compara pela CHAVE: com campo de texto livre, 'RODOIL' e 'RODOIL LTDA'
+        // são a mesma distribuidora e tinham que colidir aqui — comparar o texto
+        // cru deixaria as duas passarem e o upsert estouraria no ON CONFLICT.
+        const kdup = chaveDistr(s.distr);
+        if (vistos.has(kdup)) {
           return { erro: s.distr + ' aparece duas vezes em ' + cb + '. Cada distribuidora entra uma vez por combustível.' };
         }
-        vistos.add(s.distr);
+        vistos.add(kdup);
         const chave = cb + '|' + s.distr;
         atuais.add(chave);
         const existia = _originais.has(chave);
@@ -737,7 +842,12 @@
         if (v < 0.5 || v > 20) {
           return { erro: 'Preço fora da faixa (0,50–20,00): ' + s.distr + ' em ' + cb + '.' };
         }
-        itens.push({ combustivel: cb, distribuidora: s.distr, preco: s.preco });
+        // permitir_nova só no item cujo nome o usuário confirmou. O backend recusa
+        // nome desconhecido sem a flag, então um nome novo que escapou da
+        // confirmação volta como erro em vez de virar série nova em silêncio.
+        const item = { combustivel: cb, distribuidora: s.distr, preco: s.preco };
+        if (_novasOk.has(chaveDistr(s.distr))) item.permitir_nova = true;
+        itens.push(item);
       }
     }
     // Par que existia e não está mais em nenhum slot (distribuidora trocada).
@@ -771,14 +881,20 @@
     if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
     _dataISO = iso;
     _lancando = false;
+    fecharConf(); _novasOk = new Set();
     carregar();
   };
+  // Abrir o lançamento zera as confirmações de nome novo: a pergunta vale por
+  // sessão de lançamento, senão um nome errado confirmado às 9h continuaria
+  // valendo à tarde sem ninguém revisar.
   window.__mrcLancar = function () {
     if (!podeEditar()) return;
+    fecharConf(); _novasOk = new Set();
     _lancando = true; msg(''); renderAcoes(); renderLancamento();
   };
   window.__mrcCancelar = function () {
     _lancando = false; msg('');
+    fecharConf(); _novasOk = new Set();
     remontarDoServidor();
     renderAcoes(); renderLancamento();
   };
@@ -790,7 +906,9 @@
     if (!_grade[cb]) return;
     while (_grade[cb].length <= i) _grade[cb].push({ distr: '', preco: '', prefill: '', cheio: null });
     const s = _grade[cb][i];
-    if (el.tagName === 'SELECT') {
+    // Agora os DOIS campos são <input> (o de nome virou datalist), então a
+    // distinção é por data-k e não mais por tagName.
+    if (el.dataset.k === 'd') {
       s.distr = el.value;
     } else {
       s.preco = el.value;
@@ -798,8 +916,101 @@
     }
     el.classList.remove('erro');
   };
+  // Sai da célula de nome (ou escolheu do datalist): canoniza e decide se precisa
+  // de confirmação. É o guard de duplicata — 'RODOIL LTDA' digitado de cabeça não
+  // pode virar uma segunda série ao lado de 'RODOIL'.
+  window.__mrcDistr = function (el) {
+    const cb = el.dataset.cb;
+    const i  = Number(el.dataset.i);
+    const s  = (_grade[cb] || [])[i];
+    if (!s) return;
+    fecharConf();
+    // Aceitar um nome atualiza o data-ant: é ele que o Cancelar restaura.
+    const aceitar = (valor) => { s.distr = valor; el.value = valor; el.dataset.ant = valor; };
+    const nome = nomeDistr(el.value);
+    if (!nome) { aceitar(''); return; }
+    const k = chaveDistr(nome);
+    // Já cadastrada: adota a grafia CANÔNICA. É o que faz 'rodoil' e
+    // 'RODOIL LTDA' caírem os dois em 'RODOIL' sem perguntar nada.
+    const conhecida = distrConhecida(k);
+    if (conhecida) { aceitar(conhecida); return; }
+    // Nome novo já confirmado antes nesta sessão: não pergunta de novo.
+    if (_novasOk.has(k)) { aceitar(nome); return; }
+    // Pendente: mostra o digitado na célula, mas SEM mexer no data-ant — se
+    // cancelar, é pro nome anterior voltar.
+    s.distr = nome; el.value = nome;
+    _pendNova = { cb: cb, i: i, nome: nome, similar: distrParecida(k), anterior: el.dataset.ant || '' };
+    renderConf();
+  };
+
+  function fecharConf() {
+    if (!_pendNova) return;
+    _pendNova = null;
+    const el = document.getElementById('mrc-conf');
+    if (el) el.remove();
+  }
+  // Barra inline no topo da área de lançamento. Dois formatos: com parecido
+  // (3 saídas) e sem parecido (criar/cancelar).
+  function renderConf() {
+    const box = document.getElementById('mrc-lanc');
+    if (!box || !_pendNova) return;
+    const p = _pendNova;
+    const antigo = document.getElementById('mrc-conf');
+    if (antigo) antigo.remove();
+    const div = document.createElement('div');
+    div.id = 'mrc-conf';
+    div.className = 'mrc-conf';
+    div.innerHTML = p.similar
+      ? '<span>Já existe <b>' + esc(p.similar) + '</b> — quis dizer essa? ' +
+          'Se <b>' + esc(p.nome) + '</b> for outra distribuidora mesmo, crie.</span>' +
+        '<button class="mrc-btn" onclick="__mrcNovaUsar()">Usar ' + esc(p.similar) + '</button>' +
+        '<button class="mrc-btn ghost" onclick="__mrcNovaCriar()">Criar ' + esc(p.nome) + '</button>' +
+        '<button class="mrc-btn ghost" onclick="__mrcNovaCancelar()">Cancelar</button>'
+      : '<span>Criar nova distribuidora <b>' + esc(p.nome) + '</b>?</span>' +
+        '<button class="mrc-btn" onclick="__mrcNovaCriar()">Criar</button>' +
+        '<button class="mrc-btn ghost" onclick="__mrcNovaCancelar()">Cancelar</button>';
+    box.insertBefore(div, box.firstChild);
+  }
+  // Aponta a célula pendente de volta pro input, pra escrever nela sem re-render
+  // (re-render da grade perderia o que já foi digitado nas outras células).
+  function celulaPend() {
+    if (!_pendNova) return null;
+    return document.querySelector('.mrc-sel[data-k="d"][data-cb="' + _pendNova.cb +
+      '"][data-i="' + _pendNova.i + '"]');
+  }
+  window.__mrcNovaUsar = function () {
+    if (!_pendNova || !_pendNova.similar) return;
+    const p = _pendNova, s = (_grade[p.cb] || [])[p.i];
+    if (s) s.distr = p.similar;
+    const el = celulaPend();
+    if (el) { el.value = p.similar; el.dataset.ant = p.similar; }
+    fecharConf();
+  };
+  window.__mrcNovaCriar = function () {
+    if (!_pendNova) return;
+    // Confirmado: entra em _novasOk e o POST vai com permitir_nova nesse item.
+    _novasOk.add(chaveDistr(_pendNova.nome));
+    const el = celulaPend();
+    if (el) el.dataset.ant = _pendNova.nome;
+    fecharConf();
+  };
+  window.__mrcNovaCancelar = function () {
+    if (!_pendNova) return;
+    const p = _pendNova, s = (_grade[p.cb] || [])[p.i];
+    if (s) s.distr = p.anterior;
+    const el = celulaPend();
+    if (el) { el.value = p.anterior; el.dataset.ant = p.anterior; el.focus(); }
+    fecharConf();
+  };
+
   window.__mrcSalvar = async function () {
     if (!podeEditar() || _salvando) return;
+    // Confirmação aberta = o usuário ainda não decidiu o nome. Salvar agora
+    // gravaria a grafia pendente (ou tomaria 409 do backend).
+    if (_pendNova) {
+      msg('Resolva a distribuidora ' + _pendNova.nome + ' antes de salvar.', 'erro');
+      return;
+    }
     const r = coletarItens();
     if (r.erro) { msg(r.erro, 'erro'); return; }
     if (!r.itens.length) {
