@@ -95,8 +95,15 @@
     if (isNaN(n)) return '';
     return n.toLocaleString('pt-BR', { minimumFractionDigits: min, maximumFractionDigits: max });
   }
-  const fmtTela  = (v) => fmtN(v, 2, 2);   // 2 casas NA TELA (pedido do negócio)
-  const fmtCheio = (v) => fmtN(v, 2, 4);   // 4 casas — só no title, p/ conferência
+  // 4 casas NA TELA. Era 2, e 2 escondia diferença que decide negociação: em
+  // 28/08 a IPIRANGA teve 5,9747 em 11 postos, 5,9755 no ESPAÇO REAL e 5,9745
+  // no SÃO LUIZ RL — os três aparecem como "5,97" com 2 casas. O banco guarda
+  // numeric(8,4), então 4 é a precisão real da fonte.
+  // min 2 de propósito: valor redondo sai "5,90" e não "5,9".
+  const fmtTela  = (v) => fmtN(v, 2, 4);
+  // Mesma precisão que fmtTela — segue existindo porque o title tem outro
+  // sentido: mostra o valor GRAVADO ao lado do que está sendo digitado.
+  const fmtCheio = fmtTela;
   const fmtCent  = (v) => fmtN(v, 1, 1);   // centavos, 1 casa
   // Diferença em CENTAVOS, arredondada. OBRIGATÓRIO arredondar: (5.94-5.79)*100
   // dá 15.000000000000009 em float, e uma diferença de exatamente 15¢ cairia no
@@ -292,7 +299,15 @@
       '.mrc-rank-l{display:grid;grid-template-columns:26px 1fr auto 74px;gap:.6rem;align-items:center;padding:.4rem .5rem;border-radius:6px;font-size:.78rem}' +
       '.mrc-rank-l.band{background:var(--sf2);border:1px solid var(--ac)}' +
       '.mrc-rank-pos{font-family:var(--mono);font-size:.68rem;color:var(--tx3);text-align:right}' +
-      '.mrc-rank-nome{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx2)}' +
+      // Origem do custo da bandeira: 'ref: LOURA EMPREENDIMENTOS' quando veio
+      // do posto de referencia, ou o aviso de fallback. Discreta de proposito:
+      // e contexto do numero, nao o numero. Fica em .mrc-rank-nome (que
+      // empilha) e sob o valor do velocimetro.
+      '.mrc-cob{font-family:var(--mono);font-size:.6rem;color:var(--tx3);white-space:nowrap}' +
+      '.mrc-cob.alerta{color:var(--wn);font-weight:700}' +
+      // Empilha nome + cobertura; o ellipsis segue valendo para o nome longo.
+      '.mrc-rank-nome{display:flex;flex-direction:column;gap:0;overflow:hidden;color:var(--tx2)}' +
+      '.mrc-rank-nome>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       '.mrc-rank-l.band .mrc-rank-nome{color:var(--ac);font-weight:700}' +
       '.mrc-rank-preco{font-family:var(--mono);font-weight:700;color:var(--tx)}' +
       '.mrc-rank-d{font-family:var(--mono);font-size:.68rem;text-align:right;color:var(--tx3)}' +
@@ -716,9 +731,9 @@
         sinal + esc(fmtCent(Math.abs(cent))) + '¢</div>' +
       '<div class="mrc-g-precos">' +
         '<div class="mrc-g-p"><div class="mrc-g-p-nome">' + esc(rotuloEnt(_pA)) + '</div>' +
-          '<div class="mrc-g-p-val">' + esc(fmtTela(vA)) + '</div></div>' +
+          '<div class="mrc-g-p-val">' + esc(fmtTela(vA)) + '</div>' + cobHtml(_pA) + '</div>' +
         '<div class="mrc-g-p"><div class="mrc-g-p-nome">' + esc(rotuloEnt(_pB)) + '</div>' +
-          '<div class="mrc-g-p-val">' + esc(fmtTela(vB)) + '</div></div>' +
+          '<div class="mrc-g-p-val">' + esc(fmtTela(vB)) + '</div>' + cobHtml(_pB) + '</div>' +
       '</div>' +
     '</div>';
   }
@@ -735,11 +750,62 @@
       const d = centavos(r.preco, menor);
       return '<div class="mrc-rank-l' + (r.tipo === 'bandeira' ? ' band' : '') + '">' +
         '<div class="mrc-rank-pos">' + (i + 1) + '</div>' +
-        '<div class="mrc-rank-nome">' + esc(rotuloEnt(r.id)) + '</div>' +
+        '<div class="mrc-rank-nome"><span>' + esc(rotuloEnt(r.id)) + '</span>' + cobHtml(r.id) + '</div>' +
         '<div class="mrc-rank-preco">' + esc(fmtTela(r.preco)) + '</div>' +
         '<div class="mrc-rank-d">' + (d < 0.05 ? 'menor' : '+' + esc(fmtCent(d)) + '¢') + '</div>' +
       '</div>';
     }).join('') + '</div>';
+  }
+
+  // Renderiza a origem do custo ao lado do preco, ou '' quando nao se aplica.
+  function cobHtml(id) {
+    const c = cobDe(id);
+    if (!c) return '';
+    return '<span class="mrc-cob' + (c.alerta ? ' alerta' : '') + '" title="' + esc(c.title) + '">' +
+      esc(c.texto) + '</span>';
+  }
+
+  // Origem do custo de uma bandeira propria. SO bandeira tem: o custo dela vem
+  // de custos_precos, que e POR POSTO, e o backend escolhe UM valor. Distribuidora
+  // de mercado nao tem — custos_mercado ja e um preco por distribuidora.
+  //
+  // Dois casos, e o alerta e SO no segundo:
+  //  · origem='referencia' — veio do posto fixo da bandeira. Mostra o NOME dele.
+  //    A contagem de quantos postos pagam o mesmo vai no title, NAO como alerta:
+  //    a VIBRA da '1 de 14' porque o P. SANTA INES - JOAQUIM e o unico naquele
+  //    valor, e isso e o comportamento pretendido, nao problema.
+  //  · origem='moda' — a referencia nao tinha custo no dia (ou nao esta
+  //    configurada). AI e alerta: o numero nao e o de referencia.
+  // Devolve { texto, alerta, title } ou null.
+  function cobDe(id) {
+    const c = combAtual();
+    const r = ((c && c.ranking) || []).find(x => x.id === id);
+    if (!r || !r.origem) return null;
+    const cobertura = (r.postos_no_valor != null && r.postos_com_custo != null)
+      ? r.postos_no_valor + ' de ' + r.postos_com_custo + ' postos pagam este valor'
+      : null;
+    const naBand = r.postos_na_bandeira ? '; a bandeira tem ' + r.postos_na_bandeira + ' postos ativos' : '';
+    const distintos = r.valores_distintos ? '; ' + r.valores_distintos + ' valores distintos no dia' : '';
+    if (r.origem === 'referencia') {
+      // Nome curto: 'P. LOURA EMPREENDIMENTOS' -> 'LOURA EMPREENDIMENTOS'.
+      const curto = String(r.posto_referencia || '').replace(/^P\.\s*/i, '');
+      return {
+        texto: curto ? 'ref: ' + curto : 'referencia',
+        alerta: false,
+        title: 'Custo do posto de referencia da bandeira' +
+          (r.posto_referencia ? ' (' + r.posto_referencia + ')' : '') + '. ' +
+          (cobertura ? cobertura + naBand + distintos : ''),
+      };
+    }
+    // fallback
+    return {
+      texto: '⚠ sem referencia' + (cobertura ? ' · ' + r.postos_no_valor + ' de ' + r.postos_com_custo : ''),
+      alerta: true,
+      title: 'FALLBACK: o posto de referencia da bandeira nao tem custo lancado neste dia' +
+        (r.posto_referencia ? ' (' + r.posto_referencia + ')' : ' (referencia nao configurada)') +
+        '. Exibindo o valor mais frequente da bandeira. ' +
+        (cobertura ? cobertura + naBand + distintos : ''),
+    };
   }
 
   function renderPainel() {

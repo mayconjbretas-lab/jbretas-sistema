@@ -82,6 +82,9 @@
     if (m >= MARGEM_AMBAR) return 'cm-m-med';
     return 'cm-m-ruim';
   }
+  // Desvio em centavos: 0.0608 -> '6,08'. A unidade e diferente da do custo
+  // (centavos, nao reais), por isso nao reusa fmtCusto.
+  const fmtCent = (v) => fmtN(Math.abs(Number(v)) * 100, 2, 2);
   function deltaClasse(d) {
     if (d === null || d === undefined || d === 0) return 'cm-d-zero';
     return d < 0 ? 'cm-d-bom' : 'cm-d-ruim'; // custo caiu = bom (verde)
@@ -204,6 +207,15 @@
       '.cm-wrap .cm-d-bom{color:var(--ok);font-family:var(--mono)}' +
       '.cm-wrap .cm-d-ruim{color:var(--danger);font-family:var(--mono)}' +
       '.cm-wrap .cm-d-zero{color:var(--text3);font-family:var(--mono)}' +
+      // Desvio em relacao ao custo do posto de REFERENCIA da bandeira.
+      // Fica colado no custo (nao vira coluna) para nao apertar a tabela no
+      // celular — a aba roda tambem em logistica-mobile.
+      '.cm-wrap .cm-dv{font-family:var(--mono);font-size:.6rem;font-weight:700;margin-left:5px;padding:0 3px;border-radius:4px;vertical-align:middle;white-space:nowrap}' +
+      '.cm-wrap .cm-dv.mais{color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)}' +
+      '.cm-wrap .cm-dv.menos{color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent)}' +
+      // Fallback: o desvio nao e contra a referencia, e contra a moda da bandeira.
+      '.cm-wrap .cm-dv.fb{color:var(--warning);background:none;border:1px dashed var(--warning);font-weight:600}' +
+      '.cm-wrap .cm-ref{font-family:var(--mono);font-size:.58rem;font-weight:700;letter-spacing:.05em;color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:2px 7px;white-space:nowrap}' +
       '.cm-wrap .cm-forn-menor{color:var(--ok);font-weight:700}' +
       '.cm-wrap .cm-empty{text-align:center;color:var(--text3);font-size:.82rem;padding:2rem}' +
       '.cm-wrap .cm-erro{text-align:center;color:var(--danger);font-size:.82rem;padding:2rem}' +
@@ -446,6 +458,37 @@
       '</div>';
   }
 
+  // ── Desvio vs. o posto de REFERENCIA da bandeira ─────────────────
+  // O painel de Mercado publica UM custo por bandeira (o do posto de
+  // referencia). Aqui o objetivo e o inverso: ver QUEM foge dele. Positivo =
+  // paga mais caro (vermelho); negativo = tem desconto (verde).
+  //
+  // Nao mostra nada quando:
+  //  · o posto ESTA na referencia (desvio 0) — card limpo, so o que desvia salta;
+  //  · nao ha referencia possivel (ref_origem null) — combustivel que o posto de
+  //    referencia nao vende E com um unico posto na bandeira, entao nao ha
+  //    com o que comparar. O backend ja suprime esses casos.
+  //
+  // ref_origem = "moda" e FALLBACK: o posto de referencia nao lancou custo no
+  // dia, e a comparacao esta sendo feita contra o valor mais frequente da
+  // bandeira. Vem tracejado em ambar para nao ser lido como desvio real.
+  function desvioHtml(c) {
+    if (c.desvio == null || !c.ref_origem) return '';
+    const fb = c.ref_origem !== 'referencia';
+    if (c.desvio === 0 && !fb) return '';
+    const base = fb
+      ? 'valor mais frequente da bandeira' + (c.ref_posto ? '; o posto de referência (' + c.ref_posto + ') não lançou custo neste dia' : '; referência não configurada')
+      : 'custo do posto de referência' + (c.ref_posto ? ' (' + c.ref_posto + ')' : '');
+    const title = (c.desvio === 0 ? 'Igual ao ' : (c.desvio > 0 ? 'Paga a mais que o ' : 'Paga a menos que o ')) +
+      base + ': ' + fmtCusto(c.ref_custo) +
+      (c.desvio === 0 ? '' : ' → diferença de ' + fmtCent(c.desvio) + ' centavos') +
+      (fb ? '. FALLBACK: não é o preço de referência.' : '');
+    const cls = 'cm-dv ' + (fb ? 'fb' : (c.desvio > 0 ? 'mais' : 'menos'));
+    const seta = c.desvio === 0 ? '=' : (c.desvio > 0 ? '▴' : '▾');
+    const texto = c.desvio === 0 ? 'na moda' : seta + fmtCent(c.desvio) + '¢';
+    return '<span class="' + cls + '" title="' + esc(title) + '">' + texto + '</span>';
+  }
+
   // ── Grid de cards dos postos ─────────────────────────────────────
   function renderGrid() {
     const box = document.getElementById('cm-grid-box');
@@ -462,7 +505,8 @@
       // Lápis só quando NÃO é leitura (ADM não edita).
       const penCusto = _readonly ? '' : '<span class="cm-pen" title="Editar custo" onclick="__cmEditCusto(\'' + pid + '\',\'' + cod + '\')">✏️</span>';
       const penVenda = _readonly ? '' : '<span class="cm-pen" title="Sobrescrever venda" onclick="__cmEditVenda(\'' + pid + '\',\'' + cod + '\')">✏️</span>';
-      const custoHtml = (c.custo != null ? '<span class="cm-custo">' + fmtCusto(c.custo) + '</span>' : '<span class="cm-na">—</span>') + penCusto;
+      const custoHtml = (c.custo != null ? '<span class="cm-custo">' + fmtCusto(c.custo) + '</span>' : '<span class="cm-na">—</span>') +
+        desvioHtml(c) + penCusto;
       // VENDA (+ etiqueta auto quando vem da coleta) + lápis de override
       let vendaHtml;
       if (c.venda != null) {
@@ -484,8 +528,14 @@
       '</tr>';
     }).join('');
     const badge = p.bandeira ? '<span class="cm-badge">' + esc(p.bandeira) + '</span>' : '';
+    // Este posto define o custo da bandeira no painel de Mercado: os desvios dos
+    // outros postos da bandeira sao medidos contra ele, e o dele e sempre zero.
+    const refBadge = p.eh_referencia
+      ? '<span class="cm-ref" title="Posto de referência da bandeira ' + esc(p.bandeira || '') +
+        '. É o custo que o painel de Mercado publica, e a base dos desvios dos outros postos.">REFERÊNCIA</span>'
+      : '';
     return '<div class="cm-pcard">' +
-      '<div class="cm-pcard-hdr"><span class="cm-pnome">' + esc(p.posto) + '</span>' + badge + '</div>' +
+      '<div class="cm-pcard-hdr"><span class="cm-pnome">' + esc(p.posto) + '</span>' + refBadge + badge + '</div>' +
       '<table class="cm-table">' +
         '<thead><tr><th>Comb</th><th>Custo</th><th>Venda</th><th>Margem</th><th>Δ Custo</th></tr></thead>' +
         '<tbody>' + (linhas || '<tr><td colspan="5" class="cm-na">Sem combustíveis</td></tr>') + '</tbody>' +
