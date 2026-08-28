@@ -137,7 +137,23 @@
       <div class="page-header">
         <div>
           <div class="page-title">🔌 API TecnoX</div>
-          <div class="page-date">Sonda de diagnóstico — executa, grava e inventaria os campos do retorno</div>
+          <div class="page-date">Saúde do rollup noturno e sonda de diagnóstico dos campos do retorno</div>
+        </div>
+      </div>
+
+      <!-- Saúde do cron do rollup. Primeiro bloco da aba de propósito: é o que
+           responde "o número da tela é de ontem ou está velho?" sem abrir o
+           Railway nem esperar a tela de Relatórios denunciar pela ausência. -->
+      <div class="section">
+        <div class="section-header">
+          <span class="section-icon">🌙</span>
+          <span class="section-title">Rollup noturno</span>
+          <span style="margin-left:auto;font-family:var(--mono);font-size:.62rem;color:var(--text3)" id="rx-quando">—</span>
+        </div>
+        <div class="section-body">
+          <div id="rx-saude"><div class="empty-state">Carregando…</div></div>
+          <div id="rx-reincidentes"></div>
+          <div id="rx-hist"></div>
         </div>
       </div>
 

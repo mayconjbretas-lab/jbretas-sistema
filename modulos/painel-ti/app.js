@@ -674,8 +674,93 @@ function ligarControlesTecnox() {
 }
 
 function txAoAbrir() {
+  rxCarregar();                               // saúde do rollup: 1 consulta, rápida
   if (!_txPostos.length) txCarregarPostos();  // carrega postos e, ao fim, o histórico
   else txCarregarHistorico();
+}
+
+// ════════════════════════════════════════════════════════════════
+// SAÚDE DO ROLLUP NOTURNO — lê GET /rollup/execucoes.
+// O veredito (ok / alerta / sem_rodada) vem PRONTO da API: a mesma regra
+// serviria um alerta por push depois, e duas cópias dela divergiriam na
+// primeira mudança. Aqui só se pinta o que o servidor decidiu.
+// ════════════════════════════════════════════════════════════════
+async function rxCarregar() {
+  const elS = document.getElementById('rx-saude');
+  const elR = document.getElementById('rx-reincidentes');
+  const elH = document.getElementById('rx-hist');
+  const elQ = document.getElementById('rx-quando');
+  if (!elS) return;
+  try {
+    const resp = await apiFetch('/rollup/execucoes?limite=14');
+    const s = resp.saude || {}, execs = resp.execucoes || [], reinc = resp.reincidentes || [];
+
+    const cor = s.estado === 'ok' ? 'var(--ok)' : 'var(--danger)';
+    const icone = s.estado === 'ok' ? '✅' : (s.estado === 'sem_rodada' ? '🚨' : '⚠️');
+    const titulo = s.estado === 'ok' ? 'Rollup em dia'
+                 : s.estado === 'sem_rodada' ? 'O rollup NÃO rodou'
+                 : 'Rollup rodou com falha';
+
+    elS.innerHTML =
+      '<div style="display:flex;gap:.6rem;align-items:flex-start;padding:.7rem .8rem;border-radius:8px;' +
+      'border-left:3px solid ' + cor + ';background:color-mix(in srgb,' + cor + ' 10%,transparent)">' +
+        '<span style="font-size:1.1rem;line-height:1.2">' + icone + '</span>' +
+        '<div>' +
+          '<div style="font-weight:600;color:' + cor + '">' + escapeHtml(titulo) + '</div>' +
+          '<div style="font-size:.78rem;color:var(--text2);margin-top:.15rem">' + escapeHtml(s.motivo || '') + '</div>' +
+        '</div>' +
+      '</div>';
+
+    if (elQ) elQ.textContent = s.horas_desde_ultima == null ? 'nunca rodou'
+      : ('há ' + s.horas_desde_ultima + 'h');
+
+    // Reincidentes: posto que falhou em mais de uma das 14 rodadas. Um posto que
+    // trava toda semana aparece como "1 posto" em cada noite isolada e some no
+    // ruído — só o acumulado mostra o padrão.
+    if (elR) elR.innerHTML = !reinc.length ? '' :
+      '<div style="margin-top:.8rem">' +
+        '<div style="font-size:.72rem;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.35rem">' +
+          'Postos que falharam mais de uma vez nas últimas 14 rodadas</div>' +
+        reinc.map(p =>
+          '<div style="display:flex;gap:.5rem;font-size:.8rem;padding:.25rem 0;border-bottom:1px solid var(--border)">' +
+            '<span style="font-weight:600;min-width:11rem">' + escapeHtml(p.posto) + '</span>' +
+            '<span style="color:var(--danger);font-family:var(--mono)">' + p.vezes + '×</span>' +
+            '<span style="color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+              escapeHtml(p.ultimo_erro || '') + '</span>' +
+          '</div>').join('') +
+      '</div>';
+
+    if (elH) elH.innerHTML = !execs.length ? '' :
+      '<div style="margin-top:.8rem;overflow-x:auto">' +
+        '<table style="width:100%;border-collapse:collapse;font-size:.76rem">' +
+        '<thead><tr style="color:var(--text3);text-align:left">' +
+          ['quando', 'janela', 'ok', 'falha', 'sem venda', 'recuperados']
+            .map(h => '<th style="padding:.3rem .5rem;font-weight:500">' + h + '</th>').join('') +
+        '</tr></thead><tbody>' +
+        execs.map(e => {
+          const morreu = !e.fim;
+          return '<tr style="border-top:1px solid var(--border)">' +
+            '<td style="padding:.3rem .5rem;font-family:var(--mono)">' + escapeHtml(txDataHora(e.inicio)) +
+              (morreu ? ' <span style="color:var(--danger)">(não fechou)</span>' : '') + '</td>' +
+            '<td style="padding:.3rem .5rem;font-family:var(--mono);color:var(--text3)">' +
+              escapeHtml(String(e.data_de)) + ' .. ' + escapeHtml(String(e.data_ate)) + '</td>' +
+            '<td style="padding:.3rem .5rem;font-family:var(--mono)">' + (e.pares_ok || 0) + '/' + (e.pares_alvo || 0) + '</td>' +
+            '<td style="padding:.3rem .5rem;font-family:var(--mono);color:' +
+              (e.pares_falha > 0 ? 'var(--danger)' : 'var(--text3)') + '">' + (e.pares_falha || 0) + '</td>' +
+            '<td style="padding:.3rem .5rem;font-family:var(--mono);color:var(--text3)">' + (e.pares_sem_dado || 0) + '</td>' +
+            '<td style="padding:.3rem .5rem;font-family:var(--mono);color:' +
+              (e.pares_recuperados > 0 ? 'var(--warning)' : 'var(--text3)') + '">' + (e.pares_recuperados || 0) + '</td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table></div>';
+  } catch (err) {
+    // Tabela ainda não criada (sql/rollup_execucoes.sql não aplicado) cai aqui.
+    // Falha de leitura da saúde NÃO pode passar por "está tudo bem".
+    elS.innerHTML = '<div class="empty-state" style="color:var(--danger)">' +
+      'Não foi possível ler a saúde do rollup: ' + escapeHtml(err.message || String(err)) + '</div>';
+    if (elR) elR.innerHTML = '';
+    if (elH) elH.innerHTML = '';
+  }
 }
 
 async function txCarregarPostos() {
