@@ -4,11 +4,18 @@
 // window.renderRelatorios(section), chamado pelo setTab (mesmo padrão
 // do renderMedicao / renderColetaRevisao).
 //
-// Consome GET /relatorios?data=YYYY-MM-DD (agregador da rede: litros
-// de combustível, mix de gasolina aditivada e venda de produtos/
-// lubrificantes do TecnoX). Três vistas sobre o MESMO fetch:
-// Consolidado (tabela) · Mix (ranking) · Produtos (ranking). Cada
-// vista tem botão "Copiar p/ WhatsApp" com formato fixo.
+// Três vistas, cada uma com seu fetch e seu botão "Copiar p/ WhatsApp":
+//  · Consolidado — GET /relatorios?data= (modo Dia, cruza medicao × TecnoX)
+//                  ou GET /relatorios?inicio&fim (modo Período, rollup)
+//  · Mix         — GET /relatorios/mix-periodo      (rollup)
+//  · Produtos    — GET /relatorios/produtos-periodo (rollup)
+//
+// FONTE: as três vistas por PERÍODO leem o rollup da TecnoX
+// (tecnox_venda_dia + tecnox_venda_produto_dia). Até 28/08/2026 liam
+// vendas_tecnox, a planilha do supervisor, que cobria 24 dos 37 postos
+// em gasolina e 29 em produtos. O modo Dia do Consolidado é o único que
+// ainda usa a planilha, porque ele compara a medicao do gerente com o
+// que a TecnoX registrou no mesmo dia.
 // Tema Premium via tokens do painel-adm.css (--tx/--ac/--sf...), então
 // segue claro/escuro sozinho. CSS da aba injetado uma vez no shell.
 // ================================================================
@@ -26,6 +33,18 @@
   let _consInicio  = null;
   let _consFim     = null;
   let _consDados   = null;            // resposta do GET /relatorios?inicio&fim
+  // Venda de Produtos passou a ser por PERÍODO (antes vinha do fetch diário) e
+  // usa a MESMA janela do card de Mix: um controle de período serve os dois
+  // rankings, e os números ficam comparáveis entre eles.
+  let _prodDados   = null;            // resposta do GET /relatorios/produtos-periodo
+
+  // Fetch em voo, por card. Existe para o Copiar p/ WhatsApp NÃO mandar o
+  // período anterior quando o usuário troca a data e clica logo em seguida —
+  // sem isso o texto sai com os números velhos, sem nenhum aviso.
+  let _diaCarregando  = false;
+  let _mixCarregando  = false;
+  let _prodCarregando = false;
+  let _consCarregando = false;
 
   // Ontem em Brasília, formato en-CA (mesmo default do backend).
   function ontemISO() {
@@ -133,6 +152,7 @@
       '</div>';
     const inp = sec.querySelector('#rel-data');
     inp.onchange = () => carregar(inp.value);
+    ligarGuarda(sec);
     _shellPronto = true;
   }
 
@@ -141,12 +161,15 @@
     _dataISO = iso;
     const body = document.getElementById('rel-body');
     if (body) body.innerHTML = '<div class="empty">Carregando…</div>';
+    _diaCarregando = true;
     try {
       _dados = await apiFetch('/relatorios?data=' + encodeURIComponent(iso));
       renderVista();
     } catch (err) {
       _dados = null;
       if (body) body.innerHTML = '<div class="empty" style="color:var(--dg)">Erro ao carregar: ' + (err.message || err) + '</div>';
+    } finally {
+      _diaCarregando = false;
     }
   }
 
@@ -157,6 +180,7 @@
     const qs = (inicio && fim)
       ? '?inicio=' + encodeURIComponent(inicio) + '&fim=' + encodeURIComponent(fim)
       : '';
+    _mixCarregando = true;
     try {
       _mixDados  = await apiFetch('/relatorios/mix-periodo' + qs);
       _mixInicio = _mixDados.inicio;
@@ -165,6 +189,30 @@
       _mixInicio = inicio || _mixInicio;
       _mixFim    = fim    || _mixFim;
       _mixDados  = { inicio: _mixInicio, fim: _mixFim, postos: [], total: {}, _erro: (err.message || err) };
+    } finally {
+      _mixCarregando = false;
+    }
+    renderVista();
+    // Produtos usa a janela do Mix. Vai DEPOIS de propósito: sem inicio/fim o
+    // backend resolve o ciclo corrente (21→20) e só aqui sabemos qual foi —
+    // assim a conta do ciclo não é repetida no front.
+    carregarProdutos(_mixInicio, _mixFim);
+  }
+
+  // ── Carrega Venda de Produtos por PERÍODO ────────────────────────
+  // GET /relatorios/produtos-periodo — soma LUBRIFICANTE + PRODUTO do rollup
+  // da TecnoX. Mesma janela do card de Mix.
+  async function carregarProdutos(inicio, fim) {
+    const qs = (inicio && fim)
+      ? '?inicio=' + encodeURIComponent(inicio) + '&fim=' + encodeURIComponent(fim)
+      : '';
+    _prodCarregando = true;
+    try {
+      _prodDados = await apiFetch('/relatorios/produtos-periodo' + qs);
+    } catch (err) {
+      _prodDados = { inicio, fim, postos: [], total: {}, _erro: (err.message || err) };
+    } finally {
+      _prodCarregando = false;
     }
     renderVista();
   }
@@ -172,12 +220,57 @@
   // ── Carrega o Consolidado por PERÍODO (GET /relatorios?inicio&fim) ──
   async function carregarConsPeriodo(inicio, fim) {
     _consInicio = inicio; _consFim = fim;
+    _consCarregando = true;
     try {
       _consDados = await apiFetch('/relatorios?inicio=' + encodeURIComponent(inicio) + '&fim=' + encodeURIComponent(fim));
     } catch (err) {
       _consDados = { modo: 'periodo', inicio, fim, postos: [], totais: {}, _erro: (err.message || err) };
+    } finally {
+      _consCarregando = false;
     }
     renderVista();
+  }
+
+  // ── Guarda de re-render durante o clique ─────────────────────────
+  // renderVista() troca o innerHTML do #rel-body INTEIRO. Se isso acontecer
+  // entre o mousedown e o mouseup de um clique, o nó que recebeu o mousedown
+  // sai do documento e o navegador NUNCA dispara o 'click' — o botão não
+  // responde, e não há erro no console para denunciar.
+  //
+  // Era o bug do "Copiar p/ WhatsApp" do Mix: o botão fica no mesmo bloco dos
+  // dois inputs de data, então clicar nele faz o input perder o foco, o
+  // 'change' disparar, o fetch voltar e o card ser recriado no meio do clique.
+  // Medido num DOM: com o fetch respondendo em até ~60ms o clique se perde;
+  // acima disso ele passa, mas copia o período ANTERIOR (ver __relCopiar). Por
+  // ser corrida, falhava de forma intermitente. O Consolidado em modo Período
+  // tem o mesmo desenho e o mesmo problema.
+  //
+  // Enquanto o ponteiro está pressionado o render fica pendente e é aplicado no
+  // pointerup. O timeout é rede de segurança: se o pointerup nunca chegar
+  // (ponteiro sai da janela, gesto cancelado), o render não pode ficar preso.
+  let _guardaLigada   = false;
+  let _pointerDown    = false;
+  let _renderPendente = false;
+  let _guardaTimer    = null;
+
+  function soltarGuarda() {
+    _pointerDown = false;
+    if (_guardaTimer) { clearTimeout(_guardaTimer); _guardaTimer = null; }
+    if (_renderPendente) { _renderPendente = false; renderVista(); }
+  }
+
+  function ligarGuarda(sec) {
+    if (_guardaLigada) return;
+    _guardaLigada = true;
+    sec.addEventListener('pointerdown', () => {
+      _pointerDown = true;
+      if (_guardaTimer) clearTimeout(_guardaTimer);
+      _guardaTimer = setTimeout(soltarGuarda, 1000);
+    });
+    // up/cancel no DOCUMENTO, não na seção: se o usuário arrasta e solta fora,
+    // o pointerup não passa pela seção e a guarda ficaria presa até o timeout.
+    document.addEventListener('pointerup', soltarGuarda);
+    document.addEventListener('pointercancel', soltarGuarda);
   }
 
   // ── Render: tudo numa tela só — consolidado em cima, mix + produtos
@@ -185,9 +278,10 @@
   function renderVista() {
     const body = document.getElementById('rel-body');
     if (!body) return;
-    // Consolidado/Produtos vêm do fetch diário; Mix tem fetch próprio. Cada
-    // card trata seu próprio "carregando", então NÃO abortamos aqui: assim o
-    // Mix pode aparecer antes/depois do diário sem um wipar o outro.
+    if (_pointerDown) { _renderPendente = true; return; }
+    // Os três cards têm fetch próprio e cada um trata seu próprio "carregando",
+    // então NÃO abortamos aqui: cada card aparece quando o dele chega, sem um
+    // wipar o outro.
     body.innerHTML =
       renderConsolidado() +
       '<div class="rel-grid2">' + renderMixCard() + renderProdutos() + '</div>';
@@ -266,7 +360,7 @@
         ? '<tr>' +
             '<td class="nome">' + nomeExib(p.posto) + '</td>' +
             '<td class="num">' + (p.gasolina_litros == null ? '—' : fmtL(p.gasolina_litros) + ' L') + '</td>' +
-            '<td class="num">' + fmtRS(p.lubrificantes_rs) + '</td>' +
+            '<td class="num">' + fmtRS(p.produtos_rs) + '</td>' +
             '<td class="num">' + fmtPct(p.mix) + '</td>' +
             '<td class="num">' + nd(p.dias) + '</td>' +
           '</tr>'
@@ -282,7 +376,7 @@
         ? '<tr class="rel-total">' +
             '<td>🏆 TOTAL REDE</td>' +
             '<td class="num">' + (t.gasolina_litros == null ? '—' : fmtL(t.gasolina_litros) + ' L') + '</td>' +
-            '<td class="num">' + fmtRS(t.lubrificantes_rs) + '</td>' +
+            '<td class="num">' + fmtRS(t.produtos_rs) + '</td>' +
             '<td class="num">' + fmtPct(t.mix) + '</td>' +
             '<td class="num">' + nd(t.dias_max || 0) + '</td>' +
           '</tr>'
@@ -293,7 +387,9 @@
             '<td class="num">' + fmtPct(t.mix) + '</td>' +
           '</tr>';
       const head = ehPer
-        ? '<th>Posto</th><th class="num">Gasolina (L)</th><th class="num">Lubrif. (R$)</th><th class="num">Mix GA</th><th class="num">Nd</th>'
+        // "Produtos" e não "Lubrif.": a coluna sempre somou lubrificante +
+        // produto, e no rollup isso fica explícito (grupos LUBRIFICANTE e PRODUTO).
+        ? '<th>Posto</th><th class="num">Gasolina (L)</th><th class="num">Produtos (R$)</th><th class="num">Mix GA</th><th class="num">Nd</th>'
         : '<th>Posto</th><th class="num">Combust. (L)</th><th class="num">Lubrif. (R$)</th><th class="num">Mix GA (dia)</th>';
       inner = '<table class="rel-table"><thead><tr>' + head + '</tr></thead><tbody>' + linhas + total + '</tbody></table>';
     }
@@ -335,7 +431,10 @@
       const dias = tot.dias_max || 0;
       const diasTxt = dias + (dias === 1 ? ' dia' : ' dias') + ' lançados';
       const estado = emAndamento ? ('🟡 em andamento · ' + diasTxt + ' até agora') : diasTxt;
-      const nPostos = rank.length + (rank.length === 1 ? ' posto' : ' postos') + ' com mix';
+      // Cobertura com DENOMINADOR da rede: "N de 37". Antes era só a contagem
+      // do que chegou ("23 postos com mix"), que não denunciava os 14 ausentes.
+      const naRede = tot.postos_na_rede || rank.length;
+      const nPostos = rank.length + ' de ' + naRede + ' postos';
       sub = 'ciclo ' + brDataCurta(d.inicio) + ' a ' + brDataCurta(d.fim) + ' · ' + estado + ' · ' + nPostos;
       inner = rank.length
         ? '<ul class="rel-rank">' + rank.map((p, i) =>
@@ -360,19 +459,35 @@
     '</div>';
   }
 
+  // Ranking de venda de produtos no PERÍODO do card de Mix (mesma janela).
+  // LUBRIFICANTE e PRODUTO somam num número só — o split vai no title da linha,
+  // que informa sem partir a tela em duas listas.
   function renderProdutos() {
-    if (!_dados) return cardCabecalho('🛢️ Venda de Produtos', 'sem combustível, R$', 'produtos', '<div class="empty">Carregando…</div>');
-    const comDados = (_dados.postos || []).filter(p => p.lubrificantes_rs != null);
-    let inner;
-    if (!comDados.length) {
-      inner = '<div class="empty">🛢️ Aguardando dados TecnoX</div>';
-    } else {
-      const rank = comDados.slice().sort((a, b) => b.lubrificantes_rs - a.lubrificantes_rs);
-      inner = '<ul class="rel-rank">' + rank.map((p, i) =>
-        '<li><span class="rk-pos">' + (i + 1) + '.</span><span class="rk-nome">' + nomeExib(p.posto) + '</span><span class="rk-val">' + fmtRS(p.lubrificantes_rs) + '</span></li>'
-      ).join('') + '</ul>';
+    const d = _prodDados;
+    const SUB = 'sem combustível, R$';
+    if (!d) return cardCabecalho('🛢️ Venda de Produtos', SUB, 'produtos', '<div class="empty">Carregando…</div>');
+    if (d._erro) {
+      return cardCabecalho('🛢️ Venda de Produtos', SUB, 'produtos',
+        '<div class="empty" style="color:var(--dg)">Erro ao carregar: ' + d._erro + '</div>');
     }
-    return cardCabecalho('🛢️ Venda de Produtos', 'sem combustível, R$', 'produtos', inner);
+    const tot  = d.total || {};
+    const rank = (d.postos || []).filter(p => p.produtos_rs != null);   // backend já ordena
+    // Denominador da rede: o card mostrava 29 postos sem dizer que a rede tem 37.
+    const naRede = tot.postos_na_rede || rank.length;
+    const sub = 'ciclo ' + brDataCurta(d.inicio) + ' a ' + brDataCurta(d.fim) +
+      ' · ' + rank.length + ' de ' + naRede + ' postos · ' + SUB;
+    const inner = rank.length
+      ? '<ul class="rel-rank">' + rank.map((p, i) => {
+          const t = (p.lubrificante_rs != null && p.produto_rs != null)
+            ? ' title="lubrificante ' + fmtRS(p.lubrificante_rs) + ' + produto ' + fmtRS(p.produto_rs) + '"'
+            : '';
+          return '<li' + t + '><span class="rk-pos">' + (i + 1) + '.</span>' +
+            '<span class="rk-nome">' + nomeExib(p.nome) + '</span>' +
+            '<span class="rk-dias">' + p.dias + 'd</span>' +
+            '<span class="rk-val">' + fmtRS(p.produtos_rs) + '</span></li>';
+        }).join('') + '</ul>'
+      : '<div class="empty">Sem venda de produtos neste período.</div>';
+    return cardCabecalho('🛢️ Venda de Produtos', sub, 'produtos', inner);
   }
 
   // ── Textos do WhatsApp (formatos fixos) ──────────────────────────
@@ -381,6 +496,7 @@
   function textoConsolidado() {
     const d = _consModo === 'periodo' ? _consDados : _dados;
     if (!d) return '';
+    if (!(d.postos || []).length) return '';   // idem: sem postos, nada a copiar
     // Modo PERÍODO: intervalo no cabeçalho + valores do período (gasolina).
     if (d.modo === 'periodo') {
       const linhas = ['📊 *RELATÓRIO — ' + brData(d.inicio) + ' a ' + brData(d.fim) + '*', HR];
@@ -388,14 +504,14 @@
         .sort((a, b) => nomeExib(a.posto).localeCompare(nomeExib(b.posto)))
         .forEach(p => {
           const g = p.gasolina_litros == null ? '—' : fmtL(p.gasolina_litros) + 'L';
-          const r = p.lubrificantes_rs == null ? '—' : fmtRS(p.lubrificantes_rs);
+          const r = p.produtos_rs == null ? '—' : fmtRS(p.produtos_rs);
           const m = p.mix == null ? '—' : fmtPct(p.mix);
           linhas.push('- ' + nomeExib(p.posto) + ': ' + g + ' | ' + r + ' | ' + m);
         });
       const t = d.totais || {};
       linhas.push(HR, '🏆 *TOTAL REDE*',
         '⛽ Gasolina: *' + fmtL(t.gasolina_litros) + ' L*',
-        '🛢️ Produtos: *' + fmtRS(t.lubrificantes_rs) + '*');
+        '🛢️ Produtos: *' + fmtRS(t.produtos_rs) + '*');
       return linhas.join('\n');
     }
     // Modo DIA (formato atual, inalterado).
@@ -417,6 +533,10 @@
   function textoMix() {
     const d = _mixDados; if (!d) return '';
     const rank = (d.postos || []).filter(p => p.mix != null);  // backend já ordena
+    // Sem nenhuma linha, devolve vazio para o __relCopiar avisar "Sem dados".
+    // Devolver só o cabeçalho fazia o botão dizer "Copiado!" e o usuário colar
+    // um título sozinho no WhatsApp.
+    if (!rank.length) return '';
     const linhas = [
       '🟢 *Mix G. Aditivada — ' + brDataCurta(d.inicio) + ' a ' + brDataCurta(d.fim) + '*',
       '(% do volume de gasolina)',
@@ -426,10 +546,16 @@
   }
 
   function textoProdutos() {
-    const d = _dados; if (!d) return '';
-    const rank = (d.postos || []).filter(p => p.lubrificantes_rs != null).sort((a, b) => b.lubrificantes_rs - a.lubrificantes_rs);
-    const linhas = ['🟢 *VENDA DE PRODUTOS*', '(sem combustível, R$)'];
-    rank.forEach((p, i) => linhas.push((i + 1) + '. ' + nomeExib(p.posto) + ' — ' + fmtRS(p.lubrificantes_rs)));
+    const d = _prodDados; if (!d) return '';
+    const rank = (d.postos || []).filter(p => p.produtos_rs != null);   // backend já ordena
+    if (!rank.length) return '';   // idem textoMix: nada a copiar, nada de cabeçalho solto
+    const linhas = [
+      '🟢 *VENDA DE PRODUTOS — ' + brDataCurta(d.inicio) + ' a ' + brDataCurta(d.fim) + '*',
+      '(sem combustível, R$)',
+    ];
+    rank.forEach((p, i) => linhas.push((i + 1) + '. ' + nomeExib(p.nome) + ' — ' + fmtRS(p.produtos_rs) + ' (' + p.dias + 'd)'));
+    const t = d.total || {};
+    if (t.produtos_rs != null) linhas.push(HR, '🏆 *TOTAL REDE*: ' + fmtRS(t.produtos_rs));
     return linhas.join('\n');
   }
 
@@ -462,10 +588,28 @@
     if (i && f && i.value && f.value) carregarConsPeriodo(i.value, f.value);
   };
 
+  // Feedback curto no próprio botão, no mesmo molde do jbCopiar.
+  function piscarBotao(btn, msg) {
+    if (!btn) return;
+    const orig = btn.textContent;
+    btn.textContent = msg;
+    setTimeout(() => { btn.textContent = orig; }, 1800);
+  }
+
   window.__relCopiar = function (tipo, btn) {
+    // Recusa copiar com fetch em voo. Sem isto, trocar a data e clicar em
+    // seguida manda para o WhatsApp os números do período ANTERIOR, sem aviso —
+    // pior que não copiar, porque parece certo.
+    const carregando = tipo === 'mix' ? _mixCarregando
+                     : tipo === 'produtos' ? _prodCarregando
+                     : (_consModo === 'periodo' ? _consCarregando : _diaCarregando);
+    if (carregando) { piscarBotao(btn, '⏳ Atualizando…'); return; }
     const texto = tipo === 'mix' ? textoMix()
                 : tipo === 'produtos' ? textoProdutos()
                 : textoConsolidado();
+    // jbCopiar mostra "✓ Copiado!" mesmo para texto vazio (writeText('') resolve).
+    // Sem esta guarda o usuário cola nada e acha que copiou.
+    if (!texto || !texto.trim()) { piscarBotao(btn, '⚠️ Sem dados'); return; }
     window.jbCopiar(texto, btn);   // helper compartilhado (shared/js/clipboard.js)
   };
 
@@ -473,9 +617,10 @@
   window.renderRelatorios = function (sec) {
     if (!sec) return;
     if (!_shellPronto || !sec.querySelector('#rel-data')) montarShell(sec);
-    // Diário e Mix têm fetches independentes; cada um chama renderVista ao chegar.
-    if (!_dados)    carregar(_dataISO);        // Consolidado + Produtos (dia)
-    if (!_mixDados) carregarMix();             // Mix (período; default = ciclo corrente)
-    if (_dados && _mixDados) renderVista();     // reabertura: já tem tudo, só re-render
+    // Três fetches independentes; cada um chama renderVista ao chegar. Produtos
+    // é encadeado por carregarMix, que resolve a janela do ciclo no backend.
+    if (!_dados)    carregar(_dataISO);        // Consolidado (modo Dia)
+    if (!_mixDados) carregarMix();             // Mix + Produtos (ciclo corrente)
+    if (_dados && _mixDados && _prodDados) renderVista();   // reabertura: só re-render
   };
 })();
