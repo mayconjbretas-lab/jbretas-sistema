@@ -281,7 +281,7 @@
       // menores sem esmagar o SVG. Não depende da quantidade — a lista vem do
       // backend (hoje 4: GC, ET, S10, S500).
       '.mrc-gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(206px,1fr));gap:.9rem}' +
-      '.mrc-gcard{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:.8rem .7rem 1rem;display:flex;flex-direction:column}' +
+      '.mrc-gcard{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:.8rem .7rem 1rem;display:flex;flex-direction:column;min-width:0}' +
       '.mrc-gcard-hdr{display:flex;flex-direction:column;gap:1px;margin-bottom:.3rem;text-align:center}' +
       '.mrc-gcard-cod{font-family:var(--mono);font-size:.82rem;font-weight:700;color:var(--tx)}' +
       '.mrc-gcard-nome{font-size:.58rem;color:var(--tx3)}' +
@@ -303,7 +303,7 @@
       // do posto de referencia, ou o aviso de fallback. Discreta de proposito:
       // e contexto do numero, nao o numero. Fica em .mrc-rank-nome (que
       // empilha) e sob o valor do velocimetro.
-      '.mrc-cob{font-family:var(--mono);font-size:.6rem;color:var(--tx3);white-space:nowrap}' +
+      '.mrc-cob{font-family:var(--mono);font-size:.6rem;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
       '.mrc-cob.alerta{color:var(--wn);font-weight:700}' +
       // Empilha nome + cobertura; o ellipsis segue valendo para o nome longo.
       '.mrc-rank-nome{display:flex;flex-direction:column;gap:0;overflow:hidden;color:var(--tx2)}' +
@@ -324,6 +324,20 @@
         '.mrc-g-val{font-size:1.15rem}' +
         '.mrc-g-precos{gap:.3rem;margin-top:.45rem;padding-top:.45rem}' +
         '.mrc-g-p-nome{font-size:.52rem}' +
+        // O rotulo divide os ~78px do meio-card com o outro lado, e o de
+        // fallback ('⚠ sem referencia · 1 de 14') mede 122px na JetBrains Mono
+        // real — nao cabe em uma linha em largura nenhuma de celular. Quebrar
+        // resolve sempre. SO no card: no ranking o nowrap e proposital (a linha
+        // tem altura fixa), por isso o seletor e .mrc-g-p .mrc-cob.
+        '.mrc-g-p .mrc-cob{font-size:.52rem;white-space:normal;line-height:1.25}' +
+        // No card, o rotulo normal ('ref: NOME') sai no mobile: e a mesma
+        // informacao repetida em 8 lugares numa tela apertada, e quem usa o
+        // painel sabe de cabeca qual posto e referencia de cada bandeira.
+        // O de FALLBACK fica: ele avisa que o numero NAO veio da referencia
+        // (a referencia nao tinha custo no dia), muda por dia e por
+        // combustivel, e sozinho na celula fica muito mais visivel.
+        // O nome completo segue no title e no ranking, e no desktop nada muda.
+        '.mrc-g-p .mrc-cob:not(.alerta){display:none}' +
         '.mrc-g-p-val{font-size:.8rem}' +
         '.mrc-gvazio{padding:1.1rem .3rem;font-size:.6rem}' +
         // Os dois seletores lado a lado com o × entre eles: o min-width de 190px
@@ -765,6 +779,25 @@
       esc(c.texto) + '</span>';
   }
 
+  // Nome de exibicao do posto de referencia, curto o bastante para caber sob o
+  // velocimetro em 380px. Regras, nesta ordem:
+  //  · tira o prefixo 'P. ';
+  //  · com traco, fica o que vem DEPOIS ('SANTA INES - JOAQUIM' -> 'JOAQUIM'):
+  //    e a parte que distingue o posto, o antes e generico;
+  //  · so a PRIMEIRA palavra, sempre.
+  // Colide em 3 pares: SAO BERNARDO/SAO LUIZ RL -> 'SAO', SANTA MARIA/SANTA
+  // INES MINAS -> 'SANTA', BOMBOM MATRIZ/FILIAL -> 'BOMBOM'. Sao 34 rotulos
+  // para 37 postos, aceito de proposito: so UM posto por bandeira e
+  // referencia, entao dois colididos so apareceriam juntos se as duas
+  // bandeiras estivessem na mesma dupla de seletores. O nome COMPLETO segue
+  // no title do span (ver cobDe).
+  function nomeCurtoPosto(nome) {
+    const s = String(nome || '').replace(/^P\.\s*/i, '').trim();
+    if (!s) return '';
+    const partes = s.split(/\s+-\s+/);
+    return partes[partes.length - 1].trim().split(/\s+/)[0];
+  }
+
   // Origem do custo de uma bandeira propria. SO bandeira tem: o custo dela vem
   // de custos_precos, que e POR POSTO, e o backend escolhe UM valor. Distribuidora
   // de mercado nao tem — custos_mercado ja e um preco por distribuidora.
@@ -787,8 +820,8 @@
     const naBand = r.postos_na_bandeira ? '; a bandeira tem ' + r.postos_na_bandeira + ' postos ativos' : '';
     const distintos = r.valores_distintos ? '; ' + r.valores_distintos + ' valores distintos no dia' : '';
     if (r.origem === 'referencia') {
-      // Nome curto: 'P. LOURA EMPREENDIMENTOS' -> 'LOURA EMPREENDIMENTOS'.
-      const curto = String(r.posto_referencia || '').replace(/^P\.\s*/i, '');
+      // Nome curto (nomeCurtoPosto): 'P. LOURA EMPREENDIMENTOS' -> 'LOURA'.
+      const curto = nomeCurtoPosto(r.posto_referencia);
       return {
         texto: curto ? 'ref: ' + curto : 'referencia',
         alerta: false,
