@@ -114,6 +114,17 @@
 
   function mesCorrente() { const d = new Date(); return { mes: d.getMonth() + 1, ano: d.getFullYear() }; }
 
+  // Mes FECHADO = qualquer um que nao seja o corrente. A matriz inteira entra
+  // somente leitura nele. Trocado a pedido: a chance de alterar historico sem
+  // querer, agora que da para navegar, e maior que a de precisar corrigir
+  // julho em setembro — e a correcao de verdade tem outros caminhos.
+  // Para afrouxar, e so esta funcao devolver false.
+  function mesFechado() {
+    if (_mes == null) return false;
+    const c = mesCorrente();
+    return !(_mes === c.mes && _ano === c.ano);
+  }
+
   // Recarrega o MESMO posto no mes vizinho. Nao passa de mes corrente para a
   // frente: adiante so ha linha vazia, e o dia 1o do mes seguinte ja aparece
   // como linha de borda (?margem=1) sem precisar sair do mes.
@@ -260,12 +271,19 @@
     _thead.innerHTML = row1 + row2;
   }
 
+  // Por que a célula está travada — o texto muda com o motivo, senão o mês
+  // fechado se explicaria como se fosse a linha de borda.
+  const motivoRO = (fechado) => fechado
+    ? 'Mês fechado — somente leitura'
+    : 'Mês anterior — somente leitura';
+
   // Uma linha por dia; cada categoria com uma célula por combustível.
   function montarLinhasMedicao(dados) {
     const grupos    = dados.grupos;
     const vendaCols = dados.combustiveisVenda;
     let html = '';
     const cats = categoriasVisiveis();
+    const fechado = mesFechado();
     dados.dias.forEach((d, diaIdx) => {
       // Linha de BORDA (fora_do_mes): mes anterior ou seguinte.
       const fora = !!d.fora_do_mes;
@@ -273,12 +291,14 @@
       // consumo do dia 1o. A da FRENTE e editavel: e o pedido da virada.
       // Compara com o 1o dia do array que NAO e de borda para saber de que
       // lado esta, sem depender de Date nem do fuso.
-      const soLeitura = fora && diaIdx === 0;
+      // Em mes FECHADO nada e editavel — nem a borda da frente, que ali ja e
+      // passado tambem.
+      const soLeitura = fechado || (fora && diaIdx === 0);
       // O mes vem da PROPRIA data do dia ('31/07/2026' -> 'JUL'), nao de
       // dados.mes: com as bordas, dados.mes rotularia 31/07 como 31/AGO.
       const mesDoDia = MES_ABREV[parseInt(String(d.data).slice(3, 5), 10) - 1] || dados.mes;
       html += '<tr' + (fora ? ' class="linha-fora"' : '') + '><td class="sticky-col"' +
-        (soLeitura ? ' title="Mês anterior — somente leitura"' : '') + '>' +
+        (soLeitura ? ' title="' + motivoRO(fechado) + '"' : '') + '>' +
         String(d.dia).padStart(2, '0') + '/' + mesDoDia + '</td>';
       cats.forEach(cat => {
         const cols    = colunasDaCategoria(cat.chave, grupos, vendaCols);
@@ -325,7 +345,7 @@
             // nenhum parece defeito.
             const vazia = (val === null || val === undefined || val === '') ? ' cell-vazia' : '';
             const motivo = soLeitura
-              ? 'Mês anterior — somente leitura'
+              ? motivoRO(fechado)
               : 'Somente leitura — definido no Painel ADM';
             html += '<td class="' + grpEnd + ' td-ro" title="' + motivo + '">' +
               '<span class="cell-val cell-ro' + vazia + '">' + fmtL(val) + '</span></td>';
