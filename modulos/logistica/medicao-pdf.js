@@ -10,8 +10,9 @@
 // tambem pelo logistica-mobile).
 //
 // DUAS PAGINAS POR POSTO, para imprimir em FRENTE E VERSO:
-//   FRENTE — medicao do mes + linha de total; a previsao do dia
-//            corrente aparece em italico.
+//   FRENTE — medicao do mes; a previsao do dia corrente aparece em
+//            italico. SEM linha de total (ver tabela(): medicao e
+//            estoque, nao fluxo).
 //   VERSO  — venda e pedido final LADO A LADO, cada um com total.
 // CARGA NAO ENTRA, a pedido: e onde os gerentes mais erram e a folha
 // nao deve carregar o numero errado para dentro do posto.
@@ -123,7 +124,7 @@
       // ── FRENTE: so a medicao ──
       '<section class="folha folha-frente">' +
         cab('Frente · Medição') +
-        tabela(dias, grupos, diaHoje, 'medicao', { previsao: true }) +
+        tabela(dias, grupos, diaHoje, 'medicao', { previsao: true, semTotal: true }) +
         rod(1, 'Em itálico: previsão do dia corrente — medição do dia anterior mais o pedido do dia. Valor previsto, não medido.') +
       '</section>' +
       // ── VERSO: venda e pedido lado a lado (ver .fl-blocos no print.css) ──
@@ -196,11 +197,20 @@
       body += '</tr>';
     });
 
-    const tfoot = '<tr><td class="fl-c-dia">Total</td>' +
-      totais.map(t => '<td>' + (t == null ? '—' : fmt(t)) + '</td>').join('') + '</tr>';
+    // MEDICAO nao leva total (opt.semTotal): medicao e ESTOQUE, nao fluxo —
+    // somar 31 leituras de tanque nao produz numero com significado (um tanque
+    // de 15.000 L 'totalizaria' 465.000 no mes). Em venda e pedido a soma e o
+    // que interessa: quanto saiu e quanto foi pedido no mes.
+    // Nada entra no lugar: uma media teria denominador ambiguo no papel (dias
+    // medidos ou dias do mes?) e o dia corrente pode estar em italico, que e
+    // previsao e nao medicao — duas coisas impossiveis de explicar num rodape.
+    const tfoot = opt.semTotal ? '' :
+      '<tfoot><tr><td class="fl-c-dia">Total</td>' +
+      totais.map(t => '<td>' + (t == null ? '—' : fmt(t)) + '</td>').join('') +
+      '</tr></tfoot>';
 
     return '<table class="fl-tab"><thead>' + thead + '</thead><tbody>' + body +
-           '</tbody><tfoot>' + tfoot + '</tfoot></table>';
+           '</tbody>' + tfoot + '</table>';
   }
 
   window.medicaoPdf = { montar: montar };
