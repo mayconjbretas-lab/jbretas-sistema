@@ -77,9 +77,12 @@ function setTab(btn, tab) {
   // KPI — sugestão de pedido (kpi.js expõe renderKpi). Tokens longos via #s-kpi (admin.css).
   if (tab === 'kpi') renderKpi(document.getElementById('s-kpi'));
   if (tab === 'coleta') renderColetaRevisao(document.getElementById('s-coleta'));
-  // Medição — aba do ADM (define o pré-pedido); código próprio do painel-adm
-  // (medicao.js expõe renderMedicao). Tokens longos resolvem via #s-medicao (admin.css).
-  if (tab === 'medicao') renderMedicao(document.getElementById('s-medicao'));
+  // Medição — tela própria do mobile (medicao-mobile.js expõe renderMedicaoMobile).
+  // É a única aba que não rola pela .main: o cabeçalho de posto e as abas de
+  // categoria ficam fixos e só o corpo da tabela rola. A classe abaixo desliga a
+  // rolagem da .main enquanto ela está ativa e devolve ao sair.
+  document.getElementById('main').classList.toggle('main-sem-rolagem', tab === 'medicao');
+  if (tab === 'medicao') renderMedicaoMobile(document.getElementById('s-medicao'));
   // Relatórios — mesmo JS do painel-adm desktop (renderRelatorios em window), sem fork.
   if (tab === 'relat') renderRelatorios(document.getElementById('s-relat'));
   // Fornecedores — dashboard (fornecedores.js expõe renderFornecedores), agora aba do rodapé.

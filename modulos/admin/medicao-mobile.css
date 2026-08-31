@@ -1,0 +1,130 @@
+/* ================================================================
+   JBRETAS SISTEMA — modulos/admin/medicao-mobile.css
+   Tela MEDICAO do admin mobile (medicao-mobile.js).
+
+   TOKENS: vocabulario CURTO do admin (--tx/--bd/--ac/--sf/--inf) usado
+   DIRETO, sem ponte longo->curto. NENHUM token e declarado aqui, e
+   nenhum seletor sai de #s-medicao — o problema que tivemos foi
+   exatamente o painel-adm/medicao.css declarar os --c-* no :root dele,
+   que no admin virava o :root da pagina inteira e vazava para as outras
+   abas. Aqui nao ha o que vazar.
+   ================================================================ */
+
+/* A Medicao e a UNICA tela do admin que nao rola pela .main: o cabecalho e
+   as abas ficam fixos e so o corpo da tabela rola. A classe e posta/tirada
+   pelo setTab (app.js), nao por :has() — o suporte no Safari mais antigo do
+   iPhone nao e garantido e isto e a estrutura da tela, nao um detalhe. */
+/* So a rolagem sai. O padding-bottom da .main (70px + safe-area) CONTINUA:
+   e ele que reserva o espaco da .bnav fixa. Zerando-o, as abas de categoria
+   ficavam por baixo do rodape de navegacao. Como height:100% do #s-medicao
+   resolve contra a altura de CONTEUDO da .main, a tela ja para acima da bnav. */
+.main.main-sem-rolagem { overflow: hidden }
+
+#s-medicao.active { display: flex; flex-direction: column; height: 100%; padding: 0; min-height: 0 }
+.mm-wrap { display: flex; flex-direction: column; height: 100%; min-height: 0 }
+
+/* ── Cabecalho fixo ─────────────────────────────────────────────── */
+.mm-topo { flex: none; background: var(--sf); border-bottom: 1px solid var(--bd); padding: .5rem .55rem .45rem }
+
+.mm-posto { display: flex; align-items: center; gap: .3rem }
+.mm-posto-txt { flex: 1; min-width: 0; text-align: center }
+.mm-nome { font-family: var(--mono); font-size: .84rem; font-weight: 700; color: var(--tx);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2 }
+.mm-sub { font-family: var(--mono); font-size: .58rem; color: var(--tx3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px }
+
+/* 40px de alvo: o dedo passa 37 postos sem errar. */
+.mm-seta { flex: none; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+  background: var(--sf2); border: 1px solid var(--bd); border-radius: 10px; color: var(--ac);
+  font-size: 1.2rem; line-height: 1; cursor: pointer; padding: 0 }
+.mm-seta:active { background: var(--acd) }
+.mm-lupa { flex: none; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid var(--bd); border-radius: 9px; color: var(--tx3);
+  font-size: .95rem; line-height: 1; cursor: pointer; padding: 0; margin-left: .15rem }
+.mm-lupa.on { background: var(--acd); border-color: var(--ac); color: var(--ac) }
+
+/* Filtro de bandeira (abre/fecha na lupa) */
+.mm-bandeiras { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .45rem }
+.mm-band { background: var(--sf2); border: 1px solid var(--bd); border-radius: 20px; padding: 4px 11px;
+  font-family: var(--mono); font-size: .62rem; font-weight: 700; color: var(--tx3); cursor: pointer }
+.mm-band.on { background: var(--acd); border-color: var(--ac); color: var(--ac) }
+
+/* Alternador de periodo */
+.mm-periodo { display: flex; align-items: center; gap: .3rem; margin-top: .45rem }
+.mm-seta-p { width: 34px; height: 30px; font-size: 1rem; border-radius: 8px }
+.mm-modo { display: inline-flex; border: 1px solid var(--bd); border-radius: 8px; overflow: hidden }
+.mm-modo-b { background: var(--sf2); border: none; color: var(--tx3); font-family: var(--mono);
+  font-size: .64rem; font-weight: 700; padding: .32rem .6rem; cursor: pointer; white-space: nowrap }
+.mm-modo-b + .mm-modo-b { border-left: 1px solid var(--bd) }
+.mm-modo-b.on { background: var(--acd); color: var(--ac) }
+.mm-per-lbl { flex: 1; text-align: right; font-family: var(--mono); font-size: .64rem;
+  font-weight: 700; color: var(--tx2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+
+/* ── Corpo: o UNICO que rola ────────────────────────────────────── */
+.mm-corpo { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch }
+.mm-msg, .mm-erro { padding: 2rem 1rem; text-align: center; font-family: var(--mono); font-size: .74rem; color: var(--tx3) }
+.mm-erro { color: var(--dg) }
+
+.mm-tab { width: 100%; border-collapse: collapse; text-align: center; font-size: .8rem }
+.mm-tab th, .mm-tab td { padding: .38rem .2rem; border-bottom: 1px solid var(--bd) }
+.mm-tab thead th { position: sticky; top: 0; z-index: 2; background: var(--sf2); color: var(--tx2);
+  font-family: var(--mono); font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em }
+.mm-c-dia { width: 52px; font-family: var(--mono); font-size: .72rem; font-weight: 700; color: var(--tx2);
+  text-align: left; padding-left: .5rem !important }
+.mm-dow { display: block; font-size: .52rem; font-weight: 400; color: var(--tx3); letter-spacing: .02em }
+.mm-c-tot { width: 62px }
+
+.mm-val   { font-family: var(--mono); font-size: .78rem; font-weight: 600; color: var(--tx) }
+.mm-vazio { color: var(--tx3) }
+.mm-vtot  { font-family: var(--mono); font-size: .78rem; font-weight: 700; color: var(--ok) }
+
+/* Sabado/domingo: visiveis de proposito (a folha antiga os escondia). */
+.mm-tab tr.mm-fds td { background: var(--sf2) }
+.mm-tab tr.mm-fds .mm-c-dia { color: var(--tx3) }
+
+/* Linha de hoje */
+.mm-tab tr.mm-hoje td { background: var(--acd) }
+.mm-tab tr.mm-hoje .mm-c-dia { color: var(--ac); box-shadow: inset 3px 0 0 var(--ac) }
+
+/* Previsao do dia corrente — italico azul, igual ao desktop.
+   COM pedido: fundo tenue + azul. SEM pedido: cinza, sem fundo (e so o
+   tanque de ontem).
+   O seletor inclui tr.mm-hoje de proposito: sem ele (0,2,1) esta regra perde
+   para .mm-tab tr.mm-hoje td (0,2,2) e o azul nunca chega a aparecer. */
+.mm-tab tr.mm-hoje td.mm-cel-prev { background: rgba(88,166,232,.14) }
+.mm-prev    { font-family: var(--mono); font-size: .78rem; font-weight: 600; font-style: italic; color: var(--inf) }
+.mm-prev-sp { font-family: var(--mono); font-size: .78rem; font-weight: 600; font-style: italic; color: var(--tx3) }
+
+/* Diferenca */
+.mm-dif-pos  { font-family: var(--mono); font-size: .78rem; font-weight: 700; color: var(--ok) }
+.mm-dif-neg  { font-family: var(--mono); font-size: .78rem; font-weight: 700; color: var(--dg) }
+.mm-dif-zero { font-family: var(--mono); font-size: .78rem; font-weight: 700; color: var(--tx3) }
+
+/* Pre-pedido (unico campo editavel da tela) */
+.mm-cel-ed { background: rgba(240,164,68,.10) }
+.mm-in { width: 100%; max-width: 68px; background: transparent; border: none; color: var(--tx);
+  text-align: center; font-family: var(--mono); font-size: .78rem; font-weight: 600; padding: 2px; border-radius: 4px }
+.mm-in:focus { outline: none; background: var(--sf3); box-shadow: 0 0 0 1.5px var(--ac) }
+.mm-in-dirty { background: var(--acd); box-shadow: 0 0 0 1.5px var(--ac); color: var(--ac) }
+
+/* ── Rodape de total ────────────────────────────────────────────── */
+.mm-rodape { flex: none; display: flex; align-items: center; justify-content: space-between;
+  gap: .5rem; padding: .45rem .7rem; background: var(--sf2); border-top: 1px solid var(--bd) }
+.mm-rod-lbl { font-family: var(--mono); font-size: .62rem; color: var(--tx3);
+  text-transform: uppercase; letter-spacing: .05em }
+.mm-rod-val { font-family: var(--mono); font-size: .92rem; font-weight: 700; color: var(--ac) }
+
+/* ── Abas (acima do rodape de navegacao, no alcance do polegar) ─── */
+.mm-abas { flex: none; display: flex; background: var(--sf); border-top: 1px solid var(--bd) }
+.mm-aba { flex: 1; min-width: 0; background: transparent; border: none; border-top: 2px solid transparent;
+  color: var(--tx3); font-family: var(--mono); font-size: .6rem; font-weight: 700; letter-spacing: .02em;
+  padding: .5rem .1rem; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.mm-aba.on { border-top-color: var(--ac); background: var(--acd); color: var(--ac) }
+
+/* Salvar: so aparece com edicao pendente, flutuando acima das abas. */
+.mm-salvar { position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(60px + 34px + env(safe-area-inset-bottom) + .5rem); z-index: 20;
+  background: var(--ac); color: #1a1206; border: none; border-radius: 22px;
+  font-family: var(--mono); font-size: .72rem; font-weight: 700; padding: .55rem 1.1rem;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35); cursor: pointer; white-space: nowrap }
+.mm-salvar:disabled { opacity: .7 }

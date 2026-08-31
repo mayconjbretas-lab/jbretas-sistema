@@ -24,9 +24,10 @@
      base.css normalmente; só o admin usa esse visual. -->
 <link rel="stylesheet" href="admin.css?v=202608281813">
 <link rel="stylesheet" href="coleta-revisao/coleta-revisao.css?v=202608281813">
-<!-- Medição (aba do ADM via Mais+): CSS de componente do painel-adm, sem fork.
-     Usa tokens longos que resolvem via bloco #s-medicao do admin.css. -->
-<link rel="stylesheet" href="../painel-adm/medicao.css?v=202608281813">
+<!-- Medição: tela PROPRIA do mobile (medicao-mobile.js/css). Não usa mais o
+     componente do painel-adm — aquele é a tabela larga do desktop. Escrito no
+     vocabulário CURTO do admin, por isso não há ponte de tokens. -->
+<link rel="stylesheet" href="medicao-mobile.css?v=202608281813">
 <!-- KPI (aba do ADM via Mais+): CSS de componente do painel-adm, sem fork.
      Usa tokens longos que resolvem via bloco #s-kpi do admin.css. -->
 <link rel="stylesheet" href="../painel-adm/kpi.css?v=202608281813">
@@ -236,8 +237,10 @@
     <!-- ═══ ABA: CUSTO & MARGEM ═══ (compartilha ../logistica/custo-margem.js, sem fork; ADM = leitura) -->
     <section class="scr" id="s-custo"></section>
 
-    <!-- ═══ ABA: MEDIÇÃO ═══ (compartilha ../painel-adm/medicao.js, sem fork; ADM define o pré-pedido).
-         Aba do bnav (setTab 'medicao'). Tokens longos do medicao.css resolvem via #s-medicao no admin.css. -->
+    <!-- ═══ ABA: MEDIÇÃO ═══ (tela própria do mobile; ADM define o pré-pedido).
+         Aba do bnav (setTab 'medicao'), montada por renderMedicaoMobile. Ao
+         contrário das outras telas, esta NÃO rola pela .main: cabeçalho e abas
+         ficam fixos e só o corpo da tabela rola (ver .main-sem-rolagem). -->
     <section class="scr" id="s-medicao"></section>
 
     <!-- ═══ ABA: KPI ═══ (compartilha ../painel-adm/kpi.js, sem fork; sugestão de pedido).
@@ -355,7 +358,7 @@
 <script src="../../shared/js/push-inscricao.js?v=202608281813"></script>
 <script src="../logistica/custo-margem.js?v=202608281813"></script>
 <script src="../../shared/js/nav-custo.js?v=202608281813"></script>
-<script src="../painel-adm/medicao.js?v=202608281813"></script>
+<script src="medicao-mobile.js?v=202608281813"></script>
 <script src="../painel-adm/kpi.js?v=202608281813"></script>
 <script src="../painel-adm/fornecedores.js?v=202608281813"></script>
 <script src="../painel-adm/compra.js?v=202608281813"></script>
