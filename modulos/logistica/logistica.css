@@ -141,6 +141,19 @@ html, body { height: 100%; overflow: hidden; }
 .btn-mobile:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ===== Aba Matriz: faixa de total + host da matriz ===== */
+/* Ações da matriz — hoje só o botão de imprimir a folha do posto. Alinhado à
+   direita, acima da matriz. O estilo de impressão em si está no
+   medicao-print.css, que só tem @media print. */
+.matriz-acoes { flex-shrink: 0; display: flex; justify-content: flex-end; margin-bottom: .6rem; }
+.matriz-acoes:empty { display: none; }
+.matriz-btn-pdf {
+  background: var(--surface2); border: 1px solid var(--border2); color: var(--text);
+  font-family: var(--mono); font-size: .72rem; font-weight: 700;
+  padding: .45rem .8rem; border-radius: 6px; cursor: pointer; white-space: nowrap;
+}
+.matriz-btn-pdf:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.matriz-btn-pdf:disabled { color: var(--text3); cursor: not-allowed; opacity: .6; }
+
 /* A matriz (montada por matrizMedicao dentro de #matriz-host) precisa ocupar o
    resto da altura e rolar internamente — mesma cadeia flex de antes, só que
    agora #matriz-host é o nível intermediário. */

@@ -20,6 +20,9 @@
 <link rel="stylesheet" href="../../shared/css/medicao-fabs.css?v=202608281813">
 <!-- Faixa/lista de alterações de medição — shared, sem fork. -->
 <link rel="stylesheet" href="../../shared/css/medicao-alteracoes.css?v=202608281813">
+<!-- Folha de impressão da Medição (medicao-pdf.js). Só @media print; na tela
+     não muda nada. Exclusivo da Logística desktop. -->
+<link rel="stylesheet" href="medicao-print.css?v=202608281813">
 <script>
   // Pre-paint: aplica o tema salvo antes de renderizar (evita flash).
   (function(){
@@ -121,6 +124,9 @@
            a faixa e a mensagem de "sem posto" são renderizadas pelo app.js. -->
       <section id="tab-matriz" class="view-panel active">
         <div id="faixa-pedido" class="faixa-pedido"></div>
+        <!-- Ações da matriz: hoje só o botão de imprimir a folha do posto
+             (medicao-pdf.js preenche). -->
+        <div id="matriz-acoes" class="matriz-acoes"></div>
         <div id="matriz-host" class="matriz-host"></div>
         <div id="matriz-vazio" class="matriz-vazio" style="display:none">Selecione um posto para ver a matriz</div>
       </section>
@@ -165,6 +171,7 @@
 <script src="../../shared/js/medicao-alteracoes.js?v=202608281813"></script>
 <script src="../../shared/js/mascara-litros.js?v=202608281813"></script>
 <script src="../../shared/js/pedido-editor.js?v=202608281813"></script>
+<script src="medicao-pdf.js?v=202608281813"></script>
 <script src="app.js?v=202608281813"></script>
 </body>
 </html>
