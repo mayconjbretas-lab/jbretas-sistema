@@ -141,10 +141,11 @@ html, body { height: 100%; overflow: hidden; }
 .btn-mobile:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ===== Aba Matriz: faixa de total + host da matriz ===== */
-/* Ações da matriz — hoje só o botão de imprimir a folha do posto. Alinhado à
-   direita, acima da matriz. O estilo de impressão em si está no
-   medicao-print.css, que só tem @media print. */
-.matriz-acoes { flex-shrink: 0; display: flex; justify-content: flex-end; margin-bottom: .6rem; }
+/* Ações da matriz — os dois botões de impressão (posto selecionado e rede
+   inteira), alinhados à direita acima da matriz. O estilo da FOLHA não está
+   aqui nem no index.html: o medicao-print.css é o CSS do documento do iframe
+   que o medicao-pdf.js monta para imprimir. */
+.matriz-acoes { flex-shrink: 0; display: flex; justify-content: flex-end; gap: .5rem; margin-bottom: .6rem; }
 .matriz-acoes:empty { display: none; }
 .matriz-btn-pdf {
   background: var(--surface2); border: 1px solid var(--border2); color: var(--text);

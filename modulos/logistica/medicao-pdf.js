@@ -1,13 +1,18 @@
 // ================================================================
 // JBRETAS SISTEMA — modulos/logistica/medicao-pdf.js
-// Botao de impressao da Medicao, na aba Matriz / Medicao.
+// Botoes de impressao da Medicao, na aba Matriz / Medicao.
 // Montado por window.medicaoPdf.montar({ getPosto, getPostos }) —
 // mesmo contrato do medicaoFabs (app.js chama os dois lado a lado).
 //
 // SO A LOGISTICA DESKTOP. Nao entra no painel-adm nem no
 // logistica-mobile — por isso e arquivo daqui e nao de shared/, e por
-// isso o botao NAO foi para o medicao-fabs.js (aquele e carregado
+// isso os botoes NAO foram para o medicao-fabs.js (aquele e carregado
 // tambem pelo logistica-mobile).
+//
+// DOIS BOTOES:
+//   · posto selecionado — 2 paginas;
+//   · rede inteira — 2 paginas por posto (74 com 37 postos), atras de
+//     uma confirmacao que diz o tamanho e lembra do duplex.
 //
 // DUAS PAGINAS POR POSTO, para imprimir em FRENTE E VERSO:
 //   FRENTE — medicao do mes; a previsao do dia corrente aparece em
@@ -17,16 +22,26 @@
 // CARGA NAO ENTRA, a pedido: e onde os gerentes mais erram e a folha
 // nao deve carregar o numero errado para dentro do posto.
 //
-// UM POSTO POR VEZ (o selecionado no filtro). A rede inteira daria 74
-// paginas — arquivo que ninguem abre, e que impresso em simplex poe o
-// verso de cada posto na frente do seguinte, arruinando o documento
-// todo em silencio. Se um dia precisar, o laco entra aqui.
+// IMPRIME DE UM IFRAME PROPRIO, nao da pagina. A versao anterior
+// montava a folha no proprio documento e escondia a aplicacao com
+// '@media print { body > * { display:none } }' — saia em BRANCO em
+// producao, e de quebra estragava o Ctrl+P normal da Logistica, que
+// passava a imprimir paginas vazias existindo folha ou nao. O iframe
+// carrega SO o medicao-print.css: nada do CSS da aplicacao alcanca a
+// folha, e nada que a folha faca alcanca a aplicacao.
 //
-// SEM BIBLIOTECA: window.print() + medicao-print.css. Ver o cabecalho
-// daquele arquivo para o porque.
+// SEM BIBLIOTECA: print() do iframe. Ver o cabecalho do print.css.
 // ================================================================
 (function () {
   'use strict';
+
+  // CSS do documento do iframe, relativo a /modulos/logistica/.
+  // O ?v= vem do PROPRIO script: o bump.js so reescreve tags do HTML, e esta
+  // URL nasce no JS — sem isso o navegador serviria o print.css do cache para
+  // sempre, mesmo depois de um bump. Amarrando na versao do medicao-pdf.js as
+  // duas andam juntas, que e o que se quer (mudam sempre no mesmo commit).
+  const CSS_FOLHA = 'medicao-print.css' +
+    ((document.currentScript && document.currentScript.src.split('?')[1]) ? '?' + document.currentScript.src.split('?')[1] : '');
 
   let _opcoes = null;
   let _ocupado = false;
@@ -42,92 +57,146 @@
     ? '' : Number(n).toLocaleString('pt-BR');
   const pad = (n) => String(n).padStart(2, '0');
 
-  // ── Botao ───────────────────────────────────────────────────────
+  // ── Botoes ──────────────────────────────────────────────────────
   function montar(opcoes) {
     _opcoes = opcoes || {};
     const host = document.getElementById('matriz-acoes');
     if (!host) return;
     host.innerHTML =
-      '<button type="button" class="matriz-btn-pdf" id="btn-medicao-pdf" ' +
-      'title="Gera 2 páginas (frente: medição · verso: venda e pedido). Imprima em frente e verso.">' +
-      '🖨️ Imprimir folha do posto</button>';
-    host.querySelector('#btn-medicao-pdf').addEventListener('click', imprimir);
+      '<button type="button" class="matriz-btn-pdf" id="btn-folha-posto" ' +
+      'title="2 páginas do posto selecionado (frente: medição · verso: venda e pedido). Imprima em frente e verso.">' +
+      '🖨️ Folha do posto</button>' +
+      '<button type="button" class="matriz-btn-pdf" id="btn-folha-rede" ' +
+      'title="2 páginas para cada posto da rede, num documento só. Imprima em frente e verso.">' +
+      '🖨️ Folhas da rede</button>';
+    host.querySelector('#btn-folha-posto').addEventListener('click', imprimirPosto);
+    host.querySelector('#btn-folha-rede').addEventListener('click', imprimirRede);
   }
 
-  async function imprimir() {
-    if (_ocupado) return;
+  // Envolve o clique: trava os dois botoes, mostra progresso no que foi
+  // clicado e devolve tudo ao normal aconteca o que acontecer.
+  function comBotao(id, fn) {
+    return async function () {
+      if (_ocupado) return;
+      const btn = document.getElementById(id);
+      const txt = btn.textContent;
+      _ocupado = true;
+      document.querySelectorAll('.matriz-btn-pdf').forEach(b => { b.disabled = true; });
+      try {
+        await fn((t) => { btn.textContent = t; });
+      } catch (err) {
+        alert('Não foi possível montar a folha: ' + (err.message || err));
+      } finally {
+        btn.textContent = txt;
+        document.querySelectorAll('.matriz-btn-pdf').forEach(b => { b.disabled = false; });
+        _ocupado = false;
+      }
+    };
+  }
+
+  const imprimirPosto = comBotao('btn-folha-posto', async (progresso) => {
     const posto = _opcoes.getPosto ? _opcoes.getPosto() : '';
     if (!posto) { alert('Selecione um posto para imprimir a folha.'); return; }
-    const btn = document.getElementById('btn-medicao-pdf');
-    _ocupado = true;
-    const txt = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Montando…';
-    try {
-      const hoje = new Date();
-      const mes = hoje.getMonth() + 1, ano = hoje.getFullYear();
-      const dados = await apiFetch('/medicao/' + encodeURIComponent(posto) +
-                                   '?mes=' + mes + '&ano=' + ano);
-      const bandeira = acharBandeira(posto);
-      montarFolha(posto, bandeira, dados, mes, ano, hoje);
-      // O dialogo do navegador e sincrono: so volta quando o usuario
-      // imprime ou cancela. A folha fica no DOM ate la (display:none na tela).
-      window.print();
-    } catch (err) {
-      alert('Não foi possível montar a folha: ' + (err.message || err));
-    } finally {
-      btn.disabled = false;
-      btn.textContent = txt;
-      _ocupado = false;
+    progresso('Montando…');
+    await imprimirDocumento(await folhasDoPosto(posto, new Date()));
+  });
+
+  const imprimirRede = comBotao('btn-folha-rede', async (progresso) => {
+    const postos = (_opcoes.getPostos ? (_opcoes.getPostos() || []) : []).filter(p => p && p.nome);
+    if (!postos.length) { alert('Nenhum posto carregado ainda.'); return; }
+    // O tamanho e o duplex vao no confirm porque as duas coisas so doem DEPOIS
+    // de mandar imprimir: em simplex o verso de cada posto cai na frente do
+    // seguinte e a pilha inteira vira lixo, sem nenhum aviso.
+    const ok = confirm(
+      postos.length + ' postos · ' + (postos.length * 2) + ' páginas.\n\n' +
+      'Imprima em FRENTE E VERSO — em simplex o verso de cada posto cai na ' +
+      'frente do próximo e a pilha inteira fica inútil.\n\nGerar?');
+    if (!ok) return;
+    const agora = new Date();
+    const partes = [];
+    for (let i = 0; i < postos.length; i++) {
+      progresso('Montando ' + (i + 1) + '/' + postos.length + '…');
+      // Em serie de proposito: 37 chamadas simultaneas ao Railway nao ganham
+      // tempo util e atrapalham quem estiver usando o sistema no mesmo momento.
+      partes.push(await folhasDoPosto(postos[i].nome, agora, postos[i].bandeira));
     }
+    progresso('Abrindo…');
+    await imprimirDocumento(partes.join(''));
+  });
+
+  // ── Impressao: iframe proprio ───────────────────────────────────
+  function imprimirDocumento(corpoHtml) {
+    return new Promise((resolve, reject) => {
+      const antigo = document.getElementById('folha-iframe');
+      if (antigo) antigo.remove();
+      const ifr = document.createElement('iframe');
+      ifr.id = 'folha-iframe';
+      // Fora da vista, mas COM tamanho de verdade: iframe 0x0 ou display:none
+      // nao faz layout, e a impressao sai vazia — que e exatamente o sintoma
+      // que estamos consertando.
+      ifr.setAttribute('aria-hidden', 'true');
+      ifr.style.cssText = 'position:fixed;right:0;bottom:0;width:210mm;height:297mm;' +
+                          'opacity:0;pointer-events:none;border:0;z-index:-1';
+      document.body.appendChild(ifr);
+
+      const doc = ifr.contentDocument;
+      doc.open();
+      doc.write(
+        '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">' +
+        '<title>Folha de Medição</title>' +
+        '<link rel="stylesheet" href="' + CSS_FOLHA + '">' +
+        '</head><body>' + corpoHtml + '</body></html>');
+      doc.close();
+
+      const mandar = () => {
+        try {
+          ifr.contentWindow.focus();
+          ifr.contentWindow.print();
+          resolve();
+        } catch (err) {
+          reject(err);
+        } finally {
+          // O dialogo e sincrono: quando print() volta, o usuario ja decidiu.
+          setTimeout(() => {
+            const el = document.getElementById('folha-iframe');
+            if (el) el.remove();
+          }, 1000);
+        }
+      };
+
+      // Espera o CSS aplicar. Sem isso a folha pode ir para o dialogo sem
+      // estilo nenhum — ou sem layout, que e o caso em branco.
+      const link = doc.querySelector('link[rel="stylesheet"]');
+      if (!link) { mandar(); return; }
+      let disparado = false;
+      const uma = () => { if (!disparado) { disparado = true; mandar(); } };
+      link.addEventListener('load', uma);
+      link.addEventListener('error', uma);   // sem CSS sai feio, mas sai
+      setTimeout(uma, 3000);                 // rede lenta nao trava o botao
+    });
   }
 
-  function acharBandeira(nome) {
-    const lista = _opcoes.getPostos ? (_opcoes.getPostos() || []) : [];
-    const p = lista.find(x => x.nome === nome);
-    return (p && p.bandeira) || '';
-  }
-
-  // ── Previsao (identica a matriz e ao admin mobile) ───────────────
-  // medicao(ontem) + pedido(hoje); so medicao(ontem) se nao ha pedido;
-  // nada se nao ha medicao(ontem). `pedido` e medicao.pedido (Pedido
-  // Final). No papel nao ha cor: o italico e o unico sinal, e a legenda
-  // do rodape diz o que ele significa.
-  function previsaoDe(dias, idxDia, i) {
-    const ontem = dias[idxDia - 1];
-    if (!ontem) return null;                       // dia 1: sem ontem no mes (igual as outras telas)
-    const medOntem = ontem.medicao ? ontem.medicao[i] : null;
-    if (!temValor(medOntem)) return null;
-    const ped = dias[idxDia].pedido ? dias[idxDia].pedido[i] : null;
-    return temValor(ped) ? Number(medOntem) + Number(ped) : Number(medOntem);
-  }
-
-  // ── Montagem da folha ───────────────────────────────────────────
-  function montarFolha(posto, bandeira, dados, mes, ano, agora) {
-    let el = document.getElementById('folha-impressao');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'folha-impressao';
-      document.body.appendChild(el);   // filho DIRETO do body: o print.css conta com isso
-    }
+  // ── Uma folha (frente + verso) de um posto ──────────────────────
+  async function folhasDoPosto(posto, agora, bandeiraConhecida) {
+    const mes = agora.getMonth() + 1, ano = agora.getFullYear();
+    const dados = await apiFetch('/medicao/' + encodeURIComponent(posto) +
+                                 '?mes=' + mes + '&ano=' + ano);
+    const bandeira = bandeiraConhecida !== undefined ? bandeiraConhecida : acharBandeira(posto);
     const grupos = dados.grupos || [];
     const vendas = dados.combustiveisVenda || [];
     const dias   = dados.dias || [];
-    const ehMesCorrente = agora.getFullYear() === ano && agora.getMonth() + 1 === mes;
-    const diaHoje = ehMesCorrente ? agora.getDate() : -1;
+    const diaHoje = agora.getDate();     // agora e sempre o mes corrente aqui
     const carimbo = pad(agora.getDate()) + '/' + pad(mes) + '/' + ano + ' ' +
                     pad(agora.getHours()) + ':' + pad(agora.getMinutes());
     const cab = (face) => topo(posto, bandeira, mes, ano, face);
     const rod = (n, legenda) => rodape(carimbo, n, legenda);
 
-    el.innerHTML =
-      // ── FRENTE: so a medicao ──
+    return '' +
       '<section class="folha folha-frente">' +
         cab('Frente · Medição') +
         tabela(dias, grupos, diaHoje, 'medicao', { previsao: true, semTotal: true }) +
         rod(1, 'Em itálico: previsão do dia corrente — medição do dia anterior mais o pedido do dia. Valor previsto, não medido.') +
       '</section>' +
-      // ── VERSO: venda e pedido lado a lado (ver .fl-blocos no print.css) ──
       '<section class="folha folha-verso">' +
         cab('Verso · Venda e pedido') +
         '<div class="fl-blocos">' +
@@ -144,6 +213,12 @@
       '</section>';
   }
 
+  function acharBandeira(nome) {
+    const lista = _opcoes.getPostos ? (_opcoes.getPostos() || []) : [];
+    const p = lista.find(x => x.nome === nome);
+    return (p && p.bandeira) || '';
+  }
+
   function topo(posto, bandeira, mes, ano, face) {
     return '<div class="fl-topo">' +
       '<div class="fl-posto">' + esc(posto) + '</div>' +
@@ -155,6 +230,9 @@
     '</div>';
   }
 
+  // 'Pagina X de 2' e por POSTO, nao do documento: mesmo na impressao da rede
+  // cada folha e um par frente/verso independente, e e assim que ela e usada
+  // dentro do posto.
   function rodape(carimbo, n, legenda) {
     return '<div class="fl-rodape">' +
       '<span class="fl-legenda">' + (legenda ? esc(legenda) : '') + '</span>' +
@@ -162,12 +240,26 @@
     '</div>';
   }
 
-  // Uma tabela: DIA + uma coluna por combustivel + linha de TOTAL.
+  // ── Previsao (identica a matriz e ao admin mobile) ───────────────
+  // medicao(ontem) + pedido(hoje); so medicao(ontem) se nao ha pedido;
+  // nada se nao ha medicao(ontem). `pedido` e medicao.pedido (Pedido
+  // Final). No papel nao ha cor: o italico e o unico sinal, e a legenda
+  // do rodape diz o que ele significa.
+  function previsaoDe(dias, idxDia, i) {
+    const ontem = dias[idxDia - 1];
+    if (!ontem) return null;                       // dia 1: sem ontem no mes (igual as outras telas)
+    const medOntem = ontem.medicao ? ontem.medicao[i] : null;
+    if (!temValor(medOntem)) return null;
+    const ped = dias[idxDia].pedido ? dias[idxDia].pedido[i] : null;
+    return temValor(ped) ? Number(medOntem) + Number(ped) : Number(medOntem);
+  }
+
+  // Uma tabela: DIA + uma coluna por combustivel (+ linha de TOTAL).
   // `cols` e grupos (medicao/pedido) ou combustiveisVenda (venda) — a API
   // devolve as duas listas e os indices sao os de cada uma.
   function tabela(dias, cols, diaHoje, campo, opt) {
     if (!cols.length) return '<div class="fl-bloco-tit">Sem combustíveis cadastrados</div>';
-    let thead = '<tr><th class="fl-c-dia">Dia</th>' +
+    const thead = '<tr><th class="fl-c-dia">Dia</th>' +
       cols.map(c => '<th>' + esc(c.abv) + '</th>').join('') + '</tr>';
 
     const totais = cols.map(() => null);

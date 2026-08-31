@@ -3,10 +3,26 @@
    Folha de impressao da Medicao (medicao-pdf.js). SO Logistica
    desktop: nao entra no painel-adm nem no logistica-mobile.
 
-   SEM BIBLIOTECA. Sao exatamente 2 paginas por posto (frente/verso),
-   entao 'Pagina X de 2' e texto fixo e a quebra e uma regra so — nao
-   ha o que uma lib de PDF resolveria aqui que valesse 395 KB (jsPDF +
-   autotable, ~1,9x o Chart.js que ja saiu do projeto por peso).
+   ESTE ARQUIVO E O CSS DE UM DOCUMENTO INTEIRO, nao um trecho da
+   aplicacao. O medicao-pdf.js monta a folha dentro de um IFRAME
+   proprio e manda imprimir ele; este e o unico estilo daquele
+   documento. Por isso NAO ha '@media print' nem nada escondendo a
+   aplicacao.
+
+   A versao anterior fazia o contrario — montava a folha na propria
+   pagina e usava '@media print { body > * { display:none } }' para
+   esconder o resto. Isso saiu por dois motivos:
+     · imprimia duas folhas em BRANCO em producao, e a causa nao deu
+       para isolar fora do ambiente real (o CSS parseia inteiro, e o
+       mecanismo funciona isolado — sobrava a interacao com o CSS da
+       Logistica, que este arquivo agora nao alcanca);
+     · quebrava o Ctrl+P normal da pagina: QUALQUER impressao da
+       Logistica saia em branco, porque a regra escondia a aplicacao
+       existindo folha ou nao.
+   No iframe nao ha o que esconder e nao ha com o que colidir.
+
+   SEM BIBLIOTECA: window.print() do iframe. jsPDF + autotable pesam
+   395 KB, ~1,9x o Chart.js que ja saiu do projeto por peso.
 
    PRETO NO BRANCO de proposito: nenhum token de tema, nenhum fundo
    colorido. Alem de ser o certo para papel, evita depender da caixa
@@ -14,88 +30,73 @@
    desmarcada por padrao e comeria qualquer preenchimento.
    ================================================================ */
 
-/* Na tela a folha nao existe; ela so e montada no clique e impressa. */
-#folha-impressao { display: none }
+@page { size: A4 portrait; margin: 12mm }
 
-@media print {
-  /* Esconde a aplicacao inteira e deixa so a folha. #folha-impressao e
-     filho direto do body (ver montarFolha), por isso o seletor funciona. */
-  body > * { display: none !important }
-  body > #folha-impressao { display: block !important }
+html, body { margin: 0; padding: 0; background: #fff; color: #000 }
+body { font-family: Arial, Helvetica, sans-serif }
 
-  html, body {
-    background: #fff !important; color: #000 !important;
-    margin: 0 !important; padding: 0 !important;
-    height: auto !important; overflow: visible !important;
-  }
+/* Uma folha = uma pagina. Bloco simples, sem flex: container flex em
+   midia paginada e fonte conhecida de conteudo perdido na quebra. */
+.folha { display: block }
+/* Toda folha depois da primeira comeca em pagina nova — vale para o verso
+   e, na impressao da rede inteira, para a frente de cada posto seguinte.
+   As duas propriedades: a moderna e a antiga (Safari do Mac). */
+.folha + .folha { break-before: page; page-break-before: always }
 
-  @page { size: A4 portrait; margin: 12mm }
+/* ── Cabecalho ── */
+.fl-topo { border-bottom: 1.5pt solid #000; padding-bottom: 2mm; margin-bottom: 3mm }
+.fl-posto { font-size: 15pt; font-weight: 700; letter-spacing: .2pt }
+.fl-meta { display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 9pt; margin-top: 1mm }
+.fl-band { text-transform: uppercase; letter-spacing: .4pt }
+.fl-mes { font-weight: 700; font-size: 11pt }
+.fl-face { font-size: 8pt; text-transform: uppercase; letter-spacing: 1pt; margin-top: .5mm }
 
-  #folha-impressao { font-family: Arial, Helvetica, sans-serif; color: #000 }
+/* ── Titulo de bloco (VENDA / PEDIDO no verso) ── */
+.fl-bloco-tit { font-size: 10pt; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .6pt; margin: 0 0 1.5mm; padding-bottom: .8mm; border-bottom: .8pt solid #000 }
 
-  .folha { display: flex; flex-direction: column; min-height: 0 }
-  /* A quebra entre frente e verso. As duas propriedades: a moderna e a
-     antiga, porque o Safari do Mac ainda le a antiga. */
-  .folha-verso { break-before: page; page-break-before: always }
+/* Verso em DUAS COLUNAS, nao empilhado. Empilhar venda e pedido (dois meses
+   inteiros, 62 linhas) da 424mm — uma A4 util tem 273mm, entao a folha
+   viraria 3 paginas e o "Pagina 2 de 2" seria mentira. Caberia empilhado so
+   a 5,5pt (269mm), tipografia pequena demais para ler no posto. Lado a lado
+   cabe na MESMA 9pt da frente. */
+.fl-blocos { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; align-items: start }
+.fl-bloco { min-width: 0 }
+/* Em duas colunas cada tabela tem ~90,5mm, entao o verso aperta o que nao e
+   numero: coluna do dia menor, padding menor e total no mesmo corpo do resto.
+   A fonte dos VALORES continua 9pt, igual a frente — nada de ilegivel. */
+.folha-verso .fl-tab .fl-c-dia { width: 10mm }
+.folha-verso .fl-tab th, .folha-verso .fl-tab td { padding: .7mm .5mm }
+.folha-verso .fl-tab tfoot td { font-size: 9pt }
 
-  /* ── Cabecalho ── */
-  .fl-topo { border-bottom: 1.5pt solid #000; padding-bottom: 2mm; margin-bottom: 3mm }
-  .fl-posto { font-size: 15pt; font-weight: 700; letter-spacing: .2pt }
-  .fl-meta { display: flex; justify-content: space-between; align-items: baseline;
-    font-size: 9pt; margin-top: 1mm }
-  .fl-band { text-transform: uppercase; letter-spacing: .4pt }
-  .fl-mes { font-weight: 700; font-size: 11pt }
-  .fl-face { font-size: 8pt; text-transform: uppercase; letter-spacing: 1pt; margin-top: .5mm }
+/* ── Tabela ── */
+.fl-tab { width: 100%; border-collapse: collapse; font-size: 9pt }
+.fl-tab th, .fl-tab td { border: .5pt solid #999; padding: .9mm 1mm; text-align: right }
+.fl-tab thead th { font-size: 8pt; text-transform: uppercase;
+  letter-spacing: .3pt; border-bottom: 1pt solid #000 }
+.fl-tab .fl-c-dia { text-align: left; width: 15mm; font-weight: 700 }
+.fl-tab .fl-dow { font-weight: 400; font-size: 7.5pt; color: #444; margin-left: 1mm }
+/* Fim de semana: so um tom de cinza no numero do dia. Sem preenchimento,
+   que dependeria do 'Graficos de plano de fundo'. */
+.fl-tab tr.fl-fds .fl-c-dia { color: #555 }
+.fl-tab td.fl-vazio { color: #bbb }
 
-  /* ── Titulo de bloco (VENDA / PEDIDO no verso) ── */
-  .fl-bloco-tit { font-size: 10pt; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .6pt; margin: 0 0 1.5mm; padding-bottom: .8mm; border-bottom: .8pt solid #000 }
-  /* Verso em DUAS COLUNAS, nao empilhado. Empilhar venda e pedido (dois meses
-     inteiros, 62 linhas) da 424mm — uma A4 util tem 273mm, entao a folha
-     viraria 3 paginas e o "Pagina 2 de 2" seria mentira. Caberia empilhado so
-     a 5,5pt (269mm), tipografia pequena demais para ler no posto. Lado a lado
-     cabe na MESMA 9pt da frente: 222mm de altura e 162mm de largura no pior
-     caso (5 combustiveis com valores de 7 digitos), contra 186mm disponiveis. */
-  .fl-blocos { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; align-items: start }
-  .fl-bloco { min-width: 0 }
-  /* Em duas colunas cada tabela tem ~90,5mm, entao o verso aperta o que nao e
-     numero: coluna do dia menor, padding menor e total no mesmo corpo do resto.
-     A fonte dos VALORES continua 9pt, igual a frente — nada de ilegivel.
-     Sem isto as tabelas ficam 100mm cada e a da direita termina em 195,6mm,
-     ~10mm fora da folha (o grid segura o container em 186mm, mas as tabelas
-     transbordam dele — foi assim que o estouro passou despercebido). */
-  .folha-verso .fl-tab .fl-c-dia { width: 10mm }
-  .folha-verso .fl-tab th, .folha-verso .fl-tab td { padding: .7mm .5mm }
-  .folha-verso .fl-tab tfoot td { font-size: 9pt }
+/* Dia corrente: contorno, nao fundo — pelo mesmo motivo dos cinzas. */
+.fl-tab tr.fl-hoje td { border-top: 1.2pt solid #000; border-bottom: 1.2pt solid #000 }
+.fl-tab tr.fl-hoje .fl-c-dia { border-left: 1.2pt solid #000 }
+.fl-tab tr.fl-hoje td:last-child { border-right: 1.2pt solid #000 }
 
-  /* ── Tabela ── */
-  .fl-tab { width: 100%; border-collapse: collapse; font-size: 9pt }
-  .fl-tab th, .fl-tab td { border: .5pt solid #999; padding: .9mm 1mm; text-align: right }
-  .fl-tab thead th { background: transparent; font-size: 8pt; text-transform: uppercase;
-    letter-spacing: .3pt; border-bottom: 1pt solid #000 }
-  .fl-tab .fl-c-dia { text-align: left; width: 15mm; font-weight: 700 }
-  .fl-tab .fl-dow { font-weight: 400; font-size: 7.5pt; color: #444; margin-left: 1mm }
-  /* Fim de semana: so um tom de cinza no numero do dia. Sem preenchimento,
-     que dependeria do 'Graficos de plano de fundo'. */
-  .fl-tab tr.fl-fds .fl-c-dia { color: #555 }
-  .fl-tab td.fl-vazio { color: #bbb }
+/* PREVISAO do dia corrente — italico, como na tela. No papel nao ha cor,
+   entao o italico e o unico sinal: e ele que diz 'este numero e previsto,
+   nao medido'. A legenda no rodape explica. */
+.fl-prev { font-style: italic }
 
-  /* Dia corrente: contorno, nao fundo — pelo mesmo motivo dos cinzas. */
-  .fl-tab tr.fl-hoje td { border-top: 1.2pt solid #000; border-bottom: 1.2pt solid #000 }
-  .fl-tab tr.fl-hoje .fl-c-dia { border-left: 1.2pt solid #000 }
-  .fl-tab tr.fl-hoje td:last-child { border-right: 1.2pt solid #000 }
+/* Linha de total (venda e pedido; a medicao nao leva — ver tabela()) */
+.fl-tab tfoot td { border-top: 1.2pt solid #000; font-weight: 700; font-size: 9.5pt }
+.fl-tab tfoot .fl-c-dia { text-transform: uppercase; letter-spacing: .5pt; font-size: 8.5pt }
 
-  /* PREVISAO do dia corrente — italico, como na tela. No papel nao ha cor,
-     entao o italico e o unico sinal: e ele que diz 'este numero e previsto,
-     nao medido'. A legenda no rodape explica. */
-  .fl-prev { font-style: italic }
-
-  /* Linha de total */
-  .fl-tab tfoot td { border-top: 1.2pt solid #000; font-weight: 700; font-size: 9.5pt }
-  .fl-tab tfoot .fl-c-dia { text-transform: uppercase; letter-spacing: .5pt; font-size: 8.5pt }
-
-  /* ── Rodape ── */
-  .fl-rodape { margin-top: auto; padding-top: 2mm; border-top: .5pt solid #000;
-    display: flex; justify-content: space-between; align-items: baseline; font-size: 8pt }
-  .fl-legenda { font-size: 7.5pt; color: #333 }
-}
+/* ── Rodape ── */
+.fl-rodape { margin-top: 3mm; padding-top: 2mm; border-top: .5pt solid #000;
+  display: flex; justify-content: space-between; align-items: baseline; font-size: 8pt }
+.fl-legenda { font-size: 7.5pt; color: #333 }
