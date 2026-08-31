@@ -141,6 +141,15 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
     var(--accent-dim2) 5px, var(--accent-dim2) 6px);
 }
 .cell-ro { color: var(--text3); }
+
+/* Linhas de BORDA — último dia do mês anterior e primeiro do seguinte
+   (?margem=1). Tom mais claro para não se confundirem com o mês corrente.
+   A de trás vem inteira em td-ro (somente leitura); a da frente é editável,
+   é onde se lança o pedido da virada. */
+.ss-table tbody tr.linha-fora td { background: var(--surface2); }
+.ss-table tbody tr.linha-fora .sticky-col { color: var(--text3); font-weight: 400; }
+.ss-table tbody tr.linha-fora .cell-val { color: var(--text3); }
+.ss-table tbody tr.linha-fora .cell-in { color: var(--text2); }
 .cell-total-venda { font-weight: 700; color: var(--c-ven); }
 .cell-total-venda.cell-vazia { font-weight: 600; color: var(--text3); }
 

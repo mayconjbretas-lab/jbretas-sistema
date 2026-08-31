@@ -36,6 +36,8 @@
   // Categorias editáveis: Medição/Venda/Carga (2A) + Pedido Final (2B).
   // Pré-pedido continua SOMENTE LEITURA (virá do Painel ADM).
   const EDITAVEIS = ['medicao', 'venda', 'carga', 'pedido'];
+  // Rótulo do dia nas linhas de borda: o mês sai da própria data do dia.
+  const MES_ABREV = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
 
   // As 7 categorias da matriz — mesma ordem/semântica do app antigo.
   // classe = cabeçalho colorido (logistica.css); chave = campo vindo do GET.
@@ -120,7 +122,11 @@
     atualizarBotoesSalvar();
     atualizarBotaoUndo();
     try {
-      const dados = await apiFetch('/medicao/' + encodeURIComponent(posto));
+      // ?margem=1: o mes mais o ULTIMO dia do anterior e o PRIMEIRO do
+      // seguinte, com valores reais e marcados com fora_do_mes. O pedido de
+      // um dia e para o dia SEGUINTE, entao em 31/08 o pedido de hoje e para
+      // 01/09 — sem essa linha nao havia onde lancar na matriz.
+      const dados = await apiFetch('/medicao/' + encodeURIComponent(posto) + '?margem=1');
       DADOS_ATUAIS = dados;
       _subtitle.innerHTML = '• ' + dados.posto + ' — ' + dados.mes + '/' + dados.ano;
       montarCabecalhoMedicao(dados.grupos, dados.combustiveisVenda);
@@ -170,8 +176,19 @@
     let html = '';
     const cats = categoriasVisiveis();
     dados.dias.forEach((d, diaIdx) => {
-      html += '<tr><td class="sticky-col">' +
-        String(d.dia).padStart(2, '0') + '/' + dados.mes + '</td>';
+      // Linha de BORDA (fora_do_mes): mes anterior ou seguinte.
+      const fora = !!d.fora_do_mes;
+      // A de TRAS e so leitura: ela existe para VER o fechamento que gerou o
+      // consumo do dia 1o. A da FRENTE e editavel: e o pedido da virada.
+      // Compara com o 1o dia do array que NAO e de borda para saber de que
+      // lado esta, sem depender de Date nem do fuso.
+      const soLeitura = fora && diaIdx === 0;
+      // O mes vem da PROPRIA data do dia ('31/07/2026' -> 'JUL'), nao de
+      // dados.mes: com as bordas, dados.mes rotularia 31/07 como 31/AGO.
+      const mesDoDia = MES_ABREV[parseInt(String(d.data).slice(3, 5), 10) - 1] || dados.mes;
+      html += '<tr' + (fora ? ' class="linha-fora"' : '') + '><td class="sticky-col"' +
+        (soLeitura ? ' title="Mês anterior — somente leitura"' : '') + '>' +
+        String(d.dia).padStart(2, '0') + '/' + mesDoDia + '</td>';
       cats.forEach(cat => {
         const cols    = colunasDaCategoria(cat.chave, grupos, vendaCols);
         const valores = d[cat.chave] || [];
@@ -180,12 +197,28 @@
           const val    = valores[i];
           // na Venda o grp-end vai pro TOTAL (adicionado após este loop)
           const grpEnd = (i === cols.length - 1 && !ehVenda) ? ' grp-end' : '';
-          if (cat.chave === 'previsao') {
+          if ((fora && cat.chave === 'diferenca') || (soLeitura && cat.chave === 'previsao')) {
+            // Célula VAZIA, sem travessão — mas o critério é DIFERENTE nas duas,
+            // porque o que elas precisam é diferente:
+            //  · PREVISÃO = medição(ontem) + pedido(hoje). Some só na borda de
+            //    TRÁS, onde não há ontem (o dia anterior a 31/07 não é carregado).
+            //    Na borda da FRENTE ela é calculável — medição(31/08) + pedido
+            //    (01/09) — e é o número que responde "se eu pedir X, o tanque
+            //    fica em quanto no dia 1º". Sem ela o pedido da virada é às cegas.
+            //  · DIFERENÇA = medição(hoje) − [medição(ontem) + carga − venda].
+            //    Some nas DUAS: atrás falta o ontem; na frente falta a medição do
+            //    próprio dia, que só existe depois que o dia acontece.
+            // Travessão é o vocabulário de 'sem valor' na tabela; usá-lo para
+            // 'não se aplica' faria parecer que houve dia sem número.
+            // Sem o <span id="prev_/diff_">, recalcularPrevisaoEDiff simplesmente
+            // não acha o elemento e passa adiante (os dois pintores já guardam).
+            html += '<td class="' + grpEnd + ' cell-na"></td>';
+          } else if (cat.chave === 'previsao') {
             // Preenchido por recalcularPrevisaoEDiff após montar as linhas.
             html += '<td class="' + grpEnd + '"><span class="cell-val" id="prev_' + diaIdx + '_' + i + '">—</span></td>';
           } else if (cat.chave === 'diferenca') {
             html += '<td class="' + grpEnd + '"><span class="cell-val cell-diff" id="diff_' + diaIdx + '_' + i + '">—</span></td>';
-          } else if (EDITAVEIS.includes(cat.chave)) {
+          } else if (EDITAVEIS.includes(cat.chave) && !soLeitura) {
             // Célula editável (Medição/Venda/Carga/Pedido) — mesmo padrão do app antigo.
             BASELINE[diaIdx + '|' + cat.chave + '|' + col.comb] = (val === undefined ? null : val);
             const combAttr = String(col.comb).replace(/"/g, '&quot;');
@@ -195,9 +228,15 @@
               ' onfocus="onCelulaFocus(this)" oninput="onCelulaDigito(this)"' +
               ' onkeydown="onCelulaTecla(event,this)" onblur="onCelulaBlur(this)"></td>';
           } else {
-            // Pré-pedido — SOMENTE LEITURA (preenchido pelo Painel ADM, não aqui).
+            // Somente leitura: o pré-pedido (definido no Painel ADM) e TODA a
+            // linha do mês anterior. Mesma marcação visual dos dois casos —
+            // td-ro/cell-ro já existiam; campo que não aceita clique sem sinal
+            // nenhum parece defeito.
             const vazia = (val === null || val === undefined || val === '') ? ' cell-vazia' : '';
-            html += '<td class="' + grpEnd + ' td-ro" title="Somente leitura — definido no Painel ADM">' +
+            const motivo = soLeitura
+              ? 'Mês anterior — somente leitura'
+              : 'Somente leitura — definido no Painel ADM';
+            html += '<td class="' + grpEnd + ' td-ro" title="' + motivo + '">' +
               '<span class="cell-val cell-ro' + vazia + '">' + fmtL(val) + '</span></td>';
           }
         });
