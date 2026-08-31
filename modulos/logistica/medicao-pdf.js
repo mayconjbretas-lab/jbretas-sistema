@@ -28,8 +28,9 @@
 // medicao de fechamento que gerou o consumo do dia 1o; o da frente e
 // onde se lanca o pedido da virada — em 31/08 o pedido de hoje e para
 // 01/09, e sem essa linha nao havia onde escrever no papel.
-// Elas NAO entram em soma nenhuma do mes (ver tabela(): `fora`), e vem
-// em tom mais claro e com o mes no rotulo ('31 jul', '01 set').
+// Vem da API por ?margem=1, marcadas com fora_do_mes e COM os valores
+// reais daqueles dias. NAO entram em soma nenhuma do mes, e saem em tom
+// mais claro e com o mes no rotulo ('31 jul', '01 set').
 // CARGA NAO ENTRA, a pedido: e onde os gerentes mais erram e a folha
 // nao deve carregar o numero errado para dentro do posto.
 //
@@ -191,28 +192,19 @@
     });
   }
 
-  // Um mes do posto. A rota ja aceitava ?mes= e ?ano= desde sempre.
-  const buscarMes = (posto, ano, mes) =>
-    apiFetch('/medicao/' + encodeURIComponent(posto) + '?mes=' + mes + '&ano=' + ano);
-
   // ── Uma folha (frente + verso) de um posto ──────────────────────
   async function folhasDoPosto(posto, agora, bandeiraConhecida) {
     const mes = agora.getMonth() + 1, ano = agora.getFullYear();
-    const ant = new Date(ano, mes - 2, 1);   // mes anterior (vira o ano sozinho)
-    const pro = new Date(ano, mes, 1);       // mes seguinte
-    // Os TRES meses em paralelo: o anterior e o seguinte entram so por UMA
-    // linha cada, e serializar triplicaria o tempo do botao da rede (37
-    // postos). Paralelo por posto, serie entre postos — o laco da rede
-    // continua sequencial, entao sao 3 chamadas simultaneas no maximo.
-    const [dAnt, dCur, dPro] = await Promise.all([
-      buscarMes(posto, ant.getFullYear(), ant.getMonth() + 1),
-      buscarMes(posto, ano, mes),
-      buscarMes(posto, pro.getFullYear(), pro.getMonth() + 1),
-    ]);
+    // UMA chamada. O ?margem=1 traz o mes mais o ultimo dia do anterior e o
+    // primeiro do seguinte, ja marcados com fora_do_mes e COM os valores
+    // reais daqueles dias (a consulta do banco usa o intervalo esticado).
+    // Antes eram 3 chamadas por posto costuradas aqui — 111 no botao da rede.
+    const dados = await apiFetch('/medicao/' + encodeURIComponent(posto) +
+                                 '?mes=' + mes + '&ano=' + ano + '&margem=1');
     const bandeira = bandeiraConhecida !== undefined ? bandeiraConhecida : acharBandeira(posto);
-    const grupos = dCur.grupos || [];
-    const vendas = dCur.combustiveisVenda || [];
-    const dias   = comBordas(dAnt, dCur, dPro);
+    const grupos = dados.grupos || [];
+    const vendas = dados.combustiveisVenda || [];
+    const dias   = dados.dias || [];
     // Hoje comparado pela DATA INTEIRA, nao pelo numero do dia: com a linha
     // de borda, 31/07 e 31/08 tem o mesmo `dia` e as duas seriam marcadas
     // como hoje.
@@ -246,16 +238,6 @@
         tabela(dias, vendas, hojeData, 'venda', { totalDia: true }) +
         rod(2, '') +
       '</section>';
-  }
-
-  // Array de dias do mes com UMA linha de borda de cada lado. As de borda
-  // levam `fora: true` — e essa marca, e so ela, que governa as tres coisas:
-  // ficar de fora das somas, o tom mais claro e o DD/MM no lugar do dia.
-  function comBordas(dAnt, dCur, dPro) {
-    const doMes = (dCur.dias || []).map(d => Object.assign({}, d, { fora: false }));
-    const antes = (dAnt.dias || []).slice(-1).map(d => Object.assign({}, d, { fora: true }));
-    const depois = (dPro.dias || []).slice(0, 1).map(d => Object.assign({}, d, { fora: true }));
-    return antes.concat(doMes, depois);
   }
 
   function acharBandeira(nome) {
@@ -318,15 +300,15 @@
       const fds = dow === 0 || dow === 6;
       // Na linha de borda o dia vem com o mes ('31 jul'): so '31' no topo de
       // uma folha de agosto se le como 31 de agosto.
-      const rotuloDia = dia.fora ? pad(dia.dia) + ' ' + MES_CURTO[+p[1] - 1] : pad(dia.dia);
-      body += '<tr class="' + (eHoje ? 'fl-hoje ' : '') + (dia.fora ? 'fl-extra ' : '') +
+      const rotuloDia = dia.fora_do_mes ? pad(dia.dia) + ' ' + MES_CURTO[+p[1] - 1] : pad(dia.dia);
+      body += '<tr class="' + (eHoje ? 'fl-hoje ' : '') + (dia.fora_do_mes ? 'fl-extra ' : '') +
         (fds ? 'fl-fds' : '') + '">' +
         '<td class="fl-c-dia">' + rotuloDia + '<span class="fl-dow">' + DIA_SEM[dow] + '</span></td>';
       cols.forEach((c, i) => {
         const val = dia[campo] ? dia[campo][i] : null;
-        // `!dia.fora`: o total e DO MES. 01/09 e setembro e nao entra no
-        // total de agosto — era o risco que o pedido apontou.
-        if (temValor(val) && !dia.fora) totais[i] = (totais[i] || 0) + Number(val);
+        // `!dia.fora_do_mes`: o total e DO MES. 01/09 e setembro e nao entra
+        // no total de agosto. A marca vem da API (?margem=1).
+        if (temValor(val) && !dia.fora_do_mes) totais[i] = (totais[i] || 0) + Number(val);
         if (temValor(val)) {
           body += '<td>' + fmt(val) + '</td>';
         } else if (opt.previsao && eHoje) {
