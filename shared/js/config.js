@@ -16,5 +16,8 @@ window.JBRETAS_CONFIG = {
     MOTORISTA:  '/modulos/motorista/',
     SUPERVISOR: '/modulos/supervisor/',
     TI:         '/modulos/painel-ti/',
+    // Portal da conciliação. Hoje só o Calibrador; a tela nasce como lista
+    // e vai receber outras conferências.
+    CONCILIACAO: '/modulos/conciliacao/',
   },
 };
