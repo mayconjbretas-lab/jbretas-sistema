@@ -142,6 +142,32 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
 }
 .cell-ro { color: var(--text3); }
 
+/* Navegação de mês no subtítulo da matriz ('P. ANA LUCIA — ‹ AGO/2026 ›').
+   Setas em vez de seletor: o caso real é voltar UM mês, que é um clique, e é
+   o mesmo gesto que a Medição mobile já usa para navegar período. */
+.mm-mesnav { display: inline-flex; align-items: center; gap: .15rem; vertical-align: baseline; }
+.mm-mes-seta { background: transparent; border: 1px solid var(--border); border-radius: 5px;
+  color: var(--accent); font-size: .8rem; line-height: 1; padding: 1px 6px; cursor: pointer; }
+.mm-mes-seta:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-dim); }
+.mm-mes-seta:disabled { color: var(--text3); cursor: default; opacity: .5; }
+/* O rótulo É o seletor: <select> nativo pintado como texto. Só ganha cara de
+   campo no hover/foco, para não poluir o cabeçalho. */
+.mm-mes-sel { font-family: var(--mono); font-weight: 700; font-size: inherit;
+  color: var(--text); background: transparent; border: 1px solid transparent;
+  border-radius: 5px; padding: 1px 2px; cursor: pointer; appearance: none; text-align: center; }
+.mm-mes-sel:hover, .mm-mes-sel:focus { border-color: var(--border); background: var(--surface2); outline: none; }
+.mm-mes-sel option { background: var(--surface2); color: var(--text); }
+
+/* FORA do mês corrente a tela avisa: o mês fica na cor de atenção e aparece o
+   botão "hoje". Sem isso dá para esquecer que se está em julho e lançar pedido
+   no mês errado — engano caro e silencioso. */
+.mm-mesnav.mm-mes-passado .mm-mes-sel { color: var(--warning); }
+.mm-mesnav.mm-mes-passado .mm-mes-seta { border-color: var(--warning); color: var(--warning); }
+.mm-mes-hoje { background: var(--warning); color: #1a1206; border: none; border-radius: 5px;
+  font-family: var(--mono); font-size: .62rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; padding: 2px 7px; margin-left: .25rem; cursor: pointer; }
+.mm-mes-hoje:hover { opacity: .88; }
+
 /* Linhas de BORDA — último dia do mês anterior e primeiro do seguinte
    (?margem=1). Tom mais claro para não se confundirem com o mês corrente.
    A de trás vem inteira em td-ro (somente leitura); a da frente é editável,

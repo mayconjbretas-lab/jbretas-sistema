@@ -18,6 +18,12 @@
 
   // ── Referências do DOM montado (preenchidas em montar) ──────────
   let _container = null, _thead = null, _tbody = null, _subtitle = null;
+  let _subTxt = null, _mesSel = null, _mesNav = null, _btnHoje = null;
+  // Mes em exibicao. Nasce do relogio do NAVEGADOR e vai SEMPRE explicito na
+  // URL — antes a matriz omitia ?mes= e caia no padrao do servidor, que roda
+  // em UTC: as 21h de BRT do ultimo dia do mes o servidor ja esta no mes
+  // seguinte e devolveria o mes errado para quem esta no Brasil.
+  let _mes = null, _ano = null;
   let _btnSalvar = null, _btnUndo = null;
 
   // ── Estado ──────────────────────────────────────────────────────
@@ -103,6 +109,82 @@
     return n.toLocaleString('pt-BR', { useGrouping: false, maximumFractionDigits: 3 });
   }
 
+  // ── Navegacao de mes ────────────────────────────────────────────
+  const MES_ABREV_NAV = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+
+  function mesCorrente() { const d = new Date(); return { mes: d.getMonth() + 1, ano: d.getFullYear() }; }
+
+  // Recarrega o MESMO posto no mes vizinho. Nao passa de mes corrente para a
+  // frente: adiante so ha linha vazia, e o dia 1o do mes seguinte ja aparece
+  // como linha de borda (?margem=1) sem precisar sair do mes.
+  function mudarMes(delta) {
+    if (_mes == null) return;
+    const d = new Date(_ano, _mes - 1 + delta, 1);
+    const hoje = mesCorrente();
+    // Para FRENTE trava no mês corrente: adiante não há dado, e uma tela
+    // vazia de setembro em agosto se lê como 'sumiu', não como 'ainda não
+    // aconteceu'. Para TRÁS não há limite — mês sem dado aparece vazio mesmo.
+    if (d > new Date(hoje.ano, hoje.mes - 1, 1)) return;
+    _mes = d.getMonth() + 1;
+    _ano = d.getFullYear();
+    recarregarMes();
+  }
+
+  function irParaMesCorrente() {
+    const c = mesCorrente();
+    if (_mes === c.mes && _ano === c.ano) return;
+    _mes = c.mes; _ano = c.ano;
+    recarregarMes();
+  }
+
+  // Sem posto não há o que recarregar, mas o rótulo tem de acompanhar assim
+  // mesmo — senão a tela diz um mês e o próximo carregamento traz outro.
+  function recarregarMes() {
+    if (!_postoAtual) { atualizarMesNav(); return; }
+    carregarMatriz(_postoAtual, { grupos: _gruposVisiveis });
+  }
+
+  // Lista do seletor: 36 meses até o corrente. As SETAS não têm esse teto —
+  // ao passar do início da lista, atualizarMesNav insere a opção que falta.
+  function popularMeses() {
+    if (!_mesSel) return;
+    const c = mesCorrente();
+    let html = '';
+    for (let i = 0; i < 36; i++) {
+      const d = new Date(c.ano, c.mes - 1 - i, 1);
+      html += opcaoMes(d.getFullYear(), d.getMonth() + 1);
+    }
+    _mesSel.innerHTML = html;
+  }
+  const chaveMesSel = (ano, mes) => ano + '-' + String(mes).padStart(2, '0');
+  const opcaoMes = (ano, mes) =>
+    '<option value="' + chaveMesSel(ano, mes) + '">' + MES_ABREV_NAV[mes - 1] + '/' + ano + '</option>';
+
+  // Seletor, setas e o aviso de mês passado.
+  function atualizarMesNav() {
+    if (!_mesNav) return;
+    const temPosto = !!_postoAtual && _mes != null;
+    _mesNav.hidden = !temPosto;
+    if (!temPosto) return;
+    // Setas não têm limite para trás; ao passar do início da lista, insere a
+    // opção que falta em vez de deixar o <select> sem valor correspondente.
+    const chave = chaveMesSel(_ano, _mes);
+    if (!_mesSel.querySelector('option[value="' + chave + '"]')) {
+      _mesSel.insertAdjacentHTML('beforeend', opcaoMes(_ano, _mes));
+    }
+    _mesSel.value = chave;
+    const hoje = mesCorrente();
+    const noCorrente = (_mes === hoje.mes && _ano === hoje.ano);
+    const prox = _mesNav.querySelector('[data-delta="1"]');
+    prox.disabled = noCorrente;
+    prox.title = noCorrente ? 'Já está no mês corrente' : 'Mês seguinte';
+    // Fora do mês corrente a tela AVISA: o rótulo muda de cor e aparece o
+    // botão 'hoje'. Sem isso dá para esquecer que se está em julho e lançar
+    // pedido no mês errado — o custo do engano é alto e silencioso.
+    _mesNav.classList.toggle('mm-mes-passado', !noCorrente);
+    _btnHoje.hidden = noCorrente;
+  }
+
   // ── Matriz — carga (GET /medicao/:posto) ────────────────────────
   async function carregarMatriz(posto, opcoes) {
     if (!_tbody) return;            // montar() ainda não chamado
@@ -112,7 +194,12 @@
     _gruposVisiveis = (opcoes && Array.isArray(opcoes.grupos) && opcoes.grupos.length)
       ? opcoes.grupos : null;
     _postoAtual = posto;
-    _subtitle.innerHTML = '• Carregando ' + posto + '...';
+    // 1a carga (ou tela recriada): comeca no mes corrente do NAVEGADOR.
+    // Trocar de posto MANTEM o mes — quem esta revendo julho quer comparar
+    // postos em julho, nao voltar para agosto a cada troca.
+    if (_mes == null) { const c = mesCorrente(); _mes = c.mes; _ano = c.ano; }
+    atualizarMesNav();
+    _subTxt.textContent = 'Carregando ' + posto + '...';
     _thead.innerHTML = '';
     _tbody.innerHTML =
       '<tr><td style="padding:2rem;color:var(--text3);text-align:center;">Conectando ao servidor…</td></tr>';
@@ -126,14 +213,18 @@
       // seguinte, com valores reais e marcados com fora_do_mes. O pedido de
       // um dia e para o dia SEGUINTE, entao em 31/08 o pedido de hoje e para
       // 01/09 — sem essa linha nao havia onde lancar na matriz.
-      const dados = await apiFetch('/medicao/' + encodeURIComponent(posto) + '?margem=1');
+      // ?mes=/?ano= vao explicitos (ver _mes/_ano): a rota ja os aceitava, a
+      // matriz e que nunca os enviava.
+      const dados = await apiFetch('/medicao/' + encodeURIComponent(posto) +
+        '?mes=' + _mes + '&ano=' + _ano + '&margem=1');
       DADOS_ATUAIS = dados;
-      _subtitle.innerHTML = '• ' + dados.posto + ' — ' + dados.mes + '/' + dados.ano;
+      _subTxt.textContent = dados.posto + ' — ';
+      atualizarMesNav();
       montarCabecalhoMedicao(dados.grupos, dados.combustiveisVenda);
       montarLinhasMedicao(dados);
       requestAnimationFrame(ajustarSticky);
     } catch (err) {
-      _subtitle.innerHTML = '• <span style="color:var(--danger)">Falha ao conectar</span>';
+      _subTxt.innerHTML = '<span style="color:var(--danger)">Falha ao conectar</span>';
       _tbody.innerHTML =
         '<tr><td class="matriz-erro">⚠ ' + err.message + '</td></tr>';
     }
@@ -599,7 +690,7 @@
   }
 
   function mostrarErroMatriz(msg) {
-    if (_subtitle) _subtitle.innerHTML = '• <span style="color:var(--danger)">' + msg + '</span>';
+    if (_subTxt) _subTxt.innerHTML = '<span style="color:var(--danger)">' + msg + '</span>';
   }
 
   // Ajusta o offset da 2ª linha sticky do cabeçalho conforme a altura REAL da 1ª.
@@ -629,7 +720,18 @@
     container.innerHTML =
       '<div class="table-actions">' +
         '<div class="table-title">' + titulo +
-          ' <span class="mm-subtitle">• Carregando posto...</span></div>' +
+          ' <span class="mm-subtitle">• <span class="mm-sub-txt">Carregando posto...</span>' +
+            '<span class="mm-mesnav" hidden>' +
+              '<button type="button" class="mm-mes-seta" data-delta="-1" title="Mês anterior" aria-label="Mês anterior">‹</button>' +
+              // O rótulo É o seletor: <select> nativo estilizado como texto.
+              // As setas cobrem o uso normal (voltar um mês); o clique abre a
+              // lista para saltar direto. Nativo de propósito — um popup
+              // próprio seria mais código para fazer pior em teclado e touch.
+              '<select class="mm-mes-sel" title="Escolher o mês" aria-label="Mês"></select>' +
+              '<button type="button" class="mm-mes-seta" data-delta="1" title="Mês seguinte" aria-label="Mês seguinte">›</button>' +
+              '<button type="button" class="mm-mes-hoje" hidden title="Voltar para o mês corrente">hoje</button>' +
+            '</span>' +
+          '</span></div>' +
         '<div class="mm-actions" style="display:flex;align-items:center;gap:1rem;">' +
           '<div class="scroll-indicator">↔ Scroll horizontal para ver tudo</div>' +
         '</div>' +
@@ -643,8 +745,24 @@
         '</table>' +
       '</div>';
     _subtitle = container.querySelector('.mm-subtitle');
+    _subTxt   = container.querySelector('.mm-sub-txt');
+    _mesNav   = container.querySelector('.mm-mesnav');
+    _mesSel   = container.querySelector('.mm-mes-sel');
+    _btnHoje  = container.querySelector('.mm-mes-hoje');
     _thead    = container.querySelector('.mm-thead');
     _tbody    = container.querySelector('.mm-tbody');
+    // Delegado no container do nav: o subtitulo em si nao e reconstruido mais
+    // (so o texto de dentro muda), mas delegar evita religar a cada carga.
+    _mesNav.addEventListener('click', (e) => {
+      const b = e.target.closest('.mm-mes-seta');
+      if (b && !b.disabled) { mudarMes(parseInt(b.dataset.delta, 10)); return; }
+      if (e.target.closest('.mm-mes-hoje')) irParaMesCorrente();
+    });
+    _mesSel.addEventListener('change', () => {
+      const [a, m] = _mesSel.value.split('-').map(Number);
+      if (a && m) { _ano = a; _mes = m; recarregarMes(); }
+    });
+    popularMeses();
     // O consumidor é dono dos botões; a matriz só controla o estado deles.
     // Se ele JÁ os posicionou (ex.: barra fixa do mobile — o botão já tem
     // parentNode), não realoca; senão (desktop, botões recém-criados sem pai),
@@ -683,6 +801,9 @@
     salvar:   salvarAlteracoesMatriz,
     desfazer: desfazerUltima,
     ajustarSticky: ajustarSticky,   // p/ re-medir o offset do cabeçalho ao reexibir a aba (ver switchMainTab)
+    // Mês em exibição — a folha de impressão segue a matriz: se a tela está
+    // em julho, imprimir tem de dar julho. null antes da 1ª carga.
+    mesAtual: () => (_mes == null ? null : { mes: _mes, ano: _ano }),
     TOLERANCIA_CARGA: TOLERANCIA_CARGA,   // exposto p/ reuso (ex.: painel Pedido Final dos FABs)
   };
 })();
