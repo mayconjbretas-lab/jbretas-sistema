@@ -52,23 +52,25 @@ body { font-family: Arial, Helvetica, sans-serif }
 .fl-mes { font-weight: 700; font-size: 11pt }
 .fl-face { font-size: 8pt; text-transform: uppercase; letter-spacing: 1pt; margin-top: .5mm }
 
-/* ── Titulo de bloco (VENDA / PEDIDO no verso) ── */
+/* ── Titulo de bloco (MEDICAO e PEDIDO na frente, VENDA no verso) ── */
 .fl-bloco-tit { font-size: 10pt; font-weight: 700; text-transform: uppercase;
   letter-spacing: .6pt; margin: 0 0 1.5mm; padding-bottom: .8mm; border-bottom: .8pt solid #000 }
 
-/* Verso em DUAS COLUNAS, nao empilhado. Empilhar venda e pedido (dois meses
-   inteiros, 62 linhas) da 424mm — uma A4 util tem 273mm, entao a folha
-   viraria 3 paginas e o "Pagina 2 de 2" seria mentira. Caberia empilhado so
-   a 5,5pt (269mm), tipografia pequena demais para ler no posto. Lado a lado
-   cabe na MESMA 9pt da frente. */
+/* DUAS COLUNAS lado a lado (hoje: medicao e pedido, na frente). Empilhar duas
+   tabelas de mes inteiro (62 linhas) daria 424mm — uma A4 util tem 273mm,
+   entao a folha viraria 3 paginas e o "Pagina X de 2" seria mentira.
+   Empilhado so caberia a 5,5pt, tipografia pequena demais para ler no posto.
+   Lado a lado cabe na MESMA 9pt do resto. */
 .fl-blocos { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; align-items: start }
 .fl-bloco { min-width: 0 }
-/* Em duas colunas cada tabela tem ~90,5mm, entao o verso aperta o que nao e
-   numero: coluna do dia menor, padding menor e total no mesmo corpo do resto.
-   A fonte dos VALORES continua 9pt, igual a frente — nada de ilegivel. */
-.folha-verso .fl-tab .fl-c-dia { width: 10mm }
-.folha-verso .fl-tab th, .folha-verso .fl-tab td { padding: .7mm .5mm }
-.folha-verso .fl-tab tfoot td { font-size: 9pt }
+/* Em duas colunas cada tabela tem ~90,5mm, entao aperta o que NAO e numero:
+   coluna do dia menor, padding menor e total no mesmo corpo do resto. A fonte
+   dos VALORES continua 9pt — nada de ilegivel. Escopado em .fl-blocos, nao
+   em .folha-verso: quem precisa apertar e o layout de duas colunas, esteja
+   ele na frente ou no verso. */
+.fl-blocos .fl-tab .fl-c-dia { width: 10mm }
+.fl-blocos .fl-tab th, .fl-blocos .fl-tab td { padding: .7mm .5mm }
+.fl-blocos .fl-tab tfoot td { font-size: 9pt }
 
 /* ── Tabela ── */
 .fl-tab { width: 100%; border-collapse: collapse; font-size: 9pt }
@@ -91,6 +93,11 @@ body { font-family: Arial, Helvetica, sans-serif }
    entao o italico e o unico sinal: e ele que diz 'este numero e previsto,
    nao medido'. A legenda no rodape explica. */
 .fl-prev { font-style: italic }
+
+/* Coluna de TOTAL do dia (venda, no verso). Negrito e uma borda mais forte a
+   esquerda para separar do ultimo combustivel — e um numero de natureza
+   diferente dos outros da linha. */
+.fl-tab .fl-c-tot { font-weight: 700; border-left: 1.2pt solid #000 }
 
 /* Linha de total (venda e pedido; a medicao nao leva — ver tabela()) */
 .fl-tab tfoot td { border-top: 1.2pt solid #000; font-weight: 700; font-size: 9.5pt }

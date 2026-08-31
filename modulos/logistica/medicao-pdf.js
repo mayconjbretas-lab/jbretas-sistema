@@ -15,10 +15,13 @@
 //     uma confirmacao que diz o tamanho e lembra do duplex.
 //
 // DUAS PAGINAS POR POSTO, para imprimir em FRENTE E VERSO:
-//   FRENTE — medicao do mes; a previsao do dia corrente aparece em
-//            italico. SEM linha de total (ver tabela(): medicao e
-//            estoque, nao fluxo).
-//   VERSO  — venda e pedido final LADO A LADO, cada um com total.
+//   FRENTE — medicao e pedido final LADO A LADO. Juntos de proposito:
+//            se olha a medicao PARA decidir o pedido, entao os dois
+//            tem que estar na mesma folha. A previsao do dia corrente
+//            aparece em italico na medicao, que NAO leva linha de
+//            total (ver tabela(): medicao e estoque, nao fluxo).
+//   VERSO  — venda sozinha, com total por DIA (soma dos combustiveis
+//            da linha) e total do mes por combustivel.
 // CARGA NAO ENTRA, a pedido: e onde os gerentes mais erram e a folha
 // nao deve carregar o numero errado para dentro do posto.
 //
@@ -192,23 +195,27 @@
     const rod = (n, legenda) => rodape(carimbo, n, legenda);
 
     return '' +
+      // FRENTE: medicao e pedido lado a lado — a folha em que se decide.
       '<section class="folha folha-frente">' +
-        cab('Frente · Medição') +
-        tabela(dias, grupos, diaHoje, 'medicao', { previsao: true, semTotal: true }) +
-        rod(1, 'Em itálico: previsão do dia corrente — medição do dia anterior mais o pedido do dia. Valor previsto, não medido.') +
-      '</section>' +
-      '<section class="folha folha-verso">' +
-        cab('Verso · Venda e pedido') +
+        cab('Frente · Medição e pedido') +
         '<div class="fl-blocos">' +
           '<div class="fl-bloco">' +
-            '<div class="fl-bloco-tit">Venda diária (L)</div>' +
-            tabela(dias, vendas, diaHoje, 'venda', {}) +
+            '<div class="fl-bloco-tit">Medição (L)</div>' +
+            tabela(dias, grupos, diaHoje, 'medicao', { previsao: true, semTotal: true }) +
           '</div>' +
           '<div class="fl-bloco">' +
             '<div class="fl-bloco-tit">Pedido final aprovado (L)</div>' +
             tabela(dias, grupos, diaHoje, 'pedido', {}) +
           '</div>' +
         '</div>' +
+        rod(1, 'Em itálico: previsão do dia corrente — medição do dia anterior mais o pedido do dia. Valor previsto, não medido.') +
+      '</section>' +
+      // VERSO: venda sozinha. Sozinha ela cabe em largura inteira, e sobra
+      // espaco para a coluna de total do DIA (soma dos combustiveis).
+      '<section class="folha folha-verso">' +
+        cab('Verso · Venda') +
+        '<div class="fl-bloco-tit">Venda diária (L)</div>' +
+        tabela(dias, vendas, diaHoje, 'venda', { totalDia: true }) +
         rod(2, '') +
       '</section>';
   }
@@ -260,7 +267,8 @@
   function tabela(dias, cols, diaHoje, campo, opt) {
     if (!cols.length) return '<div class="fl-bloco-tit">Sem combustíveis cadastrados</div>';
     const thead = '<tr><th class="fl-c-dia">Dia</th>' +
-      cols.map(c => '<th>' + esc(c.abv) + '</th>').join('') + '</tr>';
+      cols.map(c => '<th>' + esc(c.abv) + '</th>').join('') +
+      (opt.totalDia ? '<th class="fl-c-tot">Total</th>' : '') + '</tr>';
 
     const totais = cols.map(() => null);
     let body = '';
@@ -286,6 +294,17 @@
           body += '<td class="fl-vazio">—</td>';
         }
       });
+      // Total do DIA: soma dos combustiveis da linha. Null-aware — dia sem
+      // nenhum lancamento fica travessao, nao zero (zero seria uma afirmacao
+      // errada: 'vendeu nada' e diferente de 'nao foi lancado').
+      if (opt.totalDia) {
+        let soma = null;
+        cols.forEach((c, i) => {
+          const v = dia[campo] ? dia[campo][i] : null;
+          if (temValor(v)) soma = (soma || 0) + Number(v);
+        });
+        body += '<td class="fl-c-tot">' + (soma == null ? '—' : fmt(soma)) + '</td>';
+      }
       body += '</tr>';
     });
 
@@ -296,9 +315,11 @@
     // Nada entra no lugar: uma media teria denominador ambiguo no papel (dias
     // medidos ou dias do mes?) e o dia corrente pode estar em italico, que e
     // previsao e nao medicao — duas coisas impossiveis de explicar num rodape.
+    const geral = totais.reduce((s, t) => (t == null ? s : (s || 0) + t), null);
     const tfoot = opt.semTotal ? '' :
       '<tfoot><tr><td class="fl-c-dia">Total</td>' +
       totais.map(t => '<td>' + (t == null ? '—' : fmt(t)) + '</td>').join('') +
+      (opt.totalDia ? '<td class="fl-c-tot">' + (geral == null ? '—' : fmt(geral)) + '</td>' : '') +
       '</tr></tfoot>';
 
     return '<table class="fl-tab"><thead>' + thead + '</thead><tbody>' + body +
