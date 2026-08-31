@@ -84,6 +84,16 @@ body { font-family: Arial, Helvetica, sans-serif }
 .fl-tab tr.fl-fds .fl-c-dia { color: #555 }
 .fl-tab td.fl-vazio { color: #bbb }
 
+/* Linhas de BORDA (ultimo dia do mes anterior, primeiro do seguinte).
+   Tom mais claro para nao se confundirem com o mes corrente. Cor de TEXTO,
+   nao preenchimento: fundo dependeria da caixa 'Graficos de plano de fundo'
+   do Chrome, que vem desmarcada — o cinza do texto sai sempre.
+   O DD/MM na coluna do dia (ver tabela()) e o segundo sinal, esse imune ate
+   a fotocopia em preto e branco puro. */
+.fl-tab tr.fl-extra td { color: #8a8a8a }
+.fl-tab tr.fl-extra .fl-c-dia { color: #8a8a8a; font-weight: 400 }
+.fl-tab tr.fl-extra .fl-dow { color: #a5a5a5 }
+
 /* Dia corrente: contorno, nao fundo — pelo mesmo motivo dos cinzas. */
 .fl-tab tr.fl-hoje td { border-top: 1.2pt solid #000; border-bottom: 1.2pt solid #000 }
 .fl-tab tr.fl-hoje .fl-c-dia { border-left: 1.2pt solid #000 }

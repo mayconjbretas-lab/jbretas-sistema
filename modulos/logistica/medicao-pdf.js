@@ -22,6 +22,14 @@
 //            total (ver tabela(): medicao e estoque, nao fluxo).
 //   VERSO  — venda sozinha, com total por DIA (soma dos combustiveis
 //            da linha) e total do mes por combustivel.
+//
+// LINHAS DE BORDA: alem do mes, a folha traz o ULTIMO dia do mes
+// anterior no topo e o PRIMEIRO do seguinte no fim. O de tras mostra a
+// medicao de fechamento que gerou o consumo do dia 1o; o da frente e
+// onde se lanca o pedido da virada — em 31/08 o pedido de hoje e para
+// 01/09, e sem essa linha nao havia onde escrever no papel.
+// Elas NAO entram em soma nenhuma do mes (ver tabela(): `fora`), e vem
+// em tom mais claro e com o mes no rotulo ('31 jul', '01 set').
 // CARGA NAO ENTRA, a pedido: e onde os gerentes mais erram e a folha
 // nao deve carregar o numero errado para dentro do posto.
 //
@@ -52,6 +60,10 @@
   const MESES = ['JANEIRO','FEVEREIRO','MARÇO','ABRIL','MAIO','JUNHO',
                  'JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
   const DIA_SEM = ['dom','seg','ter','qua','qui','sex','sáb'];
+  // So para o rotulo das linhas de borda ('31 jul'). MESES (acima) e o nome
+  // cheio do cabecalho da folha.
+  const MES_CURTO = ['jan','fev','mar','abr','mai','jun',
+                     'jul','ago','set','out','nov','dez'];
 
   const esc = (s) => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -179,16 +191,32 @@
     });
   }
 
+  // Um mes do posto. A rota ja aceitava ?mes= e ?ano= desde sempre.
+  const buscarMes = (posto, ano, mes) =>
+    apiFetch('/medicao/' + encodeURIComponent(posto) + '?mes=' + mes + '&ano=' + ano);
+
   // ── Uma folha (frente + verso) de um posto ──────────────────────
   async function folhasDoPosto(posto, agora, bandeiraConhecida) {
     const mes = agora.getMonth() + 1, ano = agora.getFullYear();
-    const dados = await apiFetch('/medicao/' + encodeURIComponent(posto) +
-                                 '?mes=' + mes + '&ano=' + ano);
+    const ant = new Date(ano, mes - 2, 1);   // mes anterior (vira o ano sozinho)
+    const pro = new Date(ano, mes, 1);       // mes seguinte
+    // Os TRES meses em paralelo: o anterior e o seguinte entram so por UMA
+    // linha cada, e serializar triplicaria o tempo do botao da rede (37
+    // postos). Paralelo por posto, serie entre postos — o laco da rede
+    // continua sequencial, entao sao 3 chamadas simultaneas no maximo.
+    const [dAnt, dCur, dPro] = await Promise.all([
+      buscarMes(posto, ant.getFullYear(), ant.getMonth() + 1),
+      buscarMes(posto, ano, mes),
+      buscarMes(posto, pro.getFullYear(), pro.getMonth() + 1),
+    ]);
     const bandeira = bandeiraConhecida !== undefined ? bandeiraConhecida : acharBandeira(posto);
-    const grupos = dados.grupos || [];
-    const vendas = dados.combustiveisVenda || [];
-    const dias   = dados.dias || [];
-    const diaHoje = agora.getDate();     // agora e sempre o mes corrente aqui
+    const grupos = dCur.grupos || [];
+    const vendas = dCur.combustiveisVenda || [];
+    const dias   = comBordas(dAnt, dCur, dPro);
+    // Hoje comparado pela DATA INTEIRA, nao pelo numero do dia: com a linha
+    // de borda, 31/07 e 31/08 tem o mesmo `dia` e as duas seriam marcadas
+    // como hoje.
+    const hojeData = pad(agora.getDate()) + '/' + pad(mes) + '/' + ano;
     const carimbo = pad(agora.getDate()) + '/' + pad(mes) + '/' + ano + ' ' +
                     pad(agora.getHours()) + ':' + pad(agora.getMinutes());
     const cab = (face) => topo(posto, bandeira, mes, ano, face);
@@ -201,11 +229,11 @@
         '<div class="fl-blocos">' +
           '<div class="fl-bloco">' +
             '<div class="fl-bloco-tit">Medição (L)</div>' +
-            tabela(dias, grupos, diaHoje, 'medicao', { previsao: true, semTotal: true }) +
+            tabela(dias, grupos, hojeData, 'medicao', { previsao: true, semTotal: true }) +
           '</div>' +
           '<div class="fl-bloco">' +
             '<div class="fl-bloco-tit">Pedido final aprovado (L)</div>' +
-            tabela(dias, grupos, diaHoje, 'pedido', {}) +
+            tabela(dias, grupos, hojeData, 'pedido', {}) +
           '</div>' +
         '</div>' +
         rod(1, 'Em itálico: previsão do dia corrente — medição do dia anterior mais o pedido do dia. Valor previsto, não medido.') +
@@ -215,9 +243,19 @@
       '<section class="folha folha-verso">' +
         cab('Verso · Venda') +
         '<div class="fl-bloco-tit">Venda diária (L)</div>' +
-        tabela(dias, vendas, diaHoje, 'venda', { totalDia: true }) +
+        tabela(dias, vendas, hojeData, 'venda', { totalDia: true }) +
         rod(2, '') +
       '</section>';
+  }
+
+  // Array de dias do mes com UMA linha de borda de cada lado. As de borda
+  // levam `fora: true` — e essa marca, e so ela, que governa as tres coisas:
+  // ficar de fora das somas, o tom mais claro e o DD/MM no lugar do dia.
+  function comBordas(dAnt, dCur, dPro) {
+    const doMes = (dCur.dias || []).map(d => Object.assign({}, d, { fora: false }));
+    const antes = (dAnt.dias || []).slice(-1).map(d => Object.assign({}, d, { fora: true }));
+    const depois = (dPro.dias || []).slice(0, 1).map(d => Object.assign({}, d, { fora: true }));
+    return antes.concat(doMes, depois);
   }
 
   function acharBandeira(nome) {
@@ -264,7 +302,7 @@
   // Uma tabela: DIA + uma coluna por combustivel (+ linha de TOTAL).
   // `cols` e grupos (medicao/pedido) ou combustiveisVenda (venda) — a API
   // devolve as duas listas e os indices sao os de cada uma.
-  function tabela(dias, cols, diaHoje, campo, opt) {
+  function tabela(dias, cols, hojeData, campo, opt) {
     if (!cols.length) return '<div class="fl-bloco-tit">Sem combustíveis cadastrados</div>';
     const thead = '<tr><th class="fl-c-dia">Dia</th>' +
       cols.map(c => '<th>' + esc(c.abv) + '</th>').join('') +
@@ -276,13 +314,19 @@
       // dia.data vem 'DD/MM/AAAA'; o dia-da-semana sai dai, sem refazer fuso.
       const p = String(dia.data).split('/');
       const dow = new Date(+p[2], +p[1] - 1, +p[0]).getDay();
-      const eHoje = dia.dia === diaHoje;
+      const eHoje = dia.data === hojeData;
       const fds = dow === 0 || dow === 6;
-      body += '<tr class="' + (eHoje ? 'fl-hoje ' : '') + (fds ? 'fl-fds' : '') + '">' +
-        '<td class="fl-c-dia">' + pad(dia.dia) + '<span class="fl-dow">' + DIA_SEM[dow] + '</span></td>';
+      // Na linha de borda o dia vem com o mes ('31 jul'): so '31' no topo de
+      // uma folha de agosto se le como 31 de agosto.
+      const rotuloDia = dia.fora ? pad(dia.dia) + ' ' + MES_CURTO[+p[1] - 1] : pad(dia.dia);
+      body += '<tr class="' + (eHoje ? 'fl-hoje ' : '') + (dia.fora ? 'fl-extra ' : '') +
+        (fds ? 'fl-fds' : '') + '">' +
+        '<td class="fl-c-dia">' + rotuloDia + '<span class="fl-dow">' + DIA_SEM[dow] + '</span></td>';
       cols.forEach((c, i) => {
         const val = dia[campo] ? dia[campo][i] : null;
-        if (temValor(val)) totais[i] = (totais[i] || 0) + Number(val);
+        // `!dia.fora`: o total e DO MES. 01/09 e setembro e nao entra no
+        // total de agosto — era o risco que o pedido apontou.
+        if (temValor(val) && !dia.fora) totais[i] = (totais[i] || 0) + Number(val);
         if (temValor(val)) {
           body += '<td>' + fmt(val) + '</td>';
         } else if (opt.previsao && eHoje) {
