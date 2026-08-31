@@ -469,7 +469,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Botão de imprimir a folha do posto (frente: medição · verso: venda e pedido).
   // Mesmo contrato dos FABs, mas arquivo DAQUI: o medicao-fabs.js é carregado
   // também pelo logistica-mobile, e a folha é só do desktop.
-  if (window.medicaoPdf) window.medicaoPdf.montar({ getPosto: () => POSTO_ATUAL, getPostos: () => TODOS_POSTOS });
+  // getMes: a folha segue o mês navegado na matriz (setas/seletor do
+  // cabeçalho). Imprimir sempre o mês corrente enquanto a tela mostra julho
+  // entregaria um papel que não bate com o que está na frente do usuário.
+  if (window.medicaoPdf) window.medicaoPdf.montar({
+    getPosto:  () => POSTO_ATUAL,
+    getPostos: () => TODOS_POSTOS,
+    getMes:    () => (window.matrizMedicao ? window.matrizMedicao.mesAtual() : null),
+  });
 
   // Faixa de alterações de medição no topo da aba Medição (#tab-matriz).
   if (window.medicaoAlteracoes) window.medicaoAlteracoes.montar(document.getElementById('tab-matriz'));

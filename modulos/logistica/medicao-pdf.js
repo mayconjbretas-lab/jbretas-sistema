@@ -114,7 +114,7 @@
     const posto = _opcoes.getPosto ? _opcoes.getPosto() : '';
     if (!posto) { alert('Selecione um posto para imprimir a folha.'); return; }
     progresso('Montando…');
-    await imprimirDocumento(await folhasDoPosto(posto, new Date()));
+    await imprimirDocumento(await folhasDoPosto(posto, referencia()));
   });
 
   const imprimirRede = comBotao('btn-folha-rede', async (progresso) => {
@@ -128,13 +128,13 @@
       'Imprima em FRENTE E VERSO — em simplex o verso de cada posto cai na ' +
       'frente do próximo e a pilha inteira fica inútil.\n\nGerar?');
     if (!ok) return;
-    const agora = new Date();
+    const ref = referencia();
     const partes = [];
     for (let i = 0; i < postos.length; i++) {
       progresso('Montando ' + (i + 1) + '/' + postos.length + '…');
       // Em serie de proposito: 37 chamadas simultaneas ao Railway nao ganham
       // tempo util e atrapalham quem estiver usando o sistema no mesmo momento.
-      partes.push(await folhasDoPosto(postos[i].nome, agora, postos[i].bandeira));
+      partes.push(await folhasDoPosto(postos[i].nome, ref, postos[i].bandeira));
     }
     progresso('Abrindo…');
     await imprimirDocumento(partes.join(''));
@@ -192,9 +192,23 @@
     });
   }
 
+  // Mes que a folha imprime: o NAVEGADO na matriz (getMes), com o mes
+  // corrente como reserva se a matriz ainda nao carregou. `agora` e o
+  // RELOGIO, e continua separado: dele saem o carimbo de geracao e a
+  // marcacao do dia de hoje, que nao dependem do mes impresso.
+  function referencia() {
+    const agora = new Date();
+    const m = _opcoes.getMes ? _opcoes.getMes() : null;
+    return {
+      agora,
+      mes: (m && m.mes) || agora.getMonth() + 1,
+      ano: (m && m.ano) || agora.getFullYear(),
+    };
+  }
+
   // ── Uma folha (frente + verso) de um posto ──────────────────────
-  async function folhasDoPosto(posto, agora, bandeiraConhecida) {
-    const mes = agora.getMonth() + 1, ano = agora.getFullYear();
+  async function folhasDoPosto(posto, ref, bandeiraConhecida) {
+    const { agora, mes, ano } = ref;
     // UMA chamada. O ?margem=1 traz o mes mais o ultimo dia do anterior e o
     // primeiro do seguinte, ja marcados com fora_do_mes e COM os valores
     // reais daqueles dias (a consulta do banco usa o intervalo esticado).
@@ -205,12 +219,14 @@
     const grupos = dados.grupos || [];
     const vendas = dados.combustiveisVenda || [];
     const dias   = dados.dias || [];
-    // Hoje comparado pela DATA INTEIRA, nao pelo numero do dia: com a linha
-    // de borda, 31/07 e 31/08 tem o mesmo `dia` e as duas seriam marcadas
-    // como hoje.
-    const hojeData = pad(agora.getDate()) + '/' + pad(mes) + '/' + ano;
-    const carimbo = pad(agora.getDate()) + '/' + pad(mes) + '/' + ano + ' ' +
-                    pad(agora.getHours()) + ':' + pad(agora.getMinutes());
+    // Hoje comparado pela DATA INTEIRA, e a data vem do RELOGIO, nao do mes
+    // impresso. Dois motivos: com a linha de borda, 31/07 e 31/08 tem o mesmo
+    // `dia` e as duas seriam marcadas como hoje; e imprimindo julho em agosto,
+    // montar a data com o mes impresso marcaria 31/07 como hoje. Imprimindo um
+    // mes passado, simplesmente nenhuma linha casa — que e o certo.
+    const hojeData = pad(agora.getDate()) + '/' + pad(agora.getMonth() + 1) + '/' + agora.getFullYear();
+    // Carimbo de GERACAO: quando o papel saiu, nao o mes que ele mostra.
+    const carimbo = hojeData + ' ' + pad(agora.getHours()) + ':' + pad(agora.getMinutes());
     const cab = (face) => topo(posto, bandeira, mes, ano, face);
     const rod = (n, legenda) => rodape(carimbo, n, legenda);
 
