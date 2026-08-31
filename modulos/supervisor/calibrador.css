@@ -1,0 +1,120 @@
+/* ================================================================
+   JBRETAS SISTEMA — modulos/supervisor/calibrador.css
+   Aba Calibrador (calibrador.js). O supervisor usa isto no celular, em
+   pe no posto, com o protocolo na outra mao — daí os alvos grandes e
+   uma coluna so.
+
+   TOKENS: vocabulario LONGO (--surface/--text/--accent), que e o do
+   base.css que este modulo carrega. Nenhum token declarado aqui e
+   nenhum seletor fora de .cal-*.
+   ================================================================ */
+
+.cal-wrap { padding: .7rem .7rem 1.5rem; display: flex; flex-direction: column; gap: .7rem; }
+
+/* ── Topo: posto + data ── */
+.cal-topo { display: flex; gap: .5rem; }
+.cal-sel { flex: 1; min-width: 0; }
+.cal-sel, .cal-data {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+  color: var(--text); font-family: var(--sans); font-size: .88rem; padding: .6rem .55rem;
+}
+.cal-sel:focus, .cal-data:focus { outline: none; border-color: var(--accent); }
+
+/* Destino (EDUARDO | DEPOSITO) — o supervisor precisa saber na hora se
+   leva ou se deposita, então fica logo abaixo do posto e não escondido. */
+.cal-destino {
+  background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 8px;
+  color: var(--accent); font-family: var(--mono); font-size: .72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em; padding: .45rem .6rem; text-align: center;
+}
+.cal-destino-erro {
+  background: transparent; border-color: var(--danger); color: var(--danger);
+  text-transform: none; letter-spacing: 0; font-weight: 600;
+}
+
+/* ── Equipamentos ── */
+.cal-eq { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: .6rem .65rem; }
+.cal-eq + .cal-eq { margin-top: .5rem; }
+.cal-eq-nome { font-size: .82rem; font-weight: 700; color: var(--text); margin-bottom: .45rem;
+  display: flex; align-items: baseline; gap: .4rem; }
+.cal-eq-uso { font-family: var(--mono); font-size: .64rem; color: var(--text3); font-weight: 400; }
+
+/* Inicial | Final | Usos — três colunas, o resultado à direita. */
+.cal-eq-campos { display: grid; grid-template-columns: 1fr 1fr auto; gap: .45rem; align-items: end; }
+.cal-eq-campos label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cal-eq-campos span, .cal-eq-res span {
+  font-family: var(--mono); font-size: .58rem; color: var(--text3);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+/* 16px no input impede o zoom automático do Safari ao focar — em pé no
+   posto, a tela pulando é o bastante para errar a digitação. */
+.cal-in {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: var(--mono); font-size: 16px; font-weight: 600;
+  padding: .5rem .4rem; text-align: center;
+}
+.cal-in:focus { outline: none; border-color: var(--accent); }
+.cal-eq-res { display: flex; flex-direction: column; gap: 2px; align-items: center; min-width: 56px; }
+.cal-eq-usos { font-family: var(--mono); font-size: 1rem; font-weight: 700; color: var(--info); }
+.cal-eq-invalido .cal-in-fim { border-color: var(--danger); }
+.cal-eq-invalido .cal-eq-usos { color: var(--danger); }
+
+.cal-eq-dica { font-family: var(--mono); font-size: .58rem; color: var(--text3); margin-top: .4rem; }
+.cal-eq-dica-alerta { color: var(--warning); }
+
+/* ── Caixa: esperado × recolhido ── */
+.cal-caixa { background: var(--surface); border: 1px solid var(--border2); border-radius: 12px; padding: .65rem; }
+.cal-linha { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+.cal-linha + .cal-linha { margin-top: .5rem; }
+.cal-linha span { font-size: .78rem; color: var(--text2); }
+.cal-esperado { font-family: var(--mono); font-size: 1.05rem; font-weight: 700; color: var(--text); }
+.cal-in-dinheiro, .cal-in-texto {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+  font-family: var(--mono); font-size: 16px; font-weight: 700; padding: .5rem .55rem;
+  text-align: right; width: 8.5em;
+}
+.cal-in-texto { text-align: left; width: 11em; font-weight: 400; font-family: var(--sans); }
+.cal-in-dinheiro:focus, .cal-in-texto:focus { outline: none; border-color: var(--accent); }
+
+/* Diferença: VERDE quando sobra, vermelho quando falta. */
+.cal-dif { margin-top: .55rem; border-radius: 8px; padding: .5rem; text-align: center;
+  font-family: var(--mono); font-size: .92rem; font-weight: 700; }
+.cal-dif-falta { background: rgba(255,77,109,.12); color: var(--danger); }
+.cal-dif-sobra { background: rgba(0,229,160,.12); color: var(--ok); }
+.cal-dif-zero  { background: var(--surface2); color: var(--text3); }
+
+.cal-obs {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; color: var(--text);
+  font-family: var(--sans); font-size: 16px; padding: .55rem; resize: vertical; width: 100%;
+}
+.cal-obs:focus { outline: none; border-color: var(--accent); }
+
+/* ── Fotos ── */
+.cal-fotos { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.cal-foto {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .25rem;
+  min-height: 62px; background: var(--surface2); border: 1px dashed var(--border2); border-radius: 10px;
+  color: var(--text2); font-size: .72rem; text-align: center; padding: .5rem .4rem; cursor: pointer;
+}
+.cal-foto-ok-on { border-style: solid; border-color: var(--ok); color: var(--ok); background: rgba(0,229,160,.08); }
+.cal-foto-ok { font-size: 1rem; font-weight: 700; }
+
+/* ── Assinatura ── */
+.cal-assin { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: .65rem; }
+.cal-resp { font-size: .74rem; color: var(--text2); margin-bottom: .5rem; }
+.cal-resp b { color: var(--text); }
+
+/* ── Salvar ── */
+.cal-salvar {
+  background: var(--accent); color: #1a1206; border: none; border-radius: 12px;
+  font-family: var(--mono); font-size: .84rem; font-weight: 700; padding: .8rem; cursor: pointer;
+}
+.cal-salvar:disabled { background: var(--surface3); color: var(--text3); cursor: not-allowed; }
+
+.cal-aviso { border-radius: 10px; padding: .6rem; font-size: .76rem; line-height: 1.45; }
+.cal-aviso-ok  { background: rgba(0,229,160,.10); color: var(--ok); }
+.cal-aviso-erro{ background: rgba(255,77,109,.10); color: var(--danger); }
+
+.cal-msg, .cal-erro { padding: 1.4rem .6rem; text-align: center;
+  font-family: var(--mono); font-size: .74rem; color: var(--text3); }
+.cal-erro { color: var(--danger); }

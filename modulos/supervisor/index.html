@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="../../shared/css/base.css?v=202608311533">
 <link rel="stylesheet" href="supervisor.css?v=202608311533">
+<link rel="stylesheet" href="calibrador.css?v=202608311533">
 <script>
   (function(){
     var t = localStorage.getItem('jb_theme') || 'dark';
@@ -53,6 +54,9 @@
     <section class="scr active" id="s-regional"><div class="sup-empty">Carregando…</div></section>
     <section class="scr" id="s-mix"><div class="sup-empty">Carregando…</div></section>
     <section class="scr" id="s-comissao"><div class="sup-empty">Carregando…</div></section>
+    <!-- Calibrador: dinheiro recolhido dos calibradores e banheiros.
+         Montada por renderCalibrador (calibrador.js). -->
+    <section class="scr" id="s-calibrador"><div class="sup-empty">Carregando…</div></section>
     <section class="scr" id="s-mapa">
       <div class="map-wrap"><div id="leaflet-map"></div></div>
       <div id="mapa-lista"></div>
@@ -63,6 +67,7 @@
     <button class="nbtn active" onclick="setTab(this,'regional')"><span class="ni">🏆</span><span class="nl">Regional</span></button>
     <button class="nbtn" onclick="setTab(this,'mix')"><span class="ni">🥇</span><span class="nl">Mix</span></button>
     <button class="nbtn" onclick="setTab(this,'comissao')"><span class="ni">💰</span><span class="nl">Comissão</span></button>
+    <button class="nbtn" onclick="setTab(this,'calibrador')"><span class="ni">🧯</span><span class="nl">Calibrador</span></button>
     <button class="nbtn" onclick="setTab(this,'mapa')"><span class="ni">🗺️</span><span class="nl">Mapa</span></button>
   </nav>
 
@@ -73,6 +78,8 @@
 <script src="../../shared/js/config.js?v=202608311533"></script>
 <script src="../../shared/js/api.js?v=202608311533"></script>
 <script src="../../shared/js/auth.js?v=202608311533"></script>
+<script src="../../shared/js/foto-upload.js?v=202608311533"></script>
+<script src="calibrador.js?v=202608311533"></script>
 <script src="app.js?v=202608311533"></script>
 </body>
 </html>

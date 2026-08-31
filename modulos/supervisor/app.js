@@ -82,6 +82,9 @@ function setTab(btn, tab) {
   btn.classList.add('active');
   document.getElementById('s-' + tab)?.classList.add('active');
   if (tab === 'mapa') iniciarMapa();
+  // Calibrador — arquivo proprio (calibrador.js expoe renderCalibrador),
+  // no padrao das outras telas montadas por JS do projeto.
+  if (tab === 'calibrador') renderCalibrador(document.getElementById('s-calibrador'));
 }
 
 // ── Carrega classificação + mix da regional ──────────────────────
