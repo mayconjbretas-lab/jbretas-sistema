@@ -51,6 +51,9 @@
     { k: 'diferenca', lbl: 'DIF',     rot: 'Diferença'  },
   ];
   const DIA_SEM = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  // So para o rotulo das linhas de borda ('31 jul').
+  const MES_CURTO = ['jan','fev','mar','abr','mai','jun',
+                     'jul','ago','set','out','nov','dez'];
   const MESES   = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
 
   // ── Utilitarios (copiados do painel-adm/medicao.js; puros, sem DOM) ─
@@ -81,15 +84,28 @@
   }
 
   // Intervalo [inicio, fim] do periodo atual, ambos inclusivos.
+  // No modo MES o intervalo passa a incluir um dia de cada lado: o pedido de
+  // um dia e para o dia SEGUINTE, entao em 31/08 o pedido de hoje e para
+  // 01/09 e nao havia linha onde lancar. O dia de tras serve a leitura (a
+  // medicao de fechamento que gerou o consumo do dia 1o).
+  // A SEMANA nao precisa: ela ja cruza a virada sozinha, por construcao.
   function intervalo() {
     if (_modo === 'semana') return [_ancora, somaDias(_ancora, 6)];
     const ini = new Date(_ancora.getFullYear(), _ancora.getMonth(), 1);
-    return [ini, new Date(_ancora.getFullYear(), _ancora.getMonth() + 1, 0)];
+    const fim = new Date(_ancora.getFullYear(), _ancora.getMonth() + 1, 0);
+    return [somaDias(ini, -1), somaDias(fim, 1)];
   }
+
+  // Primeiro dia do mes ancora — separa a borda de TRAS (somente leitura) da
+  // de FRENTE (editavel).
+  const primeiroDoMes = () => new Date(_ancora.getFullYear(), _ancora.getMonth(), 1);
 
   function rotuloPeriodo() {
     const [a, b] = intervalo();
-    if (_modo === 'mes') return MESES[a.getMonth()] + ' ' + a.getFullYear();
+    // No modo Mes o rotulo vem da ANCORA, nao do inicio do intervalo: com as
+    // bordas o intervalo comeca no ultimo dia do mes anterior, e o cabecalho
+    // de agosto mostraria "JUL".
+    if (_modo === 'mes') return MESES[_ancora.getMonth()] + ' ' + _ancora.getFullYear();
     const dd = (d) => String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
     return dd(a) + '–' + dd(b);
   }
@@ -104,8 +120,12 @@
   async function carregarMes(posto, ano, mes) {
     const k = posto + '|' + ano + '-' + String(mes).padStart(2, '0');
     if (_cacheMes.has(k)) return _cacheMes.get(k);
+    // ?margem=1 traz o mes mais o ultimo dia do anterior e o primeiro do
+    // seguinte, com valores reais e marcados com fora_do_mes. No modo Mes e
+    // o que da as linhas da virada em UMA chamada — costurar 3 meses no
+    // cliente triplicaria as chamadas a cada seta de posto, em rede de celular.
     const resp = await apiFetch('/medicao/' + encodeURIComponent(posto) +
-                                '?mes=' + mes + '&ano=' + ano);
+                                '?mes=' + mes + '&ano=' + ano + '&margem=1');
     _cacheMes.set(k, resp);
     return resp;
   }
@@ -115,10 +135,16 @@
   async function dadosDoPeriodo() {
     const posto = postoAtual();
     if (!posto) return null;
-    const [ini, fim] = intervalo();
     const meses = new Map();
-    for (let d = new Date(ini); d <= fim; d = somaDias(d, 1)) {
-      meses.set(chaveMes(d), { ano: d.getFullYear(), mes: d.getMonth() + 1 });
+    if (_modo === 'mes') {
+      // UMA chamada: o ?margem=1 do proprio mes ja cobre as duas bordas.
+      // Percorrer o intervalo aqui carregaria 3 meses e desfaria o ganho.
+      meses.set(chaveMes(_ancora), { ano: _ancora.getFullYear(), mes: _ancora.getMonth() + 1 });
+    } else {
+      const [ini, fim] = intervalo();
+      for (let d = new Date(ini); d <= fim; d = somaDias(d, 1)) {
+        meses.set(chaveMes(d), { ano: d.getFullYear(), mes: d.getMonth() + 1 });
+      }
     }
     const resps = [];
     for (const m of meses.values()) resps.push(await carregarMes(posto.nome, m.ano, m.mes));
@@ -126,7 +152,13 @@
     resps.forEach(r => (r.dias || []).forEach(dia => {
       // dia.data vem 'DD/MM/AAAA' do backend; indexa por ISO para casar com o laco.
       const p = String(dia.data).split('/');
-      porData.set(p[2] + '-' + p[1] + '-' + p[0], dia);
+      const k = p[2] + '-' + p[1] + '-' + p[0];
+      // Na SEMANA que cruza a virada os dois meses sao carregados, e a mesma
+      // data chega duas vezes: como dia normal de um e como borda do outro.
+      // O dia do PROPRIO mes vence — senao 01/09 apareceria como borda numa
+      // semana de setembro, cinza e fora do total.
+      if (porData.has(k) && dia.fora_do_mes) return;
+      porData.set(k, dia);
     }));
     return {
       grupos: resps[0].grupos || [],
@@ -136,17 +168,14 @@
   }
 
   // ── Previsao e diferenca ────────────────────────────────────────
-  // PARIDADE COM O DESKTOP: a previsao so usa o dia anterior quando ele esta
-  // no MESMO mes. O desktop nao tem o mes anterior em memoria, entao no dia 1
-  // ele nao projeta; aqui os dois meses estao carregados (a semana pode
-  // cruzar a virada) e sem esta guarda o mobile passaria a mostrar previsao
-  // num dia em que o desktop mostra travessao. Foi decisao explicita manter
-  // os dois numeros identicos. Para projetar tambem no dia 1, apagar a
-  // condicao `mesmoMes` abaixo — e fazer o mesmo no desktop, junto.
+  // O dia 1o do mes PASSA A TER previsao. Antes havia uma guarda `mesmoMes`
+  // aqui, para nao divergir do desktop: nenhuma das telas tinha o mes
+  // anterior em memoria, entao no dia 1 nao havia `ontem` e nenhuma
+  // projetava. Com o ?margem=1 as tres passam a ter a linha de tras, entao a
+  // guarda saiu e a formula vale para todo dia que tenha o anterior
+  // carregado. A formula em si nao mudou.
   function previsaoDe(d, dados, i) {
     const ontem = somaDias(d, -1);
-    const mesmoMes = ontem.getMonth() === d.getMonth() && ontem.getFullYear() === d.getFullYear();
-    if (!mesmoMes) return { valor: null, semPedido: false };
     const dOntem = dados.porData.get(iso(ontem));
     const dHoje  = dados.porData.get(iso(d));
     const medOntem   = dOntem && dOntem.medicao ? dOntem.medicao[i] : null;
@@ -165,7 +194,8 @@
   // que nao desceu.
   function diferencaDe(d, dados, i) {
     const ontem = somaDias(d, -1);
-    if (ontem.getMonth() !== d.getMonth() || ontem.getFullYear() !== d.getFullYear()) return null;
+    // Sem guarda de mes, pelo mesmo motivo da previsao: com a linha de tras
+    // carregada, o dia 1o tem `ontem` e a conta fecha.
     const dHoje = dados.porData.get(iso(d));
     const dOntem = dados.porData.get(iso(ontem));
     if (!dHoje || !dOntem) return null;
@@ -346,22 +376,39 @@
       const dia = dados.porData.get(k);
       const eHoje = k === hj;
       const fds = d.getDay() === 0 || d.getDay() === 6;
-      body += '<tr class="' + (eHoje ? 'mm-hoje' : '') + (fds ? ' mm-fds' : '') + '"' +
+      const fora = !!(dia && dia.fora_do_mes);
+      // Borda de TRAS (antes do 1o do mes) e so leitura: existe para VER o
+      // fechamento. A da FRENTE e editavel — e o pedido da virada.
+      const soLeitura = fora && d < primeiroDoMes();
+      body += '<tr class="' + (eHoje ? 'mm-hoje' : '') + (fds ? ' mm-fds' : '') +
+              (fora ? ' mm-fora' : '') + '"' +
               (eHoje ? ' id="mm-linha-hoje"' : '') + '>';
-      body += '<td class="mm-c-dia">' + String(d.getDate()).padStart(2, '0') +
-              '<span class="mm-dow">' + DIA_SEM[d.getDay()] + '</span></td>';
+      // Na borda o rotulo leva o mes ('31 jul'): so '31' no topo de uma tela
+      // de agosto se le como 31 de agosto.
+      const rotulo = fora
+        ? String(d.getDate()).padStart(2, '0') + ' ' + MES_CURTO[d.getMonth()]
+        : String(d.getDate()).padStart(2, '0');
+      body += '<td class="mm-c-dia"' + (soLeitura ? ' title="Mês anterior — somente leitura"' : '') +
+              '>' + rotulo + '<span class="mm-dow">' + DIA_SEM[d.getDay()] + '</span></td>';
 
       fuels.forEach((f, i) => {
         let val = null;
         if (_aba === 'diferenca')      val = diferencaDe(d, dados, i);
         else if (dia && dia[_aba])     val = dia[_aba][i];
 
-        if (temValor(val)) totais[i] = (totais[i] || 0) + Number(val);
+        // `!fora`: o rodape mostra o total DO MES. 01/09 e setembro e nao
+        // entra no total de agosto.
+        if (temValor(val) && !fora) totais[i] = (totais[i] || 0) + Number(val);
 
-        if (ehPed) {
+        if (ehPed && !soLeitura) {
           body += '<td class="mm-cel-ed"><input class="mm-in" inputmode="decimal" value="' +
             (val == null ? '' : fmt(val)) + '" data-data="' + esc(k) + '" data-comb="' +
             esc(f.comb) + '" oninput="__mmDirty(this)" onfocus="this.select()"></td>';
+        } else if (_aba === 'diferenca' && fora) {
+          // Celula VAZIA nas linhas de borda: a diferenca vem do dia anterior, e
+          // o anterior ao 31/07 nao e carregado. Travessao aqui leria como 'dia
+          // sem valor', que e outra coisa.
+          body += '<td class="mm-na"></td>';
         } else if (_aba === 'diferenca') {
           const cls = val == null ? 'mm-vazio' : (val > 0 ? 'mm-dif-pos' : (val < 0 ? 'mm-dif-neg' : 'mm-dif-zero'));
           const txt = val == null ? '—' : ((val > 0 ? '+' : '') + fmt(val));
@@ -373,8 +420,12 @@
           else if (p.semPedido)     body += '<td><span class="mm-prev-sp">' + fmt(p.valor) + '</span></td>';
           else                      body += '<td class="mm-cel-prev"><span class="mm-prev">' + fmt(p.valor) + '</span></td>';
         } else {
-          body += '<td><span class="' + (val == null ? 'mm-vazio' : 'mm-val') + '">' +
-            (val == null ? '—' : fmt(val)) + '</span></td>';
+          // Na borda de tras a celula do PEDIDO cai aqui: vira texto, com a
+          // classe mm-ro. Campo que nao aceita clique sem sinal nenhum parece
+          // defeito, entao ela fica visivelmente diferente de um input.
+          const cls = (val == null ? 'mm-vazio' : 'mm-val') + (soLeitura && ehPed ? ' mm-ro' : '');
+          body += '<td' + (soLeitura && ehPed ? ' class="mm-cel-ro" title="Mês anterior — somente leitura"' : '') +
+            '><span class="' + cls + '">' + (val == null ? '—' : fmt(val)) + '</span></td>';
         }
       });
 

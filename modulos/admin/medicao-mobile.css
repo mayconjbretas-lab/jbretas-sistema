@@ -82,6 +82,17 @@
 .mm-tab tr.mm-fds td { background: var(--sf2) }
 .mm-tab tr.mm-fds .mm-c-dia { color: var(--tx3) }
 
+/* Linhas de BORDA — ultimo dia do mes anterior e primeiro do seguinte
+   (?margem=1, modo Mes). Tom mais claro; a de tras e somente leitura. */
+.mm-tab tr.mm-fora td { background: var(--sf2) }
+.mm-tab tr.mm-fora .mm-c-dia,
+.mm-tab tr.mm-fora .mm-val,
+.mm-tab tr.mm-fora .mm-vazio { color: var(--tx3); font-weight: 400 }
+/* Celula do pedido na borda de tras: sem a tinta de campo editavel e com
+   cursor normal — o input das outras linhas tem fundo proprio (.mm-cel-ed). */
+.mm-cel-ro { background: transparent; cursor: default }
+.mm-ro { font-style: italic }
+
 /* Linha de hoje */
 .mm-tab tr.mm-hoje td { background: var(--acd) }
 .mm-tab tr.mm-hoje .mm-c-dia { color: var(--ac); box-shadow: inset 3px 0 0 var(--ac) }
