@@ -94,8 +94,29 @@
   async function carregarPostos() {
     const sel = document.getElementById('cal-posto');
     try {
+      // A rota devolve so os postos da REGIONAL do supervisor logado (ADM e
+      // TI continuam vendo a rede). O filtro de verdade e no backend — aqui
+      // so se exibe o que veio.
       const r = await apiFetch('/calibrador/postos');
       _postos = r.postos || [];
+
+      // Lista vazia tem TRES causas diferentes, e um seletor mudo nao
+      // distingue nenhuma: o supervisor conclui que a tela quebrou. A API
+      // manda `escopo` justamente para isto.
+      if (!_postos.length) {
+        sel.innerHTML = '<option value="">—</option>';
+        if (r.escopo === 'SEM_REGIONAL') {
+          mostrarAviso('Seu usuário não tem regional definida, então não há postos a mostrar. ' +
+            'Peça ao TI para preencher o campo Regional no seu cadastro.', true);
+        } else if (r.escopo === 'REGIONAL') {
+          mostrarAviso('Nenhum posto da regional ' + (r.regional || '') +
+            ' tem calibrador cadastrado.', false);
+        } else {
+          mostrarAviso('Nenhum posto com calibrador cadastrado.', false);
+        }
+        return;
+      }
+
       sel.innerHTML = '<option value="">Selecione o posto…</option>' +
         _postos.map(p => '<option value="' + esc(p.nome) + '">' + esc(p.nome) + '</option>').join('');
     } catch (err) {
