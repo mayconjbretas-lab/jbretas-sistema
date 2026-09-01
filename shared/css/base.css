@@ -512,3 +512,97 @@ body::before {
 /* ===== CARDS GENÉRICOS (coleta, copasa, etc) ===== */
 .coleta-card { background: var(--grad-panel); border: 1px solid var(--border); border-radius: 14px; margin: 0 1rem 1rem; padding: 1.25rem; }
 .coleta-section-title { font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); font-family: var(--mono); margin-bottom: 0.75rem; }
+
+/* ════════════════════════════════════════════════════════════════
+   TOPBAR QUE ENCOLHE — correção de enquadramento
+   ════════════════════════════════════════════════════════════════
+   O BUG: `.topbar` é flex com `nowrap`, e todo item de flex nasce com
+   `min-width: auto` — ou seja, RECUSA encolher abaixo do próprio
+   conteúdo. Num iPhone de 380px o conteúdo media 485px e os 105px de
+   sobra empurravam a PÁGINA para o lado.
+
+   E como a topbar é `position: sticky; top: 0`, ela gruda na vertical
+   mas rola junto na HORIZONTAL: ao arrastar para a direita o cabeçalho
+   saía de vista. Era o mesmo defeito, não dois.
+
+   Mesma causa do painel de Mercado. Aqui vale para TODOS os módulos,
+   porque a topbar mora no base.css — o calibrador e a conciliação só
+   foram onde ela apareceu.
+
+   A CORREÇÃO tem duas partes, e as duas são necessárias:
+   1. `min-width: 0` na CADEIA inteira de flex. Basta um elo sem ele
+      para o encolhimento parar ali.
+   2. o que encolhe é o TEXTO (marca, nome, regional), com reticências.
+      Botão que encolhe vira alvo pequeno demais para o dedo — por isso
+      `flex: none` neles.
+   ════════════════════════════════════════════════════════════════ */
+
+.topbar > *,
+.topbar-right,
+.topbar-user,
+.topbar-info { min-width: 0; }
+
+/* O texto cede primeiro, e cede com reticências em vez de vazar. */
+.topbar-brand,
+.topbar-name,
+.topbar-posto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Alvo de toque não encolhe: avatar e botões mantêm o tamanho.
+   Seletor por ELEMENTO, não por classe: cada módulo batizou os seus de um
+   jeito (.menu-dots no supervisor e na conciliação, .theme-btn e
+   .btn-mobile na logística e no painel-adm). Enumerar classes deixaria
+   justamente os módulos de topbar mais cheia de fora. */
+.topbar .avatar,
+.topbar button { flex: none; }
+
+/* Abaixo de 560px o espaço não dá para todos: aperta o respiro e deixa
+   o bloco de nome/regional ceder até sumir, na ordem em que menos
+   custa. O avatar fica — é a confirmação de quem está logado. */
+@media (max-width: 560px) {
+  .topbar { padding-left: .7rem; padding-right: .7rem; }
+  .topbar-right { gap: .5rem; }
+  .topbar-user  { gap: 6px; }
+  .topbar button { padding-left: .4rem; padding-right: .4rem; }
+}
+
+/* Em tela bem estreita o nome sai de vez: com 380px, mantê-lo deixaria
+   uma reticência de 20px que não informa nada e ainda rouba o botão. */
+@media (max-width: 430px) {
+  .topbar-info { display: none; }
+}
+
+/* Telas muito estreitas (iPhone SE antigo, 320px). A topbar mais cheia do
+   sistema — a da Logística, com 4 botões — ainda sobrava 17px aqui. Aperta
+   só o respiro; NÃO esconde botão. Em particular o "📲 Mobile" precisa
+   continuar visível: numa tela deste tamanho ele é justamente a saída para
+   a versão certa, e escondê-lo tiraria o escape de quem mais precisa. */
+@media (max-width: 360px) {
+  .topbar { padding-left: .4rem; padding-right: .4rem; }
+  .topbar-right { gap: .3rem; }
+}
+
+/* ── Modal que não estoura a tela ──────────────────────────────────
+   `.modal-card` não tinha `max-height` nem `overflow`: um conteúdo mais
+   alto que a janela era simplesmente CORTADO, sem barra de rolagem e sem
+   como alcançar o resto — inclusive o botão de fechar. Só não aparecia
+   porque os modais existentes eram curtos; o detalhe da coleta, com 4 ou
+   5 equipamentos num celular, é o primeiro a passar do limite.
+
+   dvh antes de vh: no Safari do iPhone a barra de endereço entra e sai, e
+   `100vh` mede a tela SEM ela — o rodapé do modal ficava embaixo da barra.
+   A linha `vh` fica como fallback para quem não conhece `dvh`. */
+.modal-card {
+  max-height: calc(100vh - 4rem);
+  max-height: calc(100dvh - 4rem);
+  overflow-y: auto;
+}
+
+@media (max-width: 560px) {
+  /* 2rem de cada lado comem 64px de uma tela de 380. */
+  .modal-overlay { padding: 1rem; }
+  .modal-card {
+    padding: 1.2rem;
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
+  }
+}

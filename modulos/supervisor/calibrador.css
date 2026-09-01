@@ -118,3 +118,11 @@
 .cal-msg, .cal-erro { padding: 1.4rem .6rem; text-align: center;
   font-family: var(--mono); font-size: .74rem; color: var(--text3); }
 .cal-erro { color: var(--danger); }
+
+/* ── Aberta no desktop ─────────────────────────────────────────────
+   A tela é de celular (o supervisor usa em pé no posto), mas nada impede
+   abrirem no computador. Sem limite, o formulário esticava para 868px numa
+   janela de 1280: campo de encerrante com 376px de largura e botão Salvar
+   com 846px. Não quebrava — ficava sofrível de usar e parecia defeito.
+   520px é a largura em que o formulário continua parecendo um formulário. */
+.cal-wrap { max-width: 520px; margin-left: auto; margin-right: auto; }
