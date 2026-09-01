@@ -1,0 +1,103 @@
+/* ================================================================
+   conciliacao-print.css — folha do relatório do Calibrador.
+
+   CARREGADO SÓ DENTRO DO IFRAME de impressão (ver conciliacao-pdf.js).
+   Nada daqui alcança a aplicação e nada da aplicação alcança a folha —
+   é o mesmo arranjo da folha de medição da Logística, adotado lá depois
+   de a versão que escondia a página com `@media print` sair em branco
+   em produção.
+
+   SEM VARIÁVEL DE TEMA. A folha é sempre clara: as cores aqui são de
+   tinta, não de interface. Herdar o tema escuro imprimiria fundo preto.
+   ================================================================ */
+
+@page { size: A4 landscape; margin: 10mm 8mm; }
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  font-size: 8.6pt;
+  color: #111;
+  background: #fff;
+}
+
+/* ── Cabeçalho ───────────────────────────────────────────────── */
+.f-cab {
+  display: flex; align-items: baseline; gap: 10mm;
+  border-bottom: 1.2pt solid #111;
+  padding-bottom: 2mm; margin-bottom: 3mm;
+}
+.f-tit   { font-size: 13pt; font-weight: 700; letter-spacing: -.2pt; }
+.f-per   { font-size: 10pt; font-weight: 600; }
+.f-sub   { font-size: 8pt; color: #555; margin-left: auto; text-align: right; line-height: 1.35; }
+
+/* ── Tabela ──────────────────────────────────────────────────── */
+table { width: 100%; border-collapse: collapse; }
+
+thead th {
+  font-size: 7.4pt; text-transform: uppercase; letter-spacing: .3pt;
+  color: #333; text-align: left; font-weight: 700;
+  border-bottom: .8pt solid #111; padding: 1.4mm 1.6mm;
+}
+/* Cabeçalho repetido em toda página: relatório de mês vira 2–3 folhas e
+   a segunda sem cabeçalho é ilegível. */
+thead { display: table-header-group; }
+tbody tr { page-break-inside: avoid; }
+
+td { padding: 1.1mm 1.6mm; border-bottom: .3pt solid #d8d8d8; vertical-align: top; }
+.num  { text-align: right; font-variant-numeric: tabular-nums; }
+.mono { font-variant-numeric: tabular-nums; }
+
+/* Primeira linha de cada coleta ganha traço mais forte no topo: é o que
+   separa uma coleta da seguinte quando ambas têm dois equipamentos. */
+tr.g-inicio td { border-top: .6pt solid #999; }
+
+/* Data, Posto, Recolhido e Diferença usam rowspan sobre as linhas do
+   grupo — é assim que a folha mostra que o recolhido é POR COLETA e não
+   por equipamento, sem repetir o número (repetir faria a leitura somar
+   duas vezes) e sem deixar a célula vazia (vazio lê-se como falta). */
+td.g-span { vertical-align: middle; border-left: .3pt solid #d8d8d8; }
+
+/* Equipamento adicional: recuado, para a segunda linha nunca ser
+   confundida com uma coleta nova. */
+.eq-mais { padding-left: 5mm; color: #333; }
+.eq-mais::before { content: "↳ "; color: #888; }
+
+/* ── Cores de valor ──────────────────────────────────────────── */
+/* Impressora a jato/laser em P&B rebaixa cor para cinza, então nenhuma
+   informação depende SÓ da cor: falta leva o sinal "−" e sobra o "+". */
+.v-falta { color: #b00020; font-weight: 700; }
+.v-sobra { color: #0a7a34; font-weight: 700; }
+.v-zero  { color: #444; }
+.v-sem   { color: #9a6400; font-weight: 700; }
+
+tr.sem-rec td { background: #fdf6e6; }
+
+/* ── Totais e resumo ─────────────────────────────────────────── */
+tfoot td {
+  border-top: 1.2pt solid #111; border-bottom: none;
+  padding-top: 2mm; font-weight: 700; font-size: 9pt;
+}
+
+.f-resumo {
+  margin-top: 4mm; padding-top: 2.5mm; border-top: .5pt solid #bbb;
+  display: flex; gap: 8mm; flex-wrap: wrap; font-size: 8.4pt;
+}
+.f-resumo b { font-size: 10pt; display: block; }
+.f-resumo span { color: #555; }
+
+.f-rodape {
+  margin-top: 5mm; padding-top: 2mm; border-top: .3pt solid #ddd;
+  font-size: 7.2pt; color: #777; display: flex; justify-content: space-between;
+}
+
+.f-vazio { padding: 20mm 0; text-align: center; color: #777; font-size: 10pt; }
+
+/* Aviso de lista cortada. Fica ACIMA da tabela e com borda: quem recebe a
+   folha impressa não tem a tela para conferir se veio tudo. */
+.f-corte {
+  border: .8pt solid #b00020; color: #b00020; font-weight: 700;
+  padding: 1.6mm 2mm; margin-bottom: 2.5mm; font-size: 8.4pt;
+}

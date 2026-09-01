@@ -26,6 +26,20 @@
 }
 .cc-tab.active { background: var(--accent-dim); border-color: var(--border2); color: var(--accent); }
 
+/* ── Modo: Pendentes x Histórico ──
+   Visualmente distinto das .cc-tabs de cima: aquelas trocam de CONFERÊNCIA
+   (Calibrador, e as próximas que vierem), estas cortam a MESMA lista. Se os
+   dois grupos parecessem iguais, "Pendentes" leria como outra conferência. */
+.cc-modos { display: flex; gap: .35rem; align-items: center; margin-bottom: .7rem; flex-wrap: wrap; }
+.cc-modo {
+  background: transparent; border: 1px solid var(--border); border-radius: 999px;
+  color: var(--text3); font-family: var(--mono); font-size: .7rem; font-weight: 600;
+  padding: .35rem .85rem; cursor: pointer;
+}
+.cc-modo:hover { color: var(--text2); border-color: var(--border2); }
+.cc-modo.active { background: var(--accent-dim); border-color: var(--border2); color: var(--accent); }
+.cc-modo-dica { font-size: .7rem; color: var(--text3); margin-left: .3rem; }
+
 /* ── Filtros ── */
 .cc-filtros {
   display: flex; gap: .6rem; flex-wrap: wrap; align-items: flex-end;
@@ -51,6 +65,7 @@
 }
 .cc-btn:hover { border-color: var(--border2); color: var(--text); }
 .cc-btn-eq { background: var(--accent-dim); border-color: var(--border2); color: var(--accent); }
+.cc-btn-pdf { background: var(--surface3); border-color: var(--border2); color: var(--text); }
 
 /* ── Resumo (soma do que esta na tela) ── */
 .cc-resumo { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .8rem; }

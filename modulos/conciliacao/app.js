@@ -99,6 +99,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   montarTopbar();
   ligarControles();
   await carregarPostos();
+  await carregarLancadores();
   await carregarLista();
 });
 
@@ -108,17 +109,34 @@ function montarTopbar() {
   const ela = document.getElementById('app-avatar'); if (ela) ela.textContent = iniciaisDe(nome);
 }
 
+const CAMPOS_FILTRO = ['f-posto', 'f-lancou', 'f-de', 'f-ate', 'f-destino', 'f-status'];
+
 function ligarControles() {
-  ['f-posto', 'f-de', 'f-ate', 'f-destino', 'f-status'].forEach(id => {
+  CAMPOS_FILTRO.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', carregarLista);
   });
   document.getElementById('btn-limpar').addEventListener('click', () => {
-    ['f-posto', 'f-de', 'f-ate', 'f-destino', 'f-status'].forEach(id => {
+    CAMPOS_FILTRO.forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
     carregarLista();
   });
+  // Limpar NAO volta para Pendentes de proposito: o modo e onde a pessoa
+  // esta trabalhando, nao um filtro. Zerar o modo junto com os campos jogaria
+  // quem esta revisando o historico de volta para a fila sem pedir.
+  document.querySelectorAll('#cc-modos .cc-modo').forEach(b => {
+    b.addEventListener('click', () => trocarModo(b.getAttribute('data-modo')));
+  });
+  document.getElementById('btn-pdf').addEventListener('click', imprimirRelatorio);
+  // Estado inicial do seletor de Status: a tela abre em Pendentes, onde o modo
+  // ja fixa o status. Sem isto ele nasceria habilitado e so travaria no
+  // primeiro clique de modo.
+  const fsIni = document.getElementById('f-status');
+  if (fsIni && modoAtual === 'pendentes') {
+    fsIni.disabled = true;
+    fsIni.title = 'Em Pendentes o status já está fixo. Vá para Histórico para filtrar por status.';
+  }
   document.getElementById('btn-novo-eq').addEventListener('click', abrirModalEquip);
   document.getElementById('eq-cancelar').addEventListener('click', () => fecharModal('md-equip'));
   document.getElementById('eq-salvar').addEventListener('click', salvarEquipamento);
@@ -160,21 +178,76 @@ async function carregarPostos() {
     '<option value="' + escapeHtml(p.nome) + '">' + escapeHtml(p.nome) + '</option>').join('');
   const fp = document.getElementById('f-posto');
   if (fp) fp.innerHTML = '<option value="">Todos</option>' + opcoes;
+
   const ep = document.getElementById('eq-posto');
   // No cadastro a lista e a MESMA (postos que ja tem equipamento). Um
   // posto totalmente novo nao aparece aqui — ver o aviso no modal.
   if (ep) ep.innerHTML = opcoes;
 }
 
+// Quem lançou, para o seletor. Vem de /calibrador/lancadores (nomes distintos
+// em calibrador_coleta.usuario_nome) e não do cadastro de perfis: a lista tem
+// de ser de quem REALMENTE lançou coleta. Um seletor cheio de nomes que nunca
+// trazem linha faz a pessoa concluir que o filtro quebrou.
+// Falha aqui NÃO derruba a tela — o seletor fica só com "Todos" e o resto dos
+// filtros continua funcionando.
+async function carregarLancadores() {
+  const fl = document.getElementById('f-lancou');
+  if (!fl) return;
+  try {
+    const r = await apiFetch('/calibrador/lancadores');
+    fl.innerHTML = '<option value="">Todos</option>' + (r.lancadores || [])
+      .map(n => '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + '</option>').join('');
+  } catch (e) {
+    fl.innerHTML = '<option value="">Todos</option>';
+    toast('Não consegui carregar quem lançou: ' + e.message);
+  }
+}
+
+// ── Modo: Pendentes x Histórico ─────────────────────────────────
+// Pendentes = status PENDENTE_FOTO (sem as duas fotos). A tela abre nele
+// porque e a fila de trabalho; Historico e consulta.
+// O corte vai para a API, nao para um filter() aqui: com o teto de 500 do
+// endpoint, cortar na tela esconderia pendentes antigas que nem chegaram na
+// resposta, e a fila apareceria vazia estando cheia.
+// Em Pendentes o seletor de Status e DESABILITADO — dois controles cortando
+// a mesma coluna se contradizem, e "Pendentes + status OK" devolveria lista
+// vazia sem dizer por que.
+let modoAtual = 'pendentes';
+
+function trocarModo(modo) {
+  if (modo !== 'pendentes' && modo !== 'historico') return;
+  modoAtual = modo;
+  document.querySelectorAll('#cc-modos .cc-modo').forEach(b =>
+    b.classList.toggle('active', b.getAttribute('data-modo') === modo));
+  const dica = document.getElementById('cc-modo-dica');
+  if (dica) dica.textContent = modo === 'pendentes'
+    ? 'Só as coletas sem as duas fotos.'
+    : 'Tudo, inclusive o que já foi conferido. Use o período para estreitar.';
+  const fs = document.getElementById('f-status');
+  if (fs) {
+    fs.disabled = (modo === 'pendentes');
+    if (modo === 'pendentes') fs.value = '';
+    fs.title = modo === 'pendentes'
+      ? 'Em Pendentes o status já está fixo. Vá para Histórico para filtrar por status.' : '';
+  }
+  carregarLista();
+}
+
 // ── Lista ───────────────────────────────────────────────────────
-function filtrosAtuais() {
+function filtrosAtuais(extra) {
   const v = id => (document.getElementById(id) || {}).value || '';
   const q = [];
   if (v('f-posto'))   q.push('posto=' + encodeURIComponent(v('f-posto')));
+  if (v('f-lancou'))  q.push('lancou=' + encodeURIComponent(v('f-lancou')));
   if (v('f-de'))      q.push('de=' + v('f-de'));
   if (v('f-ate'))     q.push('ate=' + v('f-ate'));
   if (v('f-destino')) q.push('destino=' + v('f-destino'));
-  if (v('f-status'))  q.push('status=' + v('f-status'));
+  // O modo manda no status. Em Pendentes o seletor esta desabilitado, entao
+  // nao ha como os dois discordarem.
+  if (modoAtual === 'pendentes') q.push('status=PENDENTE_FOTO');
+  else if (v('f-status'))        q.push('status=' + v('f-status'));
+  if (extra) q.push(extra);
   return q.length ? '?' + q.join('&') : '';
 }
 
@@ -299,6 +372,39 @@ function renderResumo() {
     '<div class="cc-kpi"><span>Sem foto</span><b class="' + (pend ? 'cc-neg' : '') + '">' + pend +
       (atras ? ' <small>(' + atras + ' há ' + DIAS_ALERTA_FOTO + '+ dias)</small>' : '') + '</b></div>' +
     '<div class="cc-kpi"><span>Conferidas</span><b>' + conf + '<small> de ' + n + '</small></b></div>';
+}
+
+// ── Relatório impresso ──────────────────────────────────────────
+// Chamada PROPRIA com ?itens=1: a lista da tela nao carrega equipamento
+// (sao 2 consultas a mais no servidor, inuteis para quem so confere).
+// Segue o filtro da tela, inclusive o modo — e o cabecalho da folha
+// imprime quais filtros estavam valendo, senao 12 coletas parecem o mes
+// inteiro para quem recebe o papel.
+async function imprimirRelatorio() {
+  const btn = document.getElementById('btn-pdf');
+  const antes = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Gerando…'; }
+  try {
+    const r = await apiFetch('/calibrador/coletas' + filtrosAtuais('itens=1'));
+    const coletas = r.coletas || [];
+    if (!coletas.length) { toast('Nenhuma coleta com esses filtros — nada a imprimir.'); return; }
+    const v = id => (document.getElementById(id) || {}).value || '';
+    const html = window.conciliacaoPdf.corpo(coletas, {
+      periodo:    window.conciliacaoPdf.rotuloPeriodo(v('f-de'), v('f-ate'), coletas),
+      posto:      v('f-posto'),
+      lancou:     v('f-lancou'),
+      destino:    v('f-destino'),
+      status:     v('f-status'),
+      modo:       modoAtual,
+      truncado:   !!r.truncado,
+      teto:       r.teto,
+    });
+    await window.conciliacaoPdf.imprimirDocumento(html);
+  } catch (e) {
+    toast('Não consegui gerar o relatório: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = antes; }
+  }
 }
 
 // ── Detalhe ─────────────────────────────────────────────────────

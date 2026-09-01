@@ -56,11 +56,32 @@
       <button class="cc-tab active" type="button">🔧 Calibrador</button>
     </div>
 
+    <!-- ══════════ PENDENTES x HISTÓRICO ══════════
+         O corte é pelo STATUS de foto (decisão do usuário). Em Pendentes o
+         seletor de Status fica desabilitado: os dois cortariam a mesma coisa
+         e poderiam se contradizer ("Pendentes" + status OK devolveria vazio
+         sem explicar por quê).
+         Consequência conhecida e aceita: o VISTO de conferido é ortogonal ao
+         status — coleta completa que ninguém olhou não aparece em Pendentes.
+         A coluna Conferidas do resumo continua sendo onde isso se vê. -->
+    <div class="cc-modos" id="cc-modos">
+      <button class="cc-modo active" data-modo="pendentes" type="button">Pendentes</button>
+      <button class="cc-modo" data-modo="historico" type="button">Histórico</button>
+      <span class="cc-modo-dica" id="cc-modo-dica">Só as coletas sem as duas fotos.</span>
+    </div>
+
     <!-- ══════════ FILTROS ══════════ -->
     <div class="cc-filtros">
       <label class="cc-f">
         <span>Posto</span>
         <select class="cc-sel" id="f-posto"><option value="">Todos</option></select>
+      </label>
+      <!-- "Lançado por" e não "Supervisor": o vínculo é usuario_nome da
+           própria coleta, quem de fato lançou. Supervisor que cobre posto de
+           outro aparece com esse trabalho no nome dele — que é o ponto. -->
+      <label class="cc-f">
+        <span>Lançado por</span>
+        <select class="cc-sel" id="f-lancou"><option value="">Todos</option></select>
       </label>
       <label class="cc-f">
         <span>De</span>
@@ -88,6 +109,7 @@
       </label>
       <div class="cc-f-acoes">
         <button class="cc-btn" id="btn-limpar" type="button">Limpar</button>
+        <button class="cc-btn cc-btn-pdf" id="btn-pdf" type="button">🖨️ Relatório</button>
         <button class="cc-btn cc-btn-eq" id="btn-novo-eq" type="button">+ Equipamento</button>
         <button class="cc-btn cc-btn-imp" id="btn-importar" type="button">📋 Importar histórico</button>
       </div>
@@ -200,6 +222,8 @@
 <script src="../../shared/js/config.js?v=202609011653"></script>
 <script src="../../shared/js/api.js?v=202609011653"></script>
 <script src="../../shared/js/auth.js?v=202609011653"></script>
+<!-- Antes do app.js: ele registra window.conciliacaoPdf, que o botão usa. -->
+<script src="conciliacao-pdf.js?v=202609011653"></script>
 <script src="app.js?v=202609011653"></script>
 </body>
 </html>
