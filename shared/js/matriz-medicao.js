@@ -114,15 +114,31 @@
 
   function mesCorrente() { const d = new Date(); return { mes: d.getMonth() + 1, ano: d.getFullYear() }; }
 
-  // Mes FECHADO = qualquer um que nao seja o corrente. A matriz inteira entra
-  // somente leitura nele. Trocado a pedido: a chance de alterar historico sem
-  // querer, agora que da para navegar, e maior que a de precisar corrigir
-  // julho em setembro — e a correcao de verdade tem outros caminhos.
-  // Para afrouxar, e so esta funcao devolver false.
-  function mesFechado() {
-    if (_mes == null) return false;
+  // Um mes esta FECHADO quando ja passou E o prazo de ajuste acabou.
+  //
+  // O PRAZO: o mes anterior so fecha a partir do DIA 3 do mes seguinte.
+  // A regra antiga fechava a zero hora do dia 1o, e isso quebrava o uso
+  // real: os ultimos dias do mes (30, 31, 28/29 em fevereiro) sao lancados
+  // DEPOIS que o mes acaba, e o comeco do mes seguinte e justamente quando
+  // se corrige o fechamento. Em 01/09 o dia 31/08 ficava sem como ser
+  // lancado — por dois caminhos ao mesmo tempo (o mes inteiro travado se
+  // navegasse ate agosto, e a linha de borda travada se ficasse em setembro).
+  //
+  // FUTURO NUNCA FECHA. A linha de borda 01/10 numa tela de setembro e onde
+  // se lanca o pedido da virada; trata-la como 'nao corrente' a travaria.
+  //
+  // Recebe o mes/ano da LINHA, nao da tela: e o que faz a borda de 31/08
+  // numa tela de setembro obedecer a regra de agosto.
+  // ano*12+mes vira o ano sozinho (dez/2026 -> jan/2027).
+  const PRAZO_AJUSTE_DIA = 3;
+  function mesFechado(mes, ano) {
+    if (mes == null || ano == null) return false;
     const c = mesCorrente();
-    return !(_mes === c.mes && _ano === c.ano);
+    const alvo  = ano * 12 + (mes - 1);
+    const atual = c.ano * 12 + (c.mes - 1);
+    if (alvo >= atual) return false;                                  // corrente ou futuro
+    if (alvo === atual - 1) return new Date().getDate() >= PRAZO_AJUSTE_DIA;  // o anterior
+    return true;                                                      // mais antigo
   }
 
   // Recarrega o MESMO posto no mes vizinho. Nao passa de mes corrente para a
@@ -271,11 +287,9 @@
     _thead.innerHTML = row1 + row2;
   }
 
-  // Por que a célula está travada — o texto muda com o motivo, senão o mês
-  // fechado se explicaria como se fosse a linha de borda.
-  const motivoRO = (fechado) => fechado
-    ? 'Mês fechado — somente leitura'
-    : 'Mês anterior — somente leitura';
+  // Um motivo só: com a trava unificada por mês da linha, 'mês anterior' e
+  // 'mês fechado' deixaram de ser casos distintos.
+  const MOTIVO_MES_FECHADO = 'Mês fechado — somente leitura';
 
   // Uma linha por dia; cada categoria com uma célula por combustível.
   function montarLinhasMedicao(dados) {
@@ -283,22 +297,25 @@
     const vendaCols = dados.combustiveisVenda;
     let html = '';
     const cats = categoriasVisiveis();
-    const fechado = mesFechado();
     dados.dias.forEach((d, diaIdx) => {
       // Linha de BORDA (fora_do_mes): mes anterior ou seguinte.
       const fora = !!d.fora_do_mes;
-      // A de TRAS e so leitura: ela existe para VER o fechamento que gerou o
-      // consumo do dia 1o. A da FRENTE e editavel: e o pedido da virada.
-      // Compara com o 1o dia do array que NAO e de borda para saber de que
-      // lado esta, sem depender de Date nem do fuso.
-      // Em mes FECHADO nada e editavel — nem a borda da frente, que ali ja e
-      // passado tambem.
-      const soLeitura = fechado || (fora && diaIdx === 0);
+      // A trava segue o mes DAQUELA LINHA, nao o da tela. Antes eram duas
+      // regras separadas — o mes da tela, e a borda de tras sempre travada —
+      // e em 01/09 as duas fechavam o dia 31/08 por caminhos diferentes.
+      // Agora e uma pergunta so: o mes DESTE dia ja fechou?
+      // Consequencia boa: a borda de 31/08 numa tela de setembro fica
+      // EDITAVEL nos dias 1 e 2 (agosto ainda aberto) e trava no dia 3,
+      // junto com o resto de agosto. E a borda de 01/10 nunca trava, porque
+      // futuro nao fecha.
+      const mesLinha = parseInt(String(d.data).slice(3, 5), 10);
+      const anoLinha = parseInt(String(d.data).slice(6, 10), 10);
+      const soLeitura = mesFechado(mesLinha, anoLinha);
       // O mes vem da PROPRIA data do dia ('31/07/2026' -> 'JUL'), nao de
       // dados.mes: com as bordas, dados.mes rotularia 31/07 como 31/AGO.
       const mesDoDia = MES_ABREV[parseInt(String(d.data).slice(3, 5), 10) - 1] || dados.mes;
       html += '<tr' + (fora ? ' class="linha-fora"' : '') + '><td class="sticky-col"' +
-        (soLeitura ? ' title="' + motivoRO(fechado) + '"' : '') + '>' +
+        (soLeitura ? ' title="' + MOTIVO_MES_FECHADO + '"' : '') + '>' +
         String(d.dia).padStart(2, '0') + '/' + mesDoDia + '</td>';
       cats.forEach(cat => {
         const cols    = colunasDaCategoria(cat.chave, grupos, vendaCols);
@@ -345,7 +362,7 @@
             // nenhum parece defeito.
             const vazia = (val === null || val === undefined || val === '') ? ' cell-vazia' : '';
             const motivo = soLeitura
-              ? motivoRO(fechado)
+              ? MOTIVO_MES_FECHADO
               : 'Somente leitura — definido no Painel ADM';
             html += '<td class="' + grpEnd + ' td-ro" title="' + motivo + '">' +
               '<span class="cell-val cell-ro' + vazia + '">' + fmtL(val) + '</span></td>';
