@@ -18,6 +18,10 @@
 
 let usuarioAtual = null;
 let coletasAtuais = [];
+// Ultima resposta da lista. Guardada para redesenhar sem ir ao servidor
+// (marcar um visto nao deve desfazer rolagem nem filtro) SEM perder o
+// aviso de truncamento, que vive na resposta e nao nas coletas.
+let ultimaResposta = { coletas: [], truncado: false };
 let postosCache = [];
 
 // Passados 2 dias do lancamento sem foto, a linha grita. O prazo foi
@@ -49,6 +53,15 @@ function fmtData(iso) {
   if (!iso) return '—';
   const p = String(iso).slice(0, 10).split('-');
   return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(iso);
+}
+// O visto tem HORA — duas pessoas conferindo no mesmo dia precisam saber
+// a ordem. Vem em ISO/UTC do banco; o Date converte para o fuso local.
+function fmtDataHora(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit' });
 }
 function escapeHtml(s) {
   return String(s == null ? '' : s)
@@ -166,6 +179,7 @@ async function carregarLista() {
   try {
     const r = await apiFetch('/calibrador/coletas' + filtrosAtuais());
     coletasAtuais = r.coletas || [];
+    ultimaResposta = r;
     renderLista(r);
   } catch (e) {
     coletasAtuais = [];
@@ -204,7 +218,19 @@ function renderLista(resp) {
         (atrasada ? '<span class="cc-selo cc-selo-atraso" title="Lançada há ' + c.dias_sem_foto +
                     ' dias e ainda sem as duas fotos">' + c.dias_sem_foto + 'd</span>' : '')
       : '<span class="cc-selo cc-selo-ok">OK</span>';
-    return '<tr class="cc-linha' + (atrasada ? ' cc-linha-atraso' : (pend ? ' cc-linha-pend' : '')) +
+    // O visto e ORTOGONAL ao status: uma coleta pode estar sem foto E
+    // conferida (a conciliação viu e aceitou), ou completa e não olhada.
+    // Por isso o ✓ acompanha o selo em vez de substituí-lo.
+    const selos = selo + (c.conferido
+      ? '<span class="cc-selo cc-selo-conf" title="Conferido por ' +
+        escapeHtml(c.conferido_por || '—') + ' em ' + fmtDataHora(c.conferido_em) + '">✓</span>'
+      : '');
+    // A faixa da esquerda mostra UMA coisa só, na ordem de urgência:
+    // atrasada > sem foto > conferida. Quem está atrasada não vira verde
+    // por ter sido conferida.
+    const clsLinha = atrasada ? ' cc-linha-atraso'
+      : (pend ? ' cc-linha-pend' : (c.conferido ? ' cc-linha-conf' : ''));
+    return '<tr class="cc-linha' + clsLinha +
       '" data-id="' + c.id + '" tabindex="0">' +
       '<td class="cc-mono">' + fmtData(c.data) + '</td>' +
       '<td>' + escapeHtml(c.posto || '—') + '</td>' +
@@ -212,7 +238,7 @@ function renderLista(resp) {
       '<td class="num cc-mono">' + fmtDin(c.valor_esperado) + '</td>' +
       '<td class="num cc-mono">' + fmtDin(c.valor_recolhido) + '</td>' +
       '<td class="num cc-mono ' + clsDif + '">' + (dif > 0 ? '+' : '') + fmtDin(dif) + '</td>' +
-      '<td>' + selo + '</td>' +
+      '<td>' + selos + '</td>' +
       '<td class="cc-quem">' + escapeHtml(c.usuario_nome || '—') + '</td>' +
       '</tr>';
   }).join('');
@@ -234,6 +260,7 @@ function renderResumo() {
   const rec = coletasAtuais.reduce((a, c) => a + Number(c.valor_recolhido || 0), 0);
   const dif = rec - esp;
   const pend = coletasAtuais.filter(c => c.status === 'PENDENTE_FOTO').length;
+  const conf = coletasAtuais.filter(c => c.conferido).length;
   const atras = coletasAtuais.filter(c => c.status === 'PENDENTE_FOTO' && c.dias_sem_foto >= DIAS_ALERTA_FOTO).length;
   const clsDif = dif < 0 ? 'cc-neg' : (dif > 0 ? 'cc-pos' : 'cc-zero');
   document.getElementById('cc-resumo').innerHTML =
@@ -243,7 +270,8 @@ function renderResumo() {
     '<div class="cc-kpi"><span>Diferença</span><b class="cc-mono ' + clsDif + '">' +
       (dif > 0 ? '+' : '') + fmtDin(dif) + '</b></div>' +
     '<div class="cc-kpi"><span>Sem foto</span><b class="' + (pend ? 'cc-neg' : '') + '">' + pend +
-      (atras ? ' <small>(' + atras + ' há ' + DIAS_ALERTA_FOTO + '+ dias)</small>' : '') + '</b></div>';
+      (atras ? ' <small>(' + atras + ' há ' + DIAS_ALERTA_FOTO + '+ dias)</small>' : '') + '</b></div>' +
+    '<div class="cc-kpi"><span>Conferidas</span><b>' + conf + '<small> de ' + n + '</small></b></div>';
 }
 
 // ── Detalhe ─────────────────────────────────────────────────────
@@ -311,7 +339,62 @@ function renderDetalhe(c) {
     '<div class="cc-fotos">' + foto(c.foto_encerrante, 'encerrante') + foto(c.foto_protocolo, 'protocolo') + '</div>' +
     (c.status === 'PENDENTE_FOTO'
       ? '<div class="cc-aviso cc-aviso-atencao">Coleta sem as duas fotos. O supervisor completa pela tela dele.</div>'
-      : '');
+      : '') +
+    '<div class="cc-conf" id="det-conf"></div>';
+  renderConferido(c);
+}
+
+// ── Visto de conferido ──────────────────────────────────────────
+// "Olhei e esta certo". Nao trava nada, nao muda calculo nenhum, e da
+// para desfazer. Serve para a conciliacao nao reconferir as mesmas
+// coletas todo mes.
+function renderConferido(c) {
+  const box = document.getElementById('det-conf');
+  if (!box) return;
+  box.className = 'cc-conf' + (c.conferido ? ' cc-conf-on' : '');
+  box.innerHTML = c.conferido
+    ? '<div class="cc-conf-txt">✓ Conferido por <b>' + escapeHtml(c.conferido_por || '—') +
+      '</b><br><span>' + fmtDataHora(c.conferido_em) + '</span></div>' +
+      '<button class="cc-btn" id="btn-conf" type="button">Desmarcar</button>'
+    : '<div class="cc-conf-txt">Ainda não conferida.</div>' +
+      '<button class="cc-btn cc-btn-conf" id="btn-conf" type="button">✓ Marcar como conferido</button>';
+  document.getElementById('btn-conf').onclick = () => alternarConferido(c);
+}
+
+async function alternarConferido(c) {
+  const btn = document.getElementById('btn-conf');
+  const alvo = !c.conferido;
+  btn.disabled = true;
+  btn.textContent = alvo ? 'Marcando…' : 'Desmarcando…';
+  try {
+    // Manda o valor EXPLICITO, nao um toggle: dois cliques seguidos, ou
+    // duas abas abertas, deixariam o resultado a sorte de qual chega
+    // primeiro. Repetir a chamada com o mesmo valor da no mesmo.
+    const r = await apiFetch('/calibrador/coleta/' + encodeURIComponent(c.id) + '/conferir', {
+      method: 'POST',
+      body: JSON.stringify({ conferido: alvo }),
+    });
+    c.conferido     = r.conferido;
+    c.conferido_em  = r.conferido_em;
+    c.conferido_por = r.conferido_por;
+    renderConferido(c);
+    toast(alvo ? 'Marcada como conferida.' : 'Visto removido.');
+
+    // A LISTA ATRAS TAMBEM MUDA. Sem isto o selo da linha continuaria
+    // como estava ate o proximo recarregamento, e a pessoa marcaria a
+    // mesma coleta de novo achando que nao pegou. Atualiza em memoria e
+    // redesenha — sem ir ao servidor, que desfaria a rolagem e os filtros.
+    const naLista = coletasAtuais.find(x => String(x.id) === String(c.id));
+    if (naLista) {
+      naLista.conferido     = r.conferido;
+      naLista.conferido_em  = r.conferido_em;
+      naLista.conferido_por = r.conferido_por;
+      renderLista(ultimaResposta);
+    }
+  } catch (e) {
+    toast('Não consegui salvar o visto: ' + e.message);
+    renderConferido(c);
+  }
 }
 
 // ── Cadastro de equipamento ─────────────────────────────────────

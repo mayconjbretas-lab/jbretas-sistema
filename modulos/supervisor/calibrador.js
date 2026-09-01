@@ -83,9 +83,15 @@
     _pronto = true;
   }
 
+  // SEM `capture`. Com ele o navegador abre a camera DIRETO e nao ha como
+  // escolher da galeria — e o supervisor quase sempre ja fotografou o
+  // encerrante e o protocolo antes de abrir o sistema. Sem o atributo, o
+  // proprio sistema operacional oferece as duas (Camera / Fotos / Arquivos),
+  // que e um toque a mais para quem vai fotografar agora e o unico caminho
+  // possivel para quem ja fotografou.
   const botaoFoto = (tipo, rotulo) =>
     '<label class="cal-foto" id="cal-foto-' + tipo + '">' +
-      '<input type="file" accept="image/*" capture="environment" id="cal-file-' + tipo + '" hidden>' +
+      '<input type="file" accept="image/*" id="cal-file-' + tipo + '" hidden>' +
       '<span class="cal-foto-lbl">' + rotulo + '</span>' +
       '<span class="cal-foto-ok" hidden>✓</span>' +
     '</label>';

@@ -182,3 +182,27 @@
   border-style: dashed; border-color: var(--danger); color: var(--danger);
   min-height: 150px; justify-content: center;
 }
+
+/* ── Visto de conferido ── */
+/* Ortogonal ao status: uma coleta pode estar sem foto E conferida. Por
+   isso o ✓ acompanha o selo de status em vez de substituí-lo. */
+.cc-selo-conf { background: rgba(0,229,160,.16); color: var(--ok); margin-left: .3rem; }
+
+/* A faixa da esquerda mostra UMA coisa só, na ordem de urgência:
+   atrasada > sem foto > conferida. Quem está atrasada não fica verde por
+   ter sido conferida — ver a montagem de clsLinha no app.js. */
+.cc-linha-conf td:first-child { box-shadow: inset 3px 0 0 var(--ok); }
+
+.cc-conf {
+  display: flex; align-items: center; justify-content: space-between; gap: .8rem;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: .6rem .7rem; margin-top: .2rem;
+}
+.cc-conf-on { background: rgba(0,229,160,.08); border-color: rgba(0,229,160,.28); }
+.cc-conf-txt { font-size: .78rem; color: var(--text2); line-height: 1.45; }
+.cc-conf-on .cc-conf-txt { color: var(--ok); }
+.cc-conf-txt b { color: var(--text); }
+.cc-conf-on .cc-conf-txt b { color: var(--ok); }
+.cc-conf-txt span { font-family: var(--mono); font-size: .64rem; color: var(--text3); }
+.cc-btn-conf { background: rgba(0,229,160,.12); border-color: rgba(0,229,160,.30); color: var(--ok); }
+.cc-btn:disabled { opacity: .55; cursor: not-allowed; }
