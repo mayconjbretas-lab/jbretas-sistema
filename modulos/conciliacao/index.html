@@ -13,8 +13,8 @@
 <link rel="apple-touch-icon" href="/shared/icon-192.png">
 <meta name="theme-color" content="#0a0d1c">
 <link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
-<link rel="stylesheet" href="../../shared/css/base.css?v=202609011624">
-<link rel="stylesheet" href="conciliacao.css?v=202609011624">
+<link rel="stylesheet" href="../../shared/css/base.css?v=202609011644">
+<link rel="stylesheet" href="conciliacao.css?v=202609011644">
 <script>
   (function(){
     var t = localStorage.getItem('jb_theme') || 'dark';
@@ -89,6 +89,7 @@
       <div class="cc-f-acoes">
         <button class="cc-btn" id="btn-limpar" type="button">Limpar</button>
         <button class="cc-btn cc-btn-eq" id="btn-novo-eq" type="button">+ Equipamento</button>
+        <button class="cc-btn cc-btn-imp" id="btn-importar" type="button">📋 Importar histórico</button>
       </div>
     </div>
 
@@ -156,14 +157,49 @@
   </div>
 </div>
 
+<!-- ══════════ IMPORTAR HISTÓRICO ══════════ -->
+<div class="modal-overlay" id="md-import">
+  <div class="modal-card cc-card-import">
+    <div class="modal-title">Importar histórico</div>
+    <div class="modal-sub">Cole direto da planilha. Nada é gravado antes da conferência.</div>
+
+    <details class="cc-ajuda">
+      <summary>Como colar</summary>
+      <p>Selecione na planilha <b>a linha com os nomes dos postos</b>, a linha do
+      cabeçalho (Data · Inicial · Final · Diferença · Valor) e as linhas de dados.
+      Blocos lado a lado funcionam.</p>
+      <p>Seis postos têm <b>dois equipamentos</b> e precisam que o topo do bloco
+      diga qual — <code>P. ITAPOA · BANHEIRO</code>. São eles: ITAPOA,
+      JOCA, DIFERENCIAL, MANGABEIRAS, TUNEL e AVIVA. Nos outros 22 o
+      equipamento é reconhecido sozinho.</p>
+      <p>A coluna <b>Diferença</b> é ignorada: o sistema recalcula
+      Final − Inicial. Se divergir da planilha, a conta da leitura é que vale.</p>
+    </details>
+
+    <textarea class="cc-colar" id="imp-texto" rows="6"
+      placeholder="Cole aqui (Ctrl+V)"></textarea>
+
+    <div class="cc-imp-acoes">
+      <button class="cc-btn" id="imp-conferir" type="button">Conferir</button>
+      <span class="cc-imp-info" id="imp-info"></span>
+    </div>
+
+    <div class="modal-msg" id="imp-msg"></div>
+    <div id="imp-previa"></div>
+
+    <button class="btn-modal-send" id="imp-gravar" type="button" hidden>Gravar</button>
+    <button class="btn-modal-cancel" id="imp-fechar" type="button">Fechar</button>
+  </div>
+</div>
+
 <div class="toast" id="toast">
   <div class="toast-title">Conciliação</div>
   <div id="toast-msg"></div>
 </div>
 
-<script src="../../shared/js/config.js?v=202609011624"></script>
-<script src="../../shared/js/api.js?v=202609011624"></script>
-<script src="../../shared/js/auth.js?v=202609011624"></script>
-<script src="app.js?v=202609011624"></script>
+<script src="../../shared/js/config.js?v=202609011644"></script>
+<script src="../../shared/js/api.js?v=202609011644"></script>
+<script src="../../shared/js/auth.js?v=202609011644"></script>
+<script src="app.js?v=202609011644"></script>
 </body>
 </html>

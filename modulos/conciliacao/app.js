@@ -115,15 +115,19 @@ function ligarControles() {
   document.getElementById('eq-cancelar').addEventListener('click', () => fecharModal('md-equip'));
   document.getElementById('eq-salvar').addEventListener('click', salvarEquipamento);
   document.getElementById('det-fechar').addEventListener('click', () => fecharModal('md-detalhe'));
+  document.getElementById('btn-importar').addEventListener('click', abrirModalImport);
+  document.getElementById('imp-conferir').addEventListener('click', conferirImport);
+  document.getElementById('imp-gravar').addEventListener('click', gravarImport);
+  document.getElementById('imp-fechar').addEventListener('click', () => fecharModal('md-import'));
 
   // Fecha no clique fora e no ESC — a tela e de conferencia, se navega
   // rapido entre linhas e ter de mirar o botao Fechar cansa.
-  ['md-detalhe', 'md-equip'].forEach(id => {
+  ['md-detalhe', 'md-equip', 'md-import'].forEach(id => {
     const ov = document.getElementById(id);
     if (ov) ov.addEventListener('click', e => { if (e.target === ov) fecharModal(id); });
   });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { fecharModal('md-detalhe'); fecharModal('md-equip'); }
+    if (e.key === 'Escape') { fecharModal('md-detalhe'); fecharModal('md-equip'); fecharModal('md-import'); }
   });
 }
 
@@ -211,8 +215,11 @@ function renderLista(resp) {
   tb.innerHTML = coletasAtuais.map(c => {
     const pend = c.status === 'PENDENTE_FOTO';
     const atrasada = pend && c.dias_sem_foto >= DIAS_ALERTA_FOTO;
-    const dif = Number(c.diferenca);
-    const clsDif = dif < 0 ? 'cc-neg' : (dif > 0 ? 'cc-pos' : 'cc-zero');
+    // Coleta sem recolhido nao tem diferenca — nem zero. Zero seria uma
+    // afirmacao ("bateu certinho") sobre uma conta que nao foi feita.
+    const dif = c.sem_recolhido ? null : Number(c.diferenca);
+    const clsDif = c.sem_recolhido ? 'cc-zero'
+      : (dif < 0 ? 'cc-neg' : (dif > 0 ? 'cc-pos' : 'cc-zero'));
     const selo = pend
       ? '<span class="cc-selo cc-selo-pend">PENDENTE FOTO</span>' +
         (atrasada ? '<span class="cc-selo cc-selo-atraso" title="Lançada há ' + c.dias_sem_foto +
@@ -236,8 +243,11 @@ function renderLista(resp) {
       '<td>' + escapeHtml(c.posto || '—') + '</td>' +
       '<td class="cc-mono cc-dest">' + escapeHtml((c.destinos || []).join(' / ') || '—') + '</td>' +
       '<td class="num cc-mono">' + fmtDin(c.valor_esperado) + '</td>' +
-      '<td class="num cc-mono">' + fmtDin(c.valor_recolhido) + '</td>' +
-      '<td class="num cc-mono ' + clsDif + '">' + (dif > 0 ? '+' : '') + fmtDin(dif) + '</td>' +
+      '<td class="num cc-mono">' + (c.sem_recolhido
+        ? '<span class="cc-falta" title="Importada da planilha sem o valor recolhido">sem recolhido</span>'
+        : fmtDin(c.valor_recolhido)) + '</td>' +
+      '<td class="num cc-mono ' + clsDif + '">' + (c.sem_recolhido ? '—'
+        : (dif > 0 ? '+' : '') + fmtDin(dif)) + '</td>' +
       '<td>' + selos + '</td>' +
       '<td class="cc-quem">' + escapeHtml(c.usuario_nome || '—') + '</td>' +
       '</tr>';
@@ -257,8 +267,14 @@ function renderLista(resp) {
 function renderResumo() {
   const n = coletasAtuais.length;
   const esp = coletasAtuais.reduce((a, c) => a + Number(c.valor_esperado || 0), 0);
-  const rec = coletasAtuais.reduce((a, c) => a + Number(c.valor_recolhido || 0), 0);
-  const dif = rec - esp;
+  // Recolhido e Diferenca somam SO as coletas que tem o valor. Tratar
+  // ausente como zero mostraria um rombo do tamanho do esperado dessas
+  // coletas — um numero que nunca existiu, no lugar mais visivel da tela.
+  const comRec = coletasAtuais.filter(c => !c.sem_recolhido);
+  const semRec = coletasAtuais.length - comRec.length;
+  const rec = comRec.reduce((a, c) => a + Number(c.valor_recolhido || 0), 0);
+  const espComRec = comRec.reduce((a, c) => a + Number(c.valor_esperado || 0), 0);
+  const dif = rec - espComRec;
   const pend = coletasAtuais.filter(c => c.status === 'PENDENTE_FOTO').length;
   const conf = coletasAtuais.filter(c => c.conferido).length;
   const atras = coletasAtuais.filter(c => c.status === 'PENDENTE_FOTO' && c.dias_sem_foto >= DIAS_ALERTA_FOTO).length;
@@ -266,9 +282,12 @@ function renderResumo() {
   document.getElementById('cc-resumo').innerHTML =
     '<div class="cc-kpi"><span>Coletas</span><b>' + n + '</b></div>' +
     '<div class="cc-kpi"><span>Esperado</span><b class="cc-mono">' + fmtDin(esp) + '</b></div>' +
-    '<div class="cc-kpi"><span>Recolhido</span><b class="cc-mono">' + fmtDin(rec) + '</b></div>' +
+    '<div class="cc-kpi"><span>Recolhido</span><b class="cc-mono">' + fmtDin(rec) +
+      (semRec ? '<small> de ' + comRec.length + '</small>' : '') + '</b></div>' +
     '<div class="cc-kpi"><span>Diferença</span><b class="cc-mono ' + clsDif + '">' +
       (dif > 0 ? '+' : '') + fmtDin(dif) + '</b></div>' +
+    (semRec ? '<div class="cc-kpi"><span>Sem recolhido</span><b class="cc-neg">' + semRec +
+      '<small> fora da soma</small></b></div>' : '') +
     '<div class="cc-kpi"><span>Sem foto</span><b class="' + (pend ? 'cc-neg' : '') + '">' + pend +
       (atras ? ' <small>(' + atras + ' há ' + DIAS_ALERTA_FOTO + '+ dias)</small>' : '') + '</b></div>' +
     '<div class="cc-kpi"><span>Conferidas</span><b>' + conf + '<small> de ' + n + '</small></b></div>';
@@ -297,8 +316,9 @@ function renderDetalhe(c) {
     'Lançada por ' + (c.usuario_nome || '—') +
     (c.gerente_nome ? ' · conferida com ' + c.gerente_nome : '');
 
-  const dif = Number(c.diferenca);
-  const clsDif = dif < 0 ? 'cc-neg' : (dif > 0 ? 'cc-pos' : 'cc-zero');
+  const dif = c.sem_recolhido ? null : Number(c.diferenca);
+  const clsDif = c.sem_recolhido ? 'cc-zero'
+    : (dif < 0 ? 'cc-neg' : (dif > 0 ? 'cc-pos' : 'cc-zero'));
 
   const linhas = (c.itens || []).map(i =>
     '<tr' + (i.equipamento_ativo ? '' : ' class="cc-eq-inativo"') + '>' +
@@ -331,12 +351,18 @@ function renderDetalhe(c) {
       ') não bate com o esperado gravado (' + fmtDin(c.valor_esperado) + ').</div>') +
     '<div class="cc-det-caixa">' +
       '<div class="cc-det-linha"><span>Esperado</span><b class="cc-mono">' + fmtDin(c.valor_esperado) + '</b></div>' +
-      '<div class="cc-det-linha"><span>Recolhido</span><b class="cc-mono">' + fmtDin(c.valor_recolhido) + '</b></div>' +
+      '<div class="cc-det-linha"><span>Recolhido</span><b class="cc-mono">' +
+        (c.sem_recolhido ? '<span class="cc-falta">não informado</span>' : fmtDin(c.valor_recolhido)) +
+        '</b></div>' +
       '<div class="cc-det-linha cc-det-dif"><span>Diferença</span><b class="cc-mono ' + clsDif + '">' +
-        (dif > 0 ? '+' : '') + fmtDin(dif) + '</b></div>' +
+        (c.sem_recolhido ? '—' : (dif > 0 ? '+' : '') + fmtDin(dif)) + '</b></div>' +
     '</div>' +
     (c.observacao ? '<div class="cc-obs"><span>Observação</span><p>' + escapeHtml(c.observacao) + '</p></div>' : '') +
     '<div class="cc-fotos">' + foto(c.foto_encerrante, 'encerrante') + foto(c.foto_protocolo, 'protocolo') + '</div>' +
+    (c.sem_recolhido
+      ? '<div class="cc-aviso cc-aviso-atencao">Importada da planilha <b>sem o valor recolhido</b>. ' +
+        'As leituras estão registradas; a diferença não pode ser calculada.</div>'
+      : '') +
     (c.status === 'PENDENTE_FOTO'
       ? '<div class="cc-aviso cc-aviso-atencao">Coleta sem as duas fotos. O supervisor completa pela tela dele.</div>'
       : '') +
@@ -495,3 +521,312 @@ async function salvarEquipamento() {
 window.toggleTheme    = toggleTheme;
 window.carregarLista  = carregarLista;
 window.abrirDetalhe   = abrirDetalhe;
+
+// ════════════════════════════════════════════════════════════════
+// IMPORTAÇÃO DO HISTÓRICO (colar da planilha)
+// ════════════════════════════════════════════════════════════════
+// ~100 lançamentos de 2 a 3 meses que hoje vivem numa planilha. Digitar
+// um por um seria transcrição — a atividade mais propensa a erro do
+// sistema, e a razão de o pré-preenchimento do `inicial` existir.
+//
+// DOIS FORMATOS, detectados sozinhos:
+//
+// LARGO (o da planilha atual): um bloco de colunas por equipamento, lado
+// a lado, com o nome do posto na linha de cima.
+//     P. JA                             P. ITAPOA · BANHEIRO
+//     Data  Inicial Final Difer. Valor  Data  Inicial Final Difer. Valor
+//     01/07 1000    1300  300    300,00 01/07 500     612   112   112,00
+//
+// LONGO: uma linha por lançamento, com cabeçalho contendo Posto e
+// Equipamento. Aceito para quem preferir reorganizar.
+//
+// O NOME DO EQUIPAMENTO só é necessário nos 6 postos que têm dois
+// (ITAPOA, JOCA, DIFERENCIAL, MANGABEIRAS, TUNEL, AVIVA). Nos outros 22
+// a API infere sozinha. No formato largo, escreva no topo do bloco:
+//     P. ITAPOA · BANHEIRO      (ou "P. ITAPOA - BANHEIRO")
+//
+// QUEM VALIDA É A API, não este parser. Aqui só se traduz texto em
+// linhas; a prévia mostra o veredito que veio de POST /calibrador/importar
+// com confirmar:false — a MESMA rota que grava. Se a tela validasse por
+// conta própria, a prévia poderia prometer o que a gravação recusa.
+// ════════════════════════════════════════════════════════════════
+
+let _linhasColadas = [];   // o que o parser entendeu
+let _previaResp    = null; // resposta da API com confirmar:false
+
+const semAc = (s) => String(s == null ? '' : s)
+  .normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+
+// "01/07/2026" e "2026-07-01" viram ISO. Ano de 2 dígitos NÃO é aceito:
+// "01/07/26" tanto pode ser 2026 quanto 1926, e adivinhar num histórico
+// que vai virar registro contábil não vale o risco.
+function dataISO(v) {
+  const t = String(v || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const m = t.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+  if (!m) return t;
+  return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+}
+
+// Separa "P. ITAPOA · BANHEIRO" em posto e equipamento. Sem separador, o
+// rótulo inteiro é o posto e o equipamento fica para a API inferir.
+function partirRotulo(rot) {
+  const m = String(rot || '').split(/\s+[·\-–—|]\s+/);
+  return m.length >= 2
+    ? { posto: m[0].trim(), equipamento: m.slice(1).join(' ').trim() }
+    : { posto: String(rot || '').trim(), equipamento: '' };
+}
+
+function parsearColagem(texto) {
+  const linhas = String(texto || '').replace(/\r/g, '').split('\n').filter(l => l.trim() !== '');
+  if (!linhas.length) return { linhas: [], erro: 'Nada colado.' };
+  const grade = linhas.map(l => l.split('\t'));
+
+  // Acha o cabeçalho: a primeira linha que tenha "Data" e ("Inicial" ou "Final").
+  const iCab = grade.findIndex(c => {
+    const s = c.map(semAc);
+    return s.includes('DATA') && (s.includes('INICIAL') || s.includes('FINAL'));
+  });
+  if (iCab === -1) {
+    return { linhas: [], erro: 'Não achei o cabeçalho. A colagem precisa incluir a linha com Data, Inicial e Final.' };
+  }
+  const cab = grade[iCab].map(semAc);
+
+  // LONGO: o cabeçalho tem Posto (e talvez Equipamento) na mesma linha.
+  if (cab.includes('POSTO')) return parsearLongo(grade, iCab, cab);
+  return parsearLargo(grade, iCab, cab);
+}
+
+function parsearLongo(grade, iCab, cab) {
+  const col = (nome) => cab.indexOf(nome);
+  const iPosto = col('POSTO'), iData = col('DATA');
+  const iEq = col('EQUIPAMENTO') !== -1 ? col('EQUIPAMENTO') : col('EQUIP');
+  const iIni = col('INICIAL'), iFim = col('FINAL');
+  const iRec = col('RECOLHIDO') !== -1 ? col('RECOLHIDO')
+             : (col('VALOR RECOLHIDO') !== -1 ? col('VALOR RECOLHIDO') : col('VALOR'));
+  if (iIni === -1 || iFim === -1) return { linhas: [], erro: 'Faltam as colunas Inicial e Final.' };
+
+  const out = [];
+  for (let r = iCab + 1; r < grade.length; r++) {
+    const c = grade[r];
+    if (!(c[iPosto] || '').trim() && !(c[iData] || '').trim()) continue;
+    out.push({
+      ref: r, origem: 'linha ' + (r + 1),
+      posto: (c[iPosto] || '').trim(),
+      equipamento: iEq !== -1 ? (c[iEq] || '').trim() : '',
+      data: dataISO(c[iData]),
+      inicial: (c[iIni] || '').trim(),
+      final: (c[iFim] || '').trim(),
+      valor_recolhido: iRec !== -1 ? (c[iRec] || '').trim() : '',
+    });
+  }
+  return { linhas: out, formato: 'longo' };
+}
+
+function parsearLargo(grade, iCab, cab) {
+  // Cada "Data" no cabeçalho abre um bloco; o bloco vai até o próximo.
+  const inicios = [];
+  cab.forEach((v, i) => { if (v === 'DATA') inicios.push(i); });
+  if (!inicios.length) return { linhas: [], erro: 'Não achei nenhuma coluna Data.' };
+
+  const blocos = inicios.map((ini, k) => {
+    const fim = k + 1 < inicios.length ? inicios[k + 1] : cab.length;
+    const mapa = {};
+    for (let i = ini; i < fim; i++) {
+      const n = cab[i];
+      if (n === 'DATA') mapa.data = i;
+      else if (n === 'INICIAL') mapa.inicial = i;
+      else if (n === 'FINAL') mapa.final = i;
+      else if (n === 'VALOR' || n === 'RECOLHIDO' || n === 'VALOR RECOLHIDO') mapa.recolhido = i;
+      // "DIFERENCA" é ignorada de propósito: a API recalcula final-inicial.
+      // Coluna conferida na planilha não vira fonte — se divergir, quem
+      // manda é a leitura.
+    }
+    // Rótulo do bloco: a célula não vazia mais próxima ACIMA, dentro das
+    // colunas do bloco. Célula mesclada no Excel cai na primeira coluna.
+    let rot = '';
+    for (let r = iCab - 1; r >= 0 && !rot; r--) {
+      for (let i = ini; i < fim && !rot; i++) {
+        if ((grade[r][i] || '').trim()) rot = grade[r][i].trim();
+      }
+    }
+    return { ini, fim, mapa, rotulo: rot };
+  });
+
+  const semRotulo = blocos.filter(b => !b.rotulo).length;
+  if (semRotulo === blocos.length) {
+    return { linhas: [], erro: 'Nenhum bloco tem o nome do posto acima do cabeçalho. Inclua a linha dos nomes na colagem.' };
+  }
+
+  const out = [];
+  for (let r = iCab + 1; r < grade.length; r++) {
+    blocos.forEach((b, k) => {
+      const c = grade[r];
+      const d = (c[b.mapa.data] || '').trim();
+      if (!d) return;                       // bloco mais curto que o vizinho
+      const { posto, equipamento } = partirRotulo(b.rotulo);
+      out.push({
+        ref: r + ':' + k,
+        origem: 'linha ' + (r + 1) + ', bloco ' + (b.rotulo || '?'),
+        posto, equipamento, data: dataISO(d),
+        inicial: (c[b.mapa.inicial] || '').trim(),
+        final: (c[b.mapa.final] || '').trim(),
+        valor_recolhido: b.mapa.recolhido !== undefined ? (c[b.mapa.recolhido] || '').trim() : '',
+      });
+    });
+  }
+  return { linhas: out, formato: 'largo', blocos: blocos.length };
+}
+
+// ── Tela da importação ──────────────────────────────────────────
+function abrirModalImport() {
+  document.getElementById('imp-texto').value = '';
+  document.getElementById('imp-previa').innerHTML = '';
+  document.getElementById('imp-info').textContent = '';
+  const msg = document.getElementById('imp-msg');
+  msg.className = 'modal-msg'; msg.textContent = '';
+  document.getElementById('imp-gravar').hidden = true;
+  _linhasColadas = []; _previaResp = null;
+  document.getElementById('md-import').classList.add('active');
+  setTimeout(() => document.getElementById('imp-texto').focus(), 50);
+}
+
+// Conferir = mandar para a API com confirmar:false. A prévia é o veredito
+// da MESMA rota que grava, não uma segunda opinião desta tela.
+async function conferirImport() {
+  const msg = document.getElementById('imp-msg');
+  const btn = document.getElementById('imp-conferir');
+  const prev = document.getElementById('imp-previa');
+  document.getElementById('imp-gravar').hidden = true;
+  _previaResp = null;
+
+  const r = parsearColagem(document.getElementById('imp-texto').value);
+  if (r.erro) {
+    msg.className = 'modal-msg err'; msg.textContent = r.erro;
+    prev.innerHTML = ''; document.getElementById('imp-info').textContent = '';
+    return;
+  }
+  _linhasColadas = r.linhas;
+  document.getElementById('imp-info').textContent =
+    'formato ' + r.formato + (r.blocos ? ', ' + r.blocos + ' blocos' : '') +
+    ', ' + r.linhas.length + ' linhas lidas';
+  if (!r.linhas.length) {
+    msg.className = 'modal-msg err';
+    msg.textContent = 'Li o cabeçalho mas nenhuma linha de dados.';
+    prev.innerHTML = ''; return;
+  }
+
+  btn.disabled = true;
+  msg.className = 'modal-msg'; msg.textContent = 'Conferindo…';
+  try {
+    const resp = await apiFetch('/calibrador/importar', {
+      method: 'POST',
+      body: JSON.stringify({ confirmar: false, linhas: r.linhas }),
+    });
+    _previaResp = resp;
+    renderPrevia(resp);
+  } catch (e) {
+    msg.className = 'modal-msg err'; msg.textContent = e.message;
+    prev.innerHTML = '';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// `confirmado` = ja gravou. Nesse caso a tabela e redesenhada mas a
+// MENSAGEM e de quem gravou: renderPrevia escrevendo por cima diria
+// "nada a gravar" logo depois de gravar 4 coletas, que e o oposto do que
+// aconteceu.
+function renderPrevia(resp) {
+  const msg = resp.confirmado ? null : document.getElementById('imp-msg');
+  const res = resp.resumo;
+  const porRef = new Map((resp.linhas || []).map(l => [String(l.ref), l]));
+
+  const linhas = _linhasColadas.map(orig => {
+    const v = porRef.get(String(orig.ref)) || {};
+    const estado = v.erro ? 'ERRO' : (v.ja_existe ? 'JA_EXISTE' : 'OK');
+    const cls = estado === 'ERRO' ? 'cc-p-erro' : (estado === 'JA_EXISTE' ? 'cc-p-dup' : 'cc-p-ok');
+    const selo = estado === 'ERRO' ? '<span class="cc-selo cc-selo-pend">erro</span>'
+      : estado === 'JA_EXISTE' ? '<span class="cc-selo cc-selo-inativo">ja existe</span>'
+      : '<span class="cc-selo cc-selo-ok">ok</span>';
+    return '<tr class="' + cls + '">' +
+      '<td class="cc-mono">' + escapeHtml(orig.origem || '') + '</td>' +
+      '<td>' + escapeHtml(v.posto || orig.posto || '—') + '</td>' +
+      '<td class="cc-mono">' + fmtData(v.data || orig.data) + '</td>' +
+      '<td>' + escapeHtml(v.equipamento || orig.equipamento || '—') +
+        (v.equipamento_inferido ? '<span class="cc-inf" title="O posto so tem este equipamento ativo">auto</span>' : '') + '</td>' +
+      '<td class="num cc-mono">' + (v.inicial != null ? v.inicial : '—') + '</td>' +
+      '<td class="num cc-mono">' + (v.final != null ? v.final : '—') + '</td>' +
+      '<td class="num cc-mono">' + (v.valor != null ? fmtDin(v.valor) : '—') + '</td>' +
+      '<td class="num cc-mono">' + (v.valor_recolhido != null ? fmtDin(v.valor_recolhido) : '—') + '</td>' +
+      '<td>' + selo + (v.erro ? ' <span class="cc-p-motivo">' + escapeHtml(v.erro) + '</span>' : '') + '</td>' +
+      '</tr>';
+  }).join('');
+
+  document.getElementById('imp-previa').innerHTML =
+    '<div class="cc-p-resumo">' +
+      '<span><b>' + res.coletas_a_gravar + '</b> coletas a gravar</span>' +
+      '<span class="' + (res.linhas_com_erro ? 'cc-neg' : '') + '"><b>' + res.linhas_com_erro + '</b> linhas com erro</span>' +
+      '<span><b>' + res.coletas_ja_existentes + '</b> ja existentes</span>' +
+    '</div>' +
+    '<div class="cc-p-wrap"><table class="cc-p-tab"><thead><tr>' +
+      '<th>Origem</th><th>Posto</th><th>Data</th><th>Equipamento</th>' +
+      '<th class="num">Inicial</th><th class="num">Final</th>' +
+      '<th class="num">Esperado</th><th class="num">Recolhido</th><th>Situacao</th>' +
+    '</tr></thead><tbody>' + linhas + '</tbody></table></div>';
+
+  const btnG = document.getElementById('imp-gravar');
+  if (res.coletas_a_gravar > 0) {
+    btnG.hidden = false;
+    btnG.textContent = 'Gravar ' + res.coletas_a_gravar + ' coleta' + (res.coletas_a_gravar > 1 ? 's' : '');
+    if (msg) msg.className = 'modal-msg';
+    // Linha com erro NAO impede gravar o resto: numa carga de 100, exigir
+    // zero erros faria refazer a colagem inteira por causa de uma. O que
+    // nao pode e gravar em silencio — por isso o botao DIZ quantas entram
+    // e o resumo diz quantas ficam de fora.
+    if (msg) msg.innerHTML = res.linhas_com_erro
+      ? '<span style="color:var(--warning)">As ' + res.linhas_com_erro +
+        ' linhas com erro serao ignoradas. Corrija na planilha e cole de novo — o que ja foi gravado aparece como "ja existe".</span>'
+      : '';
+  } else {
+    btnG.hidden = true;
+    if (msg) msg.className = 'modal-msg err';
+    if (msg) msg.textContent = res.coletas_ja_existentes
+      ? 'Nada a gravar: todas essas coletas ja estao no sistema.'
+      : 'Nada a gravar: nenhuma linha passou na conferencia.';
+  }
+}
+
+async function gravarImport() {
+  if (!_previaResp || !_linhasColadas.length) return;
+  const btn = document.getElementById('imp-gravar');
+  const msg = document.getElementById('imp-msg');
+  btn.disabled = true; btn.textContent = 'Gravando…';
+  try {
+    // Manda as MESMAS linhas de novo com confirmar:true. A API refaz a
+    // conferencia inteira, inclusive a de ja existir — entre a previa e o
+    // clique, alguem pode ter lancado.
+    const resp = await apiFetch('/calibrador/importar', {
+      method: 'POST',
+      body: JSON.stringify({ confirmar: true, linhas: _linhasColadas }),
+    });
+    const r = resp.resumo;
+    msg.className = 'modal-msg ' + (r.falhas ? 'err' : 'ok');
+    msg.textContent = r.gravadas + ' coleta(s) gravada(s)' +
+      (r.falhas ? '; ' + r.falhas + ' falharam' : '') +
+      (r.coletas_ja_existentes ? '; ' + r.coletas_ja_existentes + ' ja existiam' : '') + '.';
+    toast(r.gravadas + ' coleta(s) importada(s)');
+    _previaResp = resp;
+    renderPrevia(resp);
+    btn.hidden = true;
+    await carregarLista();
+  } catch (e) {
+    msg.className = 'modal-msg err'; msg.textContent = e.message;
+    btn.disabled = false; btn.textContent = 'Gravar';
+  }
+}
+
+window.abrirModalImport = abrirModalImport;
+window.conferirImport   = conferirImport;
+window.gravarImport     = gravarImport;
+window.parsearColagem   = parsearColagem;

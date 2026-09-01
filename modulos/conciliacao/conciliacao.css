@@ -206,3 +206,88 @@
 .cc-conf-txt span { font-family: var(--mono); font-size: .64rem; color: var(--text3); }
 .cc-btn-conf { background: rgba(0,229,160,.12); border-color: rgba(0,229,160,.30); color: var(--ok); }
 .cc-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+/* ── Importação do histórico ────────────────────────────────────── */
+.cc-btn-imp { background: var(--surface3); border-color: var(--border2); color: var(--text); }
+
+/* Mais largo que o detalhe: a prévia tem 9 colunas e é onde se confere
+   100 linhas antes de gravar. Uma prévia apertada não é conferível. */
+.cc-card-import { max-width: 900px; width: 96vw; }
+
+.cc-ajuda { margin-bottom: .7rem; font-size: .76rem; color: var(--text2); }
+.cc-ajuda summary { cursor: pointer; color: var(--accent); font-family: var(--mono); font-size: .72rem; }
+.cc-ajuda p { margin: .5rem 0 0; line-height: 1.5; }
+.cc-ajuda code {
+  font-family: var(--mono); font-size: .72rem; background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 4px; padding: .05rem .3rem;
+}
+
+/* Fonte mono na área de colagem: o conteúdo é tabular, e com fonte
+   proporcional a pessoa não enxerga que colou a coluna errada. */
+.cc-colar {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text); font-family: var(--mono);
+  font-size: .72rem; padding: .6rem; resize: vertical; white-space: pre;
+  overflow-x: auto;
+}
+.cc-colar:focus { outline: none; border-color: var(--accent); }
+
+.cc-imp-acoes { display: flex; align-items: center; gap: .6rem; margin: .6rem 0; }
+.cc-imp-info { font-family: var(--mono); font-size: .64rem; color: var(--text3); }
+
+.cc-p-resumo { display: flex; gap: 1rem; flex-wrap: wrap; margin: .6rem 0 .4rem;
+  font-size: .76rem; color: var(--text2); }
+.cc-p-resumo b { color: var(--text); font-size: .9rem; }
+
+/* A prévia rola SOZINHA: com 100 linhas, deixar o modal inteiro rolar
+   levaria o botão Gravar para longe do que se acabou de conferir. */
+.cc-p-wrap {
+  max-height: 46vh; overflow: auto; border: 1px solid var(--border);
+  border-radius: var(--radius); margin-bottom: .7rem;
+}
+.cc-p-tab { width: 100%; border-collapse: collapse; font-size: .72rem; }
+.cc-p-tab th {
+  position: sticky; top: 0; z-index: 1; background: var(--surface2);
+  color: var(--text3); font-family: var(--mono); font-size: .55rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em; padding: .4rem .45rem;
+  text-align: left; white-space: nowrap; border-bottom: 1px solid var(--border);
+}
+.cc-p-tab th.num, .cc-p-tab td.num { text-align: right; }
+.cc-p-tab td { padding: .35rem .45rem; color: var(--text);
+  border-bottom: 1px solid var(--border); white-space: nowrap; }
+
+/* Erro em vermelho, já-existe em cinza, entra em verde: a pessoa varre
+   100 linhas pela cor e só lê as que destoam. */
+.cc-p-erro td { background: rgba(255,77,109,.07); }
+.cc-p-dup  td { background: var(--surface2); color: var(--text3); }
+.cc-p-ok   td:first-child { box-shadow: inset 3px 0 0 var(--ok); }
+.cc-p-motivo { color: var(--danger); font-size: .68rem; }
+
+/* "auto" = o equipamento foi inferido porque o posto só tem um. Discreto:
+   é informação de conferência, não alerta. */
+.cc-inf {
+  font-family: var(--mono); font-size: .55rem; color: var(--text3);
+  background: var(--surface2); border-radius: 4px; padding: .05rem .25rem; margin-left: .3rem;
+}
+
+@media (max-width: 560px) {
+  .cc-p-wrap { max-height: 40vh; }
+  .cc-ajuda { font-size: .72rem; }
+}
+
+/* ── Coleta sem o valor recolhido ────────────────────────────────
+   Vem da importação do histórico: a planilha antiga nem sempre tinha esse
+   dado, e é melhor ter o encerrante sem o recolhido do que não ter nada.
+   Mas a coleta fica INCOMPLETA, e a tela precisa dizer isso — senão um
+   "0,00" na coluna se lê como "contaram e não havia dinheiro", que é uma
+   afirmação sobre uma conta que nunca foi feita. */
+.cc-falta {
+  font-family: var(--mono); font-size: .58rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em;
+  color: var(--warning); background: rgba(249,199,79,.12);
+  border-radius: 5px; padding: .15rem .35rem; white-space: nowrap;
+}
+/* Especificidade elevada pelo mesmo motivo da .cc-neg: `.cc-tabela td`
+   é (0,1,1) e venceria `.cc-falta` (0,1,0), deixando o aviso sem cor. */
+.cc-tabela td .cc-falta,
+.cc-det-linha > b .cc-falta { color: var(--warning); }
