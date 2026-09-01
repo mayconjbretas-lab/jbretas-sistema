@@ -213,6 +213,13 @@
     // primeiro do seguinte, ja marcados com fora_do_mes e COM os valores
     // reais daqueles dias (a consulta do banco usa o intervalo esticado).
     // Antes eram 3 chamadas por posto costuradas aqui — 111 no botao da rede.
+    //
+    // FICA NO 1 DE PROPOSITO, enquanto a matriz e a Medicao mobile foram para
+    // o 2. O que o 2 acrescenta e a ANCORA, e a ancora so serve para calcular
+    // Previsao e Diferenca da primeira linha — nenhuma das duas e impressa
+    // aqui (frente: medicao + pedido; verso: venda). Pedir o 2 seria ler um
+    // dia a mais por posto, 37 vezes no botao da rede, para jogar fora.
+    // Se um dia a folha ganhar coluna de Diferenca, troque para 2.
     const dados = await apiFetch('/medicao/' + encodeURIComponent(posto) +
                                  '?mes=' + mes + '&ano=' + ano + '&margem=1');
     const bandeira = bandeiraConhecida !== undefined ? bandeiraConhecida : acharBandeira(posto);

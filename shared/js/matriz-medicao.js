@@ -143,7 +143,7 @@
 
   // Recarrega o MESMO posto no mes vizinho. Nao passa de mes corrente para a
   // frente: adiante so ha linha vazia, e o dia 1o do mes seguinte ja aparece
-  // como linha de borda (?margem=1) sem precisar sair do mes.
+  // como linha de borda (?margem=2) sem precisar sair do mes.
   function mudarMes(delta) {
     if (_mes == null) return;
     const d = new Date(_ano, _mes - 1 + delta, 1);
@@ -236,14 +236,18 @@
     atualizarBotoesSalvar();
     atualizarBotaoUndo();
     try {
-      // ?margem=1: o mes mais o ULTIMO dia do anterior e o PRIMEIRO do
+      // ?margem=2: o mes mais o ULTIMO dia do anterior e o PRIMEIRO do
       // seguinte, com valores reais e marcados com fora_do_mes. O pedido de
       // um dia e para o dia SEGUINTE, entao em 31/08 o pedido de hoje e para
       // 01/09 — sem essa linha nao havia onde lancar na matriz.
       // ?mes=/?ano= vao explicitos (ver _mes/_ano): a rota ja os aceitava, a
       // matriz e que nunca os enviava.
+      // O 2 (e nao 1) acrescenta a ANCORA: a medicao do dia anterior a
+      // primeira linha, fora do array `dias`. Sem ela a Diferenca e a
+      // Previsao da linha de borda de tras ficavam vazias — 31/08 sem
+      // diferenca durante setembro inteiro.
       const dados = await apiFetch('/medicao/' + encodeURIComponent(posto) +
-        '?mes=' + _mes + '&ano=' + _ano + '&margem=1');
+        '?mes=' + _mes + '&ano=' + _ano + '&margem=2');
       DADOS_ATUAIS = dados;
       _subTxt.textContent = dados.posto + ' — ';
       atualizarMesNav();
@@ -325,7 +329,12 @@
           const val    = valores[i];
           // na Venda o grp-end vai pro TOTAL (adicionado após este loop)
           const grpEnd = (i === cols.length - 1 && !ehVenda) ? ' grp-end' : '';
-          if ((fora && cat.chave === 'diferenca') || (soLeitura && cat.chave === 'previsao')) {
+          // DIFERENÇA na borda: some na da FRENTE sempre, e na de TRÁS só quando
+          // não veio âncora (?margem=1, ou API antiga). Com âncora o 31/08
+          // calcula normalmente numa tela de setembro — inclusive depois que
+          // agosto fecha, porque travado impede editar, não ver.
+          const difNA = cat.chave === 'diferenca' && fora && !(diaIdx === 0 && dados.ancora);
+          if (difNA || (soLeitura && cat.chave === 'previsao')) {
             // Célula VAZIA, sem travessão — mas o critério é DIFERENTE nas duas,
             // porque o que elas precisam é diferente:
             //  · PREVISÃO = medição(ontem) + pedido(hoje). Some só na borda de
@@ -334,8 +343,9 @@
             //    (01/09) — e é o número que responde "se eu pedir X, o tanque
             //    fica em quanto no dia 1º". Sem ela o pedido da virada é às cegas.
             //  · DIFERENÇA = medição(hoje) − [medição(ontem) + carga − venda].
-            //    Some nas DUAS: atrás falta o ontem; na frente falta a medição do
-            //    próprio dia, que só existe depois que o dia acontece.
+            //    Some na da FRENTE, onde falta a medição do próprio dia (ela só
+            //    existe depois que o dia acontece). Atrás faltava o ontem — a
+            //    âncora do ?margem=2 resolveu, e a célula passou a calcular.
             // Travessão é o vocabulário de 'sem valor' na tabela; usá-lo para
             // 'não se aplica' faria parecer que houve dia sem número.
             // Sem o <span id="prev_/diff_">, recalcularPrevisaoEDiff simplesmente
@@ -386,6 +396,15 @@
   // "Tem valor" para as fórmulas: null/undefined/'' contam como vazio.
   function temValor(v) { return v !== null && v !== undefined && v !== ''; }
 
+  // O "ontem" de uma linha. Na PRIMEIRA ele não está no array: vem da ÂNCORA
+  // (?margem=2), que a API devolve fora de `dias` porque é insumo de conta, não
+  // dia para exibir. Só tem `medicao` — que é tudo o que as duas fórmulas leem
+  // de ontem. Sem âncora devolve undefined e as duas caem no caso "sem medição
+  // de ontem" de sempre, que já era o comportamento anterior.
+  function _ontem(diaIdx) {
+    return diaIdx > 0 ? DADOS_ATUAIS.dias[diaIdx - 1] : DADOS_ATUAIS.ancora;
+  }
+
   // PREVISÃO MED.:
   //  • COM pedido:  medição(ontem) + pedido(hoje)   → estilo normal
   //  • SEM pedido:  só medição(ontem)               → cinza + itálico (semPedido)
@@ -393,7 +412,7 @@
   // `pedido` é a coluna medicao.pedido (Pedido Final). Devolve { valor, semPedido }.
   function _prevCelula(diaIdx, i) {
     const dias = DADOS_ATUAIS.dias;
-    const diaOntem   = dias[diaIdx - 1];
+    const diaOntem   = _ontem(diaIdx);
     const medOntem   = diaOntem ? diaOntem.medicao[i] : null;
     const pedidoHoje = dias[diaIdx].pedido ? dias[diaIdx].pedido[i] : null;
     if (!temValor(medOntem))   return { valor: null, semPedido: false };
@@ -411,7 +430,7 @@
   function _diffCelula(diaIdx, i) {
     const dias = DADOS_ATUAIS.dias;
     const dia  = dias[diaIdx];
-    const diaOntem = dias[diaIdx - 1];
+    const diaOntem = _ontem(diaIdx);
     const g = DADOS_ATUAIS.grupos[i];
     const medHoje  = dia.medicao[i];
     const medOntem = diaOntem ? diaOntem.medicao[i] : null;

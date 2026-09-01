@@ -120,12 +120,14 @@
   async function carregarMes(posto, ano, mes) {
     const k = posto + '|' + ano + '-' + String(mes).padStart(2, '0');
     if (_cacheMes.has(k)) return _cacheMes.get(k);
-    // ?margem=1 traz o mes mais o ultimo dia do anterior e o primeiro do
+    // ?margem=2 traz o mes mais o ultimo dia do anterior e o primeiro do
     // seguinte, com valores reais e marcados com fora_do_mes. No modo Mes e
     // o que da as linhas da virada em UMA chamada — costurar 3 meses no
     // cliente triplicaria as chamadas a cada seta de posto, em rede de celular.
+    // O 2 acrescenta a ANCORA (medicao do dia anterior a primeira linha, fora
+    // de `dias`): sem ela a aba DIF mostrava 31/08 vazio o setembro inteiro.
     const resp = await apiFetch('/medicao/' + encodeURIComponent(posto) +
-                                '?mes=' + mes + '&ano=' + ano + '&margem=1');
+                                '?mes=' + mes + '&ano=' + ano + '&margem=2');
     _cacheMes.set(k, resp);
     return resp;
   }
@@ -137,7 +139,7 @@
     if (!posto) return null;
     const meses = new Map();
     if (_modo === 'mes') {
-      // UMA chamada: o ?margem=1 do proprio mes ja cobre as duas bordas.
+      // UMA chamada: o ?margem=2 do proprio mes ja cobre as duas bordas.
       // Percorrer o intervalo aqui carregaria 3 meses e desfaria o ganho.
       meses.set(chaveMes(_ancora), { ano: _ancora.getFullYear(), mes: _ancora.getMonth() + 1 });
     } else {
@@ -160,6 +162,17 @@
       if (porData.has(k) && dia.fora_do_mes) return;
       porData.set(k, dia);
     }));
+    // A ANCORA entra no mesmo mapa: previsaoDe/diferencaDe procuram o ontem
+    // por data, entao basta ela estar la para a primeira linha fechar a conta.
+    // NUNCA sobrescreve: a ancora so tem `medicao`, e na semana que cruza a
+    // virada a mesma data pode chegar como dia de verdade do outro mes, com
+    // venda e carga. Dia real sempre vence.
+    resps.forEach(r => {
+      if (!r.ancora || !r.ancora.data) return;
+      const p = String(r.ancora.data).split('/');
+      const k = p[2] + '-' + p[1] + '-' + p[0];
+      if (!porData.has(k)) porData.set(k, r.ancora);
+    });
     return {
       grupos: resps[0].grupos || [],
       combustiveisVenda: resps[0].combustiveisVenda || [],
@@ -171,7 +184,7 @@
   // O dia 1o do mes PASSA A TER previsao. Antes havia uma guarda `mesmoMes`
   // aqui, para nao divergir do desktop: nenhuma das telas tinha o mes
   // anterior em memoria, entao no dia 1 nao havia `ontem` e nenhuma
-  // projetava. Com o ?margem=1 as tres passam a ter a linha de tras, entao a
+  // projetava. Com o ?margem=2 as tres passam a ter a linha de tras, entao a
   // guarda saiu e a formula vale para todo dia que tenha o anterior
   // carregado. A formula em si nao mudou.
   function previsaoDe(d, dados, i) {
@@ -404,10 +417,15 @@
           body += '<td class="mm-cel-ed"><input class="mm-in" inputmode="decimal" value="' +
             (val == null ? '' : fmt(val)) + '" data-data="' + esc(k) + '" data-comb="' +
             esc(f.comb) + '" oninput="__mmDirty(this)" onfocus="this.select()"></td>';
-        } else if (_aba === 'diferenca' && fora) {
-          // Celula VAZIA nas linhas de borda: a diferenca vem do dia anterior, e
-          // o anterior ao 31/07 nao e carregado. Travessao aqui leria como 'dia
-          // sem valor', que e outra coisa.
+        } else if (_aba === 'diferenca' && fora && !temValor(val)) {
+          // Celula VAZIA na borda SO quando a conta nao fecha — e ai o travessao
+          // mentiria, porque leria como 'dia sem valor' e o caso e 'nao se
+          // aplica'. Nao fecha em dois casos:
+          //  · borda da FRENTE: a medicao do proprio dia ainda nao existe;
+          //  · borda de TRAS sem ancora (?margem=1 ou API antiga), onde falta o
+          //    dia anterior.
+          // Com ?margem=2 a de tras passa a calcular e cai no ramo normal: era
+          // o 31/08 vazio a setembro inteiro na aba DIF.
           body += '<td class="mm-na"></td>';
         } else if (_aba === 'diferenca') {
           const cls = val == null ? 'mm-vazio' : (val > 0 ? 'mm-dif-pos' : (val < 0 ? 'mm-dif-neg' : 'mm-dif-zero'));
