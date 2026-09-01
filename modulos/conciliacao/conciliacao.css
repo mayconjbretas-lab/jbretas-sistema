@@ -291,3 +291,27 @@
    é (0,1,1) e venceria `.cc-falta` (0,1,0), deixando o aviso sem cor. */
 .cc-tabela td .cc-falta,
 .cc-det-linha > b .cc-falta { color: var(--warning); }
+
+/* ── Excluir coleta (só TI e ADM) ────────────────────────────────
+   Fica no rodapé do detalhe, depois do visto: é a última coisa da tela,
+   não uma das primeiras. Discreto no estado normal — vermelho só depois
+   que a confirmação abre, quando é de fato o que vai acontecer. */
+.cc-excluir {
+  display: flex; align-items: center; gap: .7rem; flex-wrap: wrap;
+  margin-top: .7rem; padding-top: .7rem; border-top: 1px solid var(--border);
+}
+.cc-excluir > span { font-size: .7rem; color: var(--text3); }
+.cc-btn-del { color: var(--danger); border-color: rgba(255,77,109,.35); }
+.cc-btn-del:hover { border-color: var(--danger); color: var(--danger); }
+
+/* Confirmação aberta: aí sim o bloco inteiro fica vermelho. */
+.cc-excluir-conf {
+  display: block; background: rgba(255,77,109,.08);
+  border: 1px solid rgba(255,77,109,.30); border-radius: var(--radius);
+  padding: .7rem; border-top: 1px solid rgba(255,77,109,.30);
+}
+.cc-del-txt { font-size: .8rem; color: var(--text); line-height: 1.5; }
+.cc-del-txt b { color: var(--danger); }
+.cc-del-txt span { font-size: .72rem; color: var(--text2); }
+.cc-del-btns { display: flex; gap: .5rem; justify-content: flex-end; margin-top: .6rem; }
+.cc-excluir-conf .cc-btn-del { background: var(--danger); color: #fff; border-color: var(--danger); }

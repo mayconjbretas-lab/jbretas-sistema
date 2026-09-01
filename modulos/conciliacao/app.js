@@ -29,6 +29,14 @@ let postosCache = [];
 // visivel, PENDENTE_FOTO vira estado permanente e ninguem cobra.
 const DIAS_ALERTA_FOTO = 2;
 
+// Excluir e de TI e ADM. A CONCILIACAO nao tem: ela confere, nao apaga
+// — quem audita nao deve poder sumir com o que audita. Isto aqui e so
+// para o botao nao aparecer; quem recusa de verdade e a rota, que
+// devolve 403 para qualquer outro perfil.
+function podeExcluir() {
+  return !!usuarioAtual && (usuarioAtual.ti === true || usuarioAtual.perfil === 'ADM');
+}
+
 // ── Tema ────────────────────────────────────────────────────────
 // Cada modulo tem a sua copia destas duas (nao estao no shared). Mesmo
 // corpo do painel-ti, de proposito: divergir aqui faria o sol/lua desta
@@ -366,8 +374,15 @@ function renderDetalhe(c) {
     (c.status === 'PENDENTE_FOTO'
       ? '<div class="cc-aviso cc-aviso-atencao">Coleta sem as duas fotos. O supervisor completa pela tela dele.</div>'
       : '') +
-    '<div class="cc-conf" id="det-conf"></div>';
+    '<div class="cc-conf" id="det-conf"></div>' +
+    (podeExcluir()
+      ? '<div class="cc-excluir"><button class="cc-btn cc-btn-del" id="btn-excluir" type="button">' +
+        'Excluir esta coleta</button>' +
+        '<span>Apaga as leituras e as fotos. Não dá para desfazer.</span></div>'
+      : '');
   renderConferido(c);
+  const bd = document.getElementById('btn-excluir');
+  if (bd) bd.onclick = () => confirmarExclusao(c);
 }
 
 // ── Visto de conferido ──────────────────────────────────────────
@@ -521,6 +536,58 @@ async function salvarEquipamento() {
 window.toggleTheme    = toggleTheme;
 window.carregarLista  = carregarLista;
 window.abrirDetalhe   = abrirDetalhe;
+
+// ── Excluir coleta ──────────────────────────────────────────────
+// DUAS etapas de propósito. A confirmação não é um `confirm()` genérico:
+// ela repete POSTO e DATA, que é o que distingue a coleta que se quer
+// apagar da de baixo na lista. "Tem certeza?" sozinho não protege de
+// clicar na linha errada — a pessoa confirma o que não leu.
+function confirmarExclusao(c) {
+  const box = document.getElementById('det-conf').parentNode.querySelector('.cc-excluir');
+  if (!box) return;
+  box.className = 'cc-excluir cc-excluir-conf';
+  box.innerHTML =
+    '<div class="cc-del-txt">Excluir a coleta de <b>' + escapeHtml(c.posto || '—') +
+      '</b> em <b>' + fmtData(c.data) + '</b>?<br>' +
+      '<span>' + ((c.itens || []).length) + ' leitura(s)' +
+      ((c.foto_encerrante || c.foto_protocolo) ? ' e as fotos do Storage' : '') +
+      '. Não dá para desfazer.</span></div>' +
+    '<div class="cc-del-btns">' +
+      '<button class="cc-btn" id="del-nao" type="button">Cancelar</button>' +
+      '<button class="cc-btn cc-btn-del" id="del-sim" type="button">Excluir</button>' +
+    '</div>';
+  document.getElementById('del-nao').onclick = () => renderDetalhe(c);
+  document.getElementById('del-sim').onclick = () => excluirColeta(c);
+}
+
+async function excluirColeta(c) {
+  const btn = document.getElementById('del-sim');
+  if (btn) { btn.disabled = true; btn.textContent = 'Excluindo…'; }
+  try {
+    const r = await apiFetch('/calibrador/coleta/' + encodeURIComponent(c.id), { method: 'DELETE' });
+    fecharModal('md-detalhe');
+    // A LISTA RECARREGA PRIMEIRO. renderLista esconde o #cc-aviso quando
+    // nao ha truncamento, entao escrever o alerta antes do reload o
+    // apagaria — o aviso de arquivo orfao sumindo em silencio e
+    // exatamente o que ele existe para evitar.
+    await carregarLista();
+    // Arquivo que sobrou no bucket NÃO some da tela em silêncio — foi
+    // assim que a coleta de preços acumulou 1.722 órfãos sem ninguém ver.
+    if (r.fotos_orfas && r.fotos_orfas.length) {
+      const av = document.getElementById('cc-aviso');
+      av.style.display = '';
+      av.className = 'cc-aviso cc-aviso-erro';
+      av.textContent = 'Coleta excluída, mas ' + r.fotos_orfas.length +
+        ' foto(s) ficaram no Storage sem dono: ' + r.fotos_orfas.join(', ') +
+        ' — peça ao TI para remover à mão.';
+    } else {
+      toast('Coleta excluída' + (r.fotos_removidas ? ' (com ' + r.fotos_removidas + ' foto(s))' : '') + '.');
+    }
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Excluir'; }
+    toast('Não consegui excluir: ' + e.message);
+  }
+}
 
 // ════════════════════════════════════════════════════════════════
 // IMPORTAÇÃO DO HISTÓRICO (colar da planilha)
@@ -830,3 +897,6 @@ window.abrirModalImport = abrirModalImport;
 window.conferirImport   = conferirImport;
 window.gravarImport     = gravarImport;
 window.parsearColagem   = parsearColagem;
+
+window.excluirColeta = excluirColeta;
+window.podeExcluir = podeExcluir;
