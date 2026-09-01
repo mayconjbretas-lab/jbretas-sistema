@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>JBRETAS — Conciliação</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" sizes="48x48" href="/shared/jbretas-favicon-48.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/shared/icon-192.png">
+<meta name="theme-color" content="#0a0d1c">
+<link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
+<link rel="stylesheet" href="../../shared/css/base.css?v=202609011420">
+<link rel="stylesheet" href="conciliacao.css?v=202609011420">
+<script>
+  (function(){
+    var t = localStorage.getItem('jb_theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+</head>
+<body>
+
+<div id="screen-app">
+
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <img src="/shared/jbretas-logo.png" alt="JBretas" style="height:34px;display:block">
+      <div>
+        <div class="topbar-brand">JBRETAS</div>
+        <div style="font-size:.62rem;color:var(--text3);letter-spacing:.2em;text-transform:uppercase;font-family:var(--mono);margin-top:2px">// Conciliação</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-user">
+        <div class="avatar" id="app-avatar">--</div>
+        <div class="topbar-info">
+          <div class="topbar-name" id="app-nome">—</div>
+          <div class="topbar-posto" id="app-sub">Conciliação</div>
+        </div>
+      </div>
+      <button class="menu-dots" id="theme-btn" onclick="toggleTheme()" title="Alternar tema">🌙</button>
+      <button class="menu-dots" onclick="location.reload()" title="Atualizar">🔄</button>
+      <button class="btn-logout" onclick="jbretasLogout()">SAIR</button>
+    </div>
+  </div>
+
+  <div class="app-main">
+
+    <!-- Hoje só o Calibrador. As abas nascem aqui para a tela receber as
+         próximas conferências sem virar outra página. -->
+    <div class="cc-tabs">
+      <button class="cc-tab active" type="button">🔧 Calibrador</button>
+    </div>
+
+    <!-- ══════════ FILTROS ══════════ -->
+    <div class="cc-filtros">
+      <label class="cc-f">
+        <span>Posto</span>
+        <select class="cc-sel" id="f-posto"><option value="">Todos</option></select>
+      </label>
+      <label class="cc-f">
+        <span>De</span>
+        <input class="cc-in" id="f-de" type="date">
+      </label>
+      <label class="cc-f">
+        <span>Até</span>
+        <input class="cc-in" id="f-ate" type="date">
+      </label>
+      <label class="cc-f">
+        <span>Destino</span>
+        <select class="cc-sel" id="f-destino">
+          <option value="">Todos</option>
+          <option value="EDUARDO">EDUARDO</option>
+          <option value="DEPOSITO">DEPOSITO</option>
+        </select>
+      </label>
+      <label class="cc-f">
+        <span>Status</span>
+        <select class="cc-sel" id="f-status">
+          <option value="">Todos</option>
+          <option value="PENDENTE_FOTO">Pendente de foto</option>
+          <option value="OK">OK</option>
+        </select>
+      </label>
+      <div class="cc-f-acoes">
+        <button class="cc-btn" id="btn-limpar" type="button">Limpar</button>
+        <button class="cc-btn cc-btn-eq" id="btn-novo-eq" type="button">+ Equipamento</button>
+      </div>
+    </div>
+
+    <div class="cc-resumo" id="cc-resumo"></div>
+    <div class="cc-aviso" id="cc-aviso" style="display:none"></div>
+
+    <!-- ══════════ LISTA ══════════ -->
+    <div class="cc-tabela-wrap">
+      <table class="cc-tabela">
+        <thead>
+          <tr>
+            <th>Data</th><th>Posto</th><th>Destino</th>
+            <th class="num">Esperado</th><th class="num">Recolhido</th><th class="num">Diferença</th>
+            <th>Status</th><th>Lançou</th>
+          </tr>
+        </thead>
+        <tbody id="cc-tbody">
+          <tr><td colspan="8" class="cc-msg">Carregando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ DETALHE ══════════ -->
+<div class="modal-overlay" id="md-detalhe">
+  <div class="modal-card cc-card-detalhe">
+    <div class="modal-title" id="det-titulo">Coleta</div>
+    <div class="modal-sub" id="det-sub">—</div>
+    <div id="det-corpo"></div>
+    <button class="btn-modal-cancel" id="det-fechar" type="button">Fechar</button>
+  </div>
+</div>
+
+<!-- ══════════ NOVO EQUIPAMENTO ══════════ -->
+<div class="modal-overlay" id="md-equip">
+  <div class="modal-card">
+    <div class="modal-title">Novo equipamento</div>
+    <div class="modal-sub">Entra no lançamento do supervisor a partir da próxima coleta.</div>
+
+    <div class="field-group">
+      <label class="field-label">Posto</label>
+      <select class="field-select" id="eq-posto"></select>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Nome</label>
+      <input class="field-input" id="eq-nome" type="text" placeholder="CALIBRADOR, BANHEIRO…" autocomplete="off">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Valor por uso (R$)</label>
+      <input class="field-input" id="eq-valor" type="text" inputmode="decimal" value="1,00">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Destino</label>
+      <select class="field-select" id="eq-destino">
+        <option value="EDUARDO">EDUARDO</option>
+        <option value="DEPOSITO">DEPOSITO</option>
+      </select>
+    </div>
+
+    <div class="modal-msg" id="eq-msg"></div>
+    <button class="btn-modal-send" id="eq-salvar" type="button">Cadastrar</button>
+    <button class="btn-modal-cancel" id="eq-cancelar" type="button">Cancelar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <div class="toast-title">Conciliação</div>
+  <div id="toast-msg"></div>
+</div>
+
+<script src="../../shared/js/config.js?v=202609011420"></script>
+<script src="../../shared/js/api.js?v=202609011420"></script>
+<script src="../../shared/js/auth.js?v=202609011420"></script>
+<script src="app.js?v=202609011420"></script>
+</body>
+</html>

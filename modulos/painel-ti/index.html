@@ -13,8 +13,8 @@
 <link rel="apple-touch-icon" href="/shared/icon-192.png">
 <meta name="theme-color" content="#0a0d1c">
 <link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
-<link rel="stylesheet" href="../../shared/css/base.css?v=202609011212">
-<link rel="stylesheet" href="painel-ti.css?v=202609011212">
+<link rel="stylesheet" href="../../shared/css/base.css?v=202609011420">
+<link rel="stylesheet" href="painel-ti.css?v=202609011420">
 <script>
   (function(){
     var t = localStorage.getItem('jb_theme') || 'dark';
@@ -79,6 +79,11 @@
             <button class="ti-chip" data-modalidade="SUPERVISOR" type="button">SUPERVISOR</button>
             <button class="ti-chip" data-modalidade="ADM" type="button">ADM</button>
             <button class="ti-chip" data-modalidade="LOGISTICA" type="button">LOGÍSTICA</button>
+            <!-- Filtro do "Acessar como". Não precisa cobrir todo perfil —
+                 "Todos" sempre mostra —, mas sem o chip é preciso caçar o
+                 usuário na busca. CONCILIACAO entra porque é o perfil novo,
+                 e é dele que se vai precisar entrar para conferir a tela. -->
+            <button class="ti-chip" data-modalidade="CONCILIACAO" type="button">CONCILIAÇÃO</button>
           </div>
           <input class="ti-busca" id="ti-busca" type="text" autocomplete="off"
                  placeholder="Buscar por nome ou posto...">
@@ -221,12 +226,19 @@
     </div>
     <div class="field-group">
       <label class="field-label">Perfil</label>
+      <!-- ESPELHA o PERFIS_VALIDOS do server.js. O backend recusa com 400
+           qualquer perfil fora daquela lista, então uma opção a mais aqui
+           não criaria nada; uma a menos torna o perfil impossível de criar
+           pela tela. Era o caso do CAIXAS (válido no backend, 5 usuários no
+           banco, sem opção aqui) e do CONCILIACAO. -->
       <select class="field-select" id="f-perfil">
         <option value="GERENTE">GERENTE</option>
         <option value="SUPERVISOR">SUPERVISOR</option>
         <option value="ADM">ADM</option>
         <option value="LOGISTICA">LOGÍSTICA</option>
+        <option value="CAIXAS">CAIXAS</option>
         <option value="MOTORISTA">MOTORISTA</option>
+        <option value="CONCILIACAO">CONCILIAÇÃO</option>
       </select>
     </div>
     <div class="field-group" id="f-grp-posto">
@@ -249,9 +261,9 @@
   <div id="toast-msg"></div>
 </div>
 
-<script src="../../shared/js/config.js?v=202609011212"></script>
-<script src="../../shared/js/api.js?v=202609011212"></script>
-<script src="../../shared/js/auth.js?v=202609011212"></script>
-<script src="app.js?v=202609011212"></script>
+<script src="../../shared/js/config.js?v=202609011420"></script>
+<script src="../../shared/js/api.js?v=202609011420"></script>
+<script src="../../shared/js/auth.js?v=202609011420"></script>
+<script src="app.js?v=202609011420"></script>
 </body>
 </html>
