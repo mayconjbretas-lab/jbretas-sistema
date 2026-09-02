@@ -34,8 +34,18 @@
   let _consFim     = null;
   let _consDados   = null;            // resposta do GET /relatorios?inicio&fim
   // Venda de Produtos passou a ser por PERÍODO (antes vinha do fetch diário) e
-  // usa a MESMA janela do card de Mix: um controle de período serve os dois
-  // rankings, e os números ficam comparáveis entre eles.
+  // divide a janela com o card de Mix: UMA janela, _mixInicio/_mixFim, e os
+  // dois cards sempre mostram o mesmo intervalo.
+  //
+  // OS DOIS CARDS TÊM OS INPUTS, e mexer em qualquer um move os dois. Até
+  // 02/09/2026 só o Mix tinha os inputs, e por isso Produtos ficava preso no
+  // ciclo inteiro (21→20) acumulado, sem como filtrar. Os inputs de Produtos
+  // resolvem isso; a janela continuar COMPARTILHADA é escolha do usuário —
+  // na prática ele olha os dois no mesmo período, e os números ficam
+  // comparáveis entre os rankings.
+  // SE UM DIA PRECISAR COMPARAR JANELAS DIFERENTES: dar a Produtos
+  // _prodInicio/_prodFim próprios e uma chave "usuário mexeu aqui", para que o
+  // Mix pare de mandar na janela dele depois disso. É a única parte que muda.
   let _prodDados   = null;            // resposta do GET /relatorios/produtos-periodo
 
   // Fetch em voo, por card. Existe para o Copiar p/ WhatsApp NÃO mandar o
@@ -193,15 +203,17 @@
       _mixCarregando = false;
     }
     renderVista();
-    // Produtos usa a janela do Mix. Vai DEPOIS de propósito: sem inicio/fim o
+    // Produtos usa a MESMA janela. Vai DEPOIS de propósito: sem inicio/fim o
     // backend resolve o ciclo corrente (21→20) e só aqui sabemos qual foi —
     // assim a conta do ciclo não é repetida no front.
+    // É AQUI QUE OS DOIS CARDS FICAM JUNTOS: os inputs de Produtos chamam
+    // carregarMix, não carregarProdutos, justamente para passar por esta linha.
     carregarProdutos(_mixInicio, _mixFim);
   }
 
   // ── Carrega Venda de Produtos por PERÍODO ────────────────────────
   // GET /relatorios/produtos-periodo — soma LUBRIFICANTE + PRODUTO do rollup
-  // da TecnoX. Mesma janela do card de Mix.
+  // da TecnoX. Mesma janela do card de Mix (_mixInicio/_mixFim).
   async function carregarProdutos(inicio, fim) {
     const qs = (inicio && fim)
       ? '?inicio=' + encodeURIComponent(inicio) + '&fim=' + encodeURIComponent(fim)
@@ -286,6 +298,7 @@
       renderConsolidado() +
       '<div class="rel-grid2">' + renderMixCard() + renderProdutos() + '</div>';
     bindMixInputs();
+    bindProdInputs();
   }
 
   // (Re)liga os handlers dos dois date inputs do card de Mix — o innerHTML
@@ -302,16 +315,27 @@
     if (fim) fim.onchange = disparar;
   }
 
-  // Card com cabeçalho (título + subtítulo opcional + botão copiar).
-  function cardCabecalho(titulo, sub, tipo, inner) {
-    return '<div class="card" id="rel-card-' + tipo + '">' +
-      '<div class="chdr" style="display:flex;justify-content:space-between;align-items:center;gap:.6rem">' +
-        '<div><div class="ctitle">' + titulo + '</div>' + (sub ? '<div class="csub">' + sub + '</div>' : '') + '</div>' +
-        '<button class="rel-copy" onclick="__relCopiar(\'' + tipo + '\', this)">📋 Copiar p/ WhatsApp</button>' +
-      '</div>' +
-      '<div class="cbody" style="overflow-x:auto">' + inner + '</div>' +
-    '</div>';
+  // Idem para o card de Venda de Produtos — e chama carregarMix, NÃO
+  // carregarProdutos: a janela é compartilhada, então mexer aqui move os dois
+  // cards. Chamar carregarProdutos direto recarregaria só este e as duas datas
+  // sairiam do lugar, com cada card mostrando um intervalo diferente do que o
+  // outro exibe no cabeçalho.
+  function bindProdInputs() {
+    const ini = document.getElementById('rel-prod-ini');
+    const fim = document.getElementById('rel-prod-fim');
+    const disparar = () => {
+      const i = document.getElementById('rel-prod-ini');
+      const f = document.getElementById('rel-prod-fim');
+      if (i && f && i.value && f.value) carregarMix(i.value, f.value);
+    };
+    if (ini) ini.onchange = disparar;
+    if (fim) fim.onchange = disparar;
   }
+
+  // cardCabecalho() foi removida em 02/09/2026. Venda de Produtos era a última
+  // a usá-la; ao ganhar janela própria, os três cards passaram a montar o
+  // cabeçalho por conta (o de inputs + Copiar não cabe no formato genérico).
+  // Se voltar a existir um card sem controle de período, ela volta do git.
 
   function renderConsolidado() {
     const modo = _consModo;
@@ -459,35 +483,71 @@
     '</div>';
   }
 
-  // Ranking de venda de produtos no PERÍODO do card de Mix (mesma janela).
+  // Ranking de venda de produtos no PERÍODO. Janela própria (dois date inputs),
+  // igual ao card de Mix — markup próprio em vez de cardCabecalho() para caber
+  // os inputs no cabeçalho ao lado do Copiar.
   // LUBRIFICANTE e PRODUTO somam num número só — o split vai no title da linha,
   // que informa sem partir a tela em duas listas.
+  //
+  // O "Nd" de cada posto é p.dias, que o backend conta como dias DISTINTOS com
+  // linha em tecnox_venda_produto_dia DENTRO da janela pedida — então ele
+  // acompanha o filtro sozinho, sem nada a mudar aqui. Filtrando um dia ele
+  // vira "1d". Antes marcava 12d porque a janela era o ciclo inteiro.
   function renderProdutos() {
     const d = _prodDados;
     const SUB = 'sem combustível, R$';
-    if (!d) return cardCabecalho('🛢️ Venda de Produtos', SUB, 'produtos', '<div class="empty">Carregando…</div>');
-    if (d._erro) {
-      return cardCabecalho('🛢️ Venda de Produtos', SUB, 'produtos',
-        '<div class="empty" style="color:var(--dg)">Erro ao carregar: ' + d._erro + '</div>');
+    // Os inputs aparecem SEMPRE, inclusive em Carregando… e em erro: se só
+    // aparecessem no caminho felizardo, um período que devolvesse erro deixaria
+    // o card sem como voltar atrás.
+    // Valem de _mixInicio/_mixFim, a janela COMPARTILHADA — não do payload
+    // deste card. É o que garante que os dois cabeçalhos nunca mostrem datas
+    // diferentes, mesmo que um dos dois fetches falhe.
+    const iniVal = _mixInicio || (d && d.inicio) || '';
+    const fimVal = _mixFim    || (d && d.fim)    || '';
+    let sub, inner;
+    if (!d) {
+      sub   = SUB;
+      inner = '<div class="empty">Carregando…</div>';
+    } else if (d._erro) {
+      sub   = SUB;
+      inner = '<div class="empty" style="color:var(--dg)">Erro ao carregar: ' + d._erro + '</div>';
+    } else {
+      const tot  = d.total || {};
+      const rank = (d.postos || []).filter(p => p.produtos_rs != null);   // backend já ordena
+      // Denominador da rede: o card mostrava 29 postos sem dizer que a rede tem 37.
+      const naRede = tot.postos_na_rede || rank.length;
+      // Diz "ciclo" igual ao card de Mix, mesmo quando a janela filtrada não é
+      // um ciclo. É impreciso nos dois cards e de propósito: a janela é a
+      // MESMA, então os dois cabeçalhos têm que usar a mesma palavra. Trocar
+      // para "período" só aqui deixaria dois rótulos diferentes para o mesmo
+      // intervalo, que é pior que a imprecisão. Se for corrigir, corrija nos
+      // dois — é uma linha em cada.
+      sub = 'ciclo ' + brDataCurta(d.inicio) + ' a ' + brDataCurta(d.fim) +
+        ' · ' + rank.length + ' de ' + naRede + ' postos · ' + SUB;
+      inner = rank.length
+        ? '<ul class="rel-rank">' + rank.map((p, i) => {
+            const t = (p.lubrificante_rs != null && p.produto_rs != null)
+              ? ' title="lubrificante ' + fmtRS(p.lubrificante_rs) + ' + produto ' + fmtRS(p.produto_rs) + '"'
+              : '';
+            return '<li' + t + '><span class="rk-pos">' + (i + 1) + '.</span>' +
+              '<span class="rk-nome">' + nomeExib(p.nome) + '</span>' +
+              '<span class="rk-dias">' + p.dias + 'd</span>' +
+              '<span class="rk-val">' + fmtRS(p.produtos_rs) + '</span></li>';
+          }).join('') + '</ul>'
+        : '<div class="empty">Sem venda de produtos neste período.</div>';
     }
-    const tot  = d.total || {};
-    const rank = (d.postos || []).filter(p => p.produtos_rs != null);   // backend já ordena
-    // Denominador da rede: o card mostrava 29 postos sem dizer que a rede tem 37.
-    const naRede = tot.postos_na_rede || rank.length;
-    const sub = 'ciclo ' + brDataCurta(d.inicio) + ' a ' + brDataCurta(d.fim) +
-      ' · ' + rank.length + ' de ' + naRede + ' postos · ' + SUB;
-    const inner = rank.length
-      ? '<ul class="rel-rank">' + rank.map((p, i) => {
-          const t = (p.lubrificante_rs != null && p.produto_rs != null)
-            ? ' title="lubrificante ' + fmtRS(p.lubrificante_rs) + ' + produto ' + fmtRS(p.produto_rs) + '"'
-            : '';
-          return '<li' + t + '><span class="rk-pos">' + (i + 1) + '.</span>' +
-            '<span class="rk-nome">' + nomeExib(p.nome) + '</span>' +
-            '<span class="rk-dias">' + p.dias + 'd</span>' +
-            '<span class="rk-val">' + fmtRS(p.produtos_rs) + '</span></li>';
-        }).join('') + '</ul>'
-      : '<div class="empty">Sem venda de produtos neste período.</div>';
-    return cardCabecalho('🛢️ Venda de Produtos', sub, 'produtos', inner);
+    return '<div class="card" id="rel-card-produtos">' +
+      '<div class="chdr" style="display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem;flex-wrap:wrap">' +
+        '<div><div class="ctitle">🛢️ Venda de Produtos</div><div class="csub">' + sub + '</div></div>' +
+        '<div class="rel-mixwin">' +
+          '<input type="date" class="rel-date" id="rel-prod-ini" value="' + iniVal + '">' +
+          '<span class="rel-sep">→</span>' +
+          '<input type="date" class="rel-date" id="rel-prod-fim" value="' + fimVal + '">' +
+          '<button class="rel-copy" onclick="__relCopiar(\'produtos\', this)">📋 Copiar p/ WhatsApp</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cbody" style="overflow-x:auto">' + inner + '</div>' +
+    '</div>';
   }
 
   // ── Textos do WhatsApp (formatos fixos) ──────────────────────────
