@@ -61,9 +61,23 @@ html, body { height: 100%; overflow: hidden; }
   font-size: 1rem; text-align: center; padding: 3rem;
 }
 
-/* ===== Barra de navegação (rodapé, 6 abas) ===== */
+/* ===== Barra de navegação (rodapé, 9 abas) =====
+   flex-wrap: wrap é NECESSÁRIO, não estético. Os botões têm min-width: 84px e
+   os 9 somam 863px de largura natural. Sem wrap, com justify-content: center,
+   o excesso era cortado NAS DUAS PONTAS e sem scroll nenhum — medido em 375px:
+   207px de conteúdo fora da tela, com "Comparação", "Coleta", "Custo" e "Mais+"
+   inalcançáveis. Com wrap a barra quebra em linhas e os 9 continuam clicáveis.
+
+   MEDIDO (largura -> linhas / altura da barra):
+     >= 870px  -> 1 linha,  64px    (1280 e 900 caem aqui)
+     600-860   -> 2 linhas, 119px
+     <= 430    -> 3 linhas, 174px
+   O limiar de uma linha é 870px, não 820: com wrap os botões NÃO encolhem
+   (flex-shrink só age dentro de uma linha), então cada um fica na largura
+   natural em vez de ser espremido até o min-width. Abaixo de 870 a barra fica
+   mais alta e tira altura da .pa-main — é o preço de não perder botão. */
 .bnav {
-  flex-shrink: 0; display: flex; justify-content: center; gap: .25rem;
+  flex-shrink: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: .25rem;
   background: var(--surface); border-top: 1px solid var(--border);
   padding: .4rem 1rem;
 }
