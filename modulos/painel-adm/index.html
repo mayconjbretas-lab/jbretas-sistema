@@ -171,6 +171,7 @@
     <section class="scr" id="s-mapa"><div class="em-construcao">🗺️ Mapa — em construção</div></section>
     <section class="scr" id="s-hist"><div class="em-construcao">📈 Histórico — em construção</div></section>
     <section class="scr" id="s-relat"></section>
+    <section class="scr" id="s-dre"></section>
     <section class="scr" id="s-custo"></section>
     <section class="scr" id="s-forn"></section>
     <section class="scr" id="s-compra"></section>
@@ -186,6 +187,7 @@
     <button class="nbtn" onclick="setTab(this,'mapa')">          <span class="ni">🗺️</span><span class="nl">Mapa</span></button>
     <button class="nbtn" onclick="setTab(this,'hist')">          <span class="ni">📈</span><span class="nl">Histórico</span></button>
     <button class="nbtn" onclick="setTab(this,'relat')">         <span class="ni">📊</span><span class="nl">Relatórios</span></button>
+    <button class="nbtn" onclick="setTab(this,'dre')">           <span class="ni">🧾</span><span class="nl">DRE</span></button>
     <button class="nbtn" onclick="setTab(this,'custo')">         <span class="ni">💰</span><span class="nl">Custo</span></button>
     <button class="nbtn" onclick="setTab(this,'mais')">          <span class="ni">➕</span><span class="nl">Mais+</span></button>
   </nav>
@@ -221,6 +223,8 @@
 <script src="medicao.js?v=202609011653"></script>
 <script src="../../shared/js/clipboard.js?v=202609011653"></script>
 <script src="relatorios.js?v=202609011653"></script>
+<!-- DRE — GET /dre (ADM ou LOGISTICA); expõe renderDre em window -->
+<script src="dre.js?v=202609011653"></script>
 <script src="solicitacoes-adm.js?v=202609011653"></script>
 <script src="../../shared/js/push-inscricao.js?v=202609011653"></script>
 <!-- Custo & Margem — mesmo JS da Logística (renderCustoMargem em window), sem fork; ADM = só leitura -->

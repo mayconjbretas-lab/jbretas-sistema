@@ -71,6 +71,8 @@ function setTab(btn, tab) {
   if (tab === 'medicao') renderMedicao(document.getElementById('s-medicao'));
   // Relatórios — consolidado/mix/produtos da rede (relatorios.js expõe renderRelatorios).
   if (tab === 'relat') renderRelatorios(document.getElementById('s-relat'));
+  // DRE — venda/custo/lucro por categoria, do .xls da TecnoX (dre.js expõe renderDre).
+  if (tab === 'dre') renderDre(document.getElementById('s-dre'));
   // Custo & Margem — mesmo JS da Logística; ADM entra em modo só-leitura (sem edição).
   if (tab === 'custo') renderCustoMargem(document.getElementById('s-custo'));
   // Mais+ — aba KPI (sugestão de pedido; kpi.js expõe renderKpi em window).
