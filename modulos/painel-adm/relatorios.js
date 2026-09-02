@@ -410,11 +410,17 @@
             '<td class="num">' + fmtRS(t.lubrificantes_rs) + '</td>' +
             '<td class="num">' + fmtPct(t.mix) + '</td>' +
           '</tr>';
+      // "Lubrif. + prod." nos DOIS modos, e igual ao card de Venda de Produtos:
+      // a coluna sempre somou os dois grupos do rollup (LUBRIFICANTE e
+      // PRODUTO), e "Lubrif." sozinho rotulava o número pela metade MENOR.
+      // Medido em 21/08–01/09: PRODUTO R$ 167.487,79 (56%) contra LUBRIFICANTE
+      // R$ 130.064,34 (44%). Dentro de PRODUTO entram gelo (13 descrições,
+      // R$ 20.329,30 — GELOSO/GELIX), água desmineralizada (R$ 3.631,00), ARLA,
+      // aditivo, fluido de radiador e galão de emergência. O nome tem que dizer
+      // isso: quem lia "Lubrif." e via R$ 3,5 mil num posto achava que era óleo.
       const head = ehPer
-        // "Produtos" e não "Lubrif.": a coluna sempre somou lubrificante +
-        // produto, e no rollup isso fica explícito (grupos LUBRIFICANTE e PRODUTO).
-        ? '<th>Posto</th><th class="num">Gasolina (L)</th><th class="num">Produtos (R$)</th><th class="num">Mix GA</th><th class="num">Nd</th>'
-        : '<th>Posto</th><th class="num">Combust. (L)</th><th class="num">Lubrif. (R$)</th><th class="num">Mix GA (dia)</th>';
+        ? '<th>Posto</th><th class="num">Gasolina (L)</th><th class="num">Lubrif. + prod. (R$)</th><th class="num">Mix GA</th><th class="num">Nd</th>'
+        : '<th>Posto</th><th class="num">Combust. (L)</th><th class="num">Lubrif. + prod. (R$)</th><th class="num">Mix GA (dia)</th>';
       inner = '<table class="rel-table"><thead><tr>' + head + '</tr></thead><tbody>' + linhas + total + '</tbody></table>';
     }
 
@@ -495,7 +501,9 @@
   // vira "1d". Antes marcava 12d porque a janela era o ciclo inteiro.
   function renderProdutos() {
     const d = _prodDados;
-    const SUB = 'sem combustível, R$';
+    // MESMA legenda da coluna do Consolidado, palavra por palavra. Era
+    // "sem combustível, R$": dizia o que o número NÃO é, e não o que ele é.
+    const SUB = 'Lubrif. + prod., R$';
     // Os inputs aparecem SEMPRE, inclusive em Carregando… e em erro: se só
     // aparecessem no caminho felizardo, um período que devolvesse erro deixaria
     // o card sem como voltar atrás.
@@ -571,7 +579,9 @@
       const t = d.totais || {};
       linhas.push(HR, '🏆 *TOTAL REDE*',
         '⛽ Gasolina: *' + fmtL(t.gasolina_litros) + ' L*',
-        '🛢️ Produtos: *' + fmtRS(t.produtos_rs) + '*');
+        // Mesmo rótulo da tela. Sem isto o texto colado no WhatsApp diria
+        // "Produtos" para um número que o card chama de "Lubrif. + prod.".
+        '🛢️ Lubrif. + prod.: *' + fmtRS(t.produtos_rs) + '*');
       return linhas.join('\n');
     }
     // Modo DIA (formato atual, inalterado).
@@ -586,7 +596,7 @@
     linhas.push(HR);
     linhas.push('🏆 *TOTAL REDE*');
     linhas.push('⛽ Combustível: *' + fmtL(t.litros) + ' L*');
-    linhas.push('🛢️ Produtos: *' + fmtRS(t.lubrificantes_rs) + '*');
+    linhas.push('🛢️ Lubrif. + prod.: *' + fmtRS(t.lubrificantes_rs) + '*');
     return linhas.join('\n');
   }
 
@@ -611,7 +621,7 @@
     if (!rank.length) return '';   // idem textoMix: nada a copiar, nada de cabeçalho solto
     const linhas = [
       '🟢 *VENDA DE PRODUTOS — ' + brDataCurta(d.inicio) + ' a ' + brDataCurta(d.fim) + '*',
-      '(sem combustível, R$)',
+      '(Lubrif. + prod., R$)',
     ];
     rank.forEach((p, i) => linhas.push((i + 1) + '. ' + nomeExib(p.nome) + ' — ' + fmtRS(p.produtos_rs) + ' (' + p.dias + 'd)'));
     const t = d.total || {};
