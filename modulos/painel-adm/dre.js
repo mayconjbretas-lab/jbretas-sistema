@@ -74,19 +74,14 @@
   // ── Sub-aba "Projeção" ──
   var _dadosPMes = null;     // GET /dre agrupar=dia, dia 1 do mês corrente até hoje
   var _dadosPAno = null;     // GET /dre agrupar=dia, 01/01 até hoje (agrupado por mês aqui)
-  // LITRAGEM por mês. Map 'YYYY-MM' -> litros, ou null quando a chamada
-  // daquele mês falhou (litro fica '—', o resto da aba não cai).
+  // A LITRAGEM VEM NA PRÓPRIA SÉRIE. A GET /dre devolve `litros` em cada
+  // linha e nos totais, nos três agrupamentos — só o que é medido em litro,
+  // separado da `quantidade` que mistura litro com unidade.
   //
-  // POR QUE UMA CHAMADA POR MÊS, e não sai do que já temos: o `agrupar=dia`
-  // soma `quantidade` de TODAS as categorias no dia, misturando LITRO de
-  // combustível com UNIDADE de produto — a soma não tem grandeza. Litro só sai
-  // de `agrupar=categoria`, que devolve `cat_nome`, e esse agrupamento não
-  // quebra por mês. Então é uma chamada por mês realizado (até 12 no fim do
-  // ano), em paralelo. Alternativa mais barata, se o volume incomodar: somar um
-  // campo `litros` na GET /dre (a rota já itera essas linhas, custaria zero
-  // leitura a mais) — aí estas chamadas somem. Não foi feito aqui para a aba
-  // não depender de um deploy da API.
-  var _litrosMes = null;     // Map 'YYYY-MM' -> número | null
+  // Antes esta aba pedia `agrupar=categoria` mês a mês só para somar litro:
+  // 9 a 12 requisições por tela aberta, para um dado que a rota já tinha em
+  // mãos. Agora são DUAS chamadas, as mesmas de sempre.
+  //
   // Métrica exibida no gráfico anual. O gráfico é UM só; isto troca o campo.
   var _metricaAno = 'lucro';
   var _postos      = null;   // lista do GET /postos (cache da sessão)
@@ -1054,48 +1049,17 @@
         return '?inicio=' + encodeURIComponent(ini) + '&fim=' + encodeURIComponent(hj) +
           pid + '&agrupar=dia';
       };
-      // LITRAGEM: uma chamada `agrupar=categoria` por mês do ano até o
-      // corrente. Ver o comentário de `_litrosMes` para o motivo.
-      // Cada uma tem `.catch` PRÓPRIO: mês que falhar vira litro desconhecido
-      // ('—'), e não derruba a aba nem os outros meses. `Promise.all` sobre
-      // promessas já protegidas nunca rejeita por causa delas.
       var anoP = hj.slice(0, 4);
-      var mesAtualN = Number(hj.slice(5, 7));
-      var zz = function (n) { return String(n).padStart(2, '0'); };
-      var pedidosLitros = [];
-      for (var mm = 1; mm <= mesAtualN; mm++) {
-        var chaveMes = anoP + '-' + zz(mm);
-        var ini = chaveMes + '-01';
-        // O último mês vai só até HOJE — pedir até o fim do mês corrente
-        // devolveria o mesmo (não há dado do futuro), mas o período pedido
-        // apareceria maior do que é em qualquer log.
-        var ult = chaveMes + '-' + zz(diasNoMes(ini));
-        var fimMes = (ult > hj) ? hj : ult;
-        pedidosLitros.push(
-          apiFetch('/dre?inicio=' + encodeURIComponent(ini) +
-                   '&fim=' + encodeURIComponent(fimMes) + pid + '&agrupar=categoria')
-            .then((function (k) { return function (r) {
-              return { mes: k, litros: somarLitros(r && r.linhas) };
-            }; })(chaveMes))
-            .catch((function (k) { return function (e) {
-              console.warn('DRE: litragem de ' + k + ' não carregou:', e && e.message);
-              return { mes: k, litros: null };
-            }; })(chaveMes))
-        );
-      }
       try {
         var rp = await Promise.all([
           apiFetch('/dre' + faixa(hj.slice(0, 7) + '-01')),   // dia 1 do mês corrente
           apiFetch('/dre' + faixa(anoP + '-01-01')),           // 01/01 do ano corrente
-          Promise.all(pedidosLitros),
         ]);
         _dadosPMes = rp[0];
         _dadosPAno = rp[1];
-        _litrosMes = new Map(rp[2].map(function (x) { return [x.mes, x.litros]; }));
       } catch (err) {
         _dadosPMes = null;
         _dadosPAno = null;
-        _litrosMes = null;
         _erro = err && err.message ? err.message : String(err);
       } finally {
         _carregando = false;
@@ -2252,19 +2216,14 @@
   }
 
   // ── LITRAGEM ─────────────────────────────────────────────────────
-  // Soma `quantidade` SÓ das categorias medidas em litro. Quem decide é o
-  // `unidadeDe` que já existe na tela — e é ele que evita o erro clássico
-  // aqui: "FILTRO DE COMBUSTIVEL" tem a palavra dentro do nome e é vendido por
-  // UNIDADE. `unidadeDe` compara com `indexOf(...) === 0` e normaliza acento,
-  // então FILTRO DE COMBUSTIVEL não entra. Reusar em vez de reescrever a regra
-  // é o que garante que litro signifique a mesma coisa nas quatro abas.
-  function somarLitros(linhas) {
-    if (!Array.isArray(linhas)) return null;
-    return linhas.reduce(function (t, l) {
-      if (unidadeDe(l.cat_nome) !== ' L') return t;
-      return t + (numOuNull(l.quantidade) || 0);
-    }, 0);
-  }
+  // A regra de "o que é litro" mora no SERVIDOR (o `ehLitro` da GET /dre), e
+  // é a mesma do `unidadeDe` daqui: começa com "COMBUSTIVE", sem acento, e
+  // "FILTRO DE COMBUSTIVEL" fica fora porque o teste é "começa com" e não
+  // "contém". Conferida contra as 30 categorias reais do banco, com zero
+  // divergência entre os dois lados.
+  //
+  // Aqui só se SOMA o que já vem separado — não se reclassifica nada. Se a
+  // regra tiver de mudar, muda num lugar: na rota.
 
   // NÚMERO OU NULL, estrito.
   //
@@ -2384,7 +2343,8 @@
       var a = por.get(mes);
       if (!a) {
         a = { mes: mes, dias: 0, venda_liquida: 0, custo_total: 0,
-              sc_linhas: 0, sc_venda: 0, margens: [], vendaDia: [] };
+              sc_linhas: 0, sc_venda: 0, margens: [], vendaDia: [],
+              litros: 0, litroAusente: false, litrosDia: [] };
         por.set(mes, a);
       }
       a.dias += 1;
@@ -2396,12 +2356,20 @@
       }
       if (temMargem(l)) a.margens.push(Number(l.margem_pct));
       a.vendaDia.push(Number(l.venda_liquida) || 0);
+      // AUSENTE não é ZERO. Um dia em que só se vendeu produto tem litros = 0
+      // de verdade; um dia cuja resposta NÃO TRAZ o campo é desconhecido — é o
+      // que acontece enquanto a API com `litros` não estiver no ar. O primeiro
+      // soma zero, o segundo apaga a litragem do mês inteiro para "—".
+      var lt = numOuNull(l.litros);
+      if (lt === null) a.litroAusente = true;
+      else { a.litros += lt; a.litrosDia.push(lt); }
     });
     return [...por.values()].sort(function (a, b) { return a.mes.localeCompare(b.mes); })
       .map(function (a) {
         a.lucro = a.venda_liquida - a.custo_total;
         a.margem_pct = a.venda_liquida !== 0 ? a.lucro / a.venda_liquida * 100 : null;
         a.custo_desconhecido = { linhas: a.sc_linhas, venda_liquida: a.sc_venda };
+        if (a.litroAusente) a.litros = null;
         return a;
       });
   }
@@ -2428,13 +2396,16 @@
     var faixa = (sd === null) ? null : venda * sd / 100;
     // LITRO segue a MESMA regra de projeção: média diária × dias do mês.
     //
-    // MAS SEM FAIXA, e o motivo é de DADO, não de escolha: a litragem vem de
-    // uma chamada `agrupar=categoria` do MÊS INTEIRO (ver `_litrosMes`), então
-    // não existe série DIÁRIA de litros para medir dispersão. Faixa exige
-    // variação dia a dia. Inventar uma a partir da dispersão da margem seria
-    // pior que não ter: margem não diz nada sobre volume. O card diz isso.
+    // A FAIXA DO LITRO passou a existir quando a GET /dre começou a devolver
+    // `litros` por LINHA: agora há série diária, e dispersão diária é
+    // exatamente o que uma faixa precisa. Antes a litragem vinha de uma
+    // chamada por mês inteiro, sem série, e o card dizia "sem faixa" — não por
+    // escolha, por falta de dado.
+    // A dispersão é a do PRÓPRIO litro, não a da margem: margem não diz nada
+    // sobre volume.
     var litrosReal = numOuNull(mesAtual.litros);
     var litros = (litrosReal === null) ? null : litrosReal / mesAtual.dias * D;
+    var sdL = desvioPadrao(mesAtual.litrosDia || []);
     // Faixa do FATURAMENTO: a dispersão da margem não serve aqui — usa a da
     // própria venda líquida diária, que existe na série.
     var sdV = desvioPadrao(mesAtual.vendaDia || []);
@@ -2444,7 +2415,7 @@
       margem_pct: venda !== 0 ? lucro / venda * 100 : null,
       faixa: faixa, sd_margem: sd,
       faixa_venda: (sdV === null) ? null : sdV * D,
-      faixa_litros: null,
+      faixa_litros: (sdL === null || litros === null) ? null : sdL * D,
     };
   }
 
@@ -2488,16 +2459,9 @@
     var mesNum = Number(hoje.slice(5, 7));          // 1..12
     var mesISO = hoje.slice(0, 7);
 
+    // A litragem já vem somada por `agruparPorMes`, da própria série diária.
     var mesesAno = agruparPorMes(_dadosPAno.linhas);
-    // LITRAGEM colada nos meses. Vem de chamadas próprias (ver `_litrosMes`);
-    // `undefined` no Map viraria NaN adiante, então normaliza para null.
-    mesesAno.forEach(function (m) {
-      m.litros = _litrosMes ? numOuNull(_litrosMes.get(m.mes)) : null;
-    });
     var doMes = agruparPorMes(_dadosPMes.linhas)[0] || null;
-    if (doMes) {
-      doMes.litros = _litrosMes ? numOuNull(_litrosMes.get(mesISO)) : null;
-    }
     var porMes = new Map(mesesAno.map(function (m) { return [m.mes, m]; }));
     var fechados = mesesAno.filter(function (m) { return m.mes < mesISO; });
     var proj = projetarMes(doMes, hoje);
@@ -2544,10 +2508,9 @@
       cardMetrica('Lucro bruto', proj ? proj.lucro : null, proj ? proj.faixa : null,
         fmtRS, doMes ? doMes.lucro : null,
         ' · margem ' + fmtPct(margemReal)) +
-      cardMetrica('Litros', proj ? proj.litros : null, null,
+      cardMetrica('Litros', proj ? proj.litros : null, proj ? proj.faixa_litros : null,
         fmtL, doMes ? doMes.litros : null, '',
-        'A litragem vem de uma chamada por MÊS, não por dia — sem série diária ' +
-        'não há dispersão para medir, então este número não tem faixa.') +
+        'A faixa é o desvio padrão da litragem diária projetado no mês.') +
       kpiVsMesAnterior(mesAnt, proj) +
     '</div>';
 
@@ -2629,35 +2592,45 @@
         piso: met.razao ? 1 : undefined,
         aria: met.rot + ' por mês em ' + ano + ', realizado e projetado',
       });
-      if (svgAno) {
-        var nReal = reais.length;
-        var nProj = slots.filter(function (f) { return f.tipo === 'proj'; }).length;
-        var nSem = slots.filter(function (f) { return f.tipo === 'vazio' || f.tipo === 'parcial'; }).length;
-        cardAno =
-          '<div class="card" style="margin-top:.9rem">' +
-            '<div class="chdr">' +
-              '<div class="ctitle">' + esc(met.rot) + ' por mês — ' + ano + '</div>' +
-              '<div class="csub">' + nReal + ' mês(es) realizado(s) · ' + nProj + ' projetado(s)' +
+      var nReal = reais.length;
+      var nProj = slots.filter(function (f) { return f.tipo === 'proj'; }).length;
+      var nSem = slots.filter(function (f) { return f.tipo === 'vazio' || f.tipo === 'parcial'; }).length;
+      // SELETOR DE MÉTRICA: o MESMO gráfico, outro campo. Não redesenha nada
+      // além do card — não há nova requisição.
+      var seletor = '<div class="dre-metricas">' + METRICAS.map(function (m) {
+        return '<button type="button" class="ftag' + (m.id === _metricaAno ? ' active' : '') +
+          '" onclick="__dreMetrica(\'' + m.id + '\')">' + esc(m.rot) + '</button>';
+      }).join('') + '</div>';
+      // O CARD SAI MESMO SEM BARRA NENHUMA, e é de propósito: quando a métrica
+      // escolhida não tem dado (litragem indisponível, por exemplo), esconder
+      // o card levava o SELETOR com ele — o usuário escolhia Litros, tudo
+      // desaparecia e não havia como voltar para Lucro. Sem barra, o lugar do
+      // desenho recebe o motivo, e os quatro botões continuam ali.
+      cardAno =
+        '<div class="card" style="margin-top:.9rem">' +
+          '<div class="chdr">' +
+            '<div class="ctitle">' + esc(met.rot) + ' por mês — ' + ano + '</div>' +
+            '<div class="csub">' + (svgAno
+              ? nReal + ' mês(es) realizado(s) · ' + nProj + ' projetado(s)' +
                 (nSem ? ' · ' + nSem + ' sem barra' : '') +
-                ' · passe o mouse ou toque numa barra</div>' +
-              // SELETOR DE MÉTRICA: o MESMO gráfico, outro campo. Não redesenha
-              // nada além do card — não há nova requisição.
-              '<div class="dre-metricas">' + METRICAS.map(function (m) {
-                return '<button type="button" class="ftag' + (m.id === _metricaAno ? ' active' : '') +
-                  '" onclick="__dreMetrica(\'' + m.id + '\')">' + esc(m.rot) + '</button>';
-              }).join('') + '</div>' +
-            '</div>' +
-            '<div class="cbody"><div class="dre-graf-wrap">' + svgAno +
-              '<div class="dre-legproj">' +
-                '<i><span class="dre-sw real"></span>realizado</i>' +
-                '<i><span class="dre-sw proj"></span>projetado' +
-                  (base3 ? ' (média de ' + base3.n + ' mês(es) fechado(s))' : '') + '</i>' +
-                '<i>| marca vertical = mês corrente</i>' +
-              '</div>' +
-              '<div class="dre-tip" style="display:none"></div>' +
-            '</div></div>' +
-          '</div>';
-      }
+                ' · passe o mouse ou toque numa barra'
+              : 'nenhum mês tem ' + met.rot.toLowerCase() + ' para desenhar') + '</div>' +
+            seletor +
+          '</div>' +
+          '<div class="cbody">' + (svgAno
+            ? '<div class="dre-graf-wrap">' + svgAno +
+                '<div class="dre-legproj">' +
+                  '<i><span class="dre-sw real"></span>realizado</i>' +
+                  '<i><span class="dre-sw proj"></span>projetado' +
+                    (base3 ? ' (média de ' + base3.n + ' mês(es) fechado(s))' : '') + '</i>' +
+                  '<i>| marca vertical = mês corrente</i>' +
+                '</div>' +
+                '<div class="dre-tip" style="display:none"></div>' +
+              '</div>'
+            : '<div class="empty">Sem ' + esc(met.rot.toLowerCase()) + ' para os meses deste ' +
+              'ano. Escolha outra métrica acima — os valores em dinheiro não são afetados.</div>') +
+          '</div>' +
+        '</div>';
     }
 
     // ── BLOCO 3: a tabela anual ──
@@ -2726,7 +2699,8 @@
 
     body.innerHTML = kpis + cardAno + cardTab + avisoProjecao(hoje, nDias, proj, base3, fechados);
 
-    if (cardAno) {
+    // So liga o balao quando ha SVG: o card pode existir sem desenho.
+    if (svgAno) {
       ligarTooltipGrafico(slots, {
         titulo: function (l) { return MESES_LONGO[l.mes - 1] + ' de ' + ano; },
         // O balão mostra as quatro medidas SEMPRE, seja qual for a métrica no
@@ -2805,10 +2779,11 @@
     itens.push('<b>Lucro aqui é BRUTO</b>: venda líquida − custo de compra. Não existe no banco ' +
       'despesa operacional, taxa de cartão nem frete, e esta tela não estima nenhum dos três.');
     if (proj && proj.faixa !== null) {
-      itens.push('A faixa <b>±</b> é o desvio padrão do que foi observado nos dias com dado ' +
-        '(margem para o lucro, venda líquida para o faturamento) projetado no mês. É dispersão ' +
-        'observada, <b>não</b> intervalo de confiança. Litros não tem faixa: a litragem vem por ' +
-        'mês, não por dia, então não há série diária para medir dispersão.');
+      itens.push('A faixa <b>±</b> é o desvio padrão do que foi observado nos dias com dado, ' +
+        'projetado no mês — cada métrica com a dispersão da SUA grandeza: margem para o ' +
+        'lucro, venda líquida para o faturamento, litragem para os litros. É dispersão ' +
+        'observada, <b>não</b> intervalo de confiança: ela supõe o desvio persistindo o mês ' +
+        'inteiro, que é o caso pessimista.');
     }
     var lacTotal = (_dadosPAno.totais && _dadosPAno.totais.custo_desconhecido) || null;
     if (lacTotal && lacTotal.linhas) {
@@ -2816,18 +2791,16 @@
         fmtRS(lacTotal.venda_liquida) + ' de venda líquida). A venda deles conta; o custo não, ' +
         'então o lucro acima é otimista nessa medida.');
     }
-    // Conta o mês CORRENTE também: se a litragem dele falhar, o total
-    // PROJETADO sai como "—" e o aviso tem de dizer por quê. Antes só olhava
-    // os fechados, e o usuário via um "—" sem explicação.
+    // Litragem ausente. Hoje o único motivo plausível é a API ainda não
+    // devolver o campo `litros` (deploy pendente) — e nesse caso falta em
+    // TODOS os meses de uma vez. Onde falta, sai "—" e os totais também, em
+    // vez de um número menor que a realidade.
     var semLitro = fechados.filter(function (m) { return numOuNull(m.litros) === null; }).length;
-    var mesSemLitro = (_litrosMes && numOuNull(_litrosMes.get(hoje.slice(0, 7))) === null);
-    if (semLitro || mesSemLitro) {
-      itens.push('<b>Litragem não carregada</b> em ' +
-        (semLitro ? semLitro + ' mês(es) fechado(s)' : '') +
-        (semLitro && mesSemLitro ? ' e ' : '') +
-        (mesSemLitro ? 'no mês corrente' : '') +
-        ' — onde falta, o litro aparece como "—" e os totais também, em vez de um ' +
-        'número menor que a realidade. Os valores em dinheiro não são afetados.');
+    if (semLitro) {
+      itens.push('<b>Litragem indisponível</b> em ' + semLitro + ' mês(es) — a rota não ' +
+        'devolveu o campo `litros` para eles. Onde falta, o litro sai como "—", e os ' +
+        'totais também, em vez de um número menor que a realidade. Os valores em ' +
+        'dinheiro não são afetados.');
     }
     return '<div class="dre-aviso-proj">' +
       '<b>Como estes números foram calculados</b>' +
