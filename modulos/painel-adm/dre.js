@@ -188,24 +188,45 @@
   var vazio = function (v) { return v === null || v === undefined || v === '' || Number.isNaN(Number(v)); };
   // Dinheiro: 2 casas.
   function fmtRS(v) { return vazio(v) ? '—' : 'R$ ' + nf(v, 2); }
-  // UNIDADE da quantidade. COMBUSTIVEIS vem em LITRO; todo o resto em UNIDADE.
+  // UNIDADE da quantidade. Duas famílias vêm em LITRO; o resto, em UNIDADE.
   // A coluna mistura as duas grandezas, então o sufixo é INFORMAÇÃO, não
   // enfeite: sem ele a quantidade de combustível (litros) e a de lubrificante
   // (unidades) ficam na mesma coluna como se fossem a mesma medida — e a de
   // combustível é ordens de magnitude maior, o que reforça a leitura errada.
   //
-  // O teste é `indexOf(...) === 0` (começa com), NÃO "contém": a categoria 12 é
-  // "FILTRO DE COMBUSTIVEL", que tem a palavra dentro e é vendida por UNIDADE.
-  // Um `includes` marcaria filtro de combustível como litro — o oposto do que
-  // se quer, e sem erro nenhum para denunciar.
-  //
   // normalize('NFD') + remoção de acento antes de comparar: o export pode vir
   // "COMBUSTÍVEIS" com acento, e aí a comparação crua falharia calada.
+  //
+  // MEDIDO sobre as 44.481 linhas da tabela (03/09/2026): contagem de itens é
+  // inteira, volume de bomba/bico quase nunca é. Cruzado com o preço unitário:
+  //
+  //   categoria                  %frac    R$/un   -> grandeza
+  //   COMBUSTIVEIS                100%     5,51      LITRO
+  //   LUBRIFICANTES A GRANEL       98%     3,32      LITRO
+  //   as outras 24 categorias        0%   15 a 108    unidade
+  //
+  // A separação é total: 98-100% contra ZERO por cento, sem caso ambíguo.
+  //
+  // OS DOIS TESTES SÃO DIFERENTES DE PROPÓSITO, cada um pelo seu motivo:
+  //
+  // "COMBUSTIVE" é COMEÇA COM, nunca contém: a categoria 12 é
+  // "FILTRO DE COMBUSTIVEL", que tem a palavra dentro do nome e é vendida por
+  // UNIDADE (0% fracionária, R$ 54,44). Um `includes` marcaria filtro de
+  // combustível como litro — o oposto do que se quer, e sem erro nenhum para
+  // denunciar, só uma litragem inflada.
+  //
+  // "GRANEL" é CONTÉM: a granel É venda por volume, é o que a palavra
+  // significa, e assim pega um "ARLA A GRANEL" que a TecnoX cadastre amanhã
+  // sem precisar mexer no código. "LUBRIFICANTES PESADOS" (tambor, R$ 97,39,
+  // 0% fracionária) não contém a palavra e fica de fora, corretamente.
+  //
+  // MESMA regra do `ehLitro` na GET /dre (jbretas-api/server.js). Ao mexer
+  // aqui, mexer lá — divergir faz litro significar duas coisas na mesma tela.
   function unidadeDe(catNome) {
     var n = String(catNome || '')
       .normalize('NFD').replace(/[̀-ͯ]/g, '')
       .trim().toUpperCase();
-    return n.indexOf('COMBUSTIVE') === 0 ? ' L' : ' un';
+    return (n.indexOf('COMBUSTIVE') === 0 || n.indexOf('GRANEL') >= 0) ? ' L' : ' un';
   }
   // Quantidade: 3 casas + unidade. `linha` ausente = sem sufixo (ver o tfoot).
   function fmtQtd(v, linha) {
@@ -2217,10 +2238,9 @@
 
   // ── LITRAGEM ─────────────────────────────────────────────────────
   // A regra de "o que é litro" mora no SERVIDOR (o `ehLitro` da GET /dre), e
-  // é a mesma do `unidadeDe` daqui: começa com "COMBUSTIVE", sem acento, e
-  // "FILTRO DE COMBUSTIVEL" fica fora porque o teste é "começa com" e não
-  // "contém". Conferida contra as 30 categorias reais do banco, com zero
-  // divergência entre os dois lados.
+  // é a mesma do `unidadeDe` daqui — ver lá a medição que a sustenta.
+  // Conferida contra as 26 categorias reais do banco, com zero divergência
+  // entre os dois lados.
   //
   // Aqui só se SOMA o que já vem separado — não se reclassifica nada. Se a
   // regra tiver de mudar, muda num lugar: na rota.
@@ -2770,9 +2790,10 @@
     itens.push('<b>Margem % não é somada nem tirada por média de margens</b>: venda e custo ' +
       'são projetados separados e só então divididos. Margem é razão — a média das margens ' +
       'mensais daria peso igual a um mês grande e a um mês pequeno.');
-    itens.push('<b>Litros</b> conta só a categoria COMBUSTIVEIS, que é medida em litro. ' +
-      'As outras categorias são vendidas por unidade e ficam FORA dessa soma — somar as ' +
-      'duas não produziria grandeza nenhuma. "FILTRO DE COMBUSTIVEL" é unidade e não entra.');
+    itens.push('<b>Litros</b> conta as categorias medidas em litro — COMBUSTIVEIS e as ' +
+      'vendidas a granel. As outras são vendidas por unidade e ficam FORA dessa soma: ' +
+      'somar as duas não produziria grandeza nenhuma. "FILTRO DE COMBUSTIVEL" tem a ' +
+      'palavra no nome mas é unidade, e não entra.');
     itens.push('O custo vem de <b>planilha importada à mão</b> (o .xls de categoria da TecnoX): ' +
       'dia sem importação NÃO entra em nenhuma conta desta aba — nem no numerador, nem na ' +
       'contagem de dias. Mês fechado sem importação aparece sem barra, não como zero.');
