@@ -84,11 +84,22 @@
   //
   // Métrica exibida no gráfico. O gráfico é UM só; isto troca o CAMPO.
   var _metricaAno = 'lucro';
-  // Escopo do gráfico e da tabela: 'ano' = 12 meses; 'mes' = série DIÁRIA do
-  // mês corrente. Troca o EIXO, não a métrica — as duas dimensões são
-  // independentes, então 4 métricas × 2 escopos saem do mesmo desenhador.
-  // Nenhum dos dois dispara requisição: a série diária do mês já vem no fetch.
+  // Escopo do gráfico e da tabela: 'ano' = 12 meses; 'mes' = série DIÁRIA de
+  // UM mês, escolhido em `_mesDiario`. Troca o EIXO, não a métrica — as duas
+  // dimensões são independentes, então 4 métricas × 2 escopos saem do mesmo
+  // desenhador.
+  // Trocar de MÉTRICA nunca busca nada. Trocar de MÊS busca uma vez, e só se
+  // aquele mês ainda não estiver em `_seriesMes`.
   var _escopoAno = 'ano';
+  // Qual mês o modo Diário mostra ('YYYY-MM'). Default = mês corrente.
+  var _mesDiario = null;
+  // CACHE das séries diárias por mês. A do mês CORRENTE já vem no fetch da
+  // aba; a de um mês passado não, então é buscada quando o usuário escolhe —
+  // e guardada, para voltar ao mês não repetir a chamada.
+  // Zerado a cada `carregar()`: trocar o posto muda os números, e cache que
+  // sobrevive a isso devolve o dado do posto anterior.
+  var _seriesMes = null;     // Map 'YYYY-MM' -> resposta do GET /dre
+  var _carregandoMes = false;
   var _postos      = null;   // lista do GET /postos (cache da sessão)
   var _inicio      = null;
   var _fim         = null;
@@ -102,6 +113,12 @@
   // `cat_nome` herdada pela outra aba não teria coluna correspondente.
   // Default = margem % desc, que é a pergunta desta aba.
   var _ordPosto = { col: 'margem_pct', dir: 'desc' };
+  // Barra com o balão aberto, e a que estava aberta antes do gesto atual.
+  // NO MÓDULO, e não na closure do binder, porque o listener de "toque fora"
+  // (que é único e vive fora dele) também precisa zerar as duas.
+  var _barraSel = null;
+  var _barraAnt = null;
+
   // Ordenação da tabela do DIA. Estado próprio pelo mesmo motivo, e com uma
   // particularidade: a tabela troca de conjunto de colunas quando um posto é
   // escolhido (postos -> categorias). Ver `ordDiaValida`.
@@ -643,6 +660,22 @@
       '#s-dre .dre-escopos { border-top: 1px solid var(--bd); padding-top: .4rem;' +
         ' margin-top: .4rem; }' +
       '#s-dre .dre-escopos .ftag { font-family: var(--mono); }' +
+      // Seletor de mês: as mesmas setas `.dre-passo` da aba Dia, com o mês no
+      // meio. Fica na fileira do escopo, ao lado de "Diário".
+      '#s-dre .dre-navmes { display: inline-flex; align-items: stretch; gap: .25rem;' +
+        ' margin-left: .35rem; }' +
+      '#s-dre .dre-navmes b { display: inline-flex; align-items: center;' +
+        ' padding: 0 .5rem; font-family: var(--mono); font-size: .66rem;' +
+        ' font-weight: 700; color: var(--ac); background: var(--acd);' +
+        ' border: 1px solid var(--bd); border-radius: 8px; white-space: nowrap; }' +
+      // CURSOR diz se a barra leva a algum lugar. O `.dre-hit` já é `pointer`
+      // por causa do balão; a fatia NÃO clicável volta ao cursor normal, que é
+      // a convenção para "isto não é um link". `not-allowed` seria pior: daria
+      // a entender que nem o balão funciona, e ele funciona.
+      '#s-dre .dre-hit.sem-clique { cursor: default; }' +
+      // Faixa de "buscando o mês" no lugar do desenho.
+      '#s-dre .dre-buscando { text-align: center; padding: 2rem 1rem; color: var(--tx3);' +
+        ' font-family: var(--mono); font-size: .72rem; }' +
       // No celular estes quatro botoes sao o controle principal do grafico, e
       // com o padding do `.ftag` padrao eles saem com 22px de altura — pouco
       // para acertar com o dedo. Sobem para ~32px SO aqui; o `.ftag` das
@@ -1097,6 +1130,7 @@
           pid + '&agrupar=dia';
       };
       var anoP = hj.slice(0, 4);
+      var mesCorr = hj.slice(0, 7);
       try {
         var rp = await Promise.all([
           apiFetch('/dre' + faixa(hj.slice(0, 7) + '-01')),   // dia 1 do mês corrente
@@ -1104,13 +1138,26 @@
         ]);
         _dadosPMes = rp[0];
         _dadosPAno = rp[1];
+        // O mês corrente ENTRA NO CACHE já buscado: ele é a primeira das duas
+        // chamadas, e sem semear aqui o modo Diário pediria de novo o que
+        // acabou de chegar.
+        _seriesMes = new Map();
+        _seriesMes.set(mesCorr, rp[0]);
+        if (!_mesDiario) _mesDiario = mesCorr;
       } catch (err) {
         _dadosPMes = null;
         _dadosPAno = null;
+        _seriesMes = null;
         _erro = err && err.message ? err.message : String(err);
       } finally {
         _carregando = false;
         render();
+      }
+      // Modo Diário num mês passado: a série dele não veio nas duas chamadas
+      // acima. Busca DEPOIS do render, para a tela não esperar por ela — o
+      // card do gráfico se anuncia carregando sozinho.
+      if (_escopoAno === 'mes' && _mesDiario && _mesDiario !== mesCorr) {
+        await garantirSerieMes(_mesDiario);
       }
       return;
     }
@@ -1317,6 +1364,8 @@
   //   aspecto    — função (linha) -> '' | 'proj' | 'parcial'. Era um booleano
   //                `hachura`, e booleano não expressa TRÊS estados: fechado
   //                (sólido), projetado (hachurado) e parcial (contorno).
+  //   clicavel   — função (linha) -> bool. Falso marca o alvo com
+  //                `.sem-clique`, que tira a afordância do cursor.
   //   marcaX     — índice que recebe marca vertical (o mês corrente), ou null.
   //   piso       — extensão mínima do domínio, na unidade do eixo.
   //   aria       — a descrição acessível, que muda com o que está no eixo.
@@ -1390,7 +1439,9 @@
       // Com 90 barras a barra real tem ~4 unidades e ninguém acerta o mouse
       // nela — e num dia sem barra não haveria nada para tocar. O alvo cobre
       // a coluna inteira e é ele que dispara o tooltip.
-      alvos += '<rect class="dre-hit" x="' + (M_ESQ + passoX * i).toFixed(2) + '" y="' + M_TOPO +
+      var podeClicar = o.clicavel ? !!o.clicavel(l) : true;
+      alvos += '<rect class="dre-hit' + (podeClicar ? '' : ' sem-clique') +
+        '" x="' + (M_ESQ + passoX * i).toFixed(2) + '" y="' + M_TOPO +
         '" width="' + passoX.toFixed(2) + '" height="' + areaA + '"' +
         ' data-i="' + i + '"></rect>';
       if (rotuloX && rotulados.indexOf(i) >= 0) {
@@ -1674,6 +1725,9 @@
   //   titulo   — o cabeçalho do balão (data no diário, nome do posto aqui);
   //   extra    — [{rot, val}] com medidas a mais, no formato das de cima.
   //   nota     — linha final sem rótulo (realizado/projetado).
+  //   aoClicar — função (linha) chamada no clique. Quem decide QUAIS fatias
+  //              aceitam clique é o `clicavel` do desenhador, que marca as
+  //              outras com `.sem-clique`.
   //   seguirY  — o balão acompanha a LINHA tocada. No diário o alvo é uma
   //              coluna de altura cheia, e o balão fica no topo; no por posto
   //              o alvo é uma faixa, e um balão fixo no topo não diria de qual
@@ -1685,7 +1739,12 @@
     var tip = document.querySelector('#s-dre .dre-tip');
     if (!svg || !tip) return;
     var titulo = o.titulo || function (l) { return brData(l.data || l.chave); };
-    var esconder = function () { tip.style.display = 'none'; };
+    var esconder = function () {
+      tip.style.display = 'none';
+      // Fechar o balão zera a seleção: reabrir a MESMA barra volta a ser um
+      // primeiro toque, não um segundo.
+      _barraSel = null; _barraAnt = null;
+    };
     var mostrar = function (ev) {
       var alvo = ev.target && ev.target.closest ? ev.target.closest('.dre-hit') : null;
       if (!alvo) { esconder(); return; }
@@ -1727,6 +1786,37 @@
         tip.style.top = '0px';
       }
     };
+    // CLIQUE que navega. `aoClicar` é opcional; sem ele nada muda.
+    //
+    // NO TOQUE SÃO DOIS TOQUES, e não é capricho: no celular o primeiro toque
+    // é o que ABRE o balão. Se ele também navegasse, o balão apareceria e a
+    // tela trocaria no mesmo gesto — os quatro números ficariam ilegíveis, e
+    // não haveria como só CONSULTAR uma barra. Então o primeiro toque mostra,
+    // o segundo na MESMA barra navega. Com mouse, um clique basta: o balão já
+    // está aberto pelo hover.
+    if (o.aoClicar) {
+      // O SEGREDO DO DOIS-TOQUES: compara com o alvo do gesto ANTERIOR, não do
+      // atual. A primeira tentativa guardava o alvo no `pointerdown` do MESMO
+      // gesto e comparava no `click` — sempre igual, então o primeiro toque
+      // navegava e o balão não era lido por ninguém.
+      // Este listener é registrado ANTES do `mostrar`, então roda antes dele e
+      // ainda vê `_barraSel` como estava.
+      svg.addEventListener('pointerdown', function (ev) {
+        var alvo = ev.target && ev.target.closest ? ev.target.closest('.dre-hit') : null;
+        _barraAnt = _barraSel;
+        _barraSel = alvo ? alvo.getAttribute('data-i') : null;
+      });
+      svg.addEventListener('click', function (ev) {
+        var alvo = ev.target && ev.target.closest ? ev.target.closest('.dre-hit') : null;
+        if (!alvo || alvo.classList.contains('sem-clique')) return;
+        var l = linhas[parseInt(alvo.getAttribute('data-i'), 10)];
+        if (!l) return;
+        // Com mouse o balão já está aberto pelo hover: um clique basta.
+        // Com toque, o primeiro abre e o segundo na MESMA barra navega.
+        if (ev.pointerType === 'touch' && _barraAnt !== alvo.getAttribute('data-i')) return;
+        o.aoClicar(l);
+      });
+    }
     svg.addEventListener('pointermove', mostrar);
     svg.addEventListener('pointerdown', mostrar);
     svg.addEventListener('pointerleave', esconder);
@@ -1767,6 +1857,9 @@
     }
     var tips = document.querySelectorAll('#s-dre .dre-tip');
     for (var j = 0; j < tips.length; j++) tips[j].style.display = 'none';
+    // Toque fora fecha o balão, então também zera a seleção — senão voltar à
+    // mesma barra contaria como SEGUNDO toque e navegaria de surpresa.
+    _barraSel = null; _barraAnt = null;
   });
 
   // ── Ordenação da tabela ──────────────────────────────────────────
@@ -2332,17 +2425,94 @@
     render();          // só redesenha; nenhuma requisição nova
   };
 
-  // ESCOPOS do eixo. 'mes' usa `_dadosPMes`, que já está carregado.
+  // ESCOPOS do eixo. 'mes' lê `_seriesMes`, o cache por mês.
   var ESCOPOS = [
     { id: 'ano', rot: 'Ano' },
-    { id: 'mes', rot: 'Mês atual' },
+    { id: 'mes', rot: 'Diário' },
   ];
   window.__dreEscopoAno = function (id) {
     if (!ESCOPOS.some(function (e) { return e.id === id; })) return;
     if (_escopoAno === id) return;
     _escopoAno = id;
-    render();          // idem: nenhuma requisição nova
+    // Trocar para Diário num mês fora do cache dispara UMA busca; nos outros
+    // casos, nenhuma. Voltar a um mês já visto também não busca.
+    if (id === 'mes' && _mesDiario && !(_seriesMes && _seriesMes.has(_mesDiario))) {
+      garantirSerieMes(_mesDiario);
+      return;
+    }
+    render();
   };
+
+  // Busca a série diária de um mês SE não estiver em cache, e renderiza.
+  // Renderiza DUAS vezes de propósito: uma para o card dizer que está
+  // buscando, outra com o resultado. Sem a primeira, a tela fica congelada no
+  // mês anterior enquanto a requisição corre, e o usuário clica de novo.
+  async function garantirSerieMes(mes) {
+    if (!_seriesMes) _seriesMes = new Map();
+    if (_seriesMes.has(mes)) { render(); return; }
+    _carregandoMes = true;
+    render();
+    var hj = hojeISO();
+    var ini = mes + '-01';
+    var ult = mes + '-' + String(diasNoMes(ini)).padStart(2, '0');
+    // Mês corrente vai só até HOJE; num mês fechado `ult` já é o fim.
+    var fim = (ult > hj) ? hj : ult;
+    try {
+      _seriesMes.set(mes, await apiFetch('/dre?inicio=' + encodeURIComponent(ini) +
+        '&fim=' + encodeURIComponent(fim) +
+        (_postoId ? '&posto_id=' + encodeURIComponent(_postoId) : '') + '&agrupar=dia'));
+    } catch (e) {
+      // Falha NÃO entra no cache: uma nova tentativa (voltar ao mês) busca de
+      // novo, em vez de guardar o erro para sempre.
+      console.warn('DRE: serie diaria de ' + mes + ' nao carregou:', e && e.message);
+    } finally {
+      _carregandoMes = false;
+      render();
+    }
+  }
+
+  window.__dreMesPasso = function (n) {
+    if (_escopoAno !== 'mes' || !_mesDiario) return;
+    var alvo = somarMesesISO(_mesDiario, n);
+    var lim = limitesMesDiario();
+    if (!lim || alvo < lim.min || alvo > lim.max) return;
+    _mesDiario = alvo;
+    garantirSerieMes(alvo);
+  };
+
+  // Vai direto a um mês — usado pelo clique numa barra do gráfico anual.
+  window.__dreMesIr = function (mes) {
+    if (!/^\d{4}-\d{2}$/.test(String(mes || ''))) return;
+    var lim = limitesMesDiario();
+    if (!lim || mes < lim.min || mes > lim.max) return;
+    _mesDiario = mes;
+    _escopoAno = 'mes';
+    garantirSerieMes(mes);
+  };
+
+  // Anda `n` meses num 'YYYY-MM'. Date.UTC com dia 1 e mês base zero
+  // atravessa o ano sozinho — mesma técnica de `mesFechado` e `somarDiasISO`,
+  // sem hora local envolvida.
+  function somarMesesISO(mesISO, n) {
+    var p = String(mesISO).split('-').map(Number);
+    var d = new Date(Date.UTC(p[0], p[1] - 1 + n, 1));
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
+  }
+
+  // LIMITES da navegação de mês.
+  //   max = mês CORRENTE — não há dado do futuro.
+  //   min = primeiro mês COM DADO do ano carregado.
+  //
+  // "do ano carregado", e não "do banco": esta aba busca UM ano (01/01 até
+  // hoje), então é até aí que ela sabe onde o dado começa. Chegar a 2025
+  // exigiria outra busca e um seletor de ano, e a referência dos 3 fechados
+  // também sairia de fora do que está na tela. O `title` da seta diz isso.
+  function limitesMesDiario() {
+    if (!_dadosPAno) return null;
+    var meses = agruparPorMes(_dadosPAno.linhas).map(function (m) { return m.mes; });
+    if (!meses.length) return null;
+    return { min: meses[0], max: hojeISO().slice(0, 7) };
+  }
 
   // MÉDIA DIÁRIA dos últimos meses fechados, por métrica — a referência do
   // modo 'mes'. Dividir a média MENSAL por 30 daria outro número: os meses
@@ -2680,50 +2850,62 @@
         base: reaisAno,
       };
     } else {
-      // ── ESCOPO MÊS ATUAL: um dia por fatia, dia 1 ao ÚLTIMO DIA DO MÊS ──
-      // O eixo vai até o fim do mês, não até o último dia com dado: os dias
-      // que faltam aparecem vazios, e é isso que mostra QUANTO FALTA. Cortar
-      // o eixo no último dia importado faria um mês de 3 dias parecer cheio.
-      var porDiaMap = new Map((_dadosPMes.linhas || []).map(function (l) {
+      // ── ESCOPO DIÁRIO: um dia por fatia, dia 1 ao ÚLTIMO DIA DO MÊS ──
+      // O eixo vai até o fim do mês, não até o último dia com dado: no mês
+      // corrente os dias que faltam aparecem vazios, e é isso que mostra
+      // QUANTO FALTA. Cortar o eixo no último dia importado faria um mês de
+      // 3 dias parecer cheio.
+      var mesAlvo = _mesDiario || mesISO;
+      var ehCorrente = (mesAlvo === mesISO);
+      var serieMes = _seriesMes ? _seriesMes.get(mesAlvo) : null;
+      var mesNumAlvo = Number(mesAlvo.slice(5, 7));
+      var porDiaMap = new Map(((serieMes && serieMes.linhas) || []).map(function (l) {
         return [String(l.data || l.chave), l];
       }));
-      var D = diasNoMes(hoje);
+      var D = diasNoMes(mesAlvo + '-01');
       fatias = [];
       for (var d = 1; d <= D; d++) {
-        var iso = mesISO + '-' + String(d).padStart(2, '0');
+        var iso = mesAlvo + '-' + String(d).padStart(2, '0');
         var lin = porDiaMap.get(iso) || null;
         var f = lin
           ? { tipo: 'real', venda_liquida: lin.venda_liquida, custo_total: lin.custo_total,
               lucro: lin.lucro, margem_pct: lin.margem_pct, litros: numOuNull(lin.litros) }
           : { tipo: 'vazio' };
-        f.mes = mesNum;
+        f.mes = mesNumAlvo;
         f.chave = iso;
         f.dia = d;
         f.rotulo = String(d);
         f.tituloLongo = brData(iso) + ' · ' + diaDaSemana(iso);
-        // FUTURO x NÃO IMPORTADO são coisas diferentes, e o balão diz qual:
-        // um dia que ainda não chegou não tem dado a faltar.
+        // FUTURO x NÃO IMPORTADO são coisas diferentes, e o balão diz qual: um
+        // dia que ainda não chegou não tem dado a faltar. Num mês FECHADO
+        // "a vir" não existe — todo dia dele já passou.
         f.situacao = lin ? 'realizado' : (iso > hoje ? 'a vir' : 'sem dado');
         fatias.push(f);
       }
-      var mDia = mediaDiariaFechados(fechados, met, 3);
+      // REFERÊNCIA: média diária dos 3 fechados, SEM o mês exibido.
+      //
+      // Excluir o próprio mês não é detalhe: comparar agosto com uma média que
+      // INCLUI agosto compara agosto com uma versão diluída de si mesmo, e a
+      // linha passa perto das barras quase por construção. Fora dele, a linha
+      // responde de verdade "este mês está acima ou abaixo dos anteriores".
+      var baseRef = fechados.filter(function (m) { return m.mes !== mesAlvo; });
+      var mDia = mediaDiariaFechados(baseRef, met, 3);
+      var nRef = Math.min(3, baseRef.length);
       modo = {
-        titulo: met.rot + ' por dia — ' + MESES_LONGO[mesNum - 1] + '/' + ano,
+        titulo: met.rot + ' por dia — ' + MESES_LONGO[mesNumAlvo - 1] + '/' + mesAlvo.slice(0, 4),
         unidade: 'dia', plural: 'dia(s)',
         media: mDia,
-        // A referência aqui NÃO é a média do próprio mês: é a média diária dos
-        // últimos fechados, que é o que responde "este mês está acima ou
-        // abaixo do normal". Média do próprio mês só diria que ele é igual a
-        // si mesmo.
         mediaRot: mDia === null
           ? ''
-          : 'média diária dos ' + Math.min(3, fechados.length) + ' mês(es) fechado(s): ' +
-            met.corpo(mDia),
-        // Marca o dia de HOJE. O escopo é sempre o mês corrente, então hoje
-        // está sempre dentro dele — não há condição a testar aqui.
-        marcaX: Number(hoje.slice(8, 10)) - 1,
+          : 'média diária dos ' + nRef + ' mês(es) fechado(s) anteriores: ' + met.corpo(mDia),
+        // Marca o dia de HOJE — só quando o mês exibido é o corrente. Num mês
+        // fechado não há "hoje" dentro dele, e a marca apontaria um dia
+        // qualquer.
+        marcaX: ehCorrente ? Number(hoje.slice(8, 10)) - 1 : null,
         colRot: 'Dia',
         base: fatias.filter(function (x) { return x.tipo === 'real'; }),
+        mesAlvo: mesAlvo, ehCorrente: ehCorrente,
+        carregando: (!serieMes && _carregandoMes),
       };
     }
 
@@ -2733,7 +2915,11 @@
     // "Mês atual" passa a ser a vista útil, porque ela não depende de mês
     // fechado nenhum.
     var semBaseAnual = (!porDia && !fechados.length);
-    var svgAno = semBaseAnual ? '' : svgBarrasVerticais(fatias, {
+    // Buscando a série de outro mês: NÃO desenha. Trinta fatias vazias
+    // enquanto a requisição corre mostrariam um mês sem dado que na verdade
+    // ninguém sabe ainda — e o usuário concluiria que o mês está vazio.
+    var buscando = (porDia && modo.carregando);
+    var svgAno = (semBaseAnual || buscando) ? '' : svgBarrasVerticais(fatias, {
       // Fatia sem dado não ganha barra. A PARCIAL ganha — ela tem dado, só
       // não tem o mês inteiro.
       valor: function (l) { return l.tipo === 'vazio' ? null : l[met.chave]; },
@@ -2745,6 +2931,9 @@
       aspecto: function (l) {
         return l.tipo === 'proj' ? 'proj' : (l.tipo === 'parcial' ? 'parcial' : '');
       },
+      // CLICÁVEL só no gráfico ANUAL, e só nas fatias que têm dia a dia para
+      // mostrar: mês projetado não tem dias, mês sem importação não tem nada.
+      clicavel: function (l) { return !porDia && podeAbrirDia(l); },
       marcaX: modo.marcaX,
       piso: met.razao ? 1 : undefined,
       aria: modo.titulo,
@@ -2766,7 +2955,31 @@
       '<div class="dre-metricas dre-escopos">' + ESCOPOS.map(function (e) {
         return '<button type="button" class="ftag' + (e.id === _escopoAno ? ' active' : '') +
           '" onclick="__dreEscopoAno(\'' + e.id + '\')">' + esc(e.rot) + '</button>';
-      }).join('') + '</div>';
+      }).join('') +
+      // SELETOR DE MÊS, só no modo Diário. As setas param nos limites e dizem
+      // por quê no `title` — desabilitada e muda faria o usuário clicar duas
+      // vezes achando que travou.
+      (porDia ? (function () {
+        var lim = limitesMesDiario() || { min: modo.mesAlvo, max: modo.mesAlvo };
+        var ant = somarMesesISO(modo.mesAlvo, -1);
+        var prox = somarMesesISO(modo.mesAlvo, 1);
+        var noMin = (ant < lim.min), noMax = (prox > lim.max);
+        return '<span class="dre-navmes">' +
+          '<button type="button" class="dre-passo" onclick="__dreMesPasso(-1)"' +
+            (noMin ? ' disabled' : '') +
+            ' title="' + (noMin
+              ? 'Primeiro mês com dado no ano carregado (' + esc(lim.min) + ')'
+              : 'Mês anterior') + '"' +
+            ' aria-label="Mês anterior">‹</button>' +
+          '<b>' + esc(MESES_CURTO[Number(modo.mesAlvo.slice(5, 7)) - 1]) + '/' +
+            esc(modo.mesAlvo.slice(0, 4)) + '</b>' +
+          '<button type="button" class="dre-passo" onclick="__dreMesPasso(1)"' +
+            (noMax ? ' disabled' : '') +
+            ' title="' + (noMax ? 'O mês corrente é o último' : 'Mês seguinte') + '"' +
+            ' aria-label="Mês seguinte">›</button>' +
+        '</span>';
+      })() : '') +
+      '</div>';
 
     // O CARD SAI MESMO SEM BARRA NENHUMA, e é de propósito: quando a métrica
     // escolhida não tem dado (litragem indisponível, por exemplo), esconder o
@@ -2782,19 +2995,28 @@
               (nProj ? ' · ' + nProj + ' projetado(s)' : '') +
               (nSem ? ' · ' + nSem + ' sem barra' : '') +
               ' · passe o mouse ou toque numa barra'
-            : (semBaseAnual ? 'sem mês fechado para comparar'
+            : (buscando ? 'buscando a série do mês…'
+               : semBaseAnual ? 'sem mês fechado para comparar'
                : 'nenhum ' + modo.unidade + ' tem ' + met.rot.toLowerCase() + ' para desenhar')) +
           '</div>' +
           seletores +
         '</div>' +
-        '<div class="cbody">' + (svgAno
+        '<div class="cbody">' + (buscando
+          ? '<div class="dre-buscando">Buscando ' +
+            esc(MESES_LONGO[Number(modo.mesAlvo.slice(5, 7)) - 1] + '/' +
+                modo.mesAlvo.slice(0, 4)) + '…</div>'
+          : svgAno
           ? '<div class="dre-graf-wrap">' + svgAno +
               '<div class="dre-legproj">' +
                 '<i><span class="dre-sw real"></span>' + (porDia ? 'dia com dado' : 'realizado') + '</i>' +
                 (nParc ? '<i><span class="dre-sw parcial"></span>parcial (mês em curso)</i>' : '') +
                 (nProj ? '<i><span class="dre-sw proj"></span>projetado' +
                   (base3 ? ' (média de ' + base3.n + ' fechado(s))' : '') + '</i>' : '') +
-                '<i>| marca vertical = ' + (porDia ? 'hoje' : 'mês corrente') + '</i>' +
+                // A legenda da marca só sai quando a marca EXISTE: num mês
+                // fechado não há "hoje" dentro dele, e anunciar uma marca
+                // ausente manda o leitor procurar o que não está lá.
+                (modo.marcaX === null || modo.marcaX === undefined ? ''
+                  : '<i>| marca vertical = ' + (porDia ? 'hoje' : 'mês corrente') + '</i>') +
               '</div>' +
               '<div class="dre-tip" style="display:none"></div>' +
             '</div>'
@@ -2857,11 +3079,13 @@
       tfootA = linhaTotal('REALIZADO', somarFatias(fatias.filter(function (f) { return f.tipo === 'real'; })), 'tot-real') +
         linhaTotal('PROJETADO', somarFatias(fatias.filter(function (f) { return f.tipo === 'proj'; })), 'tot-proj');
     } else {
-      // No modo diário o "realizado" é o mês até agora. A segunda linha é a
-      // PROJEÇÃO do mês inteiro, quando existe — o par continua sendo
-      // "o que aconteceu" contra "o que se estima".
-      tfootA = linhaTotal('MÊS ATÉ AGORA', somarFatias(modo.base), 'tot-real');
-      if (proj) {
+      // No modo diário o "realizado" é o mês exibido. Num mês FECHADO ele é o
+      // mês inteiro, e o rótulo diz isso — "MÊS ATÉ AGORA" num mês que acabou
+      // sugeriria que ainda vai crescer. A segunda linha (a projeção) só faz
+      // sentido no mês CORRENTE: projetar um mês fechado não é projeção.
+      tfootA = linhaTotal(modo.ehCorrente ? 'MÊS ATÉ AGORA' : 'MÊS FECHADO',
+        somarFatias(modo.base), 'tot-real');
+      if (proj && modo.ehCorrente) {
         tfootA += linhaTotal('PROJEÇÃO DO MÊS', {
           n: diasNoMes(hoje), litros: proj.litros, venda_liquida: proj.venda,
           custo_total: proj.venda - proj.lucro, lucro: proj.lucro,
@@ -2874,17 +3098,19 @@
       '<div class="card" style="margin-top:.9rem">' +
         '<div class="chdr">' +
           '<div class="ctitle">' + (porDia
-            ? MESES_LONGO[mesNum - 1] + ', dia a dia'
+            ? MESES_LONGO[Number(modo.mesAlvo.slice(5, 7)) - 1] + '/' +
+              modo.mesAlvo.slice(0, 4) + ', dia a dia'
             : 'O ano mês a mês') + '</div>' +
           '<div class="csub">Ordem cronológica · os dois totais ficam separados de ' +
             'propósito: fato e estimativa não se somam num número só</div>' +
         '</div>' +
-        '<div class="cbody dre-scroll">' +
-          '<table class="dre-table dre-tano">' +
-            '<thead><tr>' + thsA + '</tr></thead>' +
-            '<tbody>' + trsA + '</tbody>' +
-            '<tfoot>' + tfootA + '</tfoot>' +
-          '</table>' +
+        '<div class="cbody dre-scroll">' + (buscando
+          ? '<div class="dre-buscando">Buscando…</div>'
+          : '<table class="dre-table dre-tano">' +
+              '<thead><tr>' + thsA + '</tr></thead>' +
+              '<tbody>' + trsA + '</tbody>' +
+              '<tfoot>' + tfootA + '</tfoot>' +
+            '</table>') +
         '</div>' +
       '</div>';
 
@@ -2894,6 +3120,11 @@
     // Só liga o balão quando há SVG: o card pode existir sem desenho.
     if (svgAno) {
       ligarTooltipGrafico(fatias, {
+        // No gráfico ANUAL, a barra leva ao dia a dia daquele mês. No diário
+        // não há para onde ir — a fatia já é um dia.
+        aoClicar: porDia ? null : function (l) {
+          if (podeAbrirDia(l)) window.__dreMesIr(l.chave);
+        },
         // No modo diário o título já traz o dia da semana (ver `tituloLongo`).
         titulo: function (l) { return l.tituloLongo; },
         // Litros SEMPRE no balão, seja qual for a métrica no eixo: quem toca
@@ -2901,17 +3132,27 @@
         extra: function (l) { return [{ rot: 'Litros', val: fmtL(l.litros) }]; },
         nota: function (l) {
           if (l.tipo === 'real') {
-            return porDia ? 'realizado' : ('realizado · ' + l.dias + ' dia(s) com dado');
+            return porDia ? 'realizado'
+              : 'realizado · ' + l.dias + ' dia(s) · clique para ver dia a dia';
+          }
+          if (l.tipo === 'parcial') {
+            return 'parcial: ' + l.dias + ' dia(s) · clique para ver dia a dia';
           }
           if (l.tipo === 'proj' && l.mes === mesNum && !porDia) {
             return 'PROJETADO de ' + l.dias + ' dia(s)';
           }
           if (l.tipo === 'proj') return 'PROJETADO (média de ' + l.baseN + ' fechado(s))';
-          if (l.tipo === 'parcial') return 'parcial: ' + l.dias + ' dia(s), sem projeção';
           return l.situacao === 'a vir' ? 'dia ainda não chegou' : 'sem dado importado';
         },
       });
     }
+  }
+
+  // Fatia do gráfico ANUAL que tem dia a dia para abrir: mês REALIZADO ou
+  // PARCIAL. Mês projetado não tem dias (é uma média), e mês sem importação
+  // não tem nada — abrir o diário deles mostraria uma tela vazia sem motivo.
+  function podeAbrirDia(l) {
+    return !!l && (l.tipo === 'real' || l.tipo === 'parcial') && !!l.chave;
   }
 
   // Média de uma métrica sobre um conjunto de fatias REALIZADAS.
