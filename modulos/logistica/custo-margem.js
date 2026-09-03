@@ -116,6 +116,13 @@
   }
 
   // ── CSS (injetado uma vez) ───────────────────────────────────────
+  // EXPOSTO para a aba DRE (modulos/painel-adm/dre.js) reusar o MODAL de
+  // importação (.cmi-*) sem copiar o CSS. O estilo é injetado aqui e só aqui:
+  // duas cópias das mesmas regras envelheceriam separadas, e o pedido era
+  // "mesmos componentes, mesma aparência". O guard por id já garante uma
+  // injeção só, seja quem chamar primeiro.
+  window.__cmInjetarEstiloImport = function () { injetarEstilo(); };
+
   function injetarEstilo() {
     if (document.getElementById('custo-margem-style')) return;
     const st = document.createElement('style');

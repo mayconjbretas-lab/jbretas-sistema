@@ -69,6 +69,17 @@
   // Ordenação da tabela. Default = venda líquida desc, como pedido.
   var _ord = { col: 'venda_liquida', dir: 'desc' };
 
+  // ── Importação (ver o bloco IMPORTAÇÃO mais abaixo) ──
+  var _impFile    = null;    // File escolhido, reenviado no confirmar
+
+  // A rota POST /dre/importar é ehTI. No backend TI é uma FLAG (perfis.ti),
+  // não um perfil do enum — mesma checagem do painel-ti e do auth.js.
+  // Sem isso o botão apareceria para o ADM e só descobriria no 403.
+  function ehTIAqui() {
+    var u = (typeof getUsuarioLogado === 'function') ? getUsuarioLogado() : null;
+    return !!(u && u.ti === true);
+  }
+
   // ── Datas (Brasília, en-CA = YYYY-MM-DD, mesmo default do backend) ──
   // toLocaleDateString com timeZone, NÃO toISOString: toISOString devolve UTC,
   // e entre 21:00 e 00:00 de Brasília o UTC já virou o dia seguinte. No dia 20
@@ -279,6 +290,52 @@
       '#s-dre .dre-tip span { display: flex; justify-content: space-between; gap: .7rem;' +
         'font-family: var(--mono); color: var(--tx); }' +
       '#s-dre .dre-tip i { font-style: normal; color: var(--tx3); }' +
+      // ── IMPORTAÇÃO: só o que o conjunto .cmi-* do Custo & Margem não cobre
+      // (lista das 5 conferências, spinner, faixa de aviso da 5 e o
+      // recolhível do resumo). SEM escopo #s-dre de propósito: o modal é
+      // anexado ao <body>, fora da seção.
+      '.dri-confs { display: flex; flex-direction: column; gap: 2px; margin: .6rem 0; }' +
+      '.dri-conf { display: grid; grid-template-columns: 1.1rem 1fr auto; gap: .5rem;' +
+        'align-items: baseline; padding: .32rem .45rem; border-radius: 6px;' +
+        'background: var(--sf2); font-size: .72rem; color: var(--tx2); }' +
+      '.dri-ic { font-family: var(--mono); font-weight: 700; text-align: center; }' +
+      '.dri-conf.ok .dri-ic { color: var(--ok); }' +
+      '.dri-conf.bad .dri-ic { color: var(--dg); }' +
+      '.dri-conf.warn .dri-ic { color: var(--wn); }' +
+      '.dri-conf.na .dri-ic { color: var(--tx3); }' +
+      '.dri-conf.bad { border: 1px solid var(--dg); }' +
+      '.dri-conf.warn { border: 1px solid var(--wn); }' +
+      '.dri-rot b { color: var(--tx); font-family: var(--mono); }' +
+      '.dri-val { font-family: var(--mono); font-size: .68rem; color: var(--tx3); text-align: right; }' +
+      // Em celular a linha vira duas: o rótulo não cabe ao lado do valor.
+      '@media (max-width: 560px) {' +
+        '.dri-conf { grid-template-columns: 1.1rem 1fr; }' +
+        '.dri-val { grid-column: 2; text-align: left; }' +
+      '}' +
+      '.dri-det { margin: .4rem 0 0; padding-left: 1.1rem; font-size: .7rem; color: var(--tx2); }' +
+      '.dri-det li { margin-bottom: .2rem; }' +
+      // Aviso da conferência 5: destaque em --wn (avisa), não em --dg (barra).
+      '.dri-aviso { border: 1px solid var(--wn); border-radius: 8px; padding: .55rem .65rem;' +
+        'margin: .6rem 0; background: rgba(249,199,79,.07); }' +
+      '.dri-aviso-tit { font-family: var(--mono); font-size: .74rem; font-weight: 700;' +
+        'color: var(--wn); margin-bottom: .3rem; }' +
+      '.dri-aviso-txt { font-size: .68rem; color: var(--tx2); line-height: 1.45; margin-bottom: .5rem; }' +
+      '.dri-tblwrap { overflow-x: auto; }' +
+      '.dri-det-box { margin: .6rem 0; }' +
+      '.dri-det-box > summary { cursor: pointer; font-family: var(--mono); font-size: .72rem;' +
+        'color: var(--tx); padding: .35rem 0; }' +
+      '.dri-ok { color: var(--ok); font-family: var(--mono); font-size: .74rem;' +
+        'padding: .5rem 0; text-align: center; }' +
+      // Spinner do processamento (arquivo com muitos postos demora).
+      '.dri-load { display: flex; flex-direction: column; align-items: center; gap: .7rem;' +
+        'padding: 1.6rem .5rem; color: var(--tx2); font-size: .74rem; text-align: center; }' +
+      '.dri-spin { width: 26px; height: 26px; border-radius: 50%;' +
+        'border: 3px solid var(--bd); border-top-color: var(--ac);' +
+        'animation: dri-gira .8s linear infinite; }' +
+      '@keyframes dri-gira { to { transform: rotate(360deg); } }' +
+      // O botão de importar fica no topo da aba, ao lado do título.
+      '#s-dre .dre-top { align-items: center; }' +
+      '#s-dre .dre-imp-acao { display: flex; gap: .4rem; }' +
       '#s-dre .dre-table { width: 100%; border-collapse: collapse; font-size: .84rem; }' +
       '#s-dre .dre-table th { text-align: left; font-family: var(--mono); font-size: .64rem; text-transform: uppercase; letter-spacing: .05em; color: var(--tx3); padding: .55rem .6rem; border-bottom: 1px solid var(--bd); white-space: nowrap; }' +
       '#s-dre .dre-table th.ord { cursor: pointer; user-select: none; }' +
@@ -405,6 +462,16 @@
       '<div class="dre-wrap">' +
         '<div class="dre-top">' +
           '<div class="dre-title">🧾 DRE — Produtos e Combustíveis</div>' +
+          // Botão só para TI: a rota é ehTI, e mostrar um botão que responde
+          // 403 é pior que não mostrar. Mesmo par botão+input escondido da
+          // importação do Custo & Margem.
+          (ehTIAqui()
+            ? '<div class="dre-imp-acao">' +
+                '<button class="cm-btn ghost" id="dre-imp-btn" onclick="__dreImpAbrir()"' +
+                  ' title="Importar o .xls de categoria da TecnoX">📥 Importar planilha</button>' +
+                '<input type="file" id="dre-imp-file" accept=".xls" hidden onchange="__dreImpFile(this)">' +
+              '</div>'
+            : '') +
         '</div>' +
         '<div class="fueltab-row" id="dre-subabas"></div>' +
         '<div class="card">' +
@@ -921,6 +988,327 @@
     // DEPOIS do innerHTML: os alvos de ponteiro só existem agora.
     if (svg) ligarTooltipGrafico(linhasDia);
   }
+
+
+  // ══ IMPORTAÇÃO DO .XLS → POST /dre/importar ══════════════════════
+  // MESMO fluxo e MESMOS componentes da importação do Custo & Margem
+  // (modulos/logistica/custo-margem.js): botão + input escondido, dry_run
+  // primeiro, modal .cmi-* com a prévia, e só então o botão que grava. O CSS
+  // do modal é injetado por lá (__cmInjetarEstiloImport) para não haver duas
+  // cópias das mesmas regras envelhecendo em paralelo.
+  //
+  // A DIFERENÇA OBRIGATÓRIA: /custos/importar recebe base64 num JSON;
+  // /dre/importar recebe MULTIPART no campo `arquivo` (a rota usa multer com
+  // memoryStorage). Então aqui vai FormData, e o Content-Type NÃO é definido à
+  // mão — quem monta o boundary é o navegador, e fixar 'application/json'
+  // faria o multer não achar arquivo nenhum.
+  var IMP_MAX_MB = 15;   // mesmo teto da rota (limits.fileSize)
+
+  // Fetch dedicado, como o importFetch do Custo & Margem: precisa do STATUS e
+  // do CORPO mesmo em erro, porque o 400 da rota traz `codigo`, `detalhes` e as
+  // próprias conferências — é com isso que a tela explica o que corrigir. O
+  // apiFetch descartaria o corpo em não-2xx. Mantém o refresh-once do token.
+  async function impFetch(file, dryRun, _retry) {
+    var token = window.jbretasGetItem ? window.jbretasGetItem('jbretas_token') : null;
+    var fd = new FormData();
+    fd.append('arquivo', file, file.name);
+    fd.append('dry_run', dryRun ? 'true' : 'false');
+    var headers = {};
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    var resp = await fetch(window.JBRETAS_CONFIG.API_URL + '/dre/importar', {
+      method: 'POST', headers: headers, body: fd,
+    });
+    if (resp.status === 401 && !_retry && typeof window.jbretasRefresh === 'function') {
+      if (await window.jbretasRefresh()) return impFetch(file, dryRun, true);
+    }
+    if (resp.status === 401) {
+      if (window.jbretasClearSessao) window.jbretasClearSessao();
+      window.location.href = (window.caminhoRaiz ? window.caminhoRaiz() : '') + 'index.html?expirado=1';
+      return { status: 401, json: {} };
+    }
+    var json = null;
+    try { json = await resp.json(); } catch (e) { /* corpo não-JSON */ }
+    return { status: resp.status, json: json || {} };
+  }
+
+  // status HTTP + corpo → mensagem legível. Espelha o mensagemErroImport do
+  // Custo & Margem, com os status que ESTA rota devolve.
+  function impMensagemErro(status, json) {
+    var base = json && json.erro ? String(json.erro) : '';
+    if (status === 403) return 'Só o perfil TI pode importar a DRE.';
+    if (status === 413) return 'Arquivo maior que ' + IMP_MAX_MB + ' MB. A rota recusa antes de ler.';
+    if (status === 429) {
+      var seg = Number(json && json.retry_apos) || 0;
+      var espera = seg <= 0 ? ''
+        : (seg >= 60 ? ' Tente em ' + Math.ceil(seg / 60) + ' min.' : ' Tente em ' + seg + 's.');
+      return (base || 'Muitas importações em pouco tempo.') + espera;
+    }
+    if (status === 400) return base || 'O arquivo não é um .xls válido.';
+    return base ? ('Erro: ' + base) : ('Erro inesperado (HTTP ' + status + ').');
+  }
+
+  // ── Modal (mesma estrutura do cmi-* do Custo & Margem) ───────────
+  function impMontarModal() {
+    // Injeta o CSS .cmi-* de lá. Se o custo-margem.js não estiver carregado o
+    // modal ainda funciona, só sem estilo — então avisa no console em vez de
+    // falhar calado.
+    if (typeof window.__cmInjetarEstiloImport === 'function') window.__cmInjetarEstiloImport();
+    else console.warn('DRE: custo-margem.js não carregado; modal de importação sem estilo.');
+    if (document.getElementById('dri-overlay')) return;
+    var ov = document.createElement('div');
+    ov.className = 'cmi-overlay';
+    ov.id = 'dri-overlay';
+    ov.innerHTML =
+      '<div class="cmi-sheet">' +
+        '<button class="cmi-close" id="dri-close">✕</button>' +
+        '<div class="cmi-title" id="dri-title">Prévia da importação</div>' +
+        '<div class="cmi-file" id="dri-file"></div>' +
+        '<div id="dri-body"></div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    document.getElementById('dri-close').onclick = impFechar;
+    ov.addEventListener('click', function (e) { if (e.target === ov) impFechar(); });
+  }
+  function impFechar() { var ov = document.getElementById('dri-overlay'); if (ov) ov.classList.remove('open'); }
+  function impAbrirOverlay() { impMontarModal(); document.getElementById('dri-overlay').classList.add('open'); }
+  window.__dreImpFechar = impFechar;
+
+  function impErro(msg, detalhes) {
+    impAbrirOverlay();
+    document.getElementById('dri-title').textContent = 'Importação';
+    document.getElementById('dri-file').textContent = _impFile ? _impFile.name : '';
+    var lista = (detalhes && detalhes.length)
+      ? '<ul class="dri-det">' + detalhes.map(function (d) { return '<li>' + esc(d) + '</li>'; }).join('') + '</ul>'
+      : '';
+    document.getElementById('dri-body').innerHTML =
+      '<div class="cmi-erro-ic">⚠️</div>' +
+      '<div class="cmi-msg">' + esc(msg) + '</div>' + lista +
+      '<div class="cmi-foot"><button class="cmi-btn ghost" onclick="__dreImpFechar()">Fechar</button></div>';
+  }
+
+  // Spinner: arquivo com muitos postos demora (a rota confere bloco por bloco).
+  function impProcessando(titulo, texto) {
+    impAbrirOverlay();
+    document.getElementById('dri-title').textContent = titulo;
+    document.getElementById('dri-file').textContent = _impFile ? _impFile.name : '';
+    document.getElementById('dri-body').innerHTML =
+      '<div class="dri-load"><div class="dri-spin"></div><div>' + esc(texto) + '</div></div>';
+  }
+
+  // As 5 conferências, na ordem, com o rótulo do que cada uma garante.
+  var IMP_CONF = [
+    { k: 'c1', n: '1', rot: 'Soma das categorias x "Total Empresa:"' },
+    { k: 'c2', n: '2', rot: 'Soma dos "Total Dia:" x "Total Geral:"' },
+    { k: 'c3', n: '3', rot: 'Chave (posto, data, categoria) única no arquivo' },
+    { k: 'c4', n: '4', rot: 'cod_empresa casa com posto cadastrado' },
+    { k: 'c5', n: '5', rot: '"Lucro Total R$" x (líquida − custo)' },
+  ];
+
+  // Detalhe curto por conferência — o que ela mediu, não só ok/falhou.
+  function impDetalheConf(k, c) {
+    if (!c) return 'não executada (uma anterior barrou antes)';
+    if (k === 'c1') return c.ok ? c.blocos + ' bloco(s) fecham' : c.falhas.length + ' bloco(s) não fecham';
+    if (k === 'c2') return c.ok ? c.dias + ' dia(s) somam o total geral' : (c.motivo || 'não fecha');
+    if (k === 'c3') return c.ok ? c.chaves + ' chave(s) distinta(s)' : c.duplicadas.length + ' chave(s) repetida(s)';
+    if (k === 'c4') return c.ok ? c.postos + ' posto(s) casado(s)' : c.faltando.length + ' cod_empresa sem posto';
+    if (k === 'c5') {
+      if (!c.comparadas) return 'sem coluna de lucro no arquivo — nada comparado';
+      return c.ok ? c.comparadas + ' linha(s) conferem'
+        : c.divergencias.length + ' de ' + c.comparadas + ' divergem (delta ' + fmtRS(c.delta_total) + ')';
+    }
+    return '';
+  }
+
+  function impRenderPrevia(p, gravado) {
+    var C = p.conferencias || {};
+    var per = p.periodo || {};
+    var postos = p.postos_detectados || [];
+    var resumo = p.resumo_por_posto || [];
+    var c5 = C.c5 || null;
+    // BLOQUEIA o confirmar se 1, 2, 3 ou 4 falharam. A 5 avisa e NÃO bloqueia.
+    var bloqueadas = ['c1', 'c2', 'c3', 'c4'].filter(function (k) { return C[k] && C[k].ok === false; });
+    var podeGravar = !bloqueadas.length;
+
+    document.getElementById('dri-title').textContent = gravado ? 'Importação concluída' : 'Prévia da importação';
+    document.getElementById('dri-file').textContent = (p.arquivo && p.arquivo.nome) || (_impFile ? _impFile.name : '');
+
+    // Cards no topo: o que o celular precisa ver primeiro.
+    var cards = '<div class="cmi-cards">' +
+      '<div class="cmi-c"><b>' + (p.registros != null ? p.registros : '—') + '</b><span>Registros</span></div>' +
+      '<div class="cmi-c"><b>' + postos.length + '</b><span>Posto(s)</span></div>' +
+      '<div class="cmi-c' + (bloqueadas.length ? ' bad' : '') + '"><b>' + bloqueadas.length +
+        '</b><span>Barrando</span></div>' +
+    '</div>';
+
+    var faixa = (per.inicio || per.fim)
+      ? '<div class="cmi-faixa">Período: <b>' + esc(brData(per.inicio)) + '</b> → <b>' +
+        esc(brData(per.fim)) + '</b>' + (per.dias ? ' · ' + per.dias + ' dia(s)' : '') + '</div>'
+      : '';
+
+    var postosTxt = postos.length
+      ? '<div class="cmi-info">Postos detectados: ' + postos.map(function (x) {
+          return esc(x.nome || x.nome_arquivo) + ' (' + x.cod_empresa + ')';
+        }).join(', ') + '</div>'
+      : '';
+
+    // As 5 conferências, uma a uma.
+    var confs = '<div class="dri-confs">' + IMP_CONF.map(function (cf) {
+      var c = C[cf.k];
+      var st = !c ? 'na' : (c.ok ? 'ok' : (cf.k === 'c5' ? 'warn' : 'bad'));
+      var ic = st === 'ok' ? '✓' : (st === 'bad' ? '✕' : (st === 'warn' ? '!' : '–'));
+      return '<div class="dri-conf ' + st + '">' +
+        '<span class="dri-ic">' + ic + '</span>' +
+        '<span class="dri-rot"><b>' + cf.n + '.</b> ' + esc(cf.rot) + '</span>' +
+        '<span class="dri-val">' + esc(impDetalheConf(cf.k, c)) + '</span>' +
+      '</div>';
+    }).join('') + '</div>';
+
+    // O que precisa ser corrigido NO ARQUIVO quando alguma barrou.
+    var erroBloq = '';
+    if (bloqueadas.length) {
+      var det = (p.detalhes && p.detalhes.length) ? p.detalhes : [];
+      // O QUE CORRIGIR depende de QUAL conferência barrou, e a diferença é
+      // real: 1, 2 e 3 são problema DO ARQUIVO (soma que não fecha, chave
+      // repetida); a 4 é problema de CADASTRO — o arquivo está certo, falta o
+      // cod_empresa no posto. Mandar "corrija a planilha" num caso de cadastro
+      // faz o operador reexportar da TecnoX à toa e voltar com o mesmo erro.
+      var comoCorrigir = (C.c4 && C.c4.ok === false)
+        ? 'Não é problema do arquivo: falta o cod_empresa no cadastro do posto. ' +
+          'Preencha postos.cod_empresa_tecnox e importe de novo. Nada foi gravado.'
+        : 'Corrija no arquivo exportado da TecnoX, salve e importe de novo. Nada foi gravado.';
+      erroBloq = '<div class="cmi-bloq">' +
+        '<div class="cmi-bloq-tit">⛔ ' + esc(p.erro || 'Conferência não fechou') + '</div>' +
+        (det.length ? '<ul>' + det.map(function (d) { return '<li>' + esc(d) + '</li>'; }).join('') + '</ul>' : '') +
+        '<div class="cmi-fix">' + esc(comoCorrigir) + '</div>' +
+      '</div>';
+    }
+
+    // Divergências da conferência 5: EM DESTAQUE, mas sem bloquear.
+    var divHtml = '';
+    if (c5 && !c5.ok && c5.divergencias && c5.divergencias.length) {
+      var linhas = c5.divergencias.slice(0, 30).map(function (d) {
+        return '<tr><td>' + esc(brData(d.data)) + '</td><td>' + esc(d.cat_nome) + '</td>' +
+          '<td class="cmi-cst">' + fmtRS(d.lucro_arq) + '</td>' +
+          '<td class="cmi-cst">' + fmtRS(d.lucro_calc) + '</td>' +
+          '<td class="cmi-cst dre-neg">' + fmtRS(d.delta) + '</td></tr>';
+      }).join('');
+      divHtml = '<div class="dri-aviso">' +
+        '<div class="dri-aviso-tit">⚠️ Conferência 5: ' + c5.divergencias.length +
+          ' divergência(s), delta total ' + fmtRS(c5.delta_total) + '</div>' +
+        '<div class="dri-aviso-txt">A coluna "Lucro Total R$" do arquivo discorda de ' +
+          'venda líquida − custo. Isto AVISA e não impede a importação: o lucro não é gravado ' +
+          '(a tabela não tem a coluna) e a DRE calcula líquida − custo. Confira esses dias na TecnoX.</div>' +
+        // A tabela rola DENTRO do próprio container. Sem isto, em 375px as 5
+        // colunas arrastavam o modal inteiro na horizontal — medido.
+        '<div class="dri-tblwrap"><table class="cmi-tbl"><thead><tr><th>Data</th><th>Categoria</th>' +
+          '<th>Lucro arq.</th><th>Calculado</th><th>Delta</th></tr></thead><tbody>' +
+          linhas + '</tbody></table></div>' +
+        (c5.divergencias.length > 30
+          ? '<div class="cmi-fix">… e mais ' + (c5.divergencias.length - 30) + '</div>' : '') +
+      '</div>';
+    }
+
+    // Resumo por posto: a informação mais volumosa. RECOLHIDO em tela estreita
+    // (no celular a prioridade é conferências, registros e divergências) e
+    // aberto no desktop, onde há espaço.
+    var estreito = !!(window.matchMedia && window.matchMedia('(max-width: 560px)').matches);
+    var resumoHtml = '';
+    if (resumo.length) {
+      var rows = resumo.map(function (r) {
+        return '<tr><td>' + esc(r.nome) + '</td><td class="cmi-cst">' + r.dias + '</td>' +
+          '<td class="cmi-cst">' + r.categorias + '</td>' +
+          '<td class="cmi-cst">' + fmtRS(r.venda_bruta) + '</td>' +
+          '<td class="cmi-cst">' + fmtRS(r.venda_liquida) + '</td>' +
+          '<td class="cmi-cst">' + fmtRS(r.custo_total) + '</td></tr>';
+      }).join('');
+      resumoHtml = '<details class="dri-det-box"' + (estreito ? '' : ' open') + '>' +
+        '<summary>Resumo por posto (' + resumo.length + ')</summary>' +
+        '<div class="dri-tblwrap"><table class="cmi-tbl"><thead><tr><th>Posto</th><th>Dias</th>' +
+          '<th>Cats</th><th>Bruta</th><th>Líquida</th><th>Custo</th></tr></thead><tbody>' +
+          rows + '</tbody></table></div>' +
+      '</details>';
+    }
+
+    // Rodapé: antes de gravar mostra o confirmar (se nada barrou); depois de
+    // gravar troca por "Fechar", mantendo TODO o resultado na tela — o usuário
+    // confere o que subiu.
+    var foot;
+    if (gravado) {
+      foot = '<div class="dri-ok">✓ ' + (p.gravados != null ? p.gravados : 0) +
+               ' registro(s) gravados. Os dados da aba já foram recarregados.</div>' +
+             '<div class="cmi-foot"><button class="cmi-btn ghost" onclick="__dreImpFechar()">Fechar</button></div>';
+    } else if (podeGravar) {
+      foot = '<div class="cmi-foot">' +
+        '<button class="cmi-btn" id="dri-gravar" onclick="__dreImpConfirmar()">Confirmar importação' +
+          (p.registros != null ? ' (' + p.registros + ')' : '') + '</button>' +
+        '<button class="cmi-btn ghost" onclick="__dreImpFechar()">Cancelar</button></div>';
+    } else {
+      // Sem botão de confirmar: não há o que fazer aqui além de corrigir o arquivo.
+      foot = '<div class="cmi-foot"><button class="cmi-btn ghost" onclick="__dreImpFechar()">Fechar</button></div>';
+    }
+
+    document.getElementById('dri-body').innerHTML =
+      cards + faixa + postosTxt + confs + erroBloq + divHtml + resumoHtml + foot;
+  }
+
+  // ── Handlers ─────────────────────────────────────────────────────
+  window.__dreImpAbrir = function () {
+    var inp = document.getElementById('dre-imp-file');
+    if (inp) { inp.value = ''; inp.click(); }
+  };
+
+  window.__dreImpFile = async function (input) {
+    var file = input.files && input.files[0];
+    input.value = '';                                  // permite reescolher o mesmo arquivo
+    if (!file) return;
+    // O relatório da TecnoX é .xls legado (BIFF8). A rota confere os magic
+    // bytes OLE2 e recusa .xlsx; barrar aqui evita a ida à rede.
+    if (!/\.xls$/i.test(file.name)) { alert('Selecione o .xls exportado da TecnoX (.xlsx não serve).'); return; }
+    if (file.size > IMP_MAX_MB * 1024 * 1024) { alert('Arquivo maior que ' + IMP_MAX_MB + ' MB.'); return; }
+
+    _impFile = file;
+    var btn = document.getElementById('dre-imp-btn');
+    var rot = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Conferindo…'; }
+    impProcessando('Conferindo o arquivo', 'Lendo e conferindo bloco por bloco. Arquivo com muitos postos demora.');
+    try {
+      var r = await impFetch(file, true);
+      // 400 COM `conferencias` no corpo não é erro de tela: é conferência que
+      // barrou, e a prévia mostra isso melhor que um alerta — inclusive quais
+      // fecharam antes da que falhou.
+      if (r.json && r.json.conferencias) { impRenderPrevia(r.json, false); return; }
+      if (r.status !== 200) { impErro(impMensagemErro(r.status, r.json), r.json && r.json.detalhes); return; }
+      impRenderPrevia(r.json, false);
+    } catch (err) {
+      impErro('Erro ao enviar o arquivo: ' + ((err && err.message) || err));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = rot || '📥 Importar planilha'; }
+    }
+  };
+
+  window.__dreImpConfirmar = async function () {
+    if (!_impFile) return;
+    var btn = document.getElementById('dri-gravar');
+    if (btn) { btn.disabled = true; btn.textContent = 'Gravando…'; }
+    impProcessando('Gravando', 'Enviando os registros em lotes. Não feche a tela.');
+    try {
+      var r = await impFetch(_impFile, false);
+      if (r.status === 200 && r.json && r.json.gravados != null) {
+        // Recarrega os dados da aba ANTES de repintar o modal: quando o usuário
+        // fechar, a tela atrás já mostra o que subiu.
+        await carregar();
+        impRenderPrevia(r.json, true);
+        return;
+      }
+      // Falhou ao gravar: mostra o erro. Para tentar de novo é preciso
+      // reescolher o arquivo — o dry_run é refeito e a prévia volta. Guardar a
+      // prévia anterior só para reexibi-la seria guardar um retrato que pode
+      // não valer mais (o arquivo em disco pode ter mudado no meio).
+      impErro(impMensagemErro(r.status, r.json), r.json && r.json.detalhes);
+    } catch (err) {
+      impErro('Erro ao gravar: ' + ((err && err.message) || err));
+    }
+  };
 
   // ── Entrada ──────────────────────────────────────────────────────
   window.renderDre = function (sec) {
