@@ -252,6 +252,25 @@
       // desenho: sem altura definida o SVG assumiria a proporção do viewBox e
       // ficaria altíssimo no desktop.
       '#s-dre .dre-graf-wrap { position: relative; }' +
+      // SELECAO NATIVA DESLIGADA — SO NA AREA DO GRAFICO.
+      // No Android/iOS o toque longo numa barra inicia a selecao de texto
+      // ANTES do handler abrir o balao: sobe a barra "Selecionar tudo /
+      // Copiar" e ela cobre o tooltip. Vale para o wrap inteiro — SVG,
+      // rotulos dos dois eixos e o proprio balao.
+      // O seletor descendente (`*`) e redundante para `user-select`, que
+      // herda, mas NAO para `-webkit-touch-callout`, que nao herda em todas
+      // as versoes; e o callout e justamente o menu que aparece no toque
+      // longo. Custa um seletor e cobre os dois casos.
+      // NAO estender para a tabela: lá o usuario PRECISA marcar e copiar o
+      // valor de uma celula. Por isso o escopo e .dre-graf-wrap e nao #s-dre.
+      '#s-dre .dre-graf-wrap, #s-dre .dre-graf-wrap * {' +
+        ' -webkit-user-select: none; -ms-user-select: none; user-select: none;' +
+        ' -webkit-touch-callout: none; }' +
+      // manipulation = mantem a rolagem vertical com o dedo sobre o grafico,
+      // mas descarta o duplo-toque-para-zoom, que atrasava o primeiro toque
+      // em ~300ms. `none` bloquearia a rolagem e prenderia o usuario no
+      // grafico — nao e o que se quer.
+      '#s-dre .dre-graf-wrap { touch-action: manipulation; }' +
       '#s-dre .dre-graf { display: block; width: 100%; height: 190px; overflow: visible; }' +
       '@media (max-width: 560px) { #s-dre .dre-graf { height: 150px; } }' +
       '#s-dre .dre-bar { fill: var(--ac); }' +
@@ -283,7 +302,17 @@
       '#s-dre .dre-hit:hover { fill: var(--acd); }' +
       // Tooltip: div sobre o SVG, não <title> nativo — <title> não abre ao
       // toque e não deixa formatar as quatro linhas.
-      '#s-dre .dre-tip { position: absolute; z-index: 3; pointer-events: none;' +
+      // z-index 20: acima de qualquer coisa DENTRO da secao (o rodape sticky
+      // e 2; um thead sticky, se alguem adicionar, costuma ficar em 5-19 no
+      // padrao das outras telas deste projeto). Nao adianta pedir mais: tanto
+      // .pa-main (painel-adm) quanto .main (admin mobile) sao
+      // `position:relative; z-index:1`, ou seja CONTEXTO DE EMPILHAMENTO — o
+      // balao esta preso dentro dele e nao passa por cima da .bnav fixa
+      // (z-index 100) por mais alto que seja o numero. Isso e aceitavel
+      // porque o balao abre no TOPO do grafico: para ele cair atras da barra
+      // de navegacao, as barras teriam de estar abaixo da dobra, e ai nao ha
+      // como tocar numa. Medido em 375px — ver o teste no commit.
+      '#s-dre .dre-tip { position: absolute; z-index: 20; pointer-events: none;' +
         'background: var(--sf2); border: 1px solid var(--bd2); border-radius: 8px;' +
         'padding: .45rem .6rem; font-size: .7rem; color: var(--tx2);' +
         'box-shadow: 0 4px 14px rgba(0,0,0,.35); min-width: 9.5rem; }' +
@@ -789,11 +818,39 @@
     svg.addEventListener('pointermove', mostrar);
     svg.addEventListener('pointerdown', mostrar);
     svg.addEventListener('pointerleave', esconder);
-    // Toque fora do gráfico fecha o balão (no celular não há "leave").
-    document.addEventListener('pointerdown', function (ev) {
-      if (svg && !svg.contains(ev.target)) esconder();
-    });
+    // pointercancel: quando o Android decide que o gesto virou rolagem, ele
+    // CANCELA o ponteiro em vez de mandar pointerup/leave. Sem isto o balão
+    // ficaria aberto depois de uma rolagem iniciada sobre o gráfico.
+    svg.addEventListener('pointercancel', esconder);
+
+    // Cinturão e suspensório para o toque longo: o `user-select: none` do CSS
+    // já impede a seleção, mas em WebView antigo do Android ele é ignorado em
+    // conteúdo SVG. Cancelar o selectstart no wrap fecha essa brecha e não
+    // afeta a tabela, que está fora do wrap.
+    // `wrapEl`, nao `wrap`: dentro do `mostrar` acima ja existe um `wrap` que
+    // e um DOMRect. Dois `var wrap` com significados diferentes na mesma
+    // funcao funcionam (escopos distintos) e confundem na leitura.
+    var wrapEl = tip.parentElement;
+    if (wrapEl) {
+      wrapEl.addEventListener('selectstart', function (ev) { ev.preventDefault(); });
+    }
   }
+
+  // Toque fora do gráfico fecha o balão (no celular não há "leave").
+  //
+  // FORA do ligarTooltipGrafico DE PROPÓSITO. Antes o listener era registrado
+  // ali dentro, e ligarTooltipGrafico roda a cada render() — ou seja, a cada
+  // ordenação de coluna e a cada troca de filtro. Cada chamada pendurava mais
+  // um listener anônimo no document, fechado sobre um `svg` que o innerHTML
+  // seguinte já havia descartado: nunca removido, crescendo sem limite numa
+  // tela que o usuário reordena à vontade. Aqui é UM listener, registrado uma
+  // única vez, que resolve os elementos ATUAIS na hora do evento.
+  document.addEventListener('pointerdown', function (ev) {
+    var svg = document.querySelector('#s-dre .dre-graf');
+    var tip = document.querySelector('#s-dre .dre-tip');
+    if (!svg || !tip) return;
+    if (!svg.contains(ev.target)) tip.style.display = 'none';
+  });
 
   // ── Ordenação da tabela ──────────────────────────────────────────
   function ordenar(linhas) {
