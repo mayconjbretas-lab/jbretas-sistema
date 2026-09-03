@@ -91,6 +91,18 @@ function setTab(btn, tab) {
 
 function abrirMais() { document.getElementById('modal-mais').classList.add('open'); }
 
+// DRE — MESMO dre.js do painel-adm desktop (renderDre em window), sem fork.
+// A adaptação para 375px é toda por CSS dentro do próprio dre.js: KPIs em 2
+// colunas, 4 das 8 colunas da tabela viram linha de detalhe ao toque, e os
+// filtros de período empilham. Espelha o abrirCustoMobile logo abaixo.
+function abrirDreMobile() {
+  document.getElementById('modal-mais').classList.remove('open');
+  document.querySelectorAll('.scr').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.nbtn').forEach(x => x.classList.remove('active'));
+  document.getElementById('s-dre').classList.add('active');
+  renderDre(document.getElementById('s-dre'));
+}
+
 // Custo & Margem (mesmo JS da Logística, sem fork) — aberto pelo item do Mais+.
 // Fecha o modal e ativa a section s-custo (não é aba do bnav). ADM = só leitura.
 function abrirCustoMobile() {

@@ -112,12 +112,33 @@
   // ── Navegacao de mes ────────────────────────────────────────────
   const MES_ABREV_NAV = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
 
-  function mesCorrente() { const d = new Date(); return { mes: d.getMonth() + 1, ano: d.getFullYear() }; }
+  // HOJE EM BRASILIA, nao no relogio do aparelho. Mesmo padrao do
+  // hojeBrasilISO do server.js e do resto do front (dre.js, mercado.js,
+  // solicitacoes-logistica.js): toLocaleDateString('en-CA') com
+  // timeZone 'America/Sao_Paulo' devolve 'AAAA-MM-DD' ja no fuso certo, e a
+  // partir dai a conta e em inteiros.
+  //
+  // POR QUE IMPORTA AQUI, e nao e cosmetico: mesFechado decide EDICAO. Com
+  // `new Date()` local, um aparelho adiantado (ou em outro fuso) via o dia 6
+  // antes do Brasil e FECHAVA o mes anterior antes da hora — o gerente perdia
+  // o prazo por causa do relogio do celular dele, sem nada explicando. O
+  // contrario tambem valia: aparelho atrasado deixava editar mes ja fechado.
+  function hojeBrasil() {
+    const p = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }).split('-');
+    return { ano: parseInt(p[0], 10), mes: parseInt(p[1], 10), dia: parseInt(p[2], 10) };
+  }
+  function mesCorrente() { const h = hojeBrasil(); return { mes: h.mes, ano: h.ano }; }
 
   // Um mes esta FECHADO quando ja passou E o prazo de ajuste acabou.
   //
-  // O PRAZO: o mes anterior so fecha a partir do DIA 3 do mes seguinte.
-  // A regra antiga fechava a zero hora do dia 1o, e isso quebrava o uso
+  // O PRAZO: o mes anterior fica editavel ATE O DIA 5 do mes seguinte,
+  // INCLUSIVE, e fecha no dia 6. Era dia 3 (fechava NO dia 3) ate 02/09/2026.
+  //
+  // PRAZO_AJUSTE_DIA e o ULTIMO DIA EDITAVEL, nao o primeiro dia fechado —
+  // por isso a comparacao e `>` e nao `>=`. Trocar so o numero de 3 para 5
+  // mantendo o `>=` fecharia NO dia 5, um dia antes do combinado.
+  //
+  // A regra original fechava a zero hora do dia 1o, e isso quebrava o uso
   // real: os ultimos dias do mes (30, 31, 28/29 em fevereiro) sao lancados
   // DEPOIS que o mes acaba, e o comeco do mes seguinte e justamente quando
   // se corrige o fechamento. Em 01/09 o dia 31/08 ficava sem como ser
@@ -130,14 +151,14 @@
   // Recebe o mes/ano da LINHA, nao da tela: e o que faz a borda de 31/08
   // numa tela de setembro obedecer a regra de agosto.
   // ano*12+mes vira o ano sozinho (dez/2026 -> jan/2027).
-  const PRAZO_AJUSTE_DIA = 3;
+  const PRAZO_AJUSTE_DIA = 5;
   function mesFechado(mes, ano) {
     if (mes == null || ano == null) return false;
     const c = mesCorrente();
     const alvo  = ano * 12 + (mes - 1);
     const atual = c.ano * 12 + (c.mes - 1);
     if (alvo >= atual) return false;                                  // corrente ou futuro
-    if (alvo === atual - 1) return new Date().getDate() >= PRAZO_AJUSTE_DIA;  // o anterior
+    if (alvo === atual - 1) return hojeBrasil().dia > PRAZO_AJUSTE_DIA;       // o anterior
     return true;                                                      // mais antigo
   }
 
