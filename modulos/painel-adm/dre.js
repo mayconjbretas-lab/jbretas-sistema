@@ -58,7 +58,8 @@
   ];
 
   var _shellPronto = false;
-  var _dados       = null;   // resposta do GET /dre
+  var _dados       = null;   // resposta do GET /dre (agrupar=categoria)
+  var _dadosDia    = null;   // resposta do GET /dre (agrupar=dia) — série do gráfico
   var _postos      = null;   // lista do GET /postos (cache da sessão)
   var _inicio      = null;
   var _fim         = null;
@@ -231,6 +232,53 @@
       '@media (max-width: 560px) { #s-dre .kval { font-size: .95rem; white-space: nowrap; } }' +
       '#s-dre .kval.neg { color: var(--dg); }' +
       '#s-dre .kval.pos { color: var(--ok); }' +
+      // ── GRÁFICO ─────────────────────────────────────────────────
+      // width:100% + viewBox = escala sozinho para o container. É o que faz
+      // 31 ou 90 barras caberem em 375px sem rolagem horizontal.
+      // `height` fixo em CSS porque preserveAspectRatio="none" estica o
+      // desenho: sem altura definida o SVG assumiria a proporção do viewBox e
+      // ficaria altíssimo no desktop.
+      '#s-dre .dre-graf-wrap { position: relative; }' +
+      '#s-dre .dre-graf { display: block; width: 100%; height: 190px; overflow: visible; }' +
+      '@media (max-width: 560px) { #s-dre .dre-graf { height: 150px; } }' +
+      '#s-dre .dre-bar { fill: var(--ac); }' +
+      '#s-dre .dre-bar.neg { fill: var(--dg); }' +
+      '#s-dre .dre-zero { stroke: var(--bd2); stroke-width: 1; }' +
+      // vector-effect: sem ele o preserveAspectRatio="none" esticaria a
+      // espessura do traço junto com o desenho e a linha do zero sairia
+      // grossa e irregular. Vale para o texto também: por isso os rótulos
+      // usam tamanho em px do viewBox e não herdam escala do container.
+      '#s-dre .dre-zero { vector-effect: non-scaling-stroke; }' +
+      // Rótulos em HTML, tamanho natural (o SVG estica, o texto não).
+      // .dre-plot é o sistema de coordenadas comum: o SVG ocupa 100% dele e os
+      // rótulos se posicionam em % sobre a mesma caixa.
+      '#s-dre .dre-plot { position: relative; }' +
+      '#s-dre .dre-area { position: relative; }' +
+      '#s-dre .dre-ey, #s-dre .dre-ex { position: absolute; color: var(--tx3);' +
+        'font-family: var(--mono); font-size: .6rem; line-height: 1; pointer-events: none;' +
+        'white-space: nowrap; }' +
+      // Y: no vão da esquerda, centrado na linha que rotula.
+      '#s-dre .dre-ey { left: 0; transform: translateY(-50%); }' +
+      '#s-dre .dre-ey.base { transform: translateY(-100%); }' +
+      // X: numa faixa própria abaixo do SVG, centrado na barra.
+      // A faixa do eixo X comeca DEPOIS do vao dos rotulos Y (e termina antes
+      // da margem direita), espelhando a area de plotagem do viewBox. Assim o
+      // rotulo do dia 1 nao cai sobre o rotulo de porcentagem.
+      '#s-dre .dre-exs { position: relative; height: 1rem; margin: 2px 1.11% 0 6.39%; }' +
+      '#s-dre .dre-ex { top: 0; transform: translateX(-50%); }' +
+      '#s-dre .dre-hit { fill: transparent; cursor: pointer; }' +
+      '#s-dre .dre-hit:hover { fill: var(--acd); }' +
+      // Tooltip: div sobre o SVG, não <title> nativo — <title> não abre ao
+      // toque e não deixa formatar as quatro linhas.
+      '#s-dre .dre-tip { position: absolute; z-index: 3; pointer-events: none;' +
+        'background: var(--sf2); border: 1px solid var(--bd2); border-radius: 8px;' +
+        'padding: .45rem .6rem; font-size: .7rem; color: var(--tx2);' +
+        'box-shadow: 0 4px 14px rgba(0,0,0,.35); min-width: 9.5rem; }' +
+      '#s-dre .dre-tip b { display: block; color: var(--tx); font-family: var(--mono);' +
+        'font-size: .72rem; margin-bottom: .25rem; }' +
+      '#s-dre .dre-tip span { display: flex; justify-content: space-between; gap: .7rem;' +
+        'font-family: var(--mono); color: var(--tx); }' +
+      '#s-dre .dre-tip i { font-style: normal; color: var(--tx3); }' +
       '#s-dre .dre-table { width: 100%; border-collapse: collapse; font-size: .84rem; }' +
       '#s-dre .dre-table th { text-align: left; font-family: var(--mono); font-size: .64rem; text-transform: uppercase; letter-spacing: .05em; color: var(--tx3); padding: .55rem .6rem; border-bottom: 1px solid var(--bd); white-space: nowrap; }' +
       '#s-dre .dre-table th.ord { cursor: pointer; user-select: none; }' +
@@ -445,19 +493,235 @@
     _erro = null;
     _carregando = true;
     if (body) body.innerHTML = '<div class="empty">Carregando…</div>';
-    var qs = '?inicio=' + encodeURIComponent(_inicio) +
-             '&fim=' + encodeURIComponent(_fim) +
-             '&agrupar=categoria' +
-             (_postoId ? '&posto_id=' + encodeURIComponent(_postoId) : '');
+    // MESMO período e MESMO posto nas duas chamadas, mudando só `agrupar`. A
+    // rota já agrupa por dia; o gráfico não precisou de rota nova.
+    var base = '?inicio=' + encodeURIComponent(_inicio) +
+               '&fim=' + encodeURIComponent(_fim) +
+               (_postoId ? '&posto_id=' + encodeURIComponent(_postoId) : '');
     try {
-      _dados = await apiFetch('/dre' + qs);
+      // Em PARALELO: são duas leituras independentes da mesma janela, e em
+      // série o tempo de tela dobrava. O gráfico é SECUNDÁRIO — se só a
+      // chamada por dia falhar, a tabela e os KPIs continuam aparecendo e o
+      // gráfico simplesmente não é desenhado (ver `.catch` abaixo). O oposto
+      // não vale: sem o agrupar=categoria não há tela.
+      var r = await Promise.all([
+        apiFetch('/dre' + base + '&agrupar=categoria'),
+        apiFetch('/dre' + base + '&agrupar=dia').catch(function (e) {
+          console.warn('DRE: série diária não carregou, gráfico omitido:', e && e.message);
+          return null;
+        }),
+      ]);
+      _dados = r[0];
+      _dadosDia = r[1];
     } catch (err) {
       _dados = null;
+      _dadosDia = null;
       _erro = err && err.message ? err.message : String(err);
     } finally {
       _carregando = false;
       render();
     }
+  }
+
+  // ══ GRÁFICO DE MARGEM DIÁRIA (SVG puro) ══════════════════════════
+  // SVG à mão, sem biblioteca: o projeto não tem lib de gráfico, e um gráfico
+  // de barras com linha de zero não justifica adicionar uma (peso, CDN,
+  // superfície de atualização) para desenhar retângulos.
+  //
+  // COMO ELE CABE EM QUALQUER LARGURA SEM ROLAR: o SVG tem `viewBox` fixo e
+  // `width:100%`. O desenho é feito num sistema de coordenadas de VB_W
+  // unidades e o navegador escala para o container — então 31 ou 90 barras
+  // cabem em 375px por construção, sem media query e sem scroll. É por isso
+  // que "reduzir a largura da barra" não precisou de código: a barra é uma
+  // fração do viewBox.
+  var VB_W = 720;      // unidades de largura do viewBox (não são pixels)
+  var VB_H = 200;      // altura
+  var M_ESQ = 46;      // margem p/ os rótulos de % do eixo Y
+  var M_DIR = 8;
+  var M_TOPO = 12;
+  var M_BASE = 8;      // só respiro; os números do dia são HTML, fora do SVG
+
+  // POR QUE OS RÓTULOS SÃO HTML E NÃO <text> NO SVG
+  // O SVG usa preserveAspectRatio="none" para poder ter altura própria (é o
+  // que faz 90 barras caberem em 375px sem rolagem). Isso escala X e Y por
+  // fatores DIFERENTES — medido em 375px: 0,386 na horizontal contra 0,68 na
+  // vertical. Retângulo distorcido não incomoda ninguém; TEXTO sim: os rótulos
+  // saíam achatados, e "0,0%" chegava a se ler como "0,8%" num painel de
+  // margem. Então o desenho fica no SVG e os rótulos vão em HTML posicionado
+  // por PORCENTAGEM sobre o mesmo sistema de coordenadas — tamanho natural,
+  // sem distorção, e sem precisar de listener de resize para redesenhar.
+
+  // '2026-08-31' -> 31 (só o dia, que é o rótulo do eixo X)
+  function diaDoISO(iso) { return parseInt(String(iso || '').slice(8, 10), 10); }
+
+  // Escolhe quais dias recebem rótulo: primeiro, último e alguns no meio.
+  // Rotular todos ilegibiliza em 375px; rotular só as pontas perde referência
+  // num mês inteiro. `passo` sai da quantidade de barras, não de uma constante.
+  function indicesRotulados(n) {
+    if (n <= 1) return [0];
+    var alvo = 6;                                  // ~6 rótulos, dê o período que der
+    var passo = Math.max(1, Math.round((n - 1) / (alvo - 1)));
+    var idx = [];
+    for (var i = 0; i < n; i += passo) idx.push(i);
+    if (idx[idx.length - 1] !== n - 1) idx.push(n - 1);
+    // Se o penúltimo ficou colado no último, tira — os dois rótulos se sobrepõem.
+    if (idx.length > 2 && (n - 1 - idx[idx.length - 2]) < passo / 2) idx.splice(idx.length - 2, 1);
+    return idx;
+  }
+
+  // Monta o SVG. Devolve '' quando não há NADA para desenhar — quem chama usa
+  // isso para não renderizar card vazio.
+  function svgMargemDiaria(linhas) {
+    if (!linhas || !linhas.length) return '';
+    // margem_pct null = venda líquida zero. NÃO é zero: o dia entra no eixo
+    // (ele existe) mas não ganha barra. Tratar como 0 desenharia uma barra
+    // rente à linha de zero, que se lê como "margem zerada", coisa diferente
+    // de "não há margem para calcular".
+    var comBarra = linhas.filter(function (l) { return l.margem_pct !== null && l.margem_pct !== undefined; });
+    if (!comBarra.length) return '';               // todos os dias sem margem: nada a desenhar
+
+    var vals = comBarra.map(function (l) { return Number(l.margem_pct); });
+    var maxV = Math.max.apply(null, vals);
+    var minV = Math.min.apply(null, vals);
+    // O DOMÍNIO SEMPRE INCLUI O ZERO — é o requisito "linha de referência no
+    // zero, sempre visível". Sem isto, um período todo positivo desenharia a
+    // linha fora da área visível.
+    var topo = Math.max(0, maxV);
+    var base = Math.min(0, minV);
+    // Período de valores todos iguais (inclusive um único dia) daria altura 0
+    // e divisão por zero na escala. O piso de 1 ponto percentual mantém a
+    // barra visível e a escala sã — é o caso "um único dia não quebra".
+    if (topo - base < 1) { topo = base + 1; }
+    var folga = (topo - base) * 0.12;
+    topo += folga; base -= folga;
+    if (base > 0) base = 0;
+    if (topo < 0) topo = 0;
+
+    var areaL = VB_W - M_ESQ - M_DIR;
+    var areaA = VB_H - M_TOPO - M_BASE;
+    var y = function (v) { return M_TOPO + (topo - v) / (topo - base) * areaA; };
+    var yZero = y(0);
+
+    var n = linhas.length;
+    var passoX = areaL / n;
+    // Barra ocupa 70% do passo (30% de respiro). Com 90 dias isso dá barra
+    // fininha, que é o comportamento pedido; com 1 dia daria uma barra
+    // larguíssima, então há TETO de 42 unidades e a barra fica centrada.
+    var larg = Math.min(passoX * 0.7, 42);
+    var rotulados = indicesRotulados(n);
+
+    var barras = '', eixoX = '', alvos = '';
+    linhas.forEach(function (l, i) {
+      var cx = M_ESQ + passoX * i + passoX / 2;
+      var x = cx - larg / 2;
+      var m = l.margem_pct;
+      var temBarra = (m !== null && m !== undefined);
+      if (temBarra) {
+        var v = Number(m);
+        var yv = y(v);
+        var alt = Math.abs(yv - yZero);
+        // Barra de valor minúsculo viraria linha invisível; 1 unidade de piso
+        // garante que o dia apareça.
+        if (alt < 1) alt = 1;
+        var yTopo = v >= 0 ? yZero - alt : yZero;
+        barras += '<rect class="dre-bar' + (v < 0 ? ' neg' : '') + '"' +
+          ' x="' + x.toFixed(2) + '" y="' + yTopo.toFixed(2) + '"' +
+          ' width="' + larg.toFixed(2) + '" height="' + alt.toFixed(2) + '" rx="1"></rect>';
+      }
+      // ALVO DE PONTEIRO: retângulo transparente de altura cheia, um por dia.
+      // Com 90 barras a barra real tem ~4 unidades e ninguém acerta o mouse
+      // nela — e num dia sem barra não haveria nada para tocar. O alvo cobre
+      // a coluna inteira e é ele que dispara o tooltip.
+      alvos += '<rect class="dre-hit" x="' + (M_ESQ + passoX * i).toFixed(2) + '" y="' + M_TOPO +
+        '" width="' + passoX.toFixed(2) + '" height="' + areaA + '"' +
+        ' data-i="' + i + '"></rect>';
+      if (rotulados.indexOf(i) >= 0) {
+        // left em PORCENTAGEM do mesmo sistema de coordenadas do SVG: o rótulo
+        // acompanha a barra em qualquer largura, sem depender de resize.
+        // left relativo a AREA DE PLOTAGEM (sem o vao dos rotulos Y), porque a
+        // faixa .dre-exs tambem comeca depois do vao. Usar o viewBox inteiro
+        // punha o rotulo do primeiro dia por cima do rotulo de % do eixo Y.
+        eixoX += '<span class="dre-ex" style="left:' +
+          ((cx - M_ESQ) / (VB_W - M_ESQ - M_DIR) * 100).toFixed(3) + '%">' +
+          diaDoISO(l.data || l.chave) + '</span>';
+      }
+    });
+
+    // Rótulos de % no eixo Y: topo, zero e base (só os que fazem sentido).
+    var marcas = [{ v: topo }, { v: 0 }];
+    // `base` so entra quando ha valor negativo (senao repetiria o zero).
+    // Ela e marcada como `.base` para ser ancorada ACIMA da linha: centrada
+    // (translateY(-50%)) ela descia para dentro da faixa do eixo X e batia no
+    // rotulo do primeiro dia — medido em 375px e 430px.
+    if (base < 0) marcas.push({ v: base, base: true });
+    var eixoY = marcas.map(function (mk) {
+      return '<span class="dre-ey' + (mk.base ? ' base' : '') +
+        '" style="top:' + (y(mk.v) / VB_H * 100).toFixed(3) + '%">' +
+        nf(mk.v, 1) + '%</span>';
+    }).join('');
+
+    // O SVG leva SÓ o desenho (barras, linha do zero, alvos de ponteiro).
+    // Os rótulos saem em <span> HTML irmãos, posicionados em % — ver o
+    // comentário sobre distorção junto de M_BASE.
+    // .dre-area envolve SÓ o SVG: é a caixa contra a qual os rótulos de % se
+    // posicionam. Pendurá-los no .dre-plot (que inclui a faixa do eixo X)
+    // fazia `top:96%` cair DENTRO da faixa — medido em 375px: o rótulo da base
+    // aterrissava sobre o número do primeiro dia.
+    return '<div class="dre-plot">' +
+      '<div class="dre-area">' +
+        '<svg class="dre-graf" viewBox="0 0 ' + VB_W + ' ' + VB_H + '"' +
+          ' preserveAspectRatio="none" role="img"' +
+          ' aria-label="Margem por dia no período">' +
+          // Linha do zero por baixo das barras: é a referência, não um enfeite.
+          '<line class="dre-zero" x1="' + M_ESQ + '" y1="' + yZero.toFixed(2) +
+            '" x2="' + (VB_W - M_DIR) + '" y2="' + yZero.toFixed(2) + '"></line>' +
+          barras + alvos +
+        '</svg>' +
+        eixoY +
+      '</div>' +
+      '<div class="dre-exs">' + eixoX + '</div>' +
+    '</div>';
+  }
+
+  // Liga o tooltip. PONTEIRO, não mouse: pointerdown/pointermove cobrem mouse,
+  // toque e caneta com um só caminho — no celular o toque na coluna abre o
+  // mesmo balão, que era o requisito. Sem inline handler porque são até 90
+  // alvos; um listener delegado no SVG resolve todos.
+  function ligarTooltipGrafico(linhas) {
+    var svg = document.querySelector('#s-dre .dre-graf');
+    var tip = document.querySelector('#s-dre .dre-tip');
+    if (!svg || !tip) return;
+    var esconder = function () { tip.style.display = 'none'; };
+    var mostrar = function (ev) {
+      var alvo = ev.target && ev.target.closest ? ev.target.closest('.dre-hit') : null;
+      if (!alvo) { esconder(); return; }
+      var l = linhas[parseInt(alvo.getAttribute('data-i'), 10)];
+      if (!l) { esconder(); return; }
+      tip.innerHTML =
+        '<b>' + brData(l.data || l.chave) + '</b>' +
+        '<span><i>Venda líquida</i>' + fmtRS(l.venda_liquida) + '</span>' +
+        '<span><i>Custo</i>' + fmtRS(l.custo_total) + '</span>' +
+        '<span><i>Lucro</i>' + fmtRS(l.lucro) + '</span>' +
+        '<span><i>Margem</i>' + fmtPct(l.margem_pct) + '</span>';
+      tip.style.display = 'block';
+      // Posiciona relativo ao WRAP do gráfico, não à página: o container rola
+      // e coordenadas de viewport descolariam do balão ao rolar.
+      var wrap = tip.parentElement.getBoundingClientRect();
+      var r = alvo.getBoundingClientRect();
+      var x = r.left + r.width / 2 - wrap.left;
+      var largTip = tip.offsetWidth;
+      // Prende dentro do wrap: perto das bordas o balão sairia da tela.
+      x = Math.max(4, Math.min(x - largTip / 2, wrap.width - largTip - 4));
+      tip.style.left = x.toFixed(0) + 'px';
+      tip.style.top = '0px';
+    };
+    svg.addEventListener('pointermove', mostrar);
+    svg.addEventListener('pointerdown', mostrar);
+    svg.addEventListener('pointerleave', esconder);
+    // Toque fora do gráfico fecha o balão (no celular não há "leave").
+    document.addEventListener('pointerdown', function (ev) {
+      if (svg && !svg.contains(ev.target)) esconder();
+    });
   }
 
   // ── Ordenação da tabela ──────────────────────────────────────────
@@ -614,7 +878,32 @@
       return '<td class="col-' + c.key + ' num' + neg + '">' + c.fmt(v) + '</td>';
     }).join('') + '</tr>';
 
-    body.innerHTML = kpis +
+    // ── Gráfico de margem diária, ENTRE os KPIs e a tabela ──
+    // `_dadosDia` pode ser null (a chamada por dia falhou — ela é secundária e
+    // não derruba a tela) ou vir com linhas sem margem nenhuma. Nos dois casos
+    // svgMargemDiaria devolve '' e o card NÃO é montado: período sem dado não
+    // mostra caixa vazia, que é pior que não mostrar nada.
+    var linhasDia = (_dadosDia && Array.isArray(_dadosDia.linhas)) ? _dadosDia.linhas : [];
+    var svg = svgMargemDiaria(linhasDia);
+    var comMargem = linhasDia.filter(function (l) {
+      return l.margem_pct !== null && l.margem_pct !== undefined;
+    }).length;
+    var cardGraf = svg
+      ? '<div class="card" style="margin-top:.9rem">' +
+          '<div class="chdr">' +
+            '<div class="ctitle">Margem por dia</div>' +
+            '<div class="csub">' + comMargem + ' dia(s) com margem' +
+              (linhasDia.length > comMargem
+                ? ' · ' + (linhasDia.length - comMargem) + ' sem venda líquida (sem barra)' : '') +
+              ' · passe o mouse ou toque numa coluna</div>' +
+          '</div>' +
+          '<div class="cbody"><div class="dre-graf-wrap">' + svg +
+            '<div class="dre-tip" style="display:none"></div>' +
+          '</div></div>' +
+        '</div>'
+      : '';
+
+    body.innerHTML = kpis + cardGraf +
       '<div class="card" style="margin-top:.9rem">' +
         '<div class="chdr">' +
           '<div class="ctitle">Por categoria</div>' +
@@ -628,6 +917,9 @@
           '</table>' +
         '</div>' +
       '</div>';
+
+    // DEPOIS do innerHTML: os alvos de ponteiro só existem agora.
+    if (svg) ligarTooltipGrafico(linhasDia);
   }
 
   // ── Entrada ──────────────────────────────────────────────────────
