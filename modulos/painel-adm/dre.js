@@ -27,16 +27,16 @@
 //  1) "Desconto" na tela é SEMPRE o `desconto_calc` da rota
 //     (venda_bruta − venda_liquida). O `desconto_arq`, que a rota também
 //     devolve, é o valor cru do relatório e é sabidamente SUBNOTIFICADO pela
-//     TecnoX (medido na carga de Araponga: 19.443,40 no arquivo contra
-//     28.762,80 de bruta − líquida, que é o que o próprio "Total Geral" do
-//     arquivo confirma). Ele existe só para auditoria e NÃO é renderizado em
-//     lugar nenhum desta tela. Se um dia aparecer na tela, o desconto da rede
-//     passa a ser subnotificado em ~32% sem nada avisando.
+//     TecnoX: medido na carga de um posto, a coluna Desconto do arquivo ficou
+//     cerca de um terço abaixo de bruta − líquida, e é a SUBTRAÇÃO que bate com
+//     o próprio "Total Geral" do mesmo arquivo. Ele existe só para auditoria e
+//     NÃO é renderizado em lugar nenhum desta tela. Se um dia aparecer, o
+//     desconto da rede passa a ser subnotificado em ~32% sem nada avisando.
 //  2) `margem_pct` pode vir null (venda líquida zero). Mostra "—", nunca
 //     "0,00%": margem de venda zerada não existe, e 0,00% seria lido como
 //     medida real.
 //
-// margem_pct JÁ vem em pontos percentuais (10.86 = 10,86%). NÃO multiplicar
+// margem_pct JÁ vem em pontos percentuais (12.5 chega como 12,50%). NÃO multiplicar
 // por 100 — diferente do fmtPct do relatorios.js, cujas rotas devolvem fração.
 //
 // Tema Premium via tokens já existentes (--tx/--ac/--sf/--bd/--dg/--ok...),
@@ -129,8 +129,9 @@
   function fmtRS(v) { return vazio(v) ? '—' : 'R$ ' + nf(v, 2); }
   // UNIDADE da quantidade. COMBUSTIVEIS vem em LITRO; todo o resto em UNIDADE.
   // A coluna mistura as duas grandezas, então o sufixo é INFORMAÇÃO, não
-  // enfeite: sem ele, 449.381,601 (litros) e 330,000 (unidades de lubrificante)
-  // aparecem como se fossem a mesma medida.
+  // enfeite: sem ele a quantidade de combustível (litros) e a de lubrificante
+  // (unidades) ficam na mesma coluna como se fossem a mesma medida — e a de
+  // combustível é ordens de magnitude maior, o que reforça a leitura errada.
   //
   // O teste é `indexOf(...) === 0` (começa com), NÃO "contém": a categoria 12 é
   // "FILTRO DE COMBUSTIVEL", que tem a palavra dentro e é vendida por UNIDADE.
@@ -237,8 +238,9 @@
       '@media (max-width: 900px) { #s-dre .kgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }' +
       '#s-dre .kval { font-size: 1.45rem; }' +
       // Em celular o valor TEM de encolher: em 375px cada card fica com ~148px
-      // úteis, e "R$ 2.254.766,24" a 1.45rem (ou a 1.55rem do admin.css) pede
-      // ~210px. Sem isto o número vaza do card ou quebra em duas linhas.
+      // úteis, e um valor de sete dígitos com centavos ("R$ 9.999.999,99" como
+      // pior caso) a 1.45rem — ou a 1.55rem do admin.css — pede ~210px. Sem
+      // isto o número vaza do card ou quebra em duas linhas.
       // nowrap para garantir que a saída seja encolher a fonte, não quebrar.
       '@media (max-width: 560px) { #s-dre .kval { font-size: .95rem; white-space: nowrap; } }' +
       '#s-dre .kval.neg { color: var(--dg); }' +
@@ -345,10 +347,11 @@
       '#s-dre .dre-table td { padding: .55rem .6rem; border-bottom: 1px solid var(--bd); color: var(--tx2); }' +
       // nowrap nas células numéricas: GARANTIA de uma linha só. Hoje o
       // .dre-scroll já rola na horizontal e nada quebra, mas sem isto a quebra
-      // depende da conta de largura do container — e o min-content de
-      // "R$ 2.219.511,51" é a parte depois do espaço, então o "R$" cairia
-      // sozinho numa segunda linha se a coluna fosse comprimida. Com nowrap
-      // isso não pode acontecer, independente do container.
+      // depende da conta de largura do container — e o min-content de um valor
+      // monetário é a parte DEPOIS do espaço ("R$ " conta como palavra
+      // separada), então o "R$" cairia sozinho numa segunda linha se a coluna
+      // fosse comprimida. Com nowrap isso não pode acontecer, independente do
+      // container.
       '#s-dre .dre-table th.num, #s-dre .dre-table td.num { text-align: right; font-family: var(--mono); white-space: nowrap; }' +
       // Categoria é a única coluna que pode quebrar (nome longo tipo
       // "PRODUTOS ICMS TRIBUTADOS REVENDA"); ela absorve a sobra de largura.
@@ -404,14 +407,15 @@
         // sobrava, mais o que quisesse), ora um max-width fixo na categoria
         // esticava tudo de volta. Com `fixed` + width:100% a tabela cabe no
         // container por construção, em qualquer largura, e o que não cabe na
-        // célula vira elipse em vez de esticar a tabela. Percentuais medidos
-        // para os maiores valores reais (R$ 2.190.748,71 na líquida).
+        // célula vira elipse em vez de esticar a tabela. Os percentuais saem da
+        // LARGURA do maior valor plausível de cada coluna (ver abaixo).
         '#s-dre .dre-table { table-layout: fixed; width: 100%; }' +
-        // Percentuais dimensionados pelo MAIOR valor real de cada coluna na
-        // menor largura suportada (360px, ~332px úteis), com o padding da
-        // célula somado: líquida "R$ 2.190.748,71" ~107px, lucro
-        // "R$ 221.240,46" ~93px, margem "10,10%" ~46px. A categoria fica com o
-        // resto — ela tem elipse e title, um número cortado não teria conserto.
+        // Dimensionados pela LARGURA do maior valor plausível de cada coluna na
+        // menor largura suportada (360px, ~332px úteis), com o padding da célula
+        // somado: um valor de sete dígitos com centavos pede ~107px, um de seis
+        // ~93px, e um percentual de duas casas ~46px. A categoria fica com o
+        // resto — ela tem elipse e title, e um número cortado não teria
+        // conserto.
         '#s-dre .col-cat_nome { width: 25%; }' +
         '#s-dre .col-venda_liquida { width: 32%; }' +
         '#s-dre .col-lucro { width: 28%; }' +
@@ -932,9 +936,10 @@
     var tfoot = '<tr>' + COLS.map(function (c, i) {
       if (i === 0) return '<td class="col-' + c.key + '">TOTAL</td>';
       // QUANTIDADE NÃO TEM TOTAL. A coluna mistura LITRO (combustíveis) com
-      // UNIDADE (produtos): 449.381,601 L + 614 un não somam "449.995,601" de
-      // grandeza nenhuma. O número existe no payload (a rota soma a coluna do
-      // banco), mas exibi-lo com ou sem sufixo seria mentira das duas formas —
+      // UNIDADE (produtos): somar litros de combustível com unidades de produto
+      // não produz grandeza nenhuma. O número existe no payload (a rota soma a
+      // coluna do banco), mas exibi-lo com ou sem sufixo seria mentira das duas
+      // formas —
       // então sai travessão com o motivo no title. É a mesma decisão do
       // sufixo por linha, levada até o rodapé.
       if (c.key === 'quantidade') {

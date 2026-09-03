@@ -413,11 +413,12 @@
       // "Lubrif. + prod." nos DOIS modos, e igual ao card de Venda de Produtos:
       // a coluna sempre somou os dois grupos do rollup (LUBRIFICANTE e
       // PRODUTO), e "Lubrif." sozinho rotulava o número pela metade MENOR.
-      // Medido em 21/08–01/09: PRODUTO R$ 167.487,79 (56%) contra LUBRIFICANTE
-      // R$ 130.064,34 (44%). Dentro de PRODUTO entram gelo (13 descrições,
-      // R$ 20.329,30 — GELOSO/GELIX), água desmineralizada (R$ 3.631,00), ARLA,
-      // aditivo, fluido de radiador e galão de emergência. O nome tem que dizer
-      // isso: quem lia "Lubrif." e via R$ 3,5 mil num posto achava que era óleo.
+      // Medido num ciclo 21→20: PRODUTO passa de metade do total e LUBRIFICANTE
+      // fica com o resto — ou seja, o rótulo antigo nomeava a parte menor.
+      // Dentro de PRODUTO entram gelo (13 descrições, GELOSO/GELIX), água
+      // desmineralizada, ARLA, aditivo, fluido de radiador e galão de
+      // emergência. O nome tem que dizer isso: quem lia "Lubrif." e via o valor
+      // de um posto achava que era só óleo.
       const head = ehPer
         ? '<th>Posto</th><th class="num">Gasolina (L)</th><th class="num">Lubrif. + prod. (R$)</th><th class="num">Mix GA</th><th class="num">Nd</th>'
         : '<th>Posto</th><th class="num">Combust. (L)</th><th class="num">Lubrif. + prod. (R$)</th><th class="num">Mix GA (dia)</th>';
