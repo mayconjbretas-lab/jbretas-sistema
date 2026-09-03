@@ -51,19 +51,29 @@
 
   // As 4 sub-abas do topo. `pronta:false` = visível, desabilitada, tooltip.
   var SUBABAS = [
-    { id: 'dia',      rotulo: 'Dia',       pronta: false },
+    { id: 'dia',      rotulo: 'Dia',       pronta: true,
+      dica: 'Um dia só, posto a posto' },
     { id: 'mes',      rotulo: 'Mês',       pronta: true,
       dica: 'Fechamento do período escolhido, por categoria' },
     { id: 'posto',    rotulo: 'Por Posto', pronta: true,
       dica: 'Compara os postos entre si no mesmo período' },
-    { id: 'projecao', rotulo: 'Projeção',  pronta: false },
+    { id: 'projecao', rotulo: 'Projeção',  pronta: true,
+      dica: 'Mês corrente projetado e o ano mês a mês' },
   ];
 
   var _shellPronto = false;
-  var _subaba      = 'mes';  // sub-aba ativa: 'mes' | 'posto'
+  var _subaba      = 'mes';  // sub-aba ativa: 'dia' | 'mes' | 'posto'
   var _dados       = null;   // resposta do GET /dre (agrupar=categoria)
   var _dadosDia    = null;   // resposta do GET /dre (agrupar=dia) — série do gráfico
   var _dadosPosto  = null;   // resposta do GET /dre (agrupar=posto)
+  // ── Sub-aba "Dia" ──
+  var _dia      = null;      // a data escolhida (YYYY-MM-DD). Uma só, não intervalo.
+  var _dadosD   = null;      // GET /dre do DIA (agrupar=posto, ou =categoria com posto)
+  var _dadosDAnt = null;     // MESMA chamada no dia ANTERIOR, só para a comparação.
+                             // Secundária: se falhar, a comparação é OMITIDA, não zerada.
+  // ── Sub-aba "Projeção" ──
+  var _dadosPMes = null;     // GET /dre agrupar=dia, dia 1 do mês corrente até hoje
+  var _dadosPAno = null;     // GET /dre agrupar=dia, 01/01 até hoje (agrupado por mês aqui)
   var _postos      = null;   // lista do GET /postos (cache da sessão)
   var _inicio      = null;
   var _fim         = null;
@@ -77,6 +87,10 @@
   // `cat_nome` herdada pela outra aba não teria coluna correspondente.
   // Default = margem % desc, que é a pergunta desta aba.
   var _ordPosto = { col: 'margem_pct', dir: 'desc' };
+  // Ordenação da tabela do DIA. Estado próprio pelo mesmo motivo, e com uma
+  // particularidade: a tabela troca de conjunto de colunas quando um posto é
+  // escolhido (postos -> categorias). Ver `ordDiaValida`.
+  var _ordDia = { col: 'margem_pct', dir: 'desc' };
 
   // ── Importação (ver o bloco IMPORTAÇÃO mais abaixo) ──
   var _impFile    = null;    // File escolhido, reenviado no confirmar
@@ -97,6 +111,34 @@
   function hojeISO() {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
   }
+
+  // Anda `n` dias a partir de um ISO. TODA a conta em UTC (Date.UTC entrando,
+  // getUTC* saindo), nunca hora local: `new Date('2026-03-01')` seguido de
+  // setDate local desliza uma hora em fuso com horário de verão e pode pular
+  // ou repetir um dia. Aqui não há hora nenhuma envolvida.
+  // Atravessa mês e ano sozinho, e resolve 28/29/30/31 sem tabela.
+  function somarDiasISO(iso, n) {
+    var p = String(iso).split('-').map(Number);
+    var d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + n));
+    var z = function (x) { return String(x).padStart(2, '0'); };
+    return d.getUTCFullYear() + '-' + z(d.getUTCMonth() + 1) + '-' + z(d.getUTCDate());
+  }
+
+  // Dia da semana de um ISO. Date.UTC + getUTCDay pelo mesmo motivo de
+  // `somarDiasISO`: `new Date('2026-09-01')` é meia-noite UTC e, lido com
+  // getDay() local em Brasília (UTC-3), volta para o dia ANTERIOR.
+  var SEMANA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+  function diaDaSemana(iso) {
+    var p = String(iso).split('-').map(Number);
+    return SEMANA[new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay()];
+  }
+
+  // ONTEM, no fuso do Brasil — o default da sub-aba "Dia".
+  // Por que ontem e não hoje: o dado vem do .xls exportado à mão da TecnoX, e
+  // o dia corrente quase nunca está importado. Abrir na data de hoje mostraria
+  // "sem dado" na maioria dos acessos, e quem abre a aba concluiria que a tela
+  // está quebrada em vez de que o arquivo do dia ainda não subiu.
+  function ontemISO() { return somarDiasISO(hojeISO(), -1); }
 
   // Último MÊS CALENDÁRIO FECHADO: dia 1 ao último dia do mês anterior.
   //   · hoje 02/09/2026 -> 01/08/2026 a 31/08/2026
@@ -236,6 +278,34 @@
   // Celular: ficam Posto, Venda líquida, Lucro e Margem. As duas escondidas
   // já estão na lista de `.col-` do media query da outra tabela.
   var MOBILE_OCULTA_POSTO = ['quantidade', 'custo_total'];
+
+  // ── Colunas da tabela da sub-aba "Dia" ───────────────────────────
+  // DERIVADAS das definições que já existem, não redigitadas: mesmos
+  // formatadores, mesmos rótulos curtos, mesmas chaves. Se `fmtRS` ou o rótulo
+  // de uma coluna mudar, muda nas três abas de uma vez.
+  //
+  // Sem `quantidade`: num dia só, a soma de litros com unidades diz menos
+  // ainda do que num mês, e a coluna a mais custaria largura em 375px.
+  var COLS_DIA_NUM = ['venda_liquida', 'custo_total', 'lucro', 'margem_pct']
+    .map(function (k) { return COL_POSTO_POR_KEY[k]; });
+  // Duas variantes, escolhidas pelo escopo: sem posto escolhido a tabela lista
+  // POSTOS; com posto escolhido, as CATEGORIAS daquele posto no dia.
+  var COLS_DIA     = [COL_POSTO_POR_KEY.nome].concat(COLS_DIA_NUM);
+  var COLS_DIA_CAT = [COL_POR_KEY.cat_nome].concat(COLS_DIA_NUM);
+  // Celular: cai só o Custo, e sobram as 4 colunas das outras abas.
+  var MOBILE_OCULTA_DIA = ['custo_total'];
+
+  // Colunas em vigor e guarda da ordenação. Trocar de escopo troca a primeira
+  // coluna (`nome` <-> `cat_nome`), e uma ordenação por uma chave que não
+  // existe mais cairia no fallback de `ordenar` e ordenaria por OUTRA coluna
+  // sem avisar — com a seta do cabeçalho apontando para nenhuma.
+  function colsDia() { return _postoId ? COLS_DIA_CAT : COLS_DIA; }
+  function ordDiaValida() {
+    var cols = colsDia();
+    var existe = cols.some(function (c) { return c.key === _ordDia.col; });
+    if (!existe) { _ordDia.col = 'margem_pct'; _ordDia.dir = 'desc'; }
+    return _ordDia;
+  }
 
   var RODAPE = 'Lucro bruto = venda líquida − custo de compra. ' +
     'Não inclui frete, taxa de cartão nem despesas operacionais.';
@@ -418,6 +488,98 @@
       // Escopo #s-dre para não mudar select desabilitado de outras telas.
       '#s-dre .sel:disabled { background: var(--sf); border-style: dashed;' +
         ' color: var(--tx3); cursor: not-allowed; opacity: 1; }' +
+      // ── SUB-ABA "DIA" ────────────────────────────────────────────
+      // Setas colando no campo de data, tudo numa linha. `min-width:0` no
+      // input para o grid não estourar em 375px — o campo de data nativo tem
+      // largura intrínseca teimosa.
+      '#s-dre .dre-navdia { display: flex; gap: .3rem; align-items: stretch; }' +
+      '#s-dre .dre-navdia .dre-date { min-width: 0; flex: 1; }' +
+      '#s-dre .dre-passo { flex: 0 0 auto; width: 2.1rem; background: var(--sf2);' +
+        ' border: 1px solid var(--bd); border-radius: 8px; color: var(--tx2);' +
+        ' font-size: 1.05rem; line-height: 1; cursor: pointer;' +
+        ' transition: border-color .15s, color .15s; }' +
+      '#s-dre .dre-passo:hover:not(:disabled) { border-color: var(--ac); color: var(--ac); }' +
+      '#s-dre .dre-passo:disabled { color: var(--tx3); border-style: dashed;' +
+        ' cursor: not-allowed; }' +
+      // Margem embaixo do lucro e variação ao lado da venda: são RESSALVAS do
+      // número de cima, então ficam no mesmo card, menores.
+      '#s-dre .kmini { font-size: .68rem; font-family: var(--mono); color: var(--tx3);' +
+        ' margin-top: 2px; }' +
+      '#s-dre .kmini.pos { color: var(--ok); }' +
+      '#s-dre .kmini.neg { color: var(--dg); }' +
+      // Legenda da linha da média — ABAIXO do gráfico, fora da área de
+      // plotagem, para não tapar barra nenhuma. O traço é uma amostra da
+      // própria linha (tracejada, cor de destaque), então não precisa dizer
+      // "a linha tracejada é": mostra.
+      '#s-dre .dre-legenda { display: flex; align-items: center; gap: .35rem;' +
+        ' margin-top: .3rem; font-family: var(--mono); font-size: .62rem;' +
+        ' font-weight: 700; color: var(--ac); }' +
+      '#s-dre .dre-leg-traco { display: inline-block; width: 1.5rem; height: 0;' +
+        ' border-top: 1.5px dashed var(--ac); }' +
+      // Faixa de "sem dado": informa a data e mantém a navegação à vista.
+      '#s-dre .dre-vazio-dia { text-align: center; padding: 1.6rem 1rem; color: var(--tx3); }' +
+      '#s-dre .dre-vazio-dia b { display: block; color: var(--tx2); font-size: .9rem;' +
+        ' margin-bottom: .35rem; }' +
+      // TRÊS KPIs (abas Dia e Projeção). O `.kgrid` geral cai para 2 colunas
+      // abaixo de 900px, o que deixaria um card órfão sozinho na segunda
+      // linha — daí a classe própria.
+      //
+      // POR QUE EMPILHA E NÃO FICA EM 3 COLUNAS NO CELULAR: em 375px, três
+      // colunas dão card de 110px, com 78px de conteúdo. Um valor de sete
+      // dígitos com centavos pede ~97px a .95rem, e o `.kval` é nowrap — ele
+      // VAZAVA do card (medido: scrollWidth 97 contra clientWidth 78). Os
+      // cards caberem não é o mesmo que os números caberem, e o erro estava
+      // em ter conferido só a primeira coisa. Empilhado, cada card fica com a
+      // largura toda e o valor sobra espaço.
+      // Três cards empilhados são três linhas — aceitável; a objeção a
+      // empilhar valia para os SEIS da aba Mês, que viravam seis telas.
+      '#s-dre .kgrid.kgrid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }' +
+      '@media (max-width: 700px) {' +
+        '#s-dre .kgrid.kgrid-3 { grid-template-columns: 1fr; }' +
+        // Empilhado há largura sobrando: o valor volta ao tamanho de leitura
+        // em vez de ficar com a fonte reduzida do layout apertado.
+        '#s-dre .kgrid.kgrid-3 .kval { font-size: 1.35rem; }' +
+      '}' +
+      // 700–900px: três colunas estreitas, então o valor encolhe para caber.
+      '@media (min-width: 701px) and (max-width: 900px) {' +
+        '#s-dre .kgrid.kgrid-3 .kval { font-size: 1.15rem; }' +
+      '}' +
+      // ── SUB-ABA "PROJEÇÃO" ───────────────────────────────────────
+      // Barra PROJETADA: hachurada e com contorno. O contorno é o que faz a
+      // barra continuar legível quando ela é baixa — só as listras, numa barra
+      // de 6px de altura, viram um borrão.
+      '#s-dre .dre-bar.proj { stroke: var(--ac); stroke-width: 1;' +
+        ' vector-effect: non-scaling-stroke; }' +
+      '#s-dre .dre-bar.proj.neg { stroke: var(--dg); }' +
+      '#s-dre .dre-hach-f { fill: var(--ac); }' +
+      '#s-dre .dre-hach-f.neg { fill: var(--dg); }' +
+      // Marca do mês corrente: vertical, discreta, POR BAIXO das barras.
+      '#s-dre .dre-marca-x { stroke: var(--bd2); stroke-width: 1;' +
+        ' stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; }' +
+      '#s-dre .dre-ex.atual { color: var(--ac); font-weight: 700; }' +
+      // Faixa de incerteza embaixo do valor projetado.
+      '#s-dre .kfaixa { font-size: .66rem; font-family: var(--mono);' +
+        ' color: var(--tx3); margin-top: 2px; }' +
+      // Legenda realizado/projetado do gráfico anual.
+      '#s-dre .dre-legproj { display: flex; flex-wrap: wrap; gap: .2rem .9rem;' +
+        ' margin-top: .3rem; font-family: var(--mono); font-size: .6rem;' +
+        ' color: var(--tx3); }' +
+      '#s-dre .dre-legproj i { font-style: normal; display: inline-flex;' +
+        ' align-items: center; gap: .3rem; }' +
+      '#s-dre .dre-sw { display: inline-block; width: .8rem; height: .55rem;' +
+        ' border-radius: 2px; }' +
+      '#s-dre .dre-sw.real { background: var(--ac); }' +
+      '#s-dre .dre-sw.proj { border: 1px solid var(--ac);' +
+        ' background: repeating-linear-gradient(90deg, var(--ac) 0 2px, transparent 2px 4px); }' +
+      // AVISO da projeção — no rodapé da aba, sempre visível, nunca opcional.
+      // Borda à esquerda em vez de fundo colorido: precisa ser lido, não
+      // ignorado como banner, e não pode competir com os números acima.
+      '#s-dre .dre-aviso-proj { margin-top: .9rem; border-left: 2px solid var(--wn);' +
+        ' background: var(--sf); border-radius: 0 8px 8px 0; padding: .6rem .8rem;' +
+        ' font-size: .68rem; color: var(--tx3); line-height: 1.5; }' +
+      '#s-dre .dre-aviso-proj b { color: var(--tx2); font-weight: 700; }' +
+      '#s-dre .dre-aviso-proj ul { margin: .35rem 0 0; padding-left: 1.1rem; }' +
+      '#s-dre .dre-aviso-proj li { margin: .15rem 0; }' +
       // ── IMPORTAÇÃO: só o que o conjunto .cmi-* do Custo & Margem não cobre
       // (lista das 5 conferências, spinner, faixa de aviso da 5 e o
       // recolhível do resumo). SEM escopo #s-dre de propósito: o modal é
@@ -596,6 +758,7 @@
     var mes = mesFechado(hojeISO());
     _inicio = _inicio || mes.inicio;
     _fim    = _fim    || mes.fim;
+    _dia    = _dia    || ontemISO();
 
     sec.innerHTML = css() +
       '<div class="dre-wrap">' +
@@ -620,13 +783,42 @@
           '</div>' +
           '<div class="cbody">' +
             '<div class="dre-filtros">' +
-              '<div>' +
+              // Início/Fim (abas Mês e Por Posto) e Data única (aba Dia)
+              // ocupam a MESMA faixa de filtros, um par por vez. Ver
+              // `aplicarEscopoSubaba`.
+              '<div id="dre-f-inicio">' +
                 '<label class="filtro-lbl" for="dre-inicio">Início</label>' +
                 '<input type="date" class="dre-date" id="dre-inicio" value="' + esc(_inicio) + '">' +
               '</div>' +
-              '<div>' +
+              '<div id="dre-f-fim">' +
                 '<label class="filtro-lbl" for="dre-fim">Fim</label>' +
                 '<input type="date" class="dre-date" id="dre-fim" value="' + esc(_fim) + '">' +
+              '</div>' +
+              // Um campo de data só, com setas para andar dia a dia. As setas
+              // existem porque o uso real é "e ontem? e antes de ontem?", e
+              // fazer isso pelo calendário nativo são três toques por dia.
+              // `max` = hoje: não há .xls do futuro, e a seta › para no dia de
+              // hoje em vez de levar a uma sequência garantida de telas vazias.
+              // Período FIXO na aba Projeção (mês corrente e ano corrente até
+              // hoje), então não há data para escolher. A nota substitui os
+              // dois campos em vez de deixá-los mudos na tela.
+              '<div id="dre-f-fixo" hidden>' +
+                '<label class="filtro-lbl">Período</label>' +
+                '<div class="dre-nota-txt">Fixo: mês corrente e ano corrente até hoje — ' +
+                  'a projeção parte do que já foi importado, não de um recorte escolhido.</div>' +
+              '</div>' +
+              '<div id="dre-f-dia" hidden>' +
+                '<label class="filtro-lbl" for="dre-dia">Data</label>' +
+                '<div class="dre-navdia">' +
+                  '<button type="button" class="dre-passo" id="dre-dia-ant"' +
+                    ' onclick="__dreDiaPasso(-1)" title="Dia anterior"' +
+                    ' aria-label="Dia anterior">‹</button>' +
+                  '<input type="date" class="dre-date" id="dre-dia"' +
+                    ' value="' + esc(_dia) + '" max="' + esc(hojeISO()) + '">' +
+                  '<button type="button" class="dre-passo" id="dre-dia-prox"' +
+                    ' onclick="__dreDiaPasso(1)" title="Dia seguinte"' +
+                    ' aria-label="Dia seguinte">›</button>' +
+                '</div>' +
               '</div>' +
               '<div id="dre-f-posto">' +
                 '<label class="filtro-lbl" for="dre-posto">Posto</label>' +
@@ -651,9 +843,18 @@
     var iIni = sec.querySelector('#dre-inicio');
     var iFim = sec.querySelector('#dre-fim');
     var iPos = sec.querySelector('#dre-posto');
+    var iDia = sec.querySelector('#dre-dia');
     iIni.onchange = function () { _inicio = iIni.value; carregar(); };
     iFim.onchange = function () { _fim = iFim.value; carregar(); };
     iPos.onchange = function () { _postoId = iPos.value; carregar(); };
+    // Data vazia (o usuário limpou o campo) volta para ontem em vez de
+    // disparar uma requisição com `inicio=`, que a rota recusaria com 400.
+    iDia.onchange = function () {
+      _dia = iDia.value || ontemISO();
+      iDia.value = _dia;
+      atualizarPassoDia();
+      carregar();
+    };
 
     _shellPronto = true;
   }
@@ -673,31 +874,70 @@
     }).join('');
   }
 
-  // Trava o seletor de posto em "Rede toda" na sub-aba "Por Posto", com o
-  // motivo visível embaixo. `disabled` e não `hidden`: o campo continua na
+  // Faixa de filtros conforme a sub-aba:
+  //   Mês / Por Posto -> Início + Fim
+  //   Dia             -> Data única com setas
+  //   Projeção        -> nenhum campo de data (período fixo), com o motivo
+  // E o seletor de posto, que está TRAVADO só em "Por Posto" (essa aba compara
+  // os postos entre si). `disabled` e não `hidden` ali: o campo continua na
   // tela mostrando o escopo em vigor, em vez de sumir e deixar o usuário sem
   // saber sobre o que os números falam.
   function aplicarEscopoSubaba() {
     var sel  = document.getElementById('dre-posto');
     var nota = document.getElementById('dre-posto-nota');
     if (!sel || !nota) return;
+    var umDia = (_subaba === 'dia');
+    var fixo  = (_subaba === 'projecao');
+    var byId = function (id) { return document.getElementById(id); };
+    byId('dre-f-inicio').hidden = umDia || fixo;
+    byId('dre-f-fim').hidden    = umDia || fixo;
+    byId('dre-f-dia').hidden    = !umDia;
+    byId('dre-f-fixo').hidden   = !fixo;
+
     var rede = (_subaba === 'posto');
     sel.disabled = rede;
     nota.hidden = !rede;
     // O `title` diz o mesmo no hover, para quem clica no campo antes de ler.
     sel.title = rede
       ? 'Travado na rede toda nesta aba — ela compara os postos entre si.'
-      : '';
+      : (umDia ? 'Escolha um posto para ver a quebra por categoria no dia.'
+               : (fixo ? 'Projeta a rede toda, ou só o posto escolhido.' : ''));
+    if (umDia) atualizarPassoDia();
   }
+
+  // A seta › para no dia de HOJE. Desabilitada com `title` explicando, e não
+  // escondida: sumir um dos dois botões desloca o campo de data e o usuário
+  // perde a referência de onde clicar. A seta ‹ nunca trava — andar para trás
+  // é sempre válido, inclusive por cima de dias sem dado.
+  function atualizarPassoDia() {
+    var b = document.getElementById('dre-dia-prox');
+    if (!b) return;
+    var noLimite = (_dia >= hojeISO());
+    b.disabled = noLimite;
+    b.title = noLimite ? 'Hoje é o último dia disponível' : 'Dia seguinte';
+  }
+
+  // Passo de um dia. Anda MESMO que o dia vizinho não tenha dado: quem está
+  // procurando o dia que faltou importar precisa poder atravessar o vazio.
+  window.__dreDiaPasso = function (n) {
+    if (_subaba !== 'dia' || !_dia) return;
+    var alvo = somarDiasISO(_dia, n);
+    if (alvo > hojeISO()) return;      // não há .xls do futuro
+    _dia = alvo;
+    var inp = document.getElementById('dre-dia');
+    if (inp) inp.value = _dia;
+    atualizarPassoDia();
+    carregar();
+  };
 
   window.__dreSubaba = function (id) {
     var a = SUBABAS.filter(function (x) { return x.id === id; })[0];
     if (!a || !a.pronta || _subaba === id) return;
     _subaba = id;
     // "Por Posto" é comparação ENTRE postos: força a rede toda. Ao voltar
-    // para "Mês" o seletor destrava zerado — o posto que estava escolhido não
-    // volta sozinho, porque a tela passou a mostrar a rede e reativar um
-    // filtro sem o usuário pedir mudaria os números sem aviso.
+    // para "Mês" ou "Dia" o seletor destrava zerado — o posto que estava
+    // escolhido não volta sozinho, porque a tela passou a mostrar a rede e
+    // reativar um filtro sem o usuário pedir mudaria os números sem aviso.
     if (id === 'posto' && _postoId) {
       _postoId = '';
       var sel = document.getElementById('dre-posto');
@@ -732,6 +972,85 @@
   // ── Fetch ────────────────────────────────────────────────────────
   async function carregar() {
     var body = document.getElementById('dre-body');
+
+    // ── sub-aba "Projeção": mês corrente + ano corrente ──
+    // As DUAS chamadas combinadas, as duas com `agrupar=dia`. O agrupamento
+    // por MÊS é feito no cliente (`agruparPorMes`) — a rota não tem esse
+    // agrupamento e não foi criada rota nova.
+    // O período é FIXO (mês corrente e ano corrente até hoje), então os campos
+    // de data não participam desta aba; o de posto sim, e vai nas duas.
+    if (_subaba === 'projecao') {
+      var hj = hojeISO();
+      _erro = null;
+      _carregando = true;
+      if (body) body.innerHTML = '<div class="empty">Carregando…</div>';
+      var pid = _postoId ? '&posto_id=' + encodeURIComponent(_postoId) : '';
+      var faixa = function (ini) {
+        return '?inicio=' + encodeURIComponent(ini) + '&fim=' + encodeURIComponent(hj) +
+          pid + '&agrupar=dia';
+      };
+      try {
+        var rp = await Promise.all([
+          apiFetch('/dre' + faixa(hj.slice(0, 7) + '-01')),   // dia 1 do mês corrente
+          apiFetch('/dre' + faixa(hj.slice(0, 4) + '-01-01')), // 01/01 do ano corrente
+        ]);
+        _dadosPMes = rp[0];
+        _dadosPAno = rp[1];
+      } catch (err) {
+        _dadosPMes = null;
+        _dadosPAno = null;
+        _erro = err && err.message ? err.message : String(err);
+      } finally {
+        _carregando = false;
+        render();
+      }
+      return;
+    }
+
+    // ── sub-aba "Dia": UM dia, inicio = fim ──
+    // Caminho próprio e curto, antes da validação de intervalo: aqui não há
+    // intervalo para validar (é a mesma data nas duas pontas) e o agrupamento
+    // depende de haver posto escolhido.
+    if (_subaba === 'dia') {
+      if (!_dia) return;
+      _erro = null;
+      _carregando = true;
+      if (body) body.innerHTML = '<div class="empty">Carregando…</div>';
+      // Com posto escolhido a pergunta muda de "qual posto" para "qual
+      // categoria dentro deste posto" — e é o mesmo GET /dre, só trocando
+      // `agrupar`. Sem posto, lista os postos do dia.
+      var agr = _postoId ? 'categoria' : 'posto';
+      var qs = function (d) {
+        return '?inicio=' + encodeURIComponent(d) + '&fim=' + encodeURIComponent(d) +
+          (_postoId ? '&posto_id=' + encodeURIComponent(_postoId) : '') +
+          '&agrupar=' + agr;
+      };
+      var ant = somarDiasISO(_dia, -1);
+      try {
+        var rd = await Promise.all([
+          apiFetch('/dre' + qs(_dia)),
+          // DIA ANTERIOR — só para a comparação do KPI, e por isso
+          // SECUNDÁRIA: `.catch` devolve null e a comparação é OMITIDA. Um
+          // erro aqui não pode derrubar a tela do dia escolhido, e mostrar
+          // "0%" no lugar afirmaria estabilidade que ninguém mediu.
+          apiFetch('/dre' + qs(ant)).catch(function (e) {
+            console.warn('DRE: dia anterior não carregou, comparação omitida:', e && e.message);
+            return null;
+          }),
+        ]);
+        _dadosD = rd[0];
+        _dadosDAnt = rd[1];
+      } catch (err) {
+        _dadosD = null;
+        _dadosDAnt = null;
+        _erro = err && err.message ? err.message : String(err);
+      } finally {
+        _carregando = false;
+        render();
+      }
+      return;
+    }
+
     if (!_inicio || !_fim) return;
     if (_inicio > _fim) {
       _dados = null;
@@ -780,16 +1099,21 @@
     }
   }
 
-  // DOMÍNIO DO EIXO DE VALOR (margem %) — comum aos DOIS gráficos.
-  // Uma função só porque as regras são as mesmas e, se divergissem, um dos
-  // gráficos passaria a desenhar a mesma margem em escala diferente do outro.
+  // DOMÍNIO DO EIXO DE VALOR — comum a TODOS os gráficos da tela.
+  // Uma função só porque as regras são as mesmas e, se divergissem, dois
+  // gráficos passariam a desenhar o mesmo número em escala diferente.
+  //
+  // Chamava-se `escalaMargem`, mas passou a servir também um eixo em DINHEIRO
+  // (o lucro mensal da aba Projeção) — nome com "margem" ali seria mentira
+  // para quem for mexer depois.
   //
   // SEMPRE INCLUI O ZERO: é o requisito "linha de referência no zero, sempre
   // visível". Sem isto um período todo positivo desenharia a linha fora da
-  // área. `extra` entra no domínio quando existe — é a média da rede no
-  // gráfico por posto: se ela caísse fora, a linha de referência (que é o
-  // ponto da tela) sairia da área desenhada.
-  function escalaMargem(vals, extra) {
+  // área. `extra` entra no domínio quando existe — é a média (da rede, ou
+  // mensal): se caísse fora, a linha de referência sairia da área desenhada.
+  // `piso` é a extensão MÍNIMA do domínio, na unidade do eixo: 1 ponto
+  // percentual para margem, e um valor em reais para o eixo de dinheiro.
+  function escalaComZero(vals, extra, piso) {
     var v = vals.slice();
     if (extra !== null && extra !== undefined && Number.isFinite(Number(extra))) {
       v.push(Number(extra));
@@ -799,7 +1123,8 @@
     // Valores todos iguais (inclusive um único ponto) dariam extensão 0 e
     // divisão por zero na escala. O piso de 1 ponto percentual mantém a barra
     // visível e a escala sã — é o caso "um único dia não quebra".
-    if (topo - base < 1) topo = base + 1;
+    var minimo = Number.isFinite(piso) ? piso : 1;
+    if (topo - base < minimo) topo = base + minimo;
     var folga = (topo - base) * 0.12;
     topo += folga; base -= folga;
     if (base > 0) base = 0;
@@ -841,9 +1166,12 @@
   // Escolhe quais dias recebem rótulo: primeiro, último e alguns no meio.
   // Rotular todos ilegibiliza em 375px; rotular só as pontas perde referência
   // num mês inteiro. `passo` sai da quantidade de barras, não de uma constante.
-  function indicesRotulados(n) {
+  function indicesRotulados(n, maxRotulos) {
     if (n <= 1) return [0];
-    var alvo = 6;                                  // ~6 rótulos, dê o período que der
+    // `maxRotulos` >= n rotula TODOS — é o caso dos 12 meses da aba Projeção,
+    // onde pular mês deixaria o eixo ilegível ("qual barra é agosto?").
+    var alvo = Number.isFinite(maxRotulos) ? maxRotulos : 6;
+    if (alvo >= n) { var todos = []; for (var t = 0; t < n; t++) todos.push(t); return todos; }
     var passo = Math.max(1, Math.round((n - 1) / (alvo - 1)));
     var idx = [];
     for (var i = 0; i < n; i += passo) idx.push(i);
@@ -855,16 +1183,48 @@
 
   // Monta o SVG. Devolve '' quando não há NADA para desenhar — quem chama usa
   // isso para não renderizar card vazio.
-  function svgMargemDiaria(linhas) {
+  // SERVE AS TRÊS ABAS que usam barra VERTICAL — a série por DIA (aba Mês), a
+  // série por POSTO num dia (aba Dia) e o LUCRO POR MÊS (aba Projeção). A
+  // geometria é a mesma nas três: barras a partir do zero, escala com o zero
+  // dentro, alvo de ponteiro de altura cheia, rótulos em HTML fora do SVG.
+  // `opts` cobre só o que difere:
+  //   valor      — função (linha) -> número da barra. Default: margem_pct.
+  //   rotuloX    — função (linha) -> texto do eixo X, ou null para NÃO rotular.
+  //   rotuloY    — função (número) -> texto do eixo Y. Default: percentual.
+  //   maxRotulos — quantos rótulos no eixo X (>= n rotula todos).
+  //   media      — valor de uma linha horizontal de referência, ou null.
+  //   mediaRot   — texto da legenda da média. Default: "média da rede N%".
+  //   hachura    — função (linha) -> true para barra HACHURADA (projetada).
+  //   marcaX     — índice que recebe marca vertical (o mês corrente), ou null.
+  //   piso       — extensão mínima do domínio, na unidade do eixo.
+  //   aria       — a descrição acessível, que muda com o que está no eixo.
+  // Sem `opts` o comportamento é EXATAMENTE o da série diária de antes.
+  //
+  // O NOME não é mais "MargemDiaria" de propósito: com um eixo em dinheiro
+  // servido pela mesma função, o nome antigo mentiria para quem for mexer.
+  function svgBarrasVerticais(linhas, opts) {
+    var o = opts || {};
+    var valor = o.valor || function (l) { return l.margem_pct; };
+    var rotuloX = (o.rotuloX === undefined)
+      ? function (l) { return diaDoISO(l.data || l.chave); }
+      : o.rotuloX;
+    var rotuloY = o.rotuloY || function (v) { return nf(v, 1) + '%'; };
     if (!linhas || !linhas.length) return '';
-    // margem_pct null = venda líquida zero. NÃO é zero: o dia entra no eixo
-    // (ele existe) mas não ganha barra. Tratar como 0 desenharia uma barra
-    // rente à linha de zero, que se lê como "margem zerada", coisa diferente
-    // de "não há margem para calcular". Ver `temMargem`.
-    var comBarra = linhas.filter(temMargem);
-    if (!comBarra.length) return '';               // todos os dias sem margem: nada a desenhar
+    // Valor ausente NÃO é zero: a fatia entra no eixo (ela existe) mas não
+    // ganha barra. Tratar como 0 desenharia uma barra rente à linha de zero,
+    // que se lê como "margem zerada" / "lucro zero" — afirmação diferente de
+    // "não há número para mostrar". Ver `temMargem` e o mês sem importação.
+    var temValor = function (l) {
+      var v = valor(l);
+      return v !== null && v !== undefined && Number.isFinite(Number(v));
+    };
+    var comBarra = linhas.filter(temValor);
+    if (!comBarra.length) return '';               // nada a desenhar
+    var valores = comBarra.map(function (l) { return Number(valor(l)); });
 
-    var dom = escalaMargem(comBarra.map(function (l) { return Number(l.margem_pct); }));
+    // A média entra no domínio: se ficasse fora, a linha de referência —
+    // que é o motivo de ela existir — sairia da área desenhada.
+    var dom = escalaComZero(valores, o.media, o.piso);
     var topo = dom.topo, base = dom.base;
 
     var areaL = VB_W - M_ESQ - M_DIR;
@@ -878,23 +1238,28 @@
     // fininha, que é o comportamento pedido; com 1 dia daria uma barra
     // larguíssima, então há TETO de 42 unidades e a barra fica centrada.
     var larg = Math.min(passoX * 0.7, 42);
-    var rotulados = indicesRotulados(n);
+    var rotulados = indicesRotulados(n, o.maxRotulos);
 
     var barras = '', eixoX = '', alvos = '';
     linhas.forEach(function (l, i) {
       var cx = M_ESQ + passoX * i + passoX / 2;
       var x = cx - larg / 2;
-      var m = l.margem_pct;
-      var temBarra = (m !== null && m !== undefined);
-      if (temBarra) {
-        var v = Number(m);
+      if (temValor(l)) {
+        var v = Number(valor(l));
         var yv = y(v);
         var alt = Math.abs(yv - yZero);
         // Barra de valor minúsculo viraria linha invisível; 1 unidade de piso
-        // garante que o dia apareça.
+        // garante que a fatia apareça.
         if (alt < 1) alt = 1;
         var yTopo = v >= 0 ? yZero - alt : yZero;
-        barras += '<rect class="dre-bar' + (v < 0 ? ' neg' : '') + '"' +
+        // HACHURA = valor PROJETADO. O preenchimento é um `pattern` de listras
+        // VERTICAIS, não diagonais: o SVG usa preserveAspectRatio="none" e
+        // escala X e Y por fatores diferentes, o que torceria uma diagonal em
+        // ângulo diferente a cada largura de tela. Listra vertical continua
+        // vertical sob qualquer escala — só o espaçamento acompanha a barra.
+        var hach = o.hachura ? !!o.hachura(l) : false;
+        barras += '<rect class="dre-bar' + (v < 0 ? ' neg' : '') + (hach ? ' proj' : '') + '"' +
+          (hach ? ' fill="url(#dre-hach-' + (v < 0 ? 'neg' : 'pos') + ')"' : '') +
           ' x="' + x.toFixed(2) + '" y="' + yTopo.toFixed(2) + '"' +
           ' width="' + larg.toFixed(2) + '" height="' + alt.toFixed(2) + '" rx="1"></rect>';
       }
@@ -905,15 +1270,15 @@
       alvos += '<rect class="dre-hit" x="' + (M_ESQ + passoX * i).toFixed(2) + '" y="' + M_TOPO +
         '" width="' + passoX.toFixed(2) + '" height="' + areaA + '"' +
         ' data-i="' + i + '"></rect>';
-      if (rotulados.indexOf(i) >= 0) {
+      if (rotuloX && rotulados.indexOf(i) >= 0) {
         // left em PORCENTAGEM do mesmo sistema de coordenadas do SVG: o rótulo
         // acompanha a barra em qualquer largura, sem depender de resize.
         // left relativo a AREA DE PLOTAGEM (sem o vao dos rotulos Y), porque a
         // faixa .dre-exs tambem comeca depois do vao. Usar o viewBox inteiro
         // punha o rotulo do primeiro dia por cima do rotulo de % do eixo Y.
-        eixoX += '<span class="dre-ex" style="left:' +
+        eixoX += '<span class="dre-ex' + (o.marcaX === i ? ' atual' : '') + '" style="left:' +
           ((cx - M_ESQ) / (VB_W - M_ESQ - M_DIR) * 100).toFixed(3) + '%">' +
-          diaDoISO(l.data || l.chave) + '</span>';
+          esc(rotuloX(l)) + '</span>';
       }
     });
 
@@ -927,8 +1292,57 @@
     var eixoY = marcas.map(function (mk) {
       return '<span class="dre-ey' + (mk.base ? ' base' : '') +
         '" style="top:' + (y(mk.v) / VB_H * 100).toFixed(3) + '%">' +
-        nf(mk.v, 1) + '%</span>';
+        esc(rotuloY(mk.v)) + '</span>';
     }).join('');
+
+    // LINHA DA MÉDIA: horizontal, tracejada, atravessando a área toda. Só
+    // existe quando `o.media` vem — a série diária da aba Mês não a usa.
+    var temMedia = (o.media !== null && o.media !== undefined && Number.isFinite(Number(o.media)));
+    var linhaMedia = '', legenda = '';
+    if (temMedia) {
+      var ym = y(Number(o.media));
+      linhaMedia = '<line class="dre-hlinha-media" x1="' + M_ESQ + '" y1="' + ym.toFixed(2) +
+        '" x2="' + (VB_W - M_DIR) + '" y2="' + ym.toFixed(2) + '"></line>';
+      // O VALOR VAI NUMA LEGENDA ABAIXO, não num rótulo sobre a linha.
+      // Rótulo colado na linha, dentro da área, TAPAVA barras: ele precisa de
+      // fundo opaco para ser legível sobre o desenho, e esse fundo apaga o
+      // dado que estiver atrás — medido em 375px, onde ele cobria a cauda das
+      // barras. Reservar margem à direita para ele custaria ~20% da área de
+      // plotagem em celular, que é onde ela já é mais escassa.
+      // Aqui não há ambiguidade: existe UMA linha tracejada no gráfico.
+      legenda = '<div class="dre-legenda"><span class="dre-leg-traco"></span>' +
+        esc(o.mediaRot || ('média da rede ' + nf(Number(o.media), 2) + '%')) + '</div>';
+    }
+
+    // MARCA VERTICAL numa fatia (o mês corrente). Vai por BAIXO das barras,
+    // atravessando a área: é uma referência de posição, não um dado, e não
+    // pode competir com a barra que marca.
+    var marca = '';
+    if (o.marcaX !== null && o.marcaX !== undefined && o.marcaX >= 0 && o.marcaX < n) {
+      var xm2 = M_ESQ + passoX * o.marcaX + passoX / 2;
+      marca = '<line class="dre-marca-x" x1="' + xm2.toFixed(2) + '" y1="' + M_TOPO +
+        '" x2="' + xm2.toFixed(2) + '" y2="' + (M_TOPO + areaA).toFixed(2) + '"></line>';
+    }
+
+    // Padrões de hachura. Declarados só quando há barra hachurada, para o SVG
+    // dos outros gráficos não carregar defs que ninguém referencia.
+    // `patternUnits="userSpaceOnUse"`: o passo é em unidades do viewBox, então
+    // acompanha a largura da barra em qualquer tela.
+    var defs = '';
+    if (o.hachura && linhas.some(function (l) { return !!o.hachura(l); })) {
+      // PASSO 11 / LISTRA 4, medido em 375px: dá listra de 1,8px com vão de
+      // 3,2px, ou ~3,5 listras por barra de 12. Com o passo 7/3 que estava
+      // aqui antes a listra ficava em 1,35px com vão de 1,8px e a barra
+      // projetada se lia como SÓLIDA no celular — que é justamente a distinção
+      // que este gráfico existe para fazer. O vão maior que a listra é o que
+      // faz o olho ler "hachurado" em vez de "cheio".
+      defs = '<defs>' +
+        '<pattern id="dre-hach-pos" patternUnits="userSpaceOnUse" width="11" height="11">' +
+          '<rect width="4" height="11" class="dre-hach-f"></rect></pattern>' +
+        '<pattern id="dre-hach-neg" patternUnits="userSpaceOnUse" width="11" height="11">' +
+          '<rect width="4" height="11" class="dre-hach-f neg"></rect></pattern>' +
+      '</defs>';
+    }
 
     // O SVG leva SÓ o desenho (barras, linha do zero, alvos de ponteiro).
     // Os rótulos saem em <span> HTML irmãos, posicionados em % — ver o
@@ -941,15 +1355,18 @@
       '<div class="dre-area">' +
         '<svg class="dre-graf dre-svg" viewBox="0 0 ' + VB_W + ' ' + VB_H + '"' +
           ' preserveAspectRatio="none" role="img"' +
-          ' aria-label="Margem por dia no período">' +
-          // Linha do zero por baixo das barras: é a referência, não um enfeite.
+          ' aria-label="' + esc(o.aria || 'Margem por dia no período') + '">' +
+          // Zero e média por baixo das barras: são referência, não enfeite.
           '<line class="dre-zero" x1="' + M_ESQ + '" y1="' + yZero.toFixed(2) +
             '" x2="' + (VB_W - M_DIR) + '" y2="' + yZero.toFixed(2) + '"></line>' +
-          barras + alvos +
+          defs + marca + linhaMedia + barras + alvos +
         '</svg>' +
         eixoY +
       '</div>' +
-      '<div class="dre-exs">' + eixoX + '</div>' +
+      // A faixa do eixo X só existe quando há rótulo: sem isto ela reservava
+      // 1rem de altura vazia embaixo do gráfico da aba Dia.
+      (rotuloX ? '<div class="dre-exs">' + eixoX + '</div>' : '') +
+      legenda +
     '</div>';
   }
 
@@ -992,7 +1409,7 @@
     var comBarra = linhas.filter(temMargem);
     if (!comBarra.length) return '';
 
-    var dom = escalaMargem(comBarra.map(function (l) { return Number(l.margem_pct); }), mediaRede);
+    var dom = escalaComZero(comBarra.map(function (l) { return Number(l.margem_pct); }), mediaRede);
     var topo = dom.topo, base = dom.base;
 
     var n = linhas.length;
@@ -1127,6 +1544,7 @@
   //
   // SERVE OS DOIS GRÁFICOS. `opts` cobre o que muda entre eles e nada mais:
   //   titulo   — o cabeçalho do balão (data no diário, nome do posto aqui);
+  //   nota     — linha extra no fim do balão (realizado/projetado).
   //   seguirY  — o balão acompanha a LINHA tocada. No diário o alvo é uma
   //              coluna de altura cheia, e o balão fica no topo; no por posto
   //              o alvo é uma faixa, e um balão fixo no topo não diria de qual
@@ -1149,7 +1567,11 @@
         '<span><i>Venda líquida</i>' + fmtRS(l.venda_liquida) + '</span>' +
         '<span><i>Custo</i>' + fmtRS(l.custo_total) + '</span>' +
         '<span><i>Lucro</i>' + fmtRS(l.lucro) + '</span>' +
-        '<span><i>Margem</i>' + fmtPct(l.margem_pct) + '</span>';
+        '<span><i>Margem</i>' + fmtPct(l.margem_pct) + '</span>' +
+        // Linha extra opcional — a aba Projeção usa para dizer se o mês é
+        // realizado ou projetado, que é a informação sem a qual os outros
+        // quatro números do balão podem ser lidos como fato.
+        (o.nota ? '<span><i>&nbsp;</i>' + esc(o.nota(l)) + '</span>' : '');
       tip.style.display = 'block';
       // Posiciona relativo ao WRAP do gráfico, não à página: o container rola
       // e coordenadas de viewport descolariam do balão ao rolar.
@@ -1235,8 +1657,8 @@
   // `escopo` = 'posto' na tabela por posto; ausente na de categoria. Cada uma
   // mexe no SEU estado de ordenação — ver o comentário de `_ordPosto`.
   window.__dreOrdenar = function (key, escopo) {
-    var cols = (escopo === 'posto') ? COLS_POSTO : COLS;
-    var ord  = (escopo === 'posto') ? _ordPosto  : _ord;
+    var cols = (escopo === 'posto') ? COLS_POSTO : (escopo === 'dia' ? colsDia() : COLS);
+    var ord  = (escopo === 'posto') ? _ordPosto  : (escopo === 'dia' ? _ordDia   : _ord);
     var c = cols.filter(function (x) { return x.key === key; })[0];
     if (!c) return;
     if (ord.col === key) {
@@ -1252,7 +1674,12 @@
   // ── Render ───────────────────────────────────────────────────────
   // Dataset da sub-aba ATIVA. O subtítulo e o período têm de descrever o que
   // está na tela — não o que a outra aba carregou antes.
-  function dadosAtivos() { return _subaba === 'posto' ? _dadosPosto : _dados; }
+  function dadosAtivos() {
+    if (_subaba === 'posto')    return _dadosPosto;
+    if (_subaba === 'dia')      return _dadosD;
+    if (_subaba === 'projecao') return _dadosPMes;
+    return _dados;
+  }
 
   function render() {
     var body = document.getElementById('dre-body');
@@ -1270,9 +1697,28 @@
       // descrever os números que estão na tela — misturar data nova com
       // contagem velha rotularia o total errado.
       var per = (dadosAtivos() && dadosAtivos().periodo) ? dadosAtivos().periodo : null;
-      sub.textContent = nomePosto + ' · ' +
-        brData(per ? per.inicio : _inicio) + ' a ' + brData(per ? per.fim : _fim) +
-        (per ? ' · ' + per.dias + ' dia(s)' : '');
+      if (_subaba === 'projecao') {
+        // Nem intervalo nem contagem de dias aqui: o `dias` da rota é a
+        // extensão do CALENDÁRIO (01/09 a 03/09 = 3), e nesta aba o número
+        // que importa é "dias COM DADO", que aparece no KPI. Repetir a
+        // contagem do calendário no subtítulo criaria dois números
+        // parecidos e diferentes na mesma tela.
+        var hjP = hojeISO();
+        sub.textContent = nomePosto + ' · ' +
+          MESES_LONGO[Number(hjP.slice(5, 7)) - 1] + '/' + hjP.slice(0, 4) +
+          ' · ano ' + hjP.slice(0, 4) + ' até ' + brData(hjP);
+      } else if (_subaba === 'dia') {
+        // UMA data, não intervalo: "01/09/2026 a 01/09/2026 · 1 dia(s)" é a
+        // mesma informação escrita três vezes. O dia da semana entra porque a
+        // margem de um domingo não se compara com a de uma terça, e sem ele o
+        // usuário precisa ir ao calendário para saber qual foi.
+        sub.textContent = nomePosto + ' · ' + brData(per ? per.inicio : _dia) +
+          ' · ' + diaDaSemana(per ? per.inicio : _dia);
+      } else {
+        sub.textContent = nomePosto + ' · ' +
+          brData(per ? per.inicio : _inicio) + ' a ' + brData(per ? per.fim : _fim) +
+          (per ? ' · ' + per.dias + ' dia(s)' : '');
+      }
     }
 
     if (_carregando) { body.innerHTML = '<div class="empty">Carregando…</div>'; return; }
@@ -1282,7 +1728,9 @@
     }
     // Daqui para baixo é o corpo da sub-aba "Mês". A "Por Posto" tem KPIs,
     // gráfico e tabela próprios, e desvia aqui em vez de ramificar cada bloco.
-    if (_subaba === 'posto') { renderPorPosto(body); return; }
+    if (_subaba === 'dia')      { renderDia(body); return; }
+    if (_subaba === 'posto')    { renderPorPosto(body); return; }
+    if (_subaba === 'projecao') { renderProjecao(body); return; }
     if (!_dados) { body.innerHTML = '<div class="empty">Sem dados.</div>'; return; }
 
     var T = _dados.totais || {};
@@ -1384,10 +1832,10 @@
     // ── Gráfico de margem diária, ENTRE os KPIs e a tabela ──
     // `_dadosDia` pode ser null (a chamada por dia falhou — ela é secundária e
     // não derruba a tela) ou vir com linhas sem margem nenhuma. Nos dois casos
-    // svgMargemDiaria devolve '' e o card NÃO é montado: período sem dado não
+    // svgBarrasVerticais devolve '' e o card NÃO é montado: período sem dado não
     // mostra caixa vazia, que é pior que não mostrar nada.
     var linhasDia = (_dadosDia && Array.isArray(_dadosDia.linhas)) ? _dadosDia.linhas : [];
-    var svg = svgMargemDiaria(linhasDia);
+    var svg = svgBarrasVerticais(linhasDia);
     var comMargem = linhasDia.filter(function (l) {
       return l.margem_pct !== null && l.margem_pct !== undefined;
     }).length;
@@ -1425,6 +1873,582 @@
     if (svg) ligarTooltipGrafico(linhasDia);
   }
 
+
+  // ── Render da sub-aba "Dia" ──────────────────────────────────────
+  // Reusa: `svgBarrasVerticais` (o mesmo desenho vertical da aba Mês, com
+  // `rotuloX:null` e a linha da média), `ligarTooltipGrafico`, o wrap
+  // `.dre-graf-wrap` (que traz user-select/touch-action/balão), as classes
+  // `col-<key>` do celular e a linha de detalhe.
+  //
+  // ESCOPO: sem posto escolhido, a lista é de POSTOS naquele dia. Com posto
+  // escolhido, é a quebra por CATEGORIA daquele posto no dia — mesma rota,
+  // outro `agrupar`. O gráfico segue a lista, seja qual for.
+  function renderDia(body) {
+    if (!_dadosD) { body.innerHTML = '<div class="empty">Sem dados.</div>'; return; }
+
+    var T = _dadosD.totais || {};
+    var linhas = Array.isArray(_dadosD.linhas) ? _dadosD.linhas : [];
+    var porCat = !!_postoId;
+    var cols = colsDia();
+    var ord = ordDiaValida();
+
+    // ── DIA SEM DADO ──
+    // Nem tela em branco nem KPI zerado: zero venda e zero custo se leem como
+    // "o posto vendeu nada", que é afirmação diferente de "este dia não foi
+    // importado". As setas continuam na faixa de filtros, intactas, porque
+    // achar o dia que falta é justamente o que se faz aqui.
+    if (!linhas.length) {
+      body.innerHTML =
+        '<div class="card"><div class="cbody">' +
+          '<div class="dre-vazio-dia">' +
+            '<b>Sem dado para ' + esc(brData(_dia)) + ' (' + esc(diaDaSemana(_dia)) + ')</b>' +
+            'Nenhum lançamento importado para esta data' +
+            (porCat ? ' neste posto' : ' em nenhum posto') + '.<br>' +
+            '<span class="csub">A DRE vem do .xls de categoria da TecnoX, importado à mão. ' +
+              'Use as setas ‹ › acima para procurar o dia mais próximo que já subiu.</span>' +
+          '</div>' +
+        '</div></div>';
+      return;
+    }
+
+    // ── KPIs: venda líquida, custo, lucro (com a margem embaixo) ──
+    // Três, não os seis da aba Mês: num dia só, venda bruta e desconto não
+    // mudam nenhuma decisão, e três cards cabem numa linha em 375px.
+    var vl = T.venda_liquida, ct = T.custo_total, lu = T.lucro, mg = T.margem_pct;
+    var kpis =
+      '<div class="kgrid kgrid-3">' +
+        '<div class="kbox">' +
+          '<div class="klbl">Venda líquida</div>' +
+          '<div class="kval ac">' + fmtRS(vl) + '</div>' +
+          variacaoVenda(vl) +
+        '</div>' +
+        '<div class="kbox">' +
+          '<div class="klbl">Custo</div>' +
+          '<div class="kval">' + fmtRS(ct) + '</div>' +
+          // Ressalva no MESMO card do custo, porque é dele que ela fala.
+          (lacunaTexto(T) ? '<div class="kmini">' + esc(lacunaTexto(T)) + '</div>' : '') +
+        '</div>' +
+        '<div class="kbox">' +
+          '<div class="klbl">Lucro bruto</div>' +
+          '<div class="kval' + (vazio(lu) ? '' : (Number(lu) < 0 ? ' neg' : ' pos')) + '">' +
+            fmtRS(lu) + '</div>' +
+          '<div class="kmini' + (mg === null || mg === undefined ? '' :
+            (Number(mg) < 0 ? ' neg' : ' pos')) + '">margem ' + fmtPct(mg) + '</div>' +
+        '</div>' +
+      '</div>';
+
+    // UMA ordenação para gráfico e tabela — a mesma lista alimenta os dois.
+    var ordenadas = ordenar(linhas, ord, cols);
+
+    // ── Gráfico: barras verticais, uma por posto (ou categoria) ──
+    // `rotuloX: null` de propósito. O rótulo aqui seria o NOME do posto, e 37
+    // nomes em pé não são legíveis em nenhuma largura — mesmo rotacionados.
+    // Quem identifica cada barra é o balão (mouse e toque), e a tabela logo
+    // abaixo repete a MESMA ordem, então a barra n é a linha n.
+    var mediaRede = (T.margem_pct === null || T.margem_pct === undefined)
+      ? null : Number(T.margem_pct);
+    // O gráfico é ordenado por MARGEM decrescente sempre, independente da
+    // ordenação da tabela: um gráfico de barras cuja altura sobe e desce sem
+    // padrão não se lê, e a comparação com a linha da média é o ponto dele.
+    var paraGrafico = ordenar(linhas, { col: 'margem_pct', dir: 'desc' }, cols);
+    var svg = svgBarrasVerticais(paraGrafico, {
+      rotuloX: null,
+      media: mediaRede,
+      aria: 'Margem por ' + (porCat ? 'categoria' : 'posto') + ' em ' + brData(_dia) +
+        ', com a média da rede',
+    });
+    var comMargem = paraGrafico.filter(temMargem).length;
+    var oQue = porCat ? 'categoria' : 'posto';
+    var cardGraf = svg
+      ? '<div class="card" style="margin-top:.9rem">' +
+          '<div class="chdr">' +
+            '<div class="ctitle">Margem por ' + oQue + '</div>' +
+            '<div class="csub">' + comMargem + ' ' + oQue + '(s) com margem' +
+              (paraGrafico.length > comMargem
+                ? ' · ' + (paraGrafico.length - comMargem) + ' sem venda líquida (sem barra)' : '') +
+              (mediaRede === null ? '' : ' · média ' + nf(mediaRede, 2) + '%') +
+              ' · ordenado por margem · passe o mouse ou toque numa barra</div>' +
+          '</div>' +
+          '<div class="cbody"><div class="dre-graf-wrap">' + svg +
+            '<div class="dre-tip" style="display:none"></div>' +
+          '</div></div>' +
+        '</div>'
+      : '';
+
+    // ── Tabela ──
+    var ths = cols.map(function (c) {
+      var on = ord.col === c.key;
+      var seta = on ? (ord.dir === 'desc' ? ' ↓' : ' ↑') : '';
+      return '<th class="ord col-' + c.key + (c.tipo === 'num' ? ' num' : '') + (on ? ' on' : '') + '"' +
+        ' onclick="__dreOrdenar(\'' + c.key + '\', \'dia\')"' +
+        ' title="Ordenar por ' + esc(c.rot) + '">' +
+        '<span class="rot-l">' + esc(c.rot) + '</span>' +
+        '<span class="rot-c">' + esc(c.rotCurto || c.rot) + '</span>' +
+        seta + '</th>';
+    }).join('');
+
+    var trs = ordenadas.map(function (l) {
+      var celulas = cols.map(function (c, i) {
+        var v = l[c.key];
+        var neg = (c.tipo === 'num' && !vazio(v) && Number(v) < 0) ? ' dre-neg' : '';
+        var primeira = (i === 0);
+        var tit = primeira
+          ? ' title="' + esc(porCat ? String(v || '') : tituloPosto(l)) + '"' : '';
+        // MESMA marcação das outras abas: o `*` vai no rótulo da linha, com o
+        // detalhe no title, porque é ressalva de toda a linha.
+        var marca = (primeira && temLacuna(l))
+          ? '<span class="dre-lacuna" title="' + esc(textoLacuna(l)) + '">*</span>' : '';
+        return '<td class="col-' + c.key + (c.tipo === 'num' ? ' num' : '') + neg + '"' + tit + '>'
+          + c.fmt(v, l) + marca + '</td>';
+      }).join('');
+      var det = MOBILE_OCULTA_DIA.map(function (k) {
+        var c = COL_POSTO_POR_KEY[k];
+        return '<div class="dre-det-par"><span>' + esc(c.rot) + '</span><b>' + c.fmt(l[k], l) + '</b></div>';
+      }).join('');
+      return '<tr onclick="__dreDetalhe(this)" title="Toque para ver o custo">'
+        + celulas + '</tr>'
+        + '<tr class="dre-det"><td colspan="' + cols.length + '">' + det + '</td></tr>';
+    }).join('');
+
+    var tfoot = '<tr>' + cols.map(function (c, i) {
+      if (i === 0) return '<td class="col-' + c.key + '">' + (porCat ? 'TOTAL' : 'REDE') + '</td>';
+      var v = T[c.key];
+      var neg = (!vazio(v) && Number(v) < 0) ? ' dre-neg' : '';
+      return '<td class="col-' + c.key + ' num' + neg + '">' + c.fmt(v) + '</td>';
+    }).join('') + '</tr>';
+
+    var comLacuna = ordenadas.filter(temLacuna).length;
+    body.innerHTML = kpis + cardGraf +
+      '<div class="card" style="margin-top:.9rem">' +
+        '<div class="chdr">' +
+          '<div class="ctitle">' + (porCat ? 'Por categoria' : 'Por posto') + '</div>' +
+          '<div class="csub">' + ordenadas.length + ' ' + oQue + '(s) · ' +
+            'clique no cabeçalho para ordenar' +
+            (porCat ? '' : ' · escolha um posto no filtro para ver as categorias dele') +
+            (comLacuna
+              ? ' · ' + comLacuna + ' com <span class="dre-lacuna">*</span> têm custo incompleto no arquivo'
+              : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="cbody dre-scroll">' +
+          '<table class="dre-table">' +
+            '<thead><tr>' + ths + '</tr></thead>' +
+            '<tbody>' + trs + '</tbody>' +
+            '<tfoot>' + tfoot + '</tfoot>' +
+          '</table>' +
+        '</div>' +
+      '</div>';
+
+    // DEPOIS do innerHTML. Mesmo binder das outras abas; o balão é ancorado no
+    // topo (o alvo é uma coluna de altura cheia, como na aba Mês), e o título
+    // é o nome do posto ou da categoria em vez da data.
+    if (svg) {
+      ligarTooltipGrafico(paraGrafico, {
+        titulo: function (l) {
+          return esc(porCat ? (l.cat_nome || '—') : rotuloPosto(l));
+        },
+      });
+    }
+  }
+
+  // Variação da venda líquida contra o DIA ANTERIOR.
+  // OMITE em vez de mostrar zero quando não há base: sem dado do dia anterior,
+  // "0,0%" afirmaria estabilidade que ninguém mediu — e é justamente o dia sem
+  // importação que produziria esse zero. Também omite quando a venda anterior
+  // é zero, porque a divisão não existe (variação percentual sobre base zero
+  // é infinita, não 100%).
+  function variacaoVenda(vlHoje) {
+    if (!_dadosDAnt) return '';
+    var la = Array.isArray(_dadosDAnt.linhas) ? _dadosDAnt.linhas : [];
+    if (!la.length) return '';
+    var va = _dadosDAnt.totais ? _dadosDAnt.totais.venda_liquida : null;
+    if (vazio(va) || Number(va) === 0 || vazio(vlHoje)) return '';
+    var d = (Number(vlHoje) - Number(va)) / Number(va) * 100;
+    // A SETA SAI DO VALOR EXIBIDO, não do cru. Com a seta vinda do cru, uma
+    // variação de +0,04% mostrava "▲ 0,0%" — seta para cima ao lado de um zero,
+    // que se lê como erro da tela. Arredonda primeiro, decide depois: abaixo de
+    // 0,05% a variação é "=", que é o que o número está dizendo.
+    var dExib = Math.round(d * 10) / 10;
+    var cls = dExib > 0 ? ' pos' : (dExib < 0 ? ' neg' : '');
+    var seta = dExib > 0 ? '▲' : (dExib < 0 ? '▼' : '=');
+    var texto = dExib === 0
+      ? '= estável vs. dia anterior'
+      : seta + ' ' + nf(Math.abs(dExib), 1) + '% vs. dia anterior';
+    return '<div class="kmini' + cls + '" title="Dia anterior (' +
+      esc(brData(somarDiasISO(_dia, -1))) + '): ' + esc(fmtRS(va)) + '">' +
+      texto + '</div>';
+  }
+
+  // Texto curto da lacuna de custo do PERÍODO (vem em `totais`), para o card
+  // do custo. Vazio quando não há lacuna — sem faixa de aviso à toa.
+  function lacunaTexto(T) {
+    var c = T && T.custo_desconhecido;
+    if (!c || !c.linhas) return '';
+    return c.linhas + ' lançamento(s) sem custo (' + fmtRS(c.venda_liquida) + ' de venda)';
+  }
+
+  // ══ SUB-ABA "PROJEÇÃO" ═══════════════════════════════════════════
+  //
+  // O QUE ELA NÃO FAZ, e é o mais importante: não modela sazonalidade nem
+  // tendência. Projetar dezembro a partir de agosto com um modelo inventado
+  // aqui produziria um número de aparência sofisticada e sem lastro — e é
+  // número de lucro, que alguém vai levar para uma reunião. A regra é MÉDIA
+  // SIMPLES, declarada na tela e no aviso do rodapé:
+  //   · mês corrente = média DIÁRIA dos dias COM DADO × dias do mês;
+  //   · meses futuros = média dos últimos 3 meses FECHADOS.
+  // Nada além disso.
+  //
+  // "DIAS COM DADO", nunca "dia do mês": a fonte é um .xls importado à mão. Se
+  // a importação parou no dia 8, a média diária tem de dividir por 8, não pelo
+  // dia de hoje — dividir pelo dia do mês diluiria o lucro em dias que nunca
+  // foram medidos e a projeção sairia baixa, com cara de queda real.
+
+  var MESES_CURTO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun',
+                     'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  var MESES_LONGO = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+                     'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
+  // Quantos dias tem o mês de um ISO. Date.UTC com dia 0 do mês SEGUINTE —
+  // mesma técnica de `mesFechado`, que resolve 28/29/30/31 sem regra de
+  // bissexto escrita à mão.
+  function diasNoMes(iso) {
+    var p = String(iso).split('-').map(Number);
+    return new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();
+  }
+
+  // Dinheiro CURTO, para rótulo de eixo: "R$ 1,2 mi", "R$ 740 mil".
+  // O eixo tem ~46 unidades de viewBox de largura; um valor com centavos não
+  // cabe e, num eixo, não acrescenta nada.
+  // O sinal vem DEPOIS do "R$", igual ao `fmtRS` do resto da tela
+  // ("R$ -184 mil", não "-R$ 184 mil"): duas convenções de sinal na mesma
+  // tela fazem o leitor conferir duas vezes qual é qual.
+  function fmtRSCurto(v) {
+    if (!Number.isFinite(v)) return '—';
+    var a = Math.abs(v), sinal = v < 0 ? '-' : '';
+    if (a >= 1e6) return 'R$ ' + sinal + nf(a / 1e6, 1) + ' mi';
+    if (a >= 1e3) return 'R$ ' + sinal + nf(a / 1e3, 0) + ' mil';
+    return 'R$ ' + sinal + nf(a, 0);
+  }
+
+  // Desvio padrão AMOSTRAL (n-1). Amostral e não populacional porque os dias
+  // observados são uma amostra do mês, não o mês inteiro — com n pequeno a
+  // diferença entre os dois divisores não é decorativa. Devolve null com menos
+  // de 2 pontos, onde dispersão não existe.
+  function desvioPadrao(vals) {
+    var n = vals.length;
+    if (n < 2) return null;
+    var media = vals.reduce(function (a, b) { return a + b; }, 0) / n;
+    var soma = vals.reduce(function (a, b) { return a + (b - media) * (b - media); }, 0);
+    return Math.sqrt(soma / (n - 1));
+  }
+
+  // Série diária -> um registro por MÊS. Feito no cliente, a partir do
+  // `agrupar=dia`, como combinado: não há rota nova.
+  // `dias` conta os dias COM DADO — a rota devolve uma linha por dia que tem
+  // lançamento, então um dia não importado simplesmente não aparece, e é
+  // exatamente essa contagem que a projeção precisa.
+  function agruparPorMes(linhas) {
+    var por = new Map();
+    (linhas || []).forEach(function (l) {
+      var iso = l.data || l.chave;
+      var mes = String(iso).slice(0, 7);          // YYYY-MM
+      var a = por.get(mes);
+      if (!a) {
+        a = { mes: mes, dias: 0, venda_liquida: 0, custo_total: 0,
+              sc_linhas: 0, sc_venda: 0, margens: [] };
+        por.set(mes, a);
+      }
+      a.dias += 1;
+      a.venda_liquida += Number(l.venda_liquida) || 0;
+      a.custo_total   += Number(l.custo_total)   || 0;
+      if (l.custo_desconhecido) {
+        a.sc_linhas += Number(l.custo_desconhecido.linhas) || 0;
+        a.sc_venda  += Number(l.custo_desconhecido.venda_liquida) || 0;
+      }
+      if (temMargem(l)) a.margens.push(Number(l.margem_pct));
+    });
+    return [...por.values()].sort(function (a, b) { return a.mes.localeCompare(b.mes); })
+      .map(function (a) {
+        a.lucro = a.venda_liquida - a.custo_total;
+        a.margem_pct = a.venda_liquida !== 0 ? a.lucro / a.venda_liquida * 100 : null;
+        a.custo_desconhecido = { linhas: a.sc_linhas, venda_liquida: a.sc_venda };
+        return a;
+      });
+  }
+
+  // Projeção do MÊS CORRENTE a partir dos dias com dado.
+  // Devolve `null` com menos de MIN_DIAS_PROJ dias — projetar 30 dias a partir
+  // de 2 é chute com aparência de conta, e a tela prefere não dizer nada a
+  // dizer isso.
+  var MIN_DIAS_PROJ = 3;
+  function projetarMes(mesAtual, iso) {
+    if (!mesAtual || mesAtual.dias < MIN_DIAS_PROJ) return null;
+    var D = diasNoMes(iso);
+    var lucroDia = mesAtual.lucro / mesAtual.dias;
+    var vendaDia = mesAtual.venda_liquida / mesAtual.dias;
+    var lucro = lucroDia * D;
+    var venda = vendaDia * D;
+    // FAIXA DE INCERTEZA: sai do desvio padrão da MARGEM DIÁRIA, convertido em
+    // dinheiro pela venda projetada. É a dispersão CRUA dos dias observados,
+    // não erro padrão da média (que seria σ/√n) — o erro padrão daria uma
+    // faixa bem mais estreita, e faixa estreita numa projeção de 8 dias é
+    // justamente a falsa confiança que se quer evitar aqui.
+    // NÃO é intervalo de confiança e a tela não chama de intervalo.
+    var sd = desvioPadrao(mesAtual.margens);
+    var faixa = (sd === null) ? null : venda * sd / 100;
+    return {
+      dias: mesAtual.dias, diasDoMes: D,
+      lucro: lucro, venda: venda,
+      margem_pct: venda !== 0 ? lucro / venda * 100 : null,
+      faixa: faixa, sd_margem: sd,
+    };
+  }
+
+  // Média dos últimos `n` meses FECHADOS COM DADO, contando de trás para
+  // frente. Mês fechado sem importação não entra: ele não vale zero, ele é
+  // desconhecido — e entrar como zero puxaria a média para baixo e a projeção
+  // dos meses futuros com ela.
+  function mediaUltimosFechados(fechados, n) {
+    var usados = fechados.slice(-n);
+    if (!usados.length) return null;
+    var soma = usados.reduce(function (a, m) {
+      a.venda += m.venda_liquida; a.custo += m.custo_total; return a;
+    }, { venda: 0, custo: 0 });
+    var venda = soma.venda / usados.length;
+    var custo = soma.custo / usados.length;
+    return {
+      n: usados.length,
+      meses: usados.map(function (m) { return m.mes; }),
+      venda_liquida: venda, custo_total: custo, lucro: venda - custo,
+      margem_pct: venda !== 0 ? (venda - custo) / venda * 100 : null,
+    };
+  }
+
+  // ── Render da sub-aba "Projeção" ─────────────────────────────────
+  function renderProjecao(body) {
+    if (!_dadosPMes || !_dadosPAno) {
+      body.innerHTML = '<div class="empty">Sem dados.</div>';
+      return;
+    }
+    var hoje = hojeISO();
+    var ano = Number(hoje.slice(0, 4));
+    var mesNum = Number(hoje.slice(5, 7));          // 1..12
+    var mesISO = hoje.slice(0, 7);
+
+    var mesesAno = agruparPorMes(_dadosPAno.linhas);
+    var doMes = agruparPorMes(_dadosPMes.linhas)[0] || null;
+    var porMes = new Map(mesesAno.map(function (m) { return [m.mes, m]; }));
+    // FECHADOS = meses anteriores ao corrente QUE TÊM DADO. A ordem é
+    // cronológica, então `slice(-3)` pega os três últimos.
+    var fechados = mesesAno.filter(function (m) { return m.mes < mesISO; });
+    var proj = projetarMes(doMes, hoje);
+    var base3 = mediaUltimosFechados(fechados, 3);
+    var mesAnt = fechados.length ? fechados[fechados.length - 1] : null;
+
+    // ── BLOCO 1: os três KPIs do mês corrente ──
+    var nDias = doMes ? doMes.dias : 0;
+    var lucroAgora = doMes ? doMes.lucro : null;
+
+    var kpiLucro =
+      '<div class="kbox">' +
+        '<div class="klbl">Lucro até agora</div>' +
+        '<div class="kval' + (vazio(lucroAgora) ? '' : (lucroAgora < 0 ? ' neg' : ' pos')) + '">' +
+          fmtRS(lucroAgora) + '</div>' +
+        '<div class="kmini" title="Dias que têm lançamento importado neste mês. Não é o dia do mês.">' +
+          nDias + ' dia(s) com dado' +
+          (nDias ? ' de ' + diasNoMes(hoje) : '') + '</div>' +
+      '</div>';
+
+    var kpiProj = proj
+      ? '<div class="kbox">' +
+          '<div class="klbl">Projeção do mês</div>' +
+          '<div class="kval ac">' + fmtRS(proj.lucro) + '</div>' +
+          '<div class="kfaixa"' +
+            ' title="Média diária dos ' + proj.dias + ' dia(s) com dado × ' + proj.diasDoMes +
+            ' dias do mês. A faixa é o desvio padrão da margem diária (' +
+            nf(proj.sd_margem || 0, 2) + ' p.p.) aplicado à venda projetada. ' +
+            'Não é intervalo de confiança.">' +
+            (proj.faixa === null ? 'sem faixa: 1 dia só' : '± ' + fmtRS(proj.faixa)) +
+          '</div>' +
+        '</div>'
+      // OMITIDA, com o motivo no lugar do número — e não um número fraco sem
+      // aviso. É o caso "menos de 3 dias com dado".
+      : '<div class="kbox">' +
+          '<div class="klbl">Projeção do mês</div>' +
+          '<div class="kval">—</div>' +
+          '<div class="kmini" title="Projetar um mês inteiro a partir de menos de ' +
+            MIN_DIAS_PROJ + ' dias não é projeção, é chute.">' +
+            (nDias ? nDias + ' dia(s) com dado: menos de ' + MIN_DIAS_PROJ + ', não projeta'
+                   : 'nenhum dia importado neste mês') + '</div>' +
+        '</div>';
+
+    // vs MÊS ANTERIOR FECHADO. Compara a PROJEÇÃO do mês com o FECHAMENTO do
+    // anterior — comparar o parcial de 8 dias com um mês inteiro sempre daria
+    // queda, e seria queda inventada pela aritmética. Sem projeção, não há
+    // comparação honesta a fazer.
+    var kpiVs;
+    if (mesAnt && proj && mesAnt.lucro !== 0) {
+      // Math.abs no DENOMINADOR, de propósito: com um mês anterior de
+      // PREJUÍZO, dividir pelo valor com sinal inverteria a leitura — sair de
+      // -163 mil para -152 mil é melhora, e apareceria como queda. Com o
+      // módulo embaixo, o sinal do resultado é o sinal da melhora.
+      var dvs = (proj.lucro - mesAnt.lucro) / Math.abs(mesAnt.lucro) * 100;
+      var dv = Math.round(dvs * 10) / 10;
+      var cvs = dv > 0 ? ' pos' : (dv < 0 ? ' neg' : '');
+      var svs = dv > 0 ? '▲' : (dv < 0 ? '▼' : '=');
+      kpiVs = '<div class="kbox">' +
+        '<div class="klbl">vs. ' + esc(MESES_CURTO[Number(mesAnt.mes.slice(5, 7)) - 1]) + ' fechado</div>' +
+        '<div class="kval' + cvs + '">' + (dv === 0 ? '=' : svs + ' ' + nf(Math.abs(dv), 1) + '%') + '</div>' +
+        '<div class="kmini" title="' + esc(MESES_LONGO[Number(mesAnt.mes.slice(5, 7)) - 1]) +
+          ' fechou com ' + esc(fmtRS(mesAnt.lucro)) + ' em ' + mesAnt.dias + ' dia(s) com dado.">' +
+          'fechou em ' + fmtRS(mesAnt.lucro) + '</div>' +
+      '</div>';
+    } else {
+      kpiVs = '<div class="kbox">' +
+        '<div class="klbl">vs. mês anterior</div>' +
+        '<div class="kval">—</div>' +
+        '<div class="kmini">' +
+          (!mesAnt
+            ? (mesNum === 1
+                ? 'janeiro: não há mês fechado neste ano'
+                : 'nenhum mês anterior tem dado importado')
+            : (!proj ? 'sem projeção do mês para comparar' : 'mês anterior fechou em zero')) +
+        '</div>' +
+      '</div>';
+    }
+
+    var kpis = '<div class="kgrid kgrid-3">' + kpiLucro + kpiProj + kpiVs + '</div>';
+
+    // ── BLOCO 2: o ano, mês a mês ──
+    // 12 fatias SEMPRE, janeiro a dezembro: o eixo é o ano, não os meses que
+    // por acaso têm dado. Mês fechado sem importação fica SEM BARRA, com o
+    // motivo no balão — barra zerada afirmaria lucro zero.
+    var slots = [];
+    for (var i = 1; i <= 12; i++) {
+      var chave = ano + '-' + String(i).padStart(2, '0');
+      var real = porMes.get(chave) || null;
+      var s;
+      if (i < mesNum) {
+        s = real
+          ? { tipo: 'real', venda_liquida: real.venda_liquida, custo_total: real.custo_total,
+              lucro: real.lucro, margem_pct: real.margem_pct, dias: real.dias }
+          : { tipo: 'vazio' };
+      } else if (i === mesNum) {
+        s = proj
+          ? { tipo: 'proj', venda_liquida: proj.venda, custo_total: proj.venda - proj.lucro,
+              lucro: proj.lucro, margem_pct: proj.margem_pct, dias: proj.dias, faixa: proj.faixa }
+          : { tipo: 'parcial', dias: nDias };
+      } else {
+        s = base3
+          ? { tipo: 'proj', venda_liquida: base3.venda_liquida, custo_total: base3.custo_total,
+              lucro: base3.lucro, margem_pct: base3.margem_pct, baseN: base3.n }
+          : { tipo: 'vazio' };
+      }
+      s.mes = i;
+      s.chave = chave;
+      slots.push(s);
+    }
+
+    // MÉDIA MENSAL REALIZADA — só dos meses fechados com dado. De propósito
+    // não entra projeção nenhuma na média: uma linha de referência calculada
+    // sobre os próprios números que ela deveria julgar não julga nada.
+    var mediaReal = fechados.length
+      ? fechados.reduce(function (a, m) { return a + m.lucro; }, 0) / fechados.length
+      : null;
+
+    // NENHUM MÊS FECHADO (janeiro, ou ano sem importação anterior): sem
+    // gráfico anual. Doze barras em que onze são vazias e uma é o mês
+    // corrente não é um gráfico do ano, é ruído.
+    var temAnual = fechados.length > 0;
+    var cardAno = '';
+    if (temAnual) {
+      var svgAno = svgBarrasVerticais(slots, {
+        valor: function (l) { return l.tipo === 'vazio' || l.tipo === 'parcial' ? null : l.lucro; },
+        rotuloX: function (l) { return MESES_CURTO[l.mes - 1]; },
+        rotuloY: fmtRSCurto,
+        maxRotulos: 12,
+        media: mediaReal,
+        mediaRot: 'média mensal realizada ' + fmtRS(mediaReal),
+        hachura: function (l) { return l.tipo === 'proj'; },
+        marcaX: mesNum - 1,
+        piso: 1,
+        aria: 'Lucro bruto por mês em ' + ano + ', realizado e projetado',
+      });
+      if (svgAno) {
+        var nReal = slots.filter(function (s2) { return s2.tipo === 'real'; }).length;
+        var nProj = slots.filter(function (s2) { return s2.tipo === 'proj'; }).length;
+        var nVazio = slots.filter(function (s2) { return s2.tipo === 'vazio' || s2.tipo === 'parcial'; }).length;
+        cardAno =
+          '<div class="card" style="margin-top:.9rem">' +
+            '<div class="chdr">' +
+              '<div class="ctitle">Lucro por mês — ' + ano + '</div>' +
+              '<div class="csub">' + nReal + ' mês(es) realizado(s) · ' + nProj + ' projetado(s)' +
+                (nVazio ? ' · ' + nVazio + ' sem dado (sem barra)' : '') +
+                ' · passe o mouse ou toque numa barra</div>' +
+            '</div>' +
+            '<div class="cbody"><div class="dre-graf-wrap">' + svgAno +
+              '<div class="dre-legproj">' +
+                '<i><span class="dre-sw real"></span>realizado</i>' +
+                '<i><span class="dre-sw proj"></span>projetado' +
+                  (base3 ? ' (média de ' + base3.n + ' mês(es) fechado(s))' : '') + '</i>' +
+                '<i>| marca vertical = mês corrente</i>' +
+              '</div>' +
+              '<div class="dre-tip" style="display:none"></div>' +
+            '</div></div>' +
+          '</div>';
+      }
+    }
+
+    // ── AVISO do rodapé da aba. OBRIGATÓRIO, e por isso montado sempre e
+    // sempre por último, depois de todo o resto. ──
+    var itens = [];
+    itens.push('A projeção do mês usa <b>' + nDias + ' dia(s) com dado</b> de ' +
+      diasNoMes(hoje) + ' do mês' +
+      (proj ? ' — média diária × ' + proj.diasDoMes + ' dias, sem sazonalidade nem tendência.'
+            : ' — menos de ' + MIN_DIAS_PROJ + ', então a projeção do mês está OMITIDA.'));
+    itens.push(base3
+      ? 'A projeção dos meses futuros é a <b>média simples dos últimos ' + base3.n +
+        ' mês(es) fechado(s)</b> (' +
+        base3.meses.map(function (m) { return MESES_CURTO[Number(m.slice(5, 7)) - 1]; }).join(', ') +
+        ')' + (base3.n < 3 ? ' — menos de 3, porque só há esses com dado.' : '.')
+      : 'Não há <b>nenhum mês fechado com dado</b> neste ano, então não há projeção anual.');
+    itens.push('O custo vem de <b>planilha importada à mão</b> (o .xls de categoria da TecnoX): ' +
+      'dia sem importação NÃO entra em nenhuma conta desta aba — nem no numerador, nem na ' +
+      'contagem de dias. Mês fechado sem importação aparece sem barra, não como zero.');
+    if (proj && proj.faixa !== null) {
+      itens.push('A faixa <b>±</b> é o desvio padrão da margem diária (' +
+        nf(proj.sd_margem, 2) + ' p.p.) aplicado à venda projetada. É dispersão observada, ' +
+        '<b>não</b> intervalo de confiança.');
+    }
+    var lacTotal = (_dadosPAno.totais && _dadosPAno.totais.custo_desconhecido) || null;
+    if (lacTotal && lacTotal.linhas) {
+      itens.push(lacTotal.linhas + ' lançamento(s) do ano vieram <b>sem custo</b> no arquivo (' +
+        fmtRS(lacTotal.venda_liquida) + ' de venda líquida). A venda deles conta; o custo não, ' +
+        'então o lucro acima é otimista nessa medida.');
+    }
+    var aviso = '<div class="dre-aviso-proj">' +
+      '<b>Como estes números foram calculados</b>' +
+      '<ul>' + itens.map(function (t) { return '<li>' + t + '</li>'; }).join('') + '</ul>' +
+    '</div>';
+
+    body.innerHTML = kpis + cardAno + aviso;
+
+    // DEPOIS do innerHTML. Mesmo binder das outras abas; `nota` acrescenta a
+    // linha que diz se o mês é realizado ou projetado — sem ela os quatro
+    // números do balão se leem todos como fato.
+    if (cardAno) {
+      ligarTooltipGrafico(slots, {
+        titulo: function (l) { return MESES_LONGO[l.mes - 1] + ' de ' + ano; },
+        nota: function (l) {
+          if (l.tipo === 'real') return 'realizado · ' + l.dias + ' dia(s) com dado';
+          if (l.tipo === 'proj' && l.mes === mesNum) return 'PROJETADO de ' + l.dias + ' dia(s)';
+          if (l.tipo === 'proj') return 'PROJETADO (média de ' + l.baseN + ' fechado(s))';
+          if (l.tipo === 'parcial') return 'parcial: ' + l.dias + ' dia(s), sem projeção';
+          return 'sem dado importado';
+        },
+      });
+    }
+  }
 
   // ── Render da sub-aba "Por Posto" ────────────────────────────────
   // Mesmos KPIs, mesmas classes `col-<key>`, mesma linha de detalhe de celular
