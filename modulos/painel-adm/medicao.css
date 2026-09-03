@@ -10,7 +10,6 @@
   --c-ven:   var(--ok);       --c-ven-d:   rgba(0,229,160,.12);
   --c-carga: #c77dff;         --c-carga-d: rgba(199,125,255,.12);
   --c-pre:   var(--warning);  --c-pre-d:   rgba(249,199,79,.12);
-  --c-dif:   var(--danger);   --c-dif-d:   rgba(255,77,109,.12);
 }
 html[data-theme="light"] { --c-carga: #8b5cf6; --c-carga-d: rgba(139,92,246,.10); }
 
@@ -34,8 +33,12 @@ html[data-theme="light"] { --c-carga: #8b5cf6; --c-carga-d: rgba(139,92,246,.10)
 .med-erro { padding: 2rem; text-align: center; font-family: var(--mono); font-size: .8rem; color: var(--danger); }
 
 /* Planilha */
-.med-table { border-collapse: collapse; text-align: center; font-size: .85rem; width: max-content; min-width: 100%; }
-.med-table th, .med-table td { padding: .5rem .7rem; border: 1px solid var(--border); min-width: 70px; white-space: nowrap; }
+/* TAMANHOS. A coluna Diferença saiu (4 a 6 colunas menos, conforme o posto),
+   e o espaço foi para o número: fonte e altura de linha maiores. A tabela rola
+   na horizontal de todo modo, então largura não era o recurso escasso — a
+   legibilidade era. */
+.med-table { border-collapse: collapse; text-align: center; font-size: .95rem; width: max-content; min-width: 100%; }
+.med-table th, .med-table td { padding: .62rem .8rem; border: 1px solid var(--border); min-width: 74px; white-space: nowrap; }
 .med-table tbody tr:nth-child(even) { background: var(--surface2); }
 .med-table tbody tr:hover { background: var(--accent-dim2) !important; }
 
@@ -43,9 +46,14 @@ html[data-theme="light"] { --c-carga: #8b5cf6; --c-carga-d: rgba(139,92,246,.10)
 .med-table .sticky-col { position: sticky; left: 0; background: var(--surface); z-index: 5; font-weight: 700; width: 56px; min-width: 56px; font-family: var(--mono); box-shadow: 2px 0 5px rgba(0,0,0,.25); }
 
 /* Cabeçalho fixo no topo (2 linhas, fundo sólido) */
-#med-thead th { position: sticky; background: var(--surface2); z-index: 18; height: 32px; box-sizing: border-box; }
-#med-thead tr:first-child th { top: 0; z-index: 20; font-family: var(--mono); font-size: .66rem; text-transform: uppercase; font-weight: 700; letter-spacing: .3px; }
-#med-thead tr:last-child th { top: 32px; z-index: 19; background: var(--surface2); color: var(--text2); font-family: var(--mono); font-size: .7rem; font-weight: 700; }
+/* A altura do cabeçalho vive numa VARIÁVEL porque a segunda linha grudada
+   depende dela: `top` da 2ª linha = altura da 1ª. Eram dois `32px` soltos em
+   regras diferentes, e mexer na fonte do cabeçalho descolava as duas — a 2ª
+   linha passava por cima da 1ª ao rolar, sem erro nenhum para denunciar. */
+#med-thead { --h-cab: 36px; }
+#med-thead th { position: sticky; background: var(--surface2); z-index: 18; height: var(--h-cab); box-sizing: border-box; }
+#med-thead tr:first-child th { top: 0; z-index: 20; font-family: var(--mono); font-size: .7rem; text-transform: uppercase; font-weight: 700; letter-spacing: .3px; }
+#med-thead tr:last-child th { top: var(--h-cab); z-index: 19; background: var(--surface2); color: var(--text2); font-family: var(--mono); font-size: .76rem; font-weight: 700; }
 #med-thead th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
 
 /* Separador entre grupos de categoria */
@@ -56,19 +64,14 @@ html[data-theme="light"] { --c-carga: #8b5cf6; --c-carga-d: rgba(139,92,246,.10)
 .h-ven   { background: linear-gradient(var(--c-ven-d),   var(--c-ven-d)),   var(--surface2) !important; color: var(--c-ven)   !important; border-bottom: 2px solid var(--c-ven)   !important; }
 .h-carga { background: linear-gradient(var(--c-carga-d), var(--c-carga-d)), var(--surface2) !important; color: var(--c-carga) !important; border-bottom: 2px solid var(--c-carga) !important; }
 .h-pre   { background: linear-gradient(var(--c-pre-d),   var(--c-pre-d)),   var(--surface2) !important; color: var(--c-pre)   !important; border-bottom: 2px solid var(--c-pre)   !important; }
-.h-dif   { background: linear-gradient(var(--c-dif-d),   var(--c-dif-d)),   var(--surface2) !important; color: var(--c-dif)   !important; border-bottom: 2px solid var(--c-dif)   !important; }
 
 /* Células read-only */
-.cell-val   { font-family: var(--mono); font-size: .82rem; font-weight: 600; color: var(--text); }
+.cell-val   { font-family: var(--mono); font-size: .95rem; font-weight: 600; color: var(--text); }
 .cell-vazia { color: var(--text3); }
-.cell-diff  { font-weight: 700; font-family: var(--mono); }
-.m-dif-pos  { color: var(--ok); }
-.m-dif-neg  { color: var(--danger); }
-.m-dif-zero { color: var(--text3); }
 
 /* Célula do pré-pedido (EDITÁVEL) */
 .cel-pre { background: var(--c-pre-d); }
-.med-in { width: 64px; background: transparent; border: none; color: var(--text); text-align: center; font-family: var(--mono); font-size: .82rem; font-weight: 600; outline: none; padding: 3px; border-radius: 4px; }
+.med-in { width: 74px; background: transparent; border: none; color: var(--text); text-align: center; font-family: var(--mono); font-size: .95rem; font-weight: 600; outline: none; padding: 4px; border-radius: 4px; }
 .med-in:focus { background: var(--surface3); box-shadow: 0 0 0 1.5px var(--accent); color: var(--text); }
 .med-in-dirty { background: var(--accent-dim); box-shadow: 0 0 0 1.5px var(--accent); color: var(--accent); }
 
@@ -112,9 +115,36 @@ html[data-theme="light"] { --c-carga: #8b5cf6; --c-carga-d: rgba(139,92,246,.10)
 .med-fx-bloco-total { background: var(--accent-dim); border-color: var(--accent); }
 .med-fx-bloco-total .med-fx-bl-lbl, .med-fx-bloco-total .med-fx-bl-val { color: var(--accent); }
 
+/* Setas de navegação entre postos, colando no seletor. */
+.med-navposto { display: inline-flex; align-items: stretch; gap: .3rem; }
+.med-navposto .sel { min-width: 0; }
+.med-passo { flex: 0 0 auto; width: 2.4rem; background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 8px; color: var(--text2);
+  font-size: 1.15rem; line-height: 1; cursor: pointer;
+  transition: border-color .15s, color .15s; }
+.med-passo:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.med-passo:disabled { color: var(--text3); border-style: dashed; cursor: not-allowed; }
+
 /* Mobile do admin (~390px): grade de 3 colunas fixas, para os blocos não
    ficarem desproporcionais no flex-wrap. */
 @media (max-width: 430px) {
   .med-fx-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
   .med-fx-bloco { min-width: 0; }
+}
+
+/* CELULAR: número maior ainda e linha mais alta. A tabela já rola na
+   horizontal, então crescer a fonte não custa coluna nenhuma — e é no celular
+   que o gerente lança de pé, no posto. */
+@media (max-width: 560px) {
+  .med-table { font-size: 1rem; }
+  .med-table th, .med-table td { padding: .7rem .7rem; min-width: 72px; }
+  /* A variável PRECISA subir junto com o padding: medido em 375px, a 1ª linha
+     do cabeçalho ia a 39px enquanto o `top` da 2ª ficava em 36px, e as duas
+     se sobrepunham 3px ao rolar. É exatamente o descolamento que a variável
+     existe para impedir — mas ela só impede se acompanhar o padding. */
+  #med-thead { --h-cab: 42px; }
+  .cell-val { font-size: 1rem; }
+  .med-in { font-size: 1rem; width: 72px; padding: 5px; }
+  /* 40px de alvo de toque nas setas — abaixo disso o dedo erra. Medido. */
+  .med-passo { width: 2.6rem; min-height: 40px; font-size: 1.25rem; }
 }

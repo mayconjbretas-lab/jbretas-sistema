@@ -1110,7 +1110,39 @@
   }
 
   // ── Fetch ────────────────────────────────────────────────────────
+  //
+  // GERAÇÃO DA CARGA — por que existe.
+  //
+  // Trocar de sub-aba chama `carregar()` sem esperar a carga anterior, então
+  // DUAS cargas ficam no ar. A que voltava primeiro executava o `finally`
+  // dela: `_carregando = false` e `render()`. Só que `render()` despacha para
+  // a sub-aba ATUAL — a nova, cujos dados ainda não chegaram — e o
+  // `renderProjecao` (ou o de qualquer outra) caía na guarda de dataset nulo e
+  // escrevia "Sem dados.".
+  //
+  // MEDIDO na aba Projeção: entrar na tela e clicar em "Projeção" durante a
+  // carga da aba Mês dava "Carregando… → Sem dados. → dados", com o `finally`
+  // da carga do Mês em t=1550ms e o da Projeção em t=1560ms. Dez milissegundos
+  // de "sem dados" numa tela que tinha dados.
+  //
+  // A correção é NUMA SÓ: cada `carregar()` tira um número, e só a carga mais
+  // recente tem direito de mexer no estado da tela. Resposta velha é
+  // descartada em silêncio — ela não é erro, só perdeu a corrida.
+  // Vale para as quatro sub-abas, porque as quatro passam por aqui.
+  var _gerCarga = 0;
+
+  // Só a carga corrente encerra o estado e redesenha. Devolve se era ela.
+  function fecharCarga(ger) {
+    if (ger !== _gerCarga) return false;
+    _carregando = false;
+    render();
+    return true;
+  }
+  // Idem para escrever erro: erro de uma carga abandonada não vai à tela.
+  function ehCargaAtual(ger) { return ger === _gerCarga; }
+
   async function carregar() {
+    var ger = ++_gerCarga;
     var body = document.getElementById('dre-body');
 
     // ── sub-aba "Projeção": mês corrente + ano corrente ──
@@ -1148,15 +1180,18 @@
         _dadosPMes = null;
         _dadosPAno = null;
         _seriesMes = null;
-        _erro = err && err.message ? err.message : String(err);
+        if (ehCargaAtual(ger)) _erro = err && err.message ? err.message : String(err);
       } finally {
-        _carregando = false;
-        render();
+        // `return` dentro de `finally` engoliria exceção — a guarda da busca
+        // seguinte fica FORA dele.
+        fecharCarga(ger);
       }
       // Modo Diário num mês passado: a série dele não veio nas duas chamadas
       // acima. Busca DEPOIS do render, para a tela não esperar por ela — o
       // card do gráfico se anuncia carregando sozinho.
-      if (_escopoAno === 'mes' && _mesDiario && _mesDiario !== mesCorr) {
+      // `ehCargaAtual`: se o usuário já trocou de aba, não há por que buscar.
+      if (ehCargaAtual(ger) &&
+          _escopoAno === 'mes' && _mesDiario && _mesDiario !== mesCorr) {
         await garantirSerieMes(_mesDiario);
       }
       return;
@@ -1198,10 +1233,9 @@
       } catch (err) {
         _dadosD = null;
         _dadosDAnt = null;
-        _erro = err && err.message ? err.message : String(err);
+        if (ehCargaAtual(ger)) _erro = err && err.message ? err.message : String(err);
       } finally {
-        _carregando = false;
-        render();
+        fecharCarga(ger);
       }
       return;
     }
@@ -1227,7 +1261,7 @@
       // duas leituras por troca de aba sem nada na tela usar o resultado.
       if (_subaba === 'posto') {
         _dadosPosto = await apiFetch('/dre' + base + '&agrupar=posto');
-        return;
+        return;      // o `finally` abaixo é quem fecha a carga
       }
       // Em PARALELO: são duas leituras independentes da mesma janela, e em
       // série o tempo de tela dobrava. O gráfico é SECUNDÁRIO — se só a
@@ -1247,10 +1281,9 @@
       _dados = null;
       _dadosDia = null;
       _dadosPosto = null;
-      _erro = err && err.message ? err.message : String(err);
+      if (ehCargaAtual(ger)) _erro = err && err.message ? err.message : String(err);
     } finally {
-      _carregando = false;
-      render();
+      fecharCarga(ger);
     }
   }
 
@@ -2448,6 +2481,10 @@
   // buscando, outra com o resultado. Sem a primeira, a tela fica congelada no
   // mês anterior enquanto a requisição corre, e o usuário clica de novo.
   async function garantirSerieMes(mes) {
+    // MESMA guarda de geração: sair da aba durante a busca de um mês faria o
+    // `finally` daqui renderizar a aba nova. Sem `++`, porque isto não é uma
+    // carga nova — é um pedaço da carga corrente.
+    var ger = _gerCarga;
     if (!_seriesMes) _seriesMes = new Map();
     if (_seriesMes.has(mes)) { render(); return; }
     _carregandoMes = true;
@@ -2467,7 +2504,7 @@
       console.warn('DRE: serie diaria de ' + mes + ' nao carregou:', e && e.message);
     } finally {
       _carregandoMes = false;
-      render();
+      if (ehCargaAtual(ger)) render();
     }
   }
 

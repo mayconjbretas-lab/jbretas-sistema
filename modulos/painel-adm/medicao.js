@@ -8,7 +8,7 @@
 // combustível. Salva via POST /medicao (campo 'pre_pedido'), que
 // cai SOMENTE LEITURA na Logística e é gravado no histórico `pedidos`.
 // Lê via GET /medicao/:posto (mês atual). NENHUM cálculo muda aqui —
-// medição/venda/carga/diferença são só apresentados; a data mostra HOJE.
+// medição/venda/carga são só apresentados; a data mostra HOJE.
 // ================================================================
 (function () {
   let _shellPronto = false;
@@ -65,15 +65,6 @@
     return algum ? soma : null;
   }
 
-  function difClass(v) {
-    if (v === null || v === undefined) return 'cell-vazia';
-    return v > 0 ? 'm-dif-pos' : (v < 0 ? 'm-dif-neg' : 'm-dif-zero');
-  }
-  function difTxt(v) {
-    if (v === null || v === undefined) return '—';
-    return (v > 0 ? '+' : '') + Number(v).toLocaleString('pt-BR');
-  }
-
   // ── Shell da aba (barra + faixa + frame + legenda), montado uma vez ─
   // Selects começam vazios; carregarPostos() (GET /postos) popula bandeira/posto,
   // define o default e dispara a 1ª carga da grade + faixa.
@@ -86,7 +77,17 @@
             '<span class="med-lbl">Bandeira</span>' +
             '<select class="sel" id="med-bandeira"></select>' +
             '<span class="med-lbl">Posto</span>' +
-            '<select class="sel" id="med-posto"></select>' +
+            // SETAS ao lado do seletor. Elas leem as OPTIONS do próprio
+            // select, então seguem a mesma ordem e o mesmo filtro de bandeira
+            // sem duplicar a lógica de filtragem — se `popularSelPosto` mudar,
+            // as setas acompanham de graça.
+            '<span class="med-navposto">' +
+              '<button type="button" class="med-passo" id="med-post-ant"' +
+                ' onclick="__medPostoPasso(-1)" aria-label="Posto anterior">‹</button>' +
+              '<select class="sel" id="med-posto"></select>' +
+              '<button type="button" class="med-passo" id="med-post-prox"' +
+                ' onclick="__medPostoPasso(1)" aria-label="Próximo posto">›</button>' +
+            '</span>' +
             '<span class="med-data" id="med-data">📅 Referência: hoje · ' + h.dd + '/' + h.mm + '/' + h.aaaa + '</span>' +
           '</div>' +
           '<div class="med-bar-right">' +
@@ -103,7 +104,6 @@
           '<span><span class="dot" style="background:var(--c-ven)"></span>Venda</span>' +
           '<span><span class="dot" style="background:var(--c-carga)"></span>Carga</span>' +
           '<span><span class="dot" style="background:var(--c-pre)"></span>Pré-pedido (editável)</span>' +
-          '<span><span class="dot" style="background:var(--c-dif)"></span>Diferença</span>' +
         '</div>' +
       '</div>';
     sec.querySelector('#med-bandeira').onchange = onBandeiraChange;
@@ -153,17 +153,101 @@
 
   // Trocar a bandeira: refiltra os postos e volta pra "Todos os postos".
   function onBandeiraChange() {
-    _bandeira = document.getElementById('med-bandeira').value;   // '' = Todas
+    const selB = document.getElementById('med-bandeira');
+    // MESMA guarda do posto: trocar a bandeira também sai do posto atual, e
+    // `popularSelPosto` zera o `_postoAtual` — sem isto o pré-pedido digitado
+    // ia embora por esse caminho, que a guarda do posto não cobre.
+    if (selB.value !== _bandeira && !podeSairDoPosto()) {
+      selB.value = _bandeira;
+      return;
+    }
+    _bandeira = selB.value;   // '' = Todas
     popularSelPosto();
     onPostoChange();   // Todos → esconde grade + mensagem; recarrega a faixa (bandeira)
   }
 
+  // Postos navegáveis = as OPTIONS do select, sem a de "Todos os postos".
+  // Fonte única: mesma ordem, mesmo filtro de bandeira.
+  function postosNavegaveis() {
+    const sel = document.getElementById('med-posto');
+    if (!sel) return [];
+    return [...sel.options].map(o => o.value).filter(Boolean);
+  }
+
+  // Liga/desliga as setas e explica no `title` por que travaram.
+  function atualizarSetas() {
+    const ant = document.getElementById('med-post-ant');
+    const prox = document.getElementById('med-post-prox');
+    if (!ant || !prox) return;
+    const lista = postosNavegaveis();
+    const i = lista.indexOf(_postoAtual);
+    // Em "Todos os postos" (i === -1) só a seta › tem para onde ir: ela entra
+    // no primeiro posto da lista. A ‹ fica travada, porque não existe "antes
+    // de todos".
+    const semAnterior = (i <= 0);
+    const semProximo  = (i === -1 ? !lista.length : i >= lista.length - 1);
+    ant.disabled = semAnterior;
+    prox.disabled = semProximo;
+    ant.title = semAnterior
+      ? (i === -1 ? 'Escolha um posto para navegar' : 'Primeiro posto da lista')
+      : 'Posto anterior: ' + lista[i - 1];
+    prox.title = semProximo
+      ? 'Último posto da lista'
+      : 'Próximo posto: ' + (i === -1 ? lista[0] : lista[i + 1]);
+  }
+
+  // PRÉ-PEDIDO NÃO SALVO — pergunta antes de descartar.
+  //
+  // `onPostoChange` fazia `_dirty.clear()` calado: trocar de posto com valores
+  // digitados e não salvos jogava tudo fora sem uma palavra. A guarda fica
+  // AQUI, no ponto único de transição, e não no `__medPostoPasso` — assim ela
+  // vale igual para as setas E para o próprio `<select>`, que tinha exatamente
+  // o mesmo risco e é o caminho que o usuário mais usa.
+  function podeSairDoPosto() {
+    if (!_dirty.size) return true;
+    const n = _dirty.size;
+    return window.confirm(
+      n + (n === 1 ? ' lançamento de pré-pedido não salvo' : ' lançamentos de pré-pedido não salvos') +
+      ' neste posto.\n\nTrocar de posto agora DESCARTA ' + (n === 1 ? 'ele' : 'eles') +
+      '.\n\nOK para descartar e trocar · Cancelar para voltar e salvar.');
+  }
+
+  // Anda na lista de postos. Em "Todos os postos" o › entra no primeiro.
+  window.__medPostoPasso = function (n) {
+    const sel = document.getElementById('med-posto');
+    if (!sel) return;
+    const lista = postosNavegaveis();
+    if (!lista.length) return;
+    const i = lista.indexOf(_postoAtual);
+    const alvo = (i === -1) ? (n > 0 ? lista[0] : null) : lista[i + n];
+    if (!alvo) return;
+    if (!podeSairDoPosto()) return;
+    sel.value = alvo;
+    aplicarPosto();
+  };
+
   // Trocar o posto. "Todos os postos" (value '') NÃO carrega a grade: mostra a
   // mensagem — nunca deixa a grade de um posto junto com o total de outra seleção.
   function onPostoChange() {
+    const sel = document.getElementById('med-posto');
+    // Troca pelo SELECT: se há coisa não salva e o usuário desistir, devolve o
+    // select ao posto de antes — senão ele ficaria mostrando um posto e a
+    // grade mostrando outro.
+    if (sel && sel.value !== _postoAtual && !podeSairDoPosto()) {
+      sel.value = _postoAtual;
+      atualizarSetas();
+      return;
+    }
+    aplicarPosto();
+  }
+
+  // Aplica o posto que está no select. Separado de `onPostoChange` porque as
+  // setas já confirmaram o descarte antes de mexer no select.
+  function aplicarPosto() {
     _postoAtual = document.getElementById('med-posto').value;
     _dirty.clear();
     atualizarBotoes();
+    atualizarSetas();
     const frame = document.getElementById('med-frame');
     if (!_postoAtual) {
       frame.innerHTML = '<div class="med-msg">Selecione um posto para ver a medição.</div>';
@@ -250,7 +334,13 @@
   };
 
   // ── Monta a grade (mensal, dia a dia) ────────────────────────────
-  // Ordem das colunas pedida pelo ADM: Medição · Venda · Carga · Pré-pedido · Diferença.
+  // Ordem das colunas pedida pelo ADM: Medição · Venda · Carga · Pré-pedido.
+  //
+  // A DIFERENÇA SAIU DESTA TELA. Ela continua sendo CALCULADA e gravada pela
+  // matriz da Logística (shared/js/matriz-medicao.js), e a coluna
+  // `medicao.diferenca` do banco segue existindo — a GET /medicao ainda a
+  // devolve, e este arquivo simplesmente não a lê mais. Nada foi apagado do
+  // cálculo nem do banco: só o que esta tela mostrava.
   function renderGrade() {
     const d = _dados;
     const frame = document.getElementById('med-frame');
@@ -264,7 +354,6 @@
       { k: 'venda',     lbl: 'Venda',        cls: 'h-ven',   edit: false },
       { k: 'carga',     lbl: 'Carga',        cls: 'h-carga', edit: false },
       { k: 'prePedido', lbl: 'Pré-pedido ✎', cls: 'h-pre',   edit: true  },
-      { k: 'diferenca', lbl: 'Diferença',    cls: 'h-dif',   edit: false },
     ];
     const h = hojeInfo();
     // Medição de ONTEM (mesmo mês) para a projeção da linha de hoje. No dia 1
@@ -310,8 +399,6 @@
               '<input class="med-in" inputmode="decimal" value="' + (val == null ? '' : fmt(val)) + '" ' +
               'data-data="' + dia.data + '" data-comb="' + f.comb + '" ' +
               'oninput="__medDirty(this)" onfocus="this.select()"></td>';
-          } else if (c.k === 'diferenca') {
-            body += '<td class="' + grp + '"><span class="' + difClass(val) + ' cell-diff">' + difTxt(val) + '</span></td>';
           } else if (c.k === 'medicao' && ehHoje && val == null) {
             // Projeção do dia de hoje (célula ainda VAZIA — se o gerente já lançou,
             // o valor real manda). Puro DISPLAY: calculado aqui, não guardado nem
