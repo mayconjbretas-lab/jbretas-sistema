@@ -51,15 +51,19 @@
 
   // As 4 sub-abas do topo. `pronta:false` = visível, desabilitada, tooltip.
   var SUBABAS = [
-    { id: 'dia',     rotulo: 'Dia',       pronta: false },
-    { id: 'mes',     rotulo: 'Mês',       pronta: true  },
-    { id: 'posto',   rotulo: 'Por Posto', pronta: false },
-    { id: 'projecao', rotulo: 'Projeção', pronta: false },
+    { id: 'dia',      rotulo: 'Dia',       pronta: false },
+    { id: 'mes',      rotulo: 'Mês',       pronta: true,
+      dica: 'Fechamento do período escolhido, por categoria' },
+    { id: 'posto',    rotulo: 'Por Posto', pronta: true,
+      dica: 'Compara os postos entre si no mesmo período' },
+    { id: 'projecao', rotulo: 'Projeção',  pronta: false },
   ];
 
   var _shellPronto = false;
+  var _subaba      = 'mes';  // sub-aba ativa: 'mes' | 'posto'
   var _dados       = null;   // resposta do GET /dre (agrupar=categoria)
   var _dadosDia    = null;   // resposta do GET /dre (agrupar=dia) — série do gráfico
+  var _dadosPosto  = null;   // resposta do GET /dre (agrupar=posto)
   var _postos      = null;   // lista do GET /postos (cache da sessão)
   var _inicio      = null;
   var _fim         = null;
@@ -68,6 +72,11 @@
   var _erro        = null;
   // Ordenação da tabela. Default = venda líquida desc, como pedido.
   var _ord = { col: 'venda_liquida', dir: 'desc' };
+  // Ordenação da tabela POR POSTO — estado próprio, não compartilhado: as duas
+  // tabelas têm conjuntos de colunas diferentes, e uma ordenação por
+  // `cat_nome` herdada pela outra aba não teria coluna correspondente.
+  // Default = margem % desc, que é a pergunta desta aba.
+  var _ordPosto = { col: 'margem_pct', dir: 'desc' };
 
   // ── Importação (ver o bloco IMPORTAÇÃO mais abaixo) ──
   var _impFile    = null;    // File escolhido, reenviado no confirmar
@@ -151,8 +160,16 @@
     if (vazio(v)) return '—';
     return nf(v, 3) + (linha ? unidadeDe(linha.cat_nome) : '');
   }
+  // Quantidade AGREGADA de um posto: soma LITRO de combustível com UNIDADE de
+  // produto, então não existe sufixo verdadeiro para ela. Sai sem unidade, com
+  // o motivo no title da coluna — a mesma decisão já tomada no total da aba
+  // Mês. Rotular a soma como litro ou como unidade mentiria das duas formas.
+  function fmtQtdMista(v) { return vazio(v) ? '—' : nf(v, 3); }
   // Percentual: 2 casas. null -> '—' (ver regra 2 no cabeçalho).
   function fmtPct(v) { return (v === null || v === undefined) ? '—' : nf(v, 2) + '%'; }
+  // margem_pct ausente = venda líquida zero. NÃO é margem zero: é ausência de
+  // base para calcular. Usado pelos dois gráficos para decidir se há barra.
+  function temMargem(l) { return l && l.margem_pct !== null && l.margem_pct !== undefined; }
 
   function esc(s) {
     return String(s === null || s === undefined ? '' : s)
@@ -195,6 +212,30 @@
   // "vendeu quanto, sobrou quanto, a que taxa". As 8 colunas não cabem em
   // 375px, e comprimi-las até caber deixaria todas ilegíveis.
   var MOBILE_OCULTA = ['quantidade', 'venda_bruta', 'desconto_calc', 'custo_total'];
+
+  // ── Colunas da tabela POR POSTO (sub-aba "Por Posto") ────────────
+  // Conjunto menor que o de categoria, de propósito: a pergunta aqui é "qual
+  // posto rende mais", e venda bruta / desconto não participam dessa
+  // comparação — margem se compara sobre líquida. As CHAVES são as mesmas da
+  // outra tabela (venda_liquida, custo_total, lucro, margem_pct), o que faz o
+  // CSS de celular que esconde `.col-<key>` valer para as duas sem regra nova.
+  var COLS_POSTO = [
+    // `fmt` recebe (valor, linha) — usa a linha para cair no MESMO rótulo que
+    // o gráfico usa. Ver `rotuloPosto`.
+    { key: 'nome',          rot: 'Posto',         tipo: 'txt',
+      fmt: function (v, l) { return esc(rotuloPosto(l || { nome: v })); } },
+    { key: 'quantidade',    rot: 'Quantidade',    tipo: 'num', fmt: fmtQtdMista,
+      titulo: 'Litros de combustível somados a unidades de produto — a soma não tem unidade única.' },
+    { key: 'venda_liquida', rot: 'Venda líquida', rotCurto: 'Líquida', tipo: 'num', fmt: fmtRS },
+    { key: 'custo_total',   rot: 'Custo',         tipo: 'num', fmt: fmtRS },
+    { key: 'lucro',         rot: 'Lucro',         tipo: 'num', fmt: fmtRS },
+    { key: 'margem_pct',    rot: 'Margem %',      rotCurto: 'Margem', tipo: 'num', fmt: fmtPct },
+  ];
+  var COL_POSTO_POR_KEY = {};
+  COLS_POSTO.forEach(function (c) { COL_POSTO_POR_KEY[c.key] = c; });
+  // Celular: ficam Posto, Venda líquida, Lucro e Margem. As duas escondidas
+  // já estão na lista de `.col-` do media query da outra tabela.
+  var MOBILE_OCULTA_POSTO = ['quantidade', 'custo_total'];
 
   var RODAPE = 'Lucro bruto = venda líquida − custo de compra. ' +
     'Não inclui frete, taxa de cartão nem despesas operacionais.';
@@ -321,6 +362,62 @@
       '#s-dre .dre-tip span { display: flex; justify-content: space-between; gap: .7rem;' +
         'font-family: var(--mono); color: var(--tx); }' +
       '#s-dre .dre-tip i { font-style: normal; color: var(--tx3); }' +
+      // ── GRÁFICO POR POSTO: barras HORIZONTAIS ────────────────────
+      // Reusa .dre-bar / .dre-bar.neg (cor), .dre-hit (alvo de ponteiro),
+      // .dre-zero (linha do zero) e o wrap .dre-graf-wrap — que é o que traz
+      // de graça o user-select:none, o touch-action e o balão. Só o que é
+      // próprio da orientação horizontal está aqui.
+      //
+      // --hbnome é a largura da coluna de NOMES, e é a MESMA variável usada
+      // pelas faixas de rótulo acima e abaixo do desenho. É ela que mantém os
+      // três blocos na mesma grade — sem medir nada em JS e sem listener de
+      // resize.
+      '#s-dre .dre-hplot { --hbnome: 9.5rem; position: relative; }' +
+      '#s-dre .dre-hgrid, #s-dre .dre-hstrip {' +
+        ' display: grid; grid-template-columns: var(--hbnome) 1fr; }' +
+      '#s-dre .dre-hnames { display: flex; flex-direction: column; min-width: 0; }' +
+      // height = --hbl, emitido pelo JS a partir de HB_LINHA: a faixa de TEXTO
+      // tem exatamente a altura da faixa DESENHADA no SVG, então nome e barra
+      // ficam na mesma linha por construção — sem posicionar por porcentagem.
+      // Elipse + title: nome de posto longo em 375px não cabe, e cortar sem
+      // deixar o nome inteiro acessível tornaria a comparação inútil.
+      '#s-dre .dre-hname { height: var(--hbl); line-height: var(--hbl);' +
+        ' font-size: .66rem; color: var(--tx2); white-space: nowrap;' +
+        ' overflow: hidden; text-overflow: ellipsis; padding-right: .45rem;' +
+        ' text-align: right; }' +
+      '#s-dre .dre-harea { position: relative; min-width: 0; }' +
+      // Sem `height` fixo: a altura vem do atributo do próprio SVG, que é
+      // n × HB_LINHA em px. Y do viewBox = altura em px, logo a escala
+      // vertical é 1 e as faixas não deformam com a largura.
+      '#s-dre .dre-hgraf { display: block; width: 100%; }' +
+      '#s-dre .dre-hxs { position: relative; height: .95rem; }' +
+      '#s-dre .dre-hx { position: absolute; top: 0; transform: translateX(-50%);' +
+        ' color: var(--tx3); font-family: var(--mono); font-size: .6rem;' +
+        ' line-height: 1; white-space: nowrap; pointer-events: none; }' +
+      // O rótulo da média é A referência da tela, não um rótulo de eixo
+      // qualquer — por isso tem cor de destaque e peso.
+      '#s-dre .dre-hmedia { position: absolute; top: 0; color: var(--ac);' +
+        ' font-family: var(--mono); font-size: .62rem; font-weight: 700;' +
+        ' line-height: 1; white-space: nowrap; pointer-events: none;' +
+        ' transform: translateX(-50%); }' +
+      // Perto das bordas o rótulo centrado sairia do card: ancora pela ponta.
+      '#s-dre .dre-hmedia.na-esq { transform: none; }' +
+      '#s-dre .dre-hmedia.na-dir { transform: translateX(-100%); }' +
+      '#s-dre .dre-hlinha-media { stroke: var(--ac); stroke-width: 1.5;' +
+        ' stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }' +
+      // Marca de custo desconhecido na linha da tabela e no nome do gráfico.
+      '#s-dre .dre-lacuna { color: var(--wn); font-weight: 700;' +
+        ' cursor: help; }' +
+      // Justificativa embaixo do seletor travado (sub-aba "Por Posto").
+      '#s-dre .dre-nota-txt { font-size: .64rem; color: var(--tx3);' +
+        ' line-height: 1.35; padding-top: .25rem; }' +
+      // O projeto não tinha estilo de `:disabled` para .sel — sem isto o
+      // campo travado fica com a aparência do destravado em parte dos
+      // navegadores, e "travado" que parece clicável é pior que campo
+      // escondido: o usuário fica tentando mudar o escopo e nada acontece.
+      // Escopo #s-dre para não mudar select desabilitado de outras telas.
+      '#s-dre .sel:disabled { background: var(--sf); border-style: dashed;' +
+        ' color: var(--tx3); cursor: not-allowed; opacity: 1; }' +
       // ── IMPORTAÇÃO: só o que o conjunto .cmi-* do Custo & Margem não cobre
       // (lista das 5 conferências, spinner, faixa de aviso da 5 e o
       // recolhível do resumo). SEM escopo #s-dre de propósito: o modal é
@@ -445,7 +542,7 @@
         // ~93px, e um percentual de duas casas ~46px. A categoria fica com o
         // resto — ela tem elipse e title, e um número cortado não teria
         // conserto.
-        '#s-dre .col-cat_nome { width: 25%; }' +
+        '#s-dre .col-cat_nome, #s-dre .col-nome { width: 25%; }' +
         '#s-dre .col-venda_liquida { width: 32%; }' +
         '#s-dre .col-lucro { width: 28%; }' +
         '#s-dre .col-margem_pct { width: 15%; }' +
@@ -453,8 +550,8 @@
         // "PRODUTOS ICMS TRIBUTADOS REVENDA" ocupava 4 linhas, as alturas de
         // linha ficavam desiguais e o chevron do toque descia para uma linha
         // sozinha, parecendo um bullet solto.
-        '#s-dre .dre-table td.col-cat_nome { white-space: nowrap; overflow: hidden;' +
-          'text-overflow: ellipsis; }' +
+        '#s-dre .dre-table td.col-cat_nome, #s-dre .dre-table td.col-nome {' +
+          'white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }' +
         // Numérica que não couber na célula ellipsiza, em vez de vazar.
         '#s-dre .dre-table td.num, #s-dre .dre-table th.num { overflow: hidden;' +
           'text-overflow: ellipsis; }' +
@@ -462,6 +559,15 @@
         // cabeçalho é que dita a largura dessas duas colunas, não o número.
         '#s-dre .dre-table th .rot-l { display: none; }' +
         '#s-dre .dre-table th .rot-c { display: inline; }' +
+      '}' +
+      '@media (max-width: 560px) {' +
+        // 5.6rem = ~90px dos ~347 úteis em 375px. Sobra ~250px para o eixo de
+        // valor, que é onde a comparação acontece. Nome maior que isso vira
+        // elipse (o inteiro fica no title) — encurtar a barra para caber o
+        // nome inverteria a prioridade da tela.
+        '#s-dre .dre-hplot { --hbnome: 5.6rem; }' +
+        '#s-dre .dre-hname { font-size: .6rem; padding-right: .3rem; }' +
+        '#s-dre .dre-hx, #s-dre .dre-hmedia { font-size: .56rem; }' +
       '}' +
       '@media (max-width: 430px) {' +
         '#s-dre .dre-title { font-size: .9rem; }' +
@@ -522,9 +628,15 @@
                 '<label class="filtro-lbl" for="dre-fim">Fim</label>' +
                 '<input type="date" class="dre-date" id="dre-fim" value="' + esc(_fim) + '">' +
               '</div>' +
-              '<div>' +
+              '<div id="dre-f-posto">' +
                 '<label class="filtro-lbl" for="dre-posto">Posto</label>' +
                 '<select class="sel" id="dre-posto"><option value="">Rede toda</option></select>' +
+                // A justificativa fica LOGO ABAIXO do próprio campo, que é
+                // onde o usuário olha quando percebe que ele não mexe. Um
+                // controle travado e mudo faz procurar o que quebrou.
+                '<div class="dre-nota-txt" id="dre-posto-nota" hidden>Travado na rede toda: ' +
+                  'esta aba compara os postos entre si, e filtrar um deixaria uma linha ' +
+                  'só para comparar.</div>' +
               '</div>' +
             '</div>' +
           '</div>' +
@@ -534,6 +646,7 @@
       '</div>';
 
     renderSubabas();
+    aplicarEscopoSubaba();
 
     var iIni = sec.querySelector('#dre-inicio');
     var iFim = sec.querySelector('#dre-fim');
@@ -549,15 +662,51 @@
     var el = document.getElementById('dre-subabas');
     if (!el) return;
     el.innerHTML = SUBABAS.map(function (a) {
-      // Só "Mês" está implementada nesta etapa; as outras ficam visíveis e
-      // desabilitadas com tooltip, em vez de escondidas — quem abre a tela vê
-      // para onde ela vai crescer.
+      // "Dia" e "Projeção" seguem visíveis e desabilitadas com tooltip, em vez
+      // de escondidas — quem abre a tela vê para onde ela vai crescer.
       if (!a.pronta) {
         return '<button class="fueltab" disabled title="em breve">' + esc(a.rotulo) + '</button>';
       }
-      return '<button class="fueltab active" title="Fechamento do período escolhido">' + esc(a.rotulo) + '</button>';
+      return '<button class="fueltab' + (_subaba === a.id ? ' active' : '') + '"' +
+        ' onclick="__dreSubaba(\'' + a.id + '\')" title="' + esc(a.dica || '') + '">' +
+        esc(a.rotulo) + '</button>';
     }).join('');
   }
+
+  // Trava o seletor de posto em "Rede toda" na sub-aba "Por Posto", com o
+  // motivo visível embaixo. `disabled` e não `hidden`: o campo continua na
+  // tela mostrando o escopo em vigor, em vez de sumir e deixar o usuário sem
+  // saber sobre o que os números falam.
+  function aplicarEscopoSubaba() {
+    var sel  = document.getElementById('dre-posto');
+    var nota = document.getElementById('dre-posto-nota');
+    if (!sel || !nota) return;
+    var rede = (_subaba === 'posto');
+    sel.disabled = rede;
+    nota.hidden = !rede;
+    // O `title` diz o mesmo no hover, para quem clica no campo antes de ler.
+    sel.title = rede
+      ? 'Travado na rede toda nesta aba — ela compara os postos entre si.'
+      : '';
+  }
+
+  window.__dreSubaba = function (id) {
+    var a = SUBABAS.filter(function (x) { return x.id === id; })[0];
+    if (!a || !a.pronta || _subaba === id) return;
+    _subaba = id;
+    // "Por Posto" é comparação ENTRE postos: força a rede toda. Ao voltar
+    // para "Mês" o seletor destrava zerado — o posto que estava escolhido não
+    // volta sozinho, porque a tela passou a mostrar a rede e reativar um
+    // filtro sem o usuário pedir mudaria os números sem aviso.
+    if (id === 'posto' && _postoId) {
+      _postoId = '';
+      var sel = document.getElementById('dre-posto');
+      if (sel) sel.value = '';
+    }
+    renderSubabas();
+    aplicarEscopoSubaba();
+    carregar();
+  };
 
   // ── Postos para o seletor (cache: uma vez por sessão da aba) ─────
   async function carregarPostos() {
@@ -599,6 +748,13 @@
                '&fim=' + encodeURIComponent(_fim) +
                (_postoId ? '&posto_id=' + encodeURIComponent(_postoId) : '');
     try {
+      // A sub-aba "Por Posto" pede UMA chamada só (agrupar=posto): ela não tem
+      // gráfico diário nem tabela de categoria. Buscar as três sempre gastaria
+      // duas leituras por troca de aba sem nada na tela usar o resultado.
+      if (_subaba === 'posto') {
+        _dadosPosto = await apiFetch('/dre' + base + '&agrupar=posto');
+        return;
+      }
       // Em PARALELO: são duas leituras independentes da mesma janela, e em
       // série o tempo de tela dobrava. O gráfico é SECUNDÁRIO — se só a
       // chamada por dia falhar, a tabela e os KPIs continuam aparecendo e o
@@ -616,11 +772,39 @@
     } catch (err) {
       _dados = null;
       _dadosDia = null;
+      _dadosPosto = null;
       _erro = err && err.message ? err.message : String(err);
     } finally {
       _carregando = false;
       render();
     }
+  }
+
+  // DOMÍNIO DO EIXO DE VALOR (margem %) — comum aos DOIS gráficos.
+  // Uma função só porque as regras são as mesmas e, se divergissem, um dos
+  // gráficos passaria a desenhar a mesma margem em escala diferente do outro.
+  //
+  // SEMPRE INCLUI O ZERO: é o requisito "linha de referência no zero, sempre
+  // visível". Sem isto um período todo positivo desenharia a linha fora da
+  // área. `extra` entra no domínio quando existe — é a média da rede no
+  // gráfico por posto: se ela caísse fora, a linha de referência (que é o
+  // ponto da tela) sairia da área desenhada.
+  function escalaMargem(vals, extra) {
+    var v = vals.slice();
+    if (extra !== null && extra !== undefined && Number.isFinite(Number(extra))) {
+      v.push(Number(extra));
+    }
+    var topo = Math.max(0, Math.max.apply(null, v));
+    var base = Math.min(0, Math.min.apply(null, v));
+    // Valores todos iguais (inclusive um único ponto) dariam extensão 0 e
+    // divisão por zero na escala. O piso de 1 ponto percentual mantém a barra
+    // visível e a escala sã — é o caso "um único dia não quebra".
+    if (topo - base < 1) topo = base + 1;
+    var folga = (topo - base) * 0.12;
+    topo += folga; base -= folga;
+    if (base > 0) base = 0;
+    if (topo < 0) topo = 0;
+    return { topo: topo, base: base };
   }
 
   // ══ GRÁFICO DE MARGEM DIÁRIA (SVG puro) ══════════════════════════
@@ -676,26 +860,12 @@
     // margem_pct null = venda líquida zero. NÃO é zero: o dia entra no eixo
     // (ele existe) mas não ganha barra. Tratar como 0 desenharia uma barra
     // rente à linha de zero, que se lê como "margem zerada", coisa diferente
-    // de "não há margem para calcular".
-    var comBarra = linhas.filter(function (l) { return l.margem_pct !== null && l.margem_pct !== undefined; });
+    // de "não há margem para calcular". Ver `temMargem`.
+    var comBarra = linhas.filter(temMargem);
     if (!comBarra.length) return '';               // todos os dias sem margem: nada a desenhar
 
-    var vals = comBarra.map(function (l) { return Number(l.margem_pct); });
-    var maxV = Math.max.apply(null, vals);
-    var minV = Math.min.apply(null, vals);
-    // O DOMÍNIO SEMPRE INCLUI O ZERO — é o requisito "linha de referência no
-    // zero, sempre visível". Sem isto, um período todo positivo desenharia a
-    // linha fora da área visível.
-    var topo = Math.max(0, maxV);
-    var base = Math.min(0, minV);
-    // Período de valores todos iguais (inclusive um único dia) daria altura 0
-    // e divisão por zero na escala. O piso de 1 ponto percentual mantém a
-    // barra visível e a escala sã — é o caso "um único dia não quebra".
-    if (topo - base < 1) { topo = base + 1; }
-    var folga = (topo - base) * 0.12;
-    topo += folga; base -= folga;
-    if (base > 0) base = 0;
-    if (topo < 0) topo = 0;
+    var dom = escalaMargem(comBarra.map(function (l) { return Number(l.margem_pct); }));
+    var topo = dom.topo, base = dom.base;
 
     var areaL = VB_W - M_ESQ - M_DIR;
     var areaA = VB_H - M_TOPO - M_BASE;
@@ -769,7 +939,7 @@
     // aterrissava sobre o número do primeiro dia.
     return '<div class="dre-plot">' +
       '<div class="dre-area">' +
-        '<svg class="dre-graf" viewBox="0 0 ' + VB_W + ' ' + VB_H + '"' +
+        '<svg class="dre-graf dre-svg" viewBox="0 0 ' + VB_W + ' ' + VB_H + '"' +
           ' preserveAspectRatio="none" role="img"' +
           ' aria-label="Margem por dia no período">' +
           // Linha do zero por baixo das barras: é a referência, não um enfeite.
@@ -783,14 +953,191 @@
     '</div>';
   }
 
+  // ══ GRÁFICO DE MARGEM POR POSTO (SVG puro, barras HORIZONTAIS) ═══
+  //
+  // POR QUE HORIZONTAL, e não vertical como o da aba Mês: aqui o rótulo é o
+  // NOME do posto, não o número do dia. 37 nomes em pé, em 375px, seriam
+  // ilegíveis mesmo rotacionados. Barra horizontal põe o nome numa linha de
+  // texto normal, que trunca com elipse e cabe.
+  //
+  // E É AQUI QUE ELE DIFERE DO OUTRO: o da aba Mês escala TUDO para caber
+  // (viewBox fixo, nenhuma rolagem). Neste, a faixa de cada posto tem ALTURA
+  // FIXA em px (HB_LINHA) e o SVG fica com n × HB_LINHA — 37 postos dão ~666px
+  // e o CARD cresce, rolando com a PÁGINA. Rolagem vertical é aceitável (é o
+  // gesto natural de quem lê uma lista); horizontal não é, e é por isso que o
+  // eixo de valor continua sendo 100% da largura, sempre.
+  //
+  // Não há container com rolagem própria de propósito: uma barra de rolagem
+  // interna estreitaria a coluna do desenho e desalinharia as faixas de rótulo
+  // de cima e de baixo, que dependem da mesma grade CSS.
+  //
+  // A altura do viewBox é a altura em PX, então o fator de escala vertical é 1
+  // e as faixas não deformam. O texto continua FORA do SVG — mesmo motivo do
+  // gráfico diário (ver o comentário junto de M_BASE).
+  var HB_VB_W  = 720;   // unidades de largura do viewBox (não são pixels)
+  var HB_LINHA = 18;    // altura da faixa de cada posto, em PX reais
+  var HB_ESQ   = 2;     // respiro; o nome do posto é HTML, em coluna própria
+  var HB_DIR   = 2;
+
+  // Monta o gráfico por posto. `linhas` JÁ vem ordenada — é a mesma lista que
+  // alimenta a tabela, para que gráfico e tabela nunca mostrem ordens
+  // diferentes. `mediaRede` é a margem do PERÍODO INTEIRO (totais.margem_pct
+  // da rota), não a média das margens dos postos: a segunda daria a cada posto
+  // o mesmo peso, e um posto pequeno mexeria na referência tanto quanto um
+  // grande. A referência é o que a rede fez.
+  // Devolve '' quando não há nada a desenhar — quem chama usa isso para não
+  // montar card vazio.
+  function svgMargemPosto(linhas, mediaRede) {
+    if (!linhas || !linhas.length) return '';
+    var comBarra = linhas.filter(temMargem);
+    if (!comBarra.length) return '';
+
+    var dom = escalaMargem(comBarra.map(function (l) { return Number(l.margem_pct); }), mediaRede);
+    var topo = dom.topo, base = dom.base;
+
+    var n = linhas.length;
+    var altura = n * HB_LINHA;
+    var areaL = HB_VB_W - HB_ESQ - HB_DIR;
+    var x = function (v) { return HB_ESQ + (v - base) / (topo - base) * areaL; };
+    var xZero = x(0);
+    // % da ÁREA DE PLOTAGEM (não do viewBox inteiro): é contra ela que as
+    // faixas de rótulo se posicionam, e as duas ocupam a mesma coluna da grade.
+    var pct = function (v) { return ((x(v) - HB_ESQ) / areaL * 100); };
+
+    // Barra com 6px de respiro entre faixas; piso de 4px para a barra não
+    // desaparecer se algum dia HB_LINHA encolher.
+    var altBar = Math.max(4, HB_LINHA - 6);
+
+    var barras = '', alvos = '', nomes = '';
+    linhas.forEach(function (l, i) {
+      var yFaixa = i * HB_LINHA;
+      var yBar = yFaixa + (HB_LINHA - altBar) / 2;
+      if (temMargem(l)) {
+        var v = Number(l.margem_pct);
+        var larg = Math.abs(x(v) - xZero);
+        // Margem minúscula viraria linha invisível; 1 unidade de piso garante
+        // que o posto apareça.
+        if (larg < 1) larg = 1;
+        barras += '<rect class="dre-bar' + (v < 0 ? ' neg' : '') + '"' +
+          ' x="' + (v >= 0 ? xZero : xZero - larg).toFixed(2) + '"' +
+          ' y="' + yBar.toFixed(2) + '"' +
+          ' width="' + larg.toFixed(2) + '" height="' + altBar + '" rx="1"></rect>';
+      }
+      // ALVO DE PONTEIRO: faixa de largura cheia, uma por posto. Com barra
+      // curta (margem perto de zero) ninguém acerta o ponteiro nela, e um
+      // posto sem margem não teria nada para tocar. Mesma solução do gráfico
+      // diário, e é o `.dre-hit` dele que dá o realce ao passar.
+      alvos += '<rect class="dre-hit" x="' + HB_ESQ + '" y="' + yFaixa +
+        '" width="' + areaL + '" height="' + HB_LINHA + '" data-i="' + i + '"></rect>';
+      // Nome em HTML, na coluna irmã. `title` sempre, porque a elipse só
+      // aparece quando falta espaço e não há como saber aqui se faltou.
+      var lac = temLacuna(l)
+        ? '<span class="dre-lacuna" title="' + esc(textoLacuna(l)) + '">*</span>' : '';
+      nomes += '<span class="dre-hname" title="' + esc(tituloPosto(l)) + '">' +
+        esc(rotuloPosto(l)) + lac + '</span>';
+    });
+
+    // Linha da média + rótulo. O rótulo é HTML, na faixa de cima, e ancora
+    // pela ponta quando está perto da borda — centrado, sairia do card.
+    var temMedia = mediaRede !== null && mediaRede !== undefined && Number.isFinite(Number(mediaRede));
+    var linhaMedia = '', rotMedia = '';
+    if (temMedia) {
+      var xm = x(Number(mediaRede));
+      linhaMedia = '<line class="dre-hlinha-media" x1="' + xm.toFixed(2) + '" y1="0"' +
+        ' x2="' + xm.toFixed(2) + '" y2="' + altura + '"></line>';
+      var pm = pct(Number(mediaRede));
+      var borda = pm < 14 ? ' na-esq' : (pm > 86 ? ' na-dir' : '');
+      // A seta só existe quando o rótulo ancora pela PONTA, e aponta para o
+      // lado onde a linha ficou:
+      //   na-esq -> rótulo cresce para a direita, linha na borda ESQUERDA dele;
+      //   na-dir -> rótulo cresce para a esquerda, linha na borda DIREITA.
+      // Centrado (o caso comum), o rótulo já fica sobre a linha e uma seta na
+      // ponta do texto apontaria para o lado errado.
+      var txtMedia = 'média da rede ' + nf(Number(mediaRede), 2) + '%';
+      if (borda === ' na-esq') txtMedia = '◂ ' + txtMedia;
+      if (borda === ' na-dir') txtMedia = txtMedia + ' ▸';
+      rotMedia = '<span class="dre-hmedia' + borda + '" style="left:' + pm.toFixed(3) + '%">' +
+        txtMedia + '</span>';
+    }
+
+    // Rótulos do eixo de valor, na faixa DE BAIXO: base (só se negativa), zero
+    // e topo. Ficam fora do SVG e fora da área que cresce, então continuam
+    // legíveis com 37 postos.
+    var marcas = [{ v: 0 }, { v: topo }];
+    if (base < 0) marcas.unshift({ v: base });
+    var rotX = marcas.map(function (mk) {
+      var pv = pct(mk.v);
+      var borda = pv < 6 ? ' style="left:0;transform:none"'
+        : (pv > 94 ? ' style="left:100%;transform:translateX(-100%)"'
+          : ' style="left:' + pv.toFixed(3) + '%"');
+      return '<span class="dre-hx"' + borda + '>' + nf(mk.v, 1) + '%</span>';
+    }).join('');
+
+    return '<div class="dre-hplot" style="--hbl:' + HB_LINHA + 'px">' +
+      '<div class="dre-hstrip"><span></span><div class="dre-hxs">' + rotMedia + '</div></div>' +
+      '<div class="dre-hgrid">' +
+        '<div class="dre-hnames">' + nomes + '</div>' +
+        '<div class="dre-harea">' +
+          '<svg class="dre-hgraf dre-svg" viewBox="0 0 ' + HB_VB_W + ' ' + altura + '"' +
+            ' height="' + altura + '" preserveAspectRatio="none" role="img"' +
+            ' aria-label="Margem por posto no período, com a média da rede">' +
+            // Zero e média por baixo das barras: são referência, não enfeite.
+            '<line class="dre-zero" x1="' + xZero.toFixed(2) + '" y1="0"' +
+              ' x2="' + xZero.toFixed(2) + '" y2="' + altura + '"></line>' +
+            linhaMedia + barras + alvos +
+          '</svg>' +
+        '</div>' +
+      '</div>' +
+      '<div class="dre-hstrip"><span></span><div class="dre-hxs">' + rotX + '</div></div>' +
+    '</div>';
+  }
+
+  // ── RÓTULO E TÍTULO DO POSTO ─────────────────────────────────────
+  // Um lugar só, usado pela tabela E pelo gráfico. `nome` vem null quando a
+  // linha do banco não casa com nenhum posto no join. Cada lado escrevendo o
+  // seu texto para esse caso fazia a MESMA linha aparecer com dois rótulos
+  // diferentes na mesma tela.
+  function rotuloPosto(l) { return (l && l.nome) ? l.nome : '— sem nome'; }
+  function tituloPosto(l) {
+    return (l && l.nome) ? l.nome
+      : 'Posto sem nome no cadastro (posto_id ' + ((l && l.chave) || '?') + ')';
+  }
+
+  // ── LACUNA DE CUSTO POR LINHA ────────────────────────────────────
+  // A rota devolve `custo_desconhecido` em cada linha e nos totais: linhas que
+  // entraram na venda mas não no custo. ESTA ABA ORDENA POR MARGEM, então a
+  // lacuna deixa de ser ruído estatístico e passa a poder mexer no RANKING —
+  // um posto com parte do custo faltando aparece mais rentável do que é. Daí a
+  // marca na linha; o aviso agregado da tela é assunto do passo 3, ainda
+  // pendente, e quando vier deve cobrir as duas abas de um lugar só.
+  function temLacuna(l) {
+    return !!(l && l.custo_desconhecido && l.custo_desconhecido.linhas > 0);
+  }
+  function textoLacuna(l) {
+    var c = l.custo_desconhecido;
+    return c.linhas + ' lançamento(s) sem custo no arquivo da TecnoX (' +
+      fmtRS(c.venda_liquida) + ' de venda líquida). O custo abaixo é só do que se ' +
+      'sabe, então lucro e margem deste posto estão OTIMISTAS.';
+  }
+
   // Liga o tooltip. PONTEIRO, não mouse: pointerdown/pointermove cobrem mouse,
   // toque e caneta com um só caminho — no celular o toque na coluna abre o
   // mesmo balão, que era o requisito. Sem inline handler porque são até 90
   // alvos; um listener delegado no SVG resolve todos.
-  function ligarTooltipGrafico(linhas) {
-    var svg = document.querySelector('#s-dre .dre-graf');
+  //
+  // SERVE OS DOIS GRÁFICOS. `opts` cobre o que muda entre eles e nada mais:
+  //   titulo   — o cabeçalho do balão (data no diário, nome do posto aqui);
+  //   seguirY  — o balão acompanha a LINHA tocada. No diário o alvo é uma
+  //              coluna de altura cheia, e o balão fica no topo; no por posto
+  //              o alvo é uma faixa, e um balão fixo no topo não diria de qual
+  //              posto ele fala.
+  // Os defaults reproduzem exatamente o comportamento do gráfico diário.
+  function ligarTooltipGrafico(linhas, opts) {
+    var o = opts || {};
+    var svg = document.querySelector('#s-dre ' + (o.svg || '.dre-graf'));
     var tip = document.querySelector('#s-dre .dre-tip');
     if (!svg || !tip) return;
+    var titulo = o.titulo || function (l) { return brData(l.data || l.chave); };
     var esconder = function () { tip.style.display = 'none'; };
     var mostrar = function (ev) {
       var alvo = ev.target && ev.target.closest ? ev.target.closest('.dre-hit') : null;
@@ -798,7 +1145,7 @@
       var l = linhas[parseInt(alvo.getAttribute('data-i'), 10)];
       if (!l) { esconder(); return; }
       tip.innerHTML =
-        '<b>' + brData(l.data || l.chave) + '</b>' +
+        '<b>' + titulo(l) + '</b>' +
         '<span><i>Venda líquida</i>' + fmtRS(l.venda_liquida) + '</span>' +
         '<span><i>Custo</i>' + fmtRS(l.custo_total) + '</span>' +
         '<span><i>Lucro</i>' + fmtRS(l.lucro) + '</span>' +
@@ -813,7 +1160,15 @@
       // Prende dentro do wrap: perto das bordas o balão sairia da tela.
       x = Math.max(4, Math.min(x - largTip / 2, wrap.width - largTip - 4));
       tip.style.left = x.toFixed(0) + 'px';
-      tip.style.top = '0px';
+      if (o.seguirY) {
+        // Centrado na faixa e preso dentro do wrap: nas primeiras e nas
+        // últimas linhas o balão sairia do card.
+        var altTip = tip.offsetHeight;
+        var yc = r.top + r.height / 2 - wrap.top - altTip / 2;
+        tip.style.top = Math.max(2, Math.min(yc, wrap.height - altTip - 2)).toFixed(0) + 'px';
+      } else {
+        tip.style.top = '0px';
+      }
     };
     svg.addEventListener('pointermove', mostrar);
     svg.addEventListener('pointerdown', mostrar);
@@ -845,17 +1200,25 @@
   // seguinte já havia descartado: nunca removido, crescendo sem limite numa
   // tela que o usuário reordena à vontade. Aqui é UM listener, registrado uma
   // única vez, que resolve os elementos ATUAIS na hora do evento.
+  // `.dre-svg` é a classe-marca que os DOIS gráficos carregam, justamente
+  // para este listener não precisar saber qual está na tela.
   document.addEventListener('pointerdown', function (ev) {
-    var svg = document.querySelector('#s-dre .dre-graf');
-    var tip = document.querySelector('#s-dre .dre-tip');
-    if (!svg || !tip) return;
-    if (!svg.contains(ev.target)) tip.style.display = 'none';
+    var svgs = document.querySelectorAll('#s-dre .dre-svg');
+    if (!svgs.length) return;
+    for (var i = 0; i < svgs.length; i++) {
+      if (svgs[i].contains(ev.target)) return;
+    }
+    var tips = document.querySelectorAll('#s-dre .dre-tip');
+    for (var j = 0; j < tips.length; j++) tips[j].style.display = 'none';
   });
 
   // ── Ordenação da tabela ──────────────────────────────────────────
-  function ordenar(linhas) {
-    var col = COLS.filter(function (c) { return c.key === _ord.col; })[0] || COLS[4];
-    var dir = _ord.dir === 'asc' ? 1 : -1;
+  // `ord` e `cols` vêm de fora: as duas tabelas ordenam pelas mesmas regras
+  // (null por último, texto em pt-BR, número por valor) sobre conjuntos de
+  // colunas diferentes. Uma função só, dois estados.
+  function ordenar(linhas, ord, cols) {
+    var col = cols.filter(function (c) { return c.key === ord.col; })[0] || cols[cols.length - 1];
+    var dir = ord.dir === 'asc' ? 1 : -1;
     return linhas.slice().sort(function (a, b) {
       var va = a[col.key], vb = b[col.key];
       // null SEMPRE por último, nas duas direções: margem null é ausência de
@@ -869,20 +1232,28 @@
     });
   }
 
-  window.__dreOrdenar = function (key) {
-    var c = COLS.filter(function (x) { return x.key === key; })[0];
+  // `escopo` = 'posto' na tabela por posto; ausente na de categoria. Cada uma
+  // mexe no SEU estado de ordenação — ver o comentário de `_ordPosto`.
+  window.__dreOrdenar = function (key, escopo) {
+    var cols = (escopo === 'posto') ? COLS_POSTO : COLS;
+    var ord  = (escopo === 'posto') ? _ordPosto  : _ord;
+    var c = cols.filter(function (x) { return x.key === key; })[0];
     if (!c) return;
-    if (_ord.col === key) {
-      _ord.dir = _ord.dir === 'desc' ? 'asc' : 'desc';
+    if (ord.col === key) {
+      ord.dir = ord.dir === 'desc' ? 'asc' : 'desc';
     } else {
       // Primeiro clique: texto sobe (A→Z), número desce (maior primeiro).
-      _ord.col = key;
-      _ord.dir = c.tipo === 'txt' ? 'asc' : 'desc';
+      ord.col = key;
+      ord.dir = c.tipo === 'txt' ? 'asc' : 'desc';
     }
     render();
   };
 
   // ── Render ───────────────────────────────────────────────────────
+  // Dataset da sub-aba ATIVA. O subtítulo e o período têm de descrever o que
+  // está na tela — não o que a outra aba carregou antes.
+  function dadosAtivos() { return _subaba === 'posto' ? _dadosPosto : _dados; }
+
   function render() {
     var body = document.getElementById('dre-body');
     var sub  = document.getElementById('dre-escopo-sub');
@@ -898,7 +1269,7 @@
       // fetch falhar depois de o usuário mexer nas datas, o subtítulo tem de
       // descrever os números que estão na tela — misturar data nova com
       // contagem velha rotularia o total errado.
-      var per = (_dados && _dados.periodo) ? _dados.periodo : null;
+      var per = (dadosAtivos() && dadosAtivos().periodo) ? dadosAtivos().periodo : null;
       sub.textContent = nomePosto + ' · ' +
         brData(per ? per.inicio : _inicio) + ' a ' + brData(per ? per.fim : _fim) +
         (per ? ' · ' + per.dias + ' dia(s)' : '');
@@ -909,6 +1280,9 @@
       body.innerHTML = '<div class="empty" style="color:var(--dg)">' + esc(_erro) + '</div>';
       return;
     }
+    // Daqui para baixo é o corpo da sub-aba "Mês". A "Por Posto" tem KPIs,
+    // gráfico e tabela próprios, e desvia aqui em vez de ramificar cada bloco.
+    if (_subaba === 'posto') { renderPorPosto(body); return; }
     if (!_dados) { body.innerHTML = '<div class="empty">Sem dados.</div>'; return; }
 
     var T = _dados.totais || {};
@@ -938,7 +1312,7 @@
     }).join('') + '</div>';
 
     // ── Tabela por categoria ──
-    var ordenadas = ordenar(linhas);
+    var ordenadas = ordenar(linhas, _ord, COLS);
     // Cada th/td leva `col-<key>`, e é por essa classe que o CSS esconde
     // coluna em celular. NÃO por :nth-child: qualquer coluna nova ou reordenada
     // deslocaria os índices e passaria a esconder a coluna errada, calado.
@@ -1049,6 +1423,145 @@
 
     // DEPOIS do innerHTML: os alvos de ponteiro só existem agora.
     if (svg) ligarTooltipGrafico(linhasDia);
+  }
+
+
+  // ── Render da sub-aba "Por Posto" ────────────────────────────────
+  // Mesmos KPIs, mesmas classes `col-<key>`, mesma linha de detalhe de celular
+  // e mesmo `.dre-graf-wrap` da aba Mês. O que é próprio daqui: o conjunto de
+  // colunas, o gráfico horizontal e a média da rede como referência.
+  function renderPorPosto(body) {
+    if (!_dadosPosto) { body.innerHTML = '<div class="empty">Sem dados.</div>'; return; }
+
+    var T = _dadosPosto.totais || {};
+    var linhas = Array.isArray(_dadosPosto.linhas) ? _dadosPosto.linhas : [];
+
+    if (!linhas.length) {
+      body.innerHTML =
+        '<div class="card"><div class="cbody">' +
+          '<div class="empty">Nenhum posto com lançamento no período.<br>' +
+          '<span class="csub">A DRE vem do .xls de categoria da TecnoX, importado por posto. ' +
+          'Posto não importado neste período não aparece aqui.</span></div>' +
+        '</div></div>';
+      return;
+    }
+
+    // KPIs: os MESMOS da aba Mês, sobre os totais da rede no período. São a
+    // linha de base contra a qual as barras se leem.
+    var kpis = '<div class="kgrid">' + KPIS.map(function (k) {
+      var v = T[k.key];
+      var cls = 'kval';
+      if (k.destaque) cls += ' ac';
+      if (k.sinal && !vazio(v)) cls += (Number(v) < 0 ? ' neg' : ' pos');
+      return '<div class="kbox">' +
+        '<div class="klbl">' + esc(k.rot) + '</div>' +
+        '<div class="' + cls + '">' + k.fmt(v) + '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+
+    // UMA ordenação para os dois: a mesma lista alimenta gráfico e tabela, e é
+    // por isso que "ordenadas junto" não precisou de sincronização nenhuma.
+    var ordenadas = ordenar(linhas, _ordPosto, COLS_POSTO);
+    var mediaRede = (T.margem_pct === null || T.margem_pct === undefined) ? null : Number(T.margem_pct);
+
+    var ths = COLS_POSTO.map(function (c) {
+      var on = _ordPosto.col === c.key;
+      var seta = on ? (_ordPosto.dir === 'desc' ? ' ↓' : ' ↑') : '';
+      var tit = c.titulo ? c.titulo : ('Ordenar por ' + c.rot);
+      return '<th class="ord col-' + c.key + (c.tipo === 'num' ? ' num' : '') + (on ? ' on' : '') + '"' +
+        ' onclick="__dreOrdenar(\'' + c.key + '\', \'posto\')"' +
+        ' title="' + esc(tit) + '">' +
+        '<span class="rot-l">' + esc(c.rot) + '</span>' +
+        '<span class="rot-c">' + esc(c.rotCurto || c.rot) + '</span>' +
+        seta + '</th>';
+    }).join('');
+
+    var trs = ordenadas.map(function (l) {
+      var celulas = COLS_POSTO.map(function (c) {
+        var v = l[c.key];
+        var neg = (c.tipo === 'num' && !vazio(v) && Number(v) < 0) ? ' dre-neg' : '';
+        // O nome leva `title` com o nome inteiro: em celular a célula trunca
+        // com elipse, e sem isto o posto ficaria sem identificação.
+        var tit = (c.key === 'nome') ? ' title="' + esc(tituloPosto(l)) + '"'
+          : (c.titulo ? ' title="' + esc(c.titulo) + '"' : '');
+        // A marca de lacuna vai no NOME, não numa coluna nova: é ressalva de
+        // toda a linha, e uma coluna a mais não caberia em 375px.
+        var marca = (c.key === 'nome' && temLacuna(l))
+          ? '<span class="dre-lacuna" title="' + esc(textoLacuna(l)) + '">*</span>' : '';
+        return '<td class="col-' + c.key + (c.tipo === 'num' ? ' num' : '') + neg + '"' + tit + '>'
+          + c.fmt(v, l) + marca + '</td>';
+      }).join('');
+      var det = MOBILE_OCULTA_POSTO.map(function (k) {
+        var c = COL_POSTO_POR_KEY[k];
+        return '<div class="dre-det-par"><span>' + esc(c.rot) + '</span><b>' + c.fmt(l[k], l) + '</b></div>';
+      }).join('');
+      return '<tr onclick="__dreDetalhe(this)" title="Toque para ver quantidade e custo">'
+        + celulas + '</tr>'
+        + '<tr class="dre-det"><td colspan="' + COLS_POSTO.length + '">' + det + '</td></tr>';
+    }).join('');
+
+    // Rodapé = totais da ROTA (a rede no período), não a soma das linhas na
+    // tela — mesma regra da aba Mês.
+    var tfoot = '<tr>' + COLS_POSTO.map(function (c, i) {
+      if (i === 0) return '<td class="col-' + c.key + '">REDE</td>';
+      if (c.key === 'quantidade') {
+        return '<td class="col-' + c.key + ' num" title="Sem total: a coluna mistura litros (combustíveis) e unidades (produtos).">—</td>';
+      }
+      var v = T[c.key];
+      var neg = (!vazio(v) && Number(v) < 0) ? ' dre-neg' : '';
+      return '<td class="col-' + c.key + ' num' + neg + '">' + c.fmt(v) + '</td>';
+    }).join('') + '</tr>';
+
+    // ── Gráfico horizontal, ENTRE os KPIs e a tabela ──
+    var svg = svgMargemPosto(ordenadas, mediaRede);
+    var comMargem = ordenadas.filter(temMargem).length;
+    var comLacuna = ordenadas.filter(temLacuna).length;
+    var cardGraf = svg
+      ? '<div class="card" style="margin-top:.9rem">' +
+          '<div class="chdr">' +
+            '<div class="ctitle">Margem por posto</div>' +
+            '<div class="csub">' + comMargem + ' posto(s) com margem' +
+              (ordenadas.length > comMargem
+                ? ' · ' + (ordenadas.length - comMargem) + ' sem venda líquida (sem barra)' : '') +
+              // A média vai TAMBÉM no subtítulo: com 37 postos o card fica alto
+              // e o rótulo da linha sai da vista ao rolar a página.
+              (mediaRede === null ? '' : ' · média da rede ' + nf(mediaRede, 2) + '%') +
+              ' · passe o mouse ou toque numa faixa</div>' +
+          '</div>' +
+          '<div class="cbody"><div class="dre-graf-wrap">' + svg +
+            '<div class="dre-tip" style="display:none"></div>' +
+          '</div></div>' +
+        '</div>'
+      : '';
+
+    body.innerHTML = kpis + cardGraf +
+      '<div class="card" style="margin-top:.9rem">' +
+        '<div class="chdr">' +
+          '<div class="ctitle">Por posto</div>' +
+          '<div class="csub">' + ordenadas.length + ' posto(s) · clique no cabeçalho para ordenar' +
+            (comLacuna
+              ? ' · ' + comLacuna + ' com <span class="dre-lacuna">*</span> têm custo incompleto no arquivo'
+              : '') +
+            '</div>' +
+        '</div>' +
+        '<div class="cbody dre-scroll">' +
+          '<table class="dre-table">' +
+            '<thead><tr>' + ths + '</tr></thead>' +
+            '<tbody>' + trs + '</tbody>' +
+            '<tfoot>' + tfoot + '</tfoot>' +
+          '</table>' +
+        '</div>' +
+      '</div>';
+
+    // DEPOIS do innerHTML: os alvos de ponteiro só existem agora. Mesmo binder
+    // do gráfico diário — só o título do balão e o eixo que ele segue mudam.
+    if (svg) {
+      ligarTooltipGrafico(ordenadas, {
+        svg: '.dre-hgraf',
+        seguirY: true,
+        titulo: function (l) { return esc(rotuloPosto(l)); },
+      });
+    }
   }
 
 
