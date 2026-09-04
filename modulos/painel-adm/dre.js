@@ -83,7 +83,8 @@
   // mãos. Agora são DUAS chamadas, as mesmas de sempre.
   //
   // Métrica exibida no gráfico. O gráfico é UM só; isto troca o CAMPO.
-  var _metricaAno = 'lucro';
+  // Default 'bruto' (o antigo 'lucro'): a pergunta da aba é quanto sobra.
+  var _metricaAno = 'bruto';
   // Escopo do gráfico e da tabela: 'ano' = 12 meses; 'mes' = série DIÁRIA de
   // UM mês, escolhido em `_mesDiario`. Troca o EIXO, não a métrica — as duas
   // dimensões são independentes, então 4 métricas × 2 escopos saem do mesmo
@@ -656,8 +657,14 @@
       '#s-dre .dre-graf-wrap { touch-action: manipulation; }' +
       '#s-dre .dre-graf { display: block; width: 100%; height: 190px; overflow: visible; }' +
       '@media (max-width: 560px) { #s-dre .dre-graf { height: 150px; } }' +
-      '#s-dre .dre-bar { fill: var(--ac); }' +
-      '#s-dre .dre-bar.neg { fill: var(--dg); }' +
+      // `:not(.proj)` — SEM ISSO A HACHURA NÃO APARECE. A barra projetada
+      // recebe `fill="url(#dre-hach-…)"` como ATRIBUTO, e atributo de
+      // apresentação perde de qualquer regra CSS: um `fill` aqui pintava a
+      // barra sólida por cima do pattern, e o mês projetado ficava
+      // distinguível do realizado só por 1px de contorno da mesma cor.
+      // Silencioso: o pattern era declarado, referenciado e ignorado.
+      '#s-dre .dre-bar:not(.proj) { fill: var(--ac); }' +
+      '#s-dre .dre-bar.neg:not(.proj) { fill: var(--dg); }' +
       '#s-dre .dre-zero { stroke: var(--bd2); stroke-width: 1; }' +
       // vector-effect: sem ele o preserveAspectRatio="none" esticaria a
       // espessura do traço junto com o desenho e a linha do zero sairia
@@ -1013,6 +1020,26 @@
       // Sempre renderizada, escondida por padrão. Só o media query abaixo a
       // torna exibível, então no desktop o toque na linha não faz nada e o
       // JS não precisa saber a largura da tela.
+      // ── SÉRIES combustível x produtos (aba Projeção) ───────────
+      // Combustível fica no âmbar do tema (a cor de dado desta tela) e
+      // produtos no azul da marca: matizes distintos, não duas saturações do
+      // mesmo — lado a lado e com 1% de altura, duas variações do mesmo tom
+      // não se distinguem. O contorno de `parcial` e a hachura de `proj`
+      // continuam valendo por cima das duas.
+      // `:not(.proj):not(.neg)` — a cor da série NÃO pode apagar duas coisas
+      // que valem mais que ela: a hachura do projetado (que vem do pattern) e
+      // o vermelho do negativo (que é sinal de prejuízo).
+      '#s-dre .dre-bar.prod:not(.proj):not(.neg) { fill: var(--brand-blue, #4bb0ea); }' +
+      '#s-dre .dre-hach-f.prod { fill: var(--brand-blue, #4bb0ea); }' +
+      '#s-dre .dre-sw.comb { background: var(--ac); }' +
+      '#s-dre .dre-sw.prod { background: var(--brand-blue, #4bb0ea); }' +
+      // Destaque do balão: o que a métrica pede sai maior; o contexto abaixo
+      // fica menor e mais apagado. A hierarquia é o ponto da mudança.
+      '#s-dre .dre-tip span.forte { font-size: .82rem; color: var(--tx); }' +
+      '#s-dre .dre-tip span.forte i { color: var(--tx2); }' +
+      '#s-dre .dre-tip span.forte + span:not(.forte) { margin-top: .28rem;' +
+        'padding-top: .28rem; border-top: 1px solid var(--bd); }' +
+      '#s-dre .dre-tip span:not(.forte) { font-size: .68rem; }' +
       '#s-dre .dre-det { display: none; }' +
       // ── Tabela por categoria AGRUPADA ─────────────────────────
       // Categoria começa escondida e aparece com `vis`, que o clique no grupo
@@ -1662,6 +1689,10 @@
   //   marcaX     — índice que recebe marca vertical (o mês corrente), ou null.
   //   piso       — extensão mínima do domínio, na unidade do eixo.
   //   aria       — a descrição acessível, que muda com o que está no eixo.
+  //   series     — DUAS OU MAIS barras por fatia, lado a lado dentro do mesmo
+  //                passo: [{ chave|valor, cls, rot }]. Sem `series` há uma
+  //                série implícita (o `valor`) e a geometria é idêntica à de
+  //                antes — é o caminho dos outros dois gráficos.
   // Sem `opts` o comportamento é EXATAMENTE o da série diária de antes.
   //
   // O NOME não é mais "MargemDiaria" de propósito: com um eixo em dinheiro
@@ -1678,13 +1709,38 @@
     // ganha barra. Tratar como 0 desenharia uma barra rente à linha de zero,
     // que se lê como "margem zerada" / "lucro zero" — afirmação diferente de
     // "não há número para mostrar". Ver `temMargem` e o mês sem importação.
-    var temValor = function (l) {
-      var v = valor(l);
+    var temValorDe = function (fn, l) {
+      var v = fn(l);
       return v !== null && v !== undefined && Number.isFinite(Number(v));
     };
-    var comBarra = linhas.filter(temValor);
+    var temValor = function (l) { return temValorDe(valor, l); };
+    // SÉRIES. Sem `series` a lista tem uma entrada — o próprio `valor` — e
+    // tudo abaixo roda igual ao de antes.
+    var series = (o.series && o.series.length)
+      ? o.series.map(function (se) {
+          return {
+            cls: se.cls || '',
+            rot: se.rot || '',
+            valor: se.valor || (function (k) {
+              return function (l) { return l.tipo === 'vazio' ? null : l[k]; };
+            })(se.chave),
+          };
+        })
+      : [{ cls: '', rot: '', valor: valor }];
+    // Alguma série tem barra em alguma fatia? Se nenhuma tem, não há gráfico.
+    var comBarra = linhas.filter(function (l) {
+      return series.some(function (se) { return temValorDe(se.valor, l); });
+    });
     if (!comBarra.length) return '';               // nada a desenhar
-    var valores = comBarra.map(function (l) { return Number(valor(l)); });
+    // DOMÍNIO sobre TODAS as séries: com escala tirada de uma só, a outra
+    // sairia da área desenhada. Em Margem isso importa de verdade — a margem
+    // de produto é cinco vezes a de combustível.
+    var valores = [];
+    comBarra.forEach(function (l) {
+      series.forEach(function (se) {
+        if (temValorDe(se.valor, l)) valores.push(Number(se.valor(l)));
+      });
+    });
 
     // A média entra no domínio: se ficasse fora, a linha de referência —
     // que é o motivo de ela existir — sairia da área desenhada.
@@ -1702,32 +1758,47 @@
     // fininha, que é o comportamento pedido; com 1 dia daria uma barra
     // larguíssima, então há TETO de 42 unidades e a barra fica centrada.
     var larg = Math.min(passoX * 0.7, 42);
+    // Com k séries o passo se divide entre elas, encostadas: separá-las com
+    // respiro dentro do passo faria par de barras de fatias vizinhas parecer
+    // um grupo só. O agrupamento se lê pelo respiro de 30% ENTRE os passos,
+    // que já existia.
+    var largS = larg / series.length;
     var rotulados = indicesRotulados(n, o.maxRotulos);
 
     var barras = '', eixoX = '', alvos = '';
     linhas.forEach(function (l, i) {
       var cx = M_ESQ + passoX * i + passoX / 2;
       var x = cx - larg / 2;
-      if (temValor(l)) {
-        var v = Number(valor(l));
-        var yv = y(v);
-        var alt = Math.abs(yv - yZero);
-        // Barra de valor minúsculo viraria linha invisível; 1 unidade de piso
-        // garante que a fatia apareça.
-        if (alt < 1) alt = 1;
-        var yTopo = v >= 0 ? yZero - alt : yZero;
-        // ASPECTO: sólido (fechado), hachurado (projetado) ou contorno
-        // (parcial, mês em curso). A hachura é um `pattern` de listras
-        // VERTICAIS, não diagonais: o SVG usa preserveAspectRatio="none" e
-        // escala X e Y por fatores diferentes, o que torceria uma diagonal em
-        // ângulo diferente a cada largura de tela. Listra vertical continua
-        // vertical sob qualquer escala — só o espaçamento acompanha a barra.
-        var asp = o.aspecto ? (o.aspecto(l) || '') : '';
-        barras += '<rect class="dre-bar' + (v < 0 ? ' neg' : '') + (asp ? ' ' + asp : '') + '"' +
-          (asp === 'proj' ? ' fill="url(#dre-hach-' + (v < 0 ? 'neg' : 'pos') + ')"' : '') +
-          ' x="' + x.toFixed(2) + '" y="' + yTopo.toFixed(2) + '"' +
-          ' width="' + larg.toFixed(2) + '" height="' + alt.toFixed(2) + '" rx="1"></rect>';
-      }
+      series.forEach(function (se, si) {
+        if (temValorDe(se.valor, l)) {
+          var v = Number(se.valor(l));
+          var yv = y(v);
+          var alt = Math.abs(yv - yZero);
+          // Barra de valor minúsculo viraria linha invisível; 1 unidade de piso
+          // garante que a fatia apareça. Com duas séries isto é o que mantém a
+          // barra de produtos VISÍVEL em Líquido, onde ela é 1% do combustível.
+          if (alt < 1) alt = 1;
+          var yTopo = v >= 0 ? yZero - alt : yZero;
+          // ASPECTO: sólido (fechado), hachurado (projetado) ou contorno
+          // (parcial, mês em curso). A hachura é um `pattern` de listras
+          // VERTICAIS, não diagonais: o SVG usa preserveAspectRatio="none" e
+          // escala X e Y por fatores diferentes, o que torceria uma diagonal em
+          // ângulo diferente a cada largura de tela. Listra vertical continua
+          // vertical sob qualquer escala — só o espaçamento acompanha a barra.
+          var asp = o.aspecto ? (o.aspecto(l) || '') : '';
+          barras += '<rect class="dre-bar' + (v < 0 ? ' neg' : '') + (asp ? ' ' + asp : '') +
+              (se.cls ? ' ' + se.cls : '') + '"' +
+            // NEGATIVO vence a série na escolha da hachura: prejuízo é sinal
+            // mais importante que "qual das duas barras", e a posição abaixo
+            // do zero já diz de quem é a barra.
+            (asp === 'proj'
+              ? ' fill="url(#dre-hach-' +
+                  (v < 0 ? 'neg' : (se.cls === 'prod' ? 'prod' : 'pos')) + ')"'
+              : '') +
+            ' x="' + (x + largS * si).toFixed(2) + '" y="' + yTopo.toFixed(2) + '"' +
+            ' width="' + largS.toFixed(2) + '" height="' + alt.toFixed(2) + '" rx="1"></rect>';
+        }
+      });
       // ALVO DE PONTEIRO: retângulo transparente de altura cheia, um por dia.
       // Com 90 barras a barra real tem ~4 unidades e ninguém acerta o mouse
       // nela — e num dia sem barra não haveria nada para tocar. O alvo cobre
@@ -1813,6 +1884,12 @@
           '<rect width="4" height="11" class="dre-hach-f"></rect></pattern>' +
         '<pattern id="dre-hach-neg" patternUnits="userSpaceOnUse" width="11" height="11">' +
           '<rect width="4" height="11" class="dre-hach-f neg"></rect></pattern>' +
+        // Uma hachura POR SÉRIE. Sem ela a barra projetada de produtos
+        // perdia a hachura: a cor da série vem do CSS, e CSS vence o atributo
+        // `fill` do pattern — o mês projetado ficava idêntico ao realizado,
+        // apagando a distinção que este gráfico existe para fazer.
+        '<pattern id="dre-hach-prod" patternUnits="userSpaceOnUse" width="11" height="11">' +
+          '<rect width="4" height="11" class="dre-hach-f prod"></rect></pattern>' +
       '</defs>';
     }
 
@@ -2018,6 +2095,13 @@
   //   titulo   — o cabeçalho do balão (data no diário, nome do posto aqui);
   //   extra    — [{rot, val}] com medidas a mais, no formato das de cima.
   //   nota     — linha final sem rótulo (realizado/projetado).
+  //   medidas  — SUBSTITUI o corpo fixo de quatro linhas: (linha) ->
+  //              [{ rot, val, forte? }]. `forte` sai em destaque, no topo.
+  //              Existe porque na aba Projeção o balão tem de seguir a
+  //              MÉTRICA escolhida: com as quatro medidas sempre iguais, o
+  //              botão não mudava nada na leitura e o número que o usuário
+  //              pediu ficava no meio dos outros. Sem `medidas`, o corpo é o
+  //              de antes — é o caminho dos outros dois gráficos.
   //   aoClicar — função (linha) chamada no clique. Quem decide QUAIS fatias
   //              aceitam clique é o `clicavel` do desenhador, que marca as
   //              outras com `.sem-clique`.
@@ -2043,15 +2127,22 @@
       if (!alvo) { esconder(); return; }
       var l = linhas[parseInt(alvo.getAttribute('data-i'), 10)];
       if (!l) { esconder(); return; }
+      // `medidas` manda quando existe; sem ela, as quatro de sempre. A lista
+      // é montada aqui e renderizada num lugar só, então destaque e contexto
+      // não podem sair por formatações diferentes.
+      var medidas = o.medidas ? o.medidas(l) : [
+        { rot: 'Venda líquida', val: fmtRS(l.venda_liquida) },
+        { rot: 'Custo', val: fmtRS(l.custo_total) },
+        { rot: 'Lucro', val: fmtRS(l.lucro) },
+        { rot: 'Margem', val: fmtPct(l.margem_pct) },
+      ];
       tip.innerHTML =
         '<b>' + titulo(l) + '</b>' +
-        '<span><i>Venda líquida</i>' + fmtRS(l.venda_liquida) + '</span>' +
-        '<span><i>Custo</i>' + fmtRS(l.custo_total) + '</span>' +
-        '<span><i>Lucro</i>' + fmtRS(l.lucro) + '</span>' +
-        '<span><i>Margem</i>' + fmtPct(l.margem_pct) + '</span>' +
-        // `extra`: medidas ADICIONAIS, no mesmo formato das quatro de cima.
-        // A aba Projeção usa para Litros — quem toca uma barra quer o mês
-        // inteiro, não só a métrica que está no eixo naquele momento.
+        medidas.map(function (x) {
+          return '<span' + (x.forte ? ' class="forte"' : '') + '><i>' + esc(x.rot) + '</i>' +
+            esc(x.val) + '</span>';
+        }).join('') +
+        // `extra`: medidas ADICIONAIS, no mesmo formato das de cima.
         (o.extra ? o.extra(l).map(function (x) {
           return '<span><i>' + esc(x.rot) + '</i>' + esc(x.val) + '</span>';
         }).join('') : '') +
@@ -2703,16 +2794,47 @@
   // puxaria a média das margens para cima sem ter puxado a rede para cima.
   // A mesma regra vale na projeção: `mediaUltimosFechados` projeta venda e
   // custo separados e só então divide.
+  // `series` liga a métrica às DUAS METADES: cada entrada é uma barra, e a
+  // ausência de `series` é uma barra só. Litros não separa porque `litros` já
+  // inclui o granel, que é produto — separar ali exigiria um quinto campo na
+  // rota para 0,18% do volume. Produtos não separa porque JÁ é uma metade.
+  //
+  // `chave` continua sendo o campo do TOTAL em todas: é ele que dá a escala do
+  // eixo, a linha de referência da média e a ordem de grandeza do card. As
+  // barras da metade cabem embaixo dele por construção — soma das metades = o
+  // total (ver `ehCombustivel` na GET /dre).
   var METRICAS = [
-    { id: 'faturamento', rot: 'Faturamento', chave: 'venda_liquida',
-      eixo: fmtRSCurto, corpo: fmtRS },
-    { id: 'lucro', rot: 'Lucro', chave: 'lucro',
-      eixo: fmtRSCurto, corpo: fmtRS },
+    { id: 'liquido', rot: 'Líquido', chave: 'venda_liquida',
+      eixo: fmtRSCurto, corpo: fmtRS,
+      series: [{ chave: 'venda_liquida_comb', rot: 'Combustível', cls: 'comb' },
+               { chave: 'venda_liquida_prod', rot: 'Produtos',    cls: 'prod' }] },
+    { id: 'bruto', rot: 'Bruto', chave: 'lucro',
+      eixo: fmtRSCurto, corpo: fmtRS,
+      series: [{ chave: 'lucro_comb', rot: 'Combustível', cls: 'comb' },
+               { chave: 'lucro_prod', rot: 'Produtos',    cls: 'prod' }] },
     { id: 'litros', rot: 'Litros', chave: 'litros',
       eixo: fmtLCurto, corpo: fmtL },
     { id: 'margem', rot: 'Margem %', chave: 'margem_pct', razao: true,
-      eixo: function (v) { return nf(v, 1) + '%'; }, corpo: fmtPct },
+      eixo: function (v) { return nf(v, 1) + '%'; }, corpo: fmtPct,
+      series: [{ chave: 'margem_comb', rot: 'Combustível', cls: 'comb' },
+               { chave: 'margem_prod', rot: 'Produtos',    cls: 'prod' }] },
+    // PRODUTOS é ESCOPO, não medida — e uma barra precisa de UMA medida. A
+    // barra é a venda líquida de produtos, que é a mesma leitura de 'Líquido'
+    // restrita a esse lado; lucro e margem de produto ficam no balão, que é
+    // onde o pedido os quer ('venda, custo, lucro e margem só de produtos').
+    { id: 'produtos', rot: 'Produtos', chave: 'venda_liquida_prod',
+      eixo: fmtRSCurto, corpo: fmtRS },
   ];
+  // A métrica tem as duas barras SE ela as pede E a fatia tem o dado. Numa
+  // janela de deploy com a API antiga, `series` existe e o dado não — e aí a
+  // métrica cai para uma barra em vez de desenhar combustível zerado.
+  function seriesDe(met, fatias) {
+    if (!met.series) return null;
+    var alguma = (fatias || []).some(function (f) {
+      return f.tipo !== 'vazio' && temSplit(f);
+    });
+    return alguma ? met.series : null;
+  }
   function metricaAtual() {
     return METRICAS.filter(function (m) { return m.id === _metricaAno; })[0] || METRICAS[1];
   }
@@ -2861,6 +2983,61 @@
   // que taxa, e se é fato". Litros/Venda/Custo vão para o detalhe ao toque.
   var MOBILE_OCULTA_ANO = ['litros', 'venda_liquida', 'custo_total'];
 
+  // ── COMBUSTÍVEL x PRODUTOS ──────────────────────────────────────
+  // A rota devolve as duas metades de venda e custo em CADA linha (ver
+  // `ehCombustivel` na GET /dre): depois do `agrupar=dia` a categoria já foi
+  // somada e separar no cliente é impossível, então o dado vem pronto.
+  //
+  // AUSENTE NÃO É ZERO — a mesma regra do litro, e aqui ela pesa mais. Com a
+  // API antiga no ar (janela de deploy) `venda_liquida_comb` não existe na
+  // resposta; tratar como zero desenharia a barra de combustível rente ao eixo,
+  // que se lê como "não vendeu combustível" — a afirmação mais errada possível
+  // numa rede onde combustível é 99% da venda. Sem o dado a métrica cai para
+  // UMA barra (o total) e o balão diz por quê.
+  var SPLIT_SOMA = ['venda_liquida_comb', 'venda_liquida_prod',
+                    'custo_total_comb', 'custo_total_prod'];
+  // numOuNull, e NÃO Number.isFinite(Number(x)): `Number(null)` é ZERO e
+  // Number.isFinite(0) é true, então a versão ingênua dava o split como
+  // PRESENTE quando ele era null — e a tela mostrava R$ 0,00 de combustível,
+  // exatamente a leitura errada que este guard existe para impedir. É a mesma
+  // armadilha que o comentário do custo nullable na GET /dre documenta.
+  function temSplit(o) {
+    return !!o && numOuNull(o.venda_liquida_comb) !== null
+               && numOuNull(o.venda_liquida_prod) !== null;
+  }
+  // Lucro e margem de cada metade a partir das quatro somas. UM lugar só:
+  // margem de metade é RAZÃO das somas daquela metade, nunca média das margens
+  // diárias — mesma regra do `margem_pct` do total, pelo mesmo motivo.
+  function derivarSplit(o) {
+    if (!temSplit(o)) {
+      o.lucro_comb = null;  o.lucro_prod = null;
+      o.margem_comb = null; o.margem_prod = null;
+      return o;
+    }
+    o.lucro_comb = o.venda_liquida_comb - o.custo_total_comb;
+    o.lucro_prod = o.venda_liquida_prod - o.custo_total_prod;
+    o.margem_comb = o.venda_liquida_comb !== 0
+      ? o.lucro_comb / o.venda_liquida_comb * 100 : null;
+    o.margem_prod = o.venda_liquida_prod !== 0
+      ? o.lucro_prod / o.venda_liquida_prod * 100 : null;
+    return o;
+  }
+  // Copia as quatro somas de `fonte` para uma fatia e deriva. Fonte sem as
+  // metades deixa a fatia sem elas, e a métrica cai para uma barra.
+  function splitDe(fonte) {
+    var o = {};
+    if (temSplit(fonte)) {
+      SPLIT_SOMA.forEach(function (k) { o[k] = Number(fonte[k]) || 0; });
+    }
+    return derivarSplit(o);
+  }
+  // Copia as metades de `fonte` para `alvo` (que já tem os campos de total).
+  function comSplit(alvo, fonte) {
+    var s = splitDe(fonte);
+    Object.keys(s).forEach(function (k) { alvo[k] = s[k]; });
+    return alvo;
+  }
+
   // Soma um conjunto de fatias devolvendo os totais e a margem como RAZÃO.
   // `litros` sai null se QUALQUER fatia tiver litro desconhecido: um total de
   // litros com meses faltando seria menor que a realidade sem nada dizendo.
@@ -2905,7 +3082,14 @@
       if (!a) {
         a = { mes: mes, dias: 0, venda_liquida: 0, custo_total: 0,
               sc_linhas: 0, sc_venda: 0, margens: [], vendaDia: [],
-              litros: 0, litroAusente: false, litrosDia: [] };
+              litros: 0, litroAusente: false, litrosDia: [],
+              // Metades acumuladas. Sem série diária por metade: a projeção
+              // usa o total do mês ÷ dias, e a faixa de incerteza sai da
+              // dispersão do TOTAL — uma faixa por metade não foi pedida e
+              // guardar a série "para o caso de" é peso morto.
+              venda_liquida_comb: 0, venda_liquida_prod: 0,
+              custo_total_comb: 0, custo_total_prod: 0,
+              splitAusente: false };
         por.set(mes, a);
       }
       a.dias += 1;
@@ -2924,6 +3108,11 @@
       var lt = numOuNull(l.litros);
       if (lt === null) a.litroAusente = true;
       else { a.litros += lt; a.litrosDia.push(lt); }
+      // METADES: um dia sem elas apaga o split do mês inteiro. Somar só os
+      // dias que têm daria um combustível menor que a realidade, com o total
+      // certo ao lado — divergência silenciosa dentro da mesma barra.
+      if (!temSplit(l)) a.splitAusente = true;
+      else SPLIT_SOMA.forEach(function (k) { a[k] += Number(l[k]) || 0; });
     });
     return [...por.values()].sort(function (a, b) { return a.mes.localeCompare(b.mes); })
       .map(function (a) {
@@ -2931,6 +3120,10 @@
         a.margem_pct = a.venda_liquida !== 0 ? a.lucro / a.venda_liquida * 100 : null;
         a.custo_desconhecido = { linhas: a.sc_linhas, venda_liquida: a.sc_venda };
         if (a.litroAusente) a.litros = null;
+        if (a.splitAusente) {
+          SPLIT_SOMA.forEach(function (k) { a[k] = null; });
+        }
+        derivarSplit(a);
         return a;
       });
   }
@@ -2970,6 +3163,17 @@
     // Faixa do FATURAMENTO: a dispersão da margem não serve aqui — usa a da
     // própria venda líquida diária, que existe na série.
     var sdV = desvioPadrao(mesAtual.vendaDia || []);
+    // METADES projetadas do MESMO jeito: média diária × dias do mês, cada
+    // soma por si. Projetar a margem de cada metade direto seria média de
+    // margens; aqui venda e custo de cada lado sobem separados e a margem sai
+    // da razão no `derivarSplit`.
+    var pSplit = {};
+    if (temSplit(mesAtual)) {
+      SPLIT_SOMA.forEach(function (k) {
+        pSplit[k] = (Number(mesAtual[k]) || 0) / mesAtual.dias * D;
+      });
+    }
+    derivarSplit(pSplit);
     return {
       dias: mesAtual.dias, diasDoMes: D,
       lucro: lucro, venda: venda, litros: litros,
@@ -2977,6 +3181,7 @@
       faixa: faixa, sd_margem: sd,
       faixa_venda: (sdV === null) ? null : sdV * D,
       faixa_litros: (sdL === null || litros === null) ? null : sdL * D,
+      split: pSplit,
     };
   }
 
@@ -2993,8 +3198,15 @@
       // mês faltando sairia baixa e viraria projeção baixa, sem nada avisando.
       var lm = numOuNull(m.litros);
       if (lm === null) a.litroCompleto = false; else a.litros += lm;
+      // Metade só entra se TODOS os meses usados a têm, mesma regra do litro:
+      // média de metade com um mês faltando sairia baixa e a projeção dos
+      // meses futuros com ela.
+      if (!temSplit(m)) a.splitCompleto = false;
+      else SPLIT_SOMA.forEach(function (k) { a.sp[k] += Number(m[k]) || 0; });
       return a;
-    }, { venda: 0, custo: 0, litros: 0, litroCompleto: true });
+    }, { venda: 0, custo: 0, litros: 0, litroCompleto: true, splitCompleto: true,
+         sp: { venda_liquida_comb: 0, venda_liquida_prod: 0,
+               custo_total_comb: 0, custo_total_prod: 0 } });
     var venda = soma.venda / usados.length;
     var custo = soma.custo / usados.length;
     return {
@@ -3006,7 +3218,87 @@
       // igual a um mês pequeno e a um mês grande.
       margem_pct: venda !== 0 ? (venda - custo) / venda * 100 : null,
       litros: soma.litroCompleto ? soma.litros / usados.length : null,
+      split: (function () {
+        var o = {};
+        if (soma.splitCompleto) {
+          SPLIT_SOMA.forEach(function (k) { o[k] = soma.sp[k] / usados.length; });
+        }
+        return derivarSplit(o);
+      })(),
     };
+  }
+
+  // ── O BALÃO SEGUE A MÉTRICA ──────────────────────────────────────
+  // Antes o balão mostrava as mesmas cinco medidas sempre, e o botão da métrica
+  // não mudava NADA na leitura: quem escolhia Margem tocava a barra e recebia
+  // venda, custo, lucro, margem e litros na mesma ordem de sempre, com o número
+  // que pediu no meio dos outros.
+  //
+  // Agora o que a métrica pede vem PRIMEIRO e em destaque; o resto desce para
+  // contexto, em fonte menor. A ordem é a resposta, não o inventário.
+  //
+  // `forte` marca o destaque. A separação combustível/produtos entra nas linhas
+  // fortes das métricas que a têm — e só quando a fatia TEM as metades: com a
+  // API antiga no ar sai uma linha dizendo que a separação não veio, em vez de
+  // dois zeros que se leriam como venda zerada de combustível.
+  function medidasDaMetrica(met, l) {
+    var m = [];
+    var semSplit = { rot: 'Combustível x produtos', val: 'não disponível' };
+    var temD = temSplit(l);
+
+    if (met.id === 'liquido') {
+      m.push({ rot: 'Venda líquida', val: fmtRS(l.venda_liquida), forte: true });
+      if (temD) {
+        m.push({ rot: '· combustível', val: fmtRS(l.venda_liquida_comb), forte: true });
+        m.push({ rot: '· produtos', val: fmtRS(l.venda_liquida_prod), forte: true });
+      } else { m.push(semSplit); }
+      m.push({ rot: 'Custo', val: fmtRS(l.custo_total) });
+      m.push({ rot: 'Lucro', val: fmtRS(l.lucro) });
+      m.push({ rot: 'Margem', val: fmtPct(l.margem_pct) });
+    } else if (met.id === 'bruto') {
+      m.push({ rot: 'Lucro bruto', val: fmtRS(l.lucro), forte: true });
+      if (temD) {
+        m.push({ rot: '· combustível', val: fmtRS(l.lucro_comb), forte: true });
+        m.push({ rot: '· produtos', val: fmtRS(l.lucro_prod), forte: true });
+      } else { m.push(semSplit); }
+      m.push({ rot: 'Venda líquida', val: fmtRS(l.venda_liquida) });
+      m.push({ rot: 'Custo', val: fmtRS(l.custo_total) });
+      m.push({ rot: 'Margem', val: fmtPct(l.margem_pct) });
+    } else if (met.id === 'litros') {
+      // Litros não separa (ver `series` em METRICAS), então o destaque é o
+      // litro do período e a PROJEÇÃO DO MÊS que aquele período alimenta — que
+      // é a pergunta de quem está nesta aba olhando volume.
+      m.push({ rot: 'Litros', val: fmtL(l.litros), forte: true });
+      m.push({ rot: 'Projeção do mês', val: l._projLitros, forte: true });
+      m.push({ rot: 'Venda líquida', val: fmtRS(l.venda_liquida) });
+      m.push({ rot: 'Lucro', val: fmtRS(l.lucro) });
+      m.push({ rot: 'Margem', val: fmtPct(l.margem_pct) });
+    } else if (met.id === 'margem') {
+      m.push({ rot: 'Margem', val: fmtPct(l.margem_pct), forte: true });
+      if (temD) {
+        m.push({ rot: '· combustível', val: fmtPct(l.margem_comb), forte: true });
+        m.push({ rot: '· produtos', val: fmtPct(l.margem_prod), forte: true });
+      } else { m.push(semSplit); }
+      m.push({ rot: 'Venda líquida', val: fmtRS(l.venda_liquida) });
+      m.push({ rot: 'Lucro', val: fmtRS(l.lucro) });
+    } else if (met.id === 'produtos') {
+      // SÓ produtos em destaque, os quatro números do pedido. O total desce
+      // para contexto — aqui ele é a referência, não a resposta.
+      if (temD) {
+        m.push({ rot: 'Venda de produtos', val: fmtRS(l.venda_liquida_prod), forte: true });
+        m.push({ rot: 'Custo', val: fmtRS(l.custo_total_prod), forte: true });
+        m.push({ rot: 'Lucro', val: fmtRS(l.lucro_prod), forte: true });
+        m.push({ rot: 'Margem', val: fmtPct(l.margem_prod), forte: true });
+        // Quanto produto representa do período: é a leitura que faz o número
+        // de produto significar algo numa rede 99% combustível.
+        var part = (Number(l.venda_liquida) > 0)
+          ? nf(l.venda_liquida_prod / l.venda_liquida * 100, 2) + '% da venda' : '—';
+        m.push({ rot: 'Peso no período', val: part });
+      } else { m.push(Object.assign({}, semSplit, { forte: true })); }
+      m.push({ rot: 'Venda do período', val: fmtRS(l.venda_liquida) });
+      m.push({ rot: 'Lucro do período', val: fmtRS(l.lucro) });
+    }
+    return m;
   }
 
   // ── Render da sub-aba "Projeção" ─────────────────────────────────
@@ -3097,9 +3389,10 @@
         var s;
         if (i < mesNum) {
           s = real
-            ? { tipo: 'real', venda_liquida: real.venda_liquida, custo_total: real.custo_total,
-                lucro: real.lucro, margem_pct: real.margem_pct, litros: real.litros,
-                dias: real.dias }
+            ? comSplit({ tipo: 'real', venda_liquida: real.venda_liquida,
+                custo_total: real.custo_total, lucro: real.lucro,
+                margem_pct: real.margem_pct, litros: real.litros,
+                dias: real.dias }, real)
             : { tipo: 'vazio' };
         } else if (i === mesNum) {
           // MÊS CORRENTE. Com projeção, a barra mostra o MÊS PROJETADO
@@ -3111,20 +3404,22 @@
           // resolve o que motivou esconder: parcial não se confunde com
           // fechado nem com projeção.
           s = proj
-            ? { tipo: 'proj', venda_liquida: proj.venda, custo_total: proj.venda - proj.lucro,
-                lucro: proj.lucro, margem_pct: proj.margem_pct, litros: proj.litros,
-                dias: proj.dias }
-            : { tipo: 'parcial', dias: nDias,
+            ? comSplit({ tipo: 'proj', venda_liquida: proj.venda,
+                custo_total: proj.venda - proj.lucro, lucro: proj.lucro,
+                margem_pct: proj.margem_pct, litros: proj.litros,
+                dias: proj.dias }, proj.split)
+            : comSplit({ tipo: 'parcial', dias: nDias,
                 venda_liquida: doMes ? doMes.venda_liquida : null,
                 custo_total: doMes ? doMes.custo_total : null,
                 lucro: doMes ? doMes.lucro : null,
                 margem_pct: doMes ? doMes.margem_pct : null,
-                litros: doMes ? doMes.litros : null };
+                litros: doMes ? doMes.litros : null }, doMes);
         } else {
           s = base3
-            ? { tipo: 'proj', venda_liquida: base3.venda_liquida, custo_total: base3.custo_total,
-                lucro: base3.lucro, margem_pct: base3.margem_pct, litros: base3.litros,
-                baseN: base3.n }
+            ? comSplit({ tipo: 'proj', venda_liquida: base3.venda_liquida,
+                custo_total: base3.custo_total, lucro: base3.lucro,
+                margem_pct: base3.margem_pct, litros: base3.litros,
+                baseN: base3.n }, base3.split)
             : { tipo: 'vazio' };
         }
         s.mes = i;
@@ -3170,8 +3465,9 @@
         var iso = mesAlvo + '-' + String(d).padStart(2, '0');
         var lin = porDiaMap.get(iso) || null;
         var f = lin
-          ? { tipo: 'real', venda_liquida: lin.venda_liquida, custo_total: lin.custo_total,
-              lucro: lin.lucro, margem_pct: lin.margem_pct, litros: numOuNull(lin.litros) }
+          ? comSplit({ tipo: 'real', venda_liquida: lin.venda_liquida,
+              custo_total: lin.custo_total, lucro: lin.lucro,
+              margem_pct: lin.margem_pct, litros: numOuNull(lin.litros) }, lin)
           : { tipo: 'vazio' };
         f.mes = mesNumAlvo;
         f.chave = iso;
@@ -3221,6 +3517,7 @@
     // enquanto a requisição corre mostrariam um mês sem dado que na verdade
     // ninguém sabe ainda — e o usuário concluiria que o mês está vazio.
     var buscando = (porDia && modo.carregando);
+    var seriesAtivas = seriesDe(met, fatias);
     var svgAno = (semBaseAnual || buscando) ? '' : svgBarrasVerticais(fatias, {
       // Fatia sem dado não ganha barra. A PARCIAL ganha — ela tem dado, só
       // não tem o mês inteiro.
@@ -3239,6 +3536,10 @@
       marcaX: modo.marcaX,
       piso: met.razao ? 1 : undefined,
       aria: modo.titulo,
+      // DUAS BARRAS em Líquido, Bruto e Margem; uma em Litros e Produtos.
+      // `seriesDe` devolve null quando a fatia não tem as metades (API
+      // antiga), e aí o desenhador volta à barra única do total.
+      series: seriesAtivas,
     });
 
     var nReal = fatias.filter(function (f) { return f.tipo === 'real'; }).length;
@@ -3310,6 +3611,11 @@
           : svgAno
           ? '<div class="dre-graf-wrap">' + svgAno +
               '<div class="dre-legproj">' +
+                // Legenda das SÉRIES primeiro: quando há duas barras, saber
+                // qual é qual vem antes de saber se o mês é projetado.
+                (seriesAtivas ? seriesAtivas.map(function (se) {
+                  return '<i><span class="dre-sw ' + se.cls + '"></span>' + esc(se.rot) + '</i>';
+                }).join('') + '<i>|</i>' : '') +
                 '<i><span class="dre-sw real"></span>' + (porDia ? 'dia com dado' : 'realizado') + '</i>' +
                 (nParc ? '<i><span class="dre-sw parcial"></span>parcial (mês em curso)</i>' : '') +
                 (nProj ? '<i><span class="dre-sw proj"></span>projetado' +
@@ -3429,9 +3735,18 @@
         },
         // No modo diário o título já traz o dia da semana (ver `tituloLongo`).
         titulo: function (l) { return l.tituloLongo; },
-        // Litros SEMPRE no balão, seja qual for a métrica no eixo: quem toca
-        // uma barra quer a fatia inteira, não só o que está no eixo.
-        extra: function (l) { return [{ rot: 'Litros', val: fmtL(l.litros) }]; },
+        // O CORPO SEGUE A MÉTRICA (ver `medidasDaMetrica`). `_projLitros` é
+        // calculado aqui porque só esta função conhece a projeção do mês.
+        medidas: function (l) {
+          l._projLitros = (proj && proj.litros !== null && proj.litros !== undefined)
+            ? fmtL(proj.litros)
+            : (nDias < MIN_DIAS_PROJ ? 'não projeta (' + nDias + ' dia(s))' : '—');
+          return medidasDaMetrica(met, l);
+        },
+        // Litros fora do `extra` quando a métrica já o traz em destaque —
+        // repeti-lo abaixo seria o mesmo número duas vezes no mesmo balão.
+        extra: met.id === 'litros' ? null
+          : function (l) { return [{ rot: 'Litros', val: fmtL(l.litros) }]; },
         nota: function (l) {
           if (l.tipo === 'real') {
             return porDia ? 'realizado'
