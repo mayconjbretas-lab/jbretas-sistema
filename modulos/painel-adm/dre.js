@@ -271,20 +271,30 @@
   // 25 categorias em 4 linhas. Quem responde "onde está o dinheiro" é o grupo;
   // a categoria é detalhe, a um clique. A tela fica curta sem perder nada.
   //
-  // TRÊS grupos são LISTA FECHADA (uma categoria cada) e o quarto é o RESTO.
+  // DOIS grupos: COMBUSTIVEIS é lista fechada, PRODUTOS EM GERAL é o RESTO.
+  // ICMS TRIBUTADOS e TRANSPORTADORA entraram no resto — juntas somavam 0,01%
+  // da venda e 0,03% do lucro do ano (R$ 31.661 e R$ 21.498 em R$ 618
+  // milhões), e duas linhas de tabela para isso custavam mais atenção do que
+  // devolviam.
+  //
   // A direção importa: categoria nova que a TecnoX cadastre amanhã cai em
   // PRODUTOS EM GERAL sozinha, em vez de virar linha órfã ou sumir da soma.
   // Sumir seria o pior dos dois — o rodapé TOTAL vem da rota, não da soma das
   // linhas da tela, então uma categoria perdida apareceria só como uma
   // divergência silenciosa entre as linhas e o total.
   //
+  // ESTA É A ÚNICA DEFINIÇÃO DE "combustível x produtos" NO FRONT, e ela é o
+  // espelho do `ehCombustivel` da GET /dre, que faz a mesma partição no
+  // servidor (onde a categoria ainda existe, para o split por dia). Dois
+  // repositórios não compartilham código; o que dá para garantir é que cada
+  // lado tenha UM lugar e que os dois comentários apontem um para o outro.
+  // Ao mexer aqui, mexer lá.
+  //
   // A ordem aqui é a do pedido, mas NÃO é a da tela: a tabela é ordenável e
   // abre por venda líquida (aba Mês) ou margem (aba Dia), como antes.
   var GRUPOS = [
-    { key: 'comb',   nome: 'COMBUSTIVEIS',                     so: ['COMBUSTIVEIS'] },
-    { key: 'geral',  nome: 'PRODUTOS EM GERAL',                so: null },
-    { key: 'icms',   nome: 'PRODUTOS ICMS TRIBUTADOS REVENDA', so: ['PRODUTOS ICMS TRIBUTADOS REVENDA'] },
-    { key: 'transp', nome: 'TRANSPORTADORA',                   so: ['TRANSPORTADORA'] },
+    { key: 'comb',  nome: 'COMBUSTIVEIS',      so: ['COMBUSTIVEIS'] },
+    { key: 'geral', nome: 'PRODUTOS EM GERAL', so: null },
   ];
   var GRUPO_RESTO = 'geral';
 
