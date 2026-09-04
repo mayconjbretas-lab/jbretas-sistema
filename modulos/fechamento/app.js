@@ -505,6 +505,31 @@ async function salvarFechamento() {
     }
   }
 
+  // TRAVA DA CARGA: "SIM" exige volume. Zero em UM combustível é NORMAL
+  // (chegou GC e não chegou GA) — a trava é sobre o TOTAL, nunca por
+  // combustível. Mesma regra do servidor (cargaSimSemVolume em POST
+  // /fechamento), que é a trava de verdade; esta aqui só avisa antes da
+  // viagem, e evita que o supervisor receba push por um erro que o gerente
+  // podia ver na hora.
+  if (cargaRespondida === 'sim') {
+    const totalCarga = combustiveisAtuais.reduce((t, c) => {
+      const input = document.getElementById('carga-' + c.nome.replace(/\s+/g, '_'));
+      return t + (parseInt(input?.dataset.val) || 0);
+    }, 0);
+    if (totalCarga <= 0) {
+      // dia/mes ja vieram de montarDataPadrao() no topo desta funcao.
+      alert('Você marcou que recebeu carga em ' + dia + '/' + mes + ', mas deixou todos os ' +
+            'combustíveis em 0.\n\nPreencha os litros do que chegou — pode deixar em 0 os ' +
+            'que não chegaram — ou mude a resposta para "NÃO — Sem carga".');
+      const primeiro = combustiveisAtuais[0];
+      const alvo = primeiro && document.getElementById('carga-' + primeiro.nome.replace(/\s+/g, '_'));
+      if (alvo) { alvo.scrollIntoView({ block: 'center', behavior: 'smooth' }); alvo.focus(); alvo.select(); }
+      btn.disabled = false;
+      btn.textContent = '💾 SALVAR FECHAMENTO';
+      return;
+    }
+  }
+
   const payload = {
     data: dataBR,
     hora,
