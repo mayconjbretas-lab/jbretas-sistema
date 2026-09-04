@@ -1050,6 +1050,27 @@
       '#s-dre .dre-tip span.forte + span:not(.forte) { margin-top: .28rem;' +
         'padding-top: .28rem; border-top: 1px solid var(--bd); }' +
       '#s-dre .dre-tip span:not(.forte) { font-size: .68rem; }' +
+      // ── GRÁFICO DE LINHAS (modo Comparar) ──────────────────────
+      // Três espessuras e três tratamentos, para as linhas se distinguirem
+      // sem depender só de cor: grossa cheia (mês escolhido), média cheia
+      // mais clara (mês anterior), fina tracejada cinza (média do ano).
+      '#s-dre .dre-lin { fill: none; stroke-linejoin: round; stroke-linecap: round; }' +
+      '#s-dre .dre-lin.mes { stroke: var(--ac); stroke-width: 2.5; }' +
+      '#s-dre .dre-lin.ant { stroke: var(--brand-blue, #4bb0ea); stroke-width: 1.6; opacity: .85; }' +
+      '#s-dre .dre-lin.med { stroke: var(--tx3); stroke-width: 1; stroke-dasharray: 5 4; }' +
+      // Ponto em HTML, centrado no lugar exato (translate de -50% nos dois
+      // eixos). Ver a decisão 2 no comentário do svgLinhas.
+      '#s-dre .dre-pt { position: absolute; width: 5px; height: 5px; border-radius: 50%;' +
+        'transform: translate(-50%, -50%); pointer-events: none; }' +
+      '#s-dre .dre-pt.mes { background: var(--ac); }' +
+      '@media (max-width: 560px) { #s-dre .dre-pt { width: 4px; height: 4px; } }' +
+      // Amostra da legenda: um traço, não um quadrado — o quadrado das barras
+      // não diz espessura nem tracejado, que é o que distingue estas três.
+      '#s-dre .dre-swl { display: inline-block; width: 14px; height: 0; vertical-align: middle;' +
+        'margin-right: 4px; border-top-style: solid; }' +
+      '#s-dre .dre-swl.mes { border-top: 3px solid var(--ac); }' +
+      '#s-dre .dre-swl.ant { border-top: 2px solid var(--brand-blue, #4bb0ea); }' +
+      '#s-dre .dre-swl.med { border-top: 1px dashed var(--tx3); }' +
       '#s-dre .dre-det { display: none; }' +
       // ── Tabela por categoria AGRUPADA ─────────────────────────
       // Categoria começa escondida e aparece com `vis`, que o clique no grupo
@@ -2859,6 +2880,9 @@
   var ESCOPOS = [
     { id: 'ano', rot: 'Ano' },
     { id: 'mes', rot: 'Diário' },
+    // COMPARAR usa o MESMO `_mesDiario` que o modo Diário, então as setas de
+    // mês servem os dois sem estado novo — e trocar de modo mantém o mês.
+    { id: 'cmp', rot: 'Comparar' },
   ];
   window.__dreEscopoAno = function (id) {
     if (!ESCOPOS.some(function (e) { return e.id === id; })) return;
@@ -2866,6 +2890,8 @@
     _escopoAno = id;
     // Trocar para Diário num mês fora do cache dispara UMA busca; nos outros
     // casos, nenhuma. Voltar a um mês já visto também não busca.
+    // COMPARAR não entra aqui: ele lê a série do ANO, que já veio no fetch da
+    // aba, e nunca precisa da série de um mês.
     if (id === 'mes' && _mesDiario && !(_seriesMes && _seriesMes.has(_mesDiario))) {
       garantirSerieMes(_mesDiario);
       return;
@@ -2906,11 +2932,15 @@
   }
 
   window.__dreMesPasso = function (n) {
-    if (_escopoAno !== 'mes' || !_mesDiario) return;
+    // Vale nos DOIS modos que escolhem um mês. No Comparar não há série de mês
+    // a buscar: as três linhas saem da série do ANO, que já está na mão — por
+    // isso ele redesenha direto em vez de passar pelo `garantirSerieMes`.
+    if ((_escopoAno !== 'mes' && _escopoAno !== 'cmp') || !_mesDiario) return;
     var alvo = somarMesesISO(_mesDiario, n);
     var lim = limitesMesDiario();
     if (!lim || alvo < lim.min || alvo > lim.max) return;
     _mesDiario = alvo;
+    if (_escopoAno === 'cmp') { render(); return; }
     garantirSerieMes(alvo);
   };
 
@@ -3236,6 +3266,229 @@
         return derivarSplit(o);
       })(),
     };
+  }
+
+  // ══ MODO "COMPARAR" ══════════════════════════════════════════════
+  //
+  // Mesmo mês contra o anterior, alinhados pelo DIA DO MÊS: o dia 3 de setembro
+  // fica exatamente acima do dia 3 de agosto. É a pergunta que os dois gráficos
+  // de barra não respondem — eles põem os meses lado a lado, e comparar o dia 3
+  // com o dia 3 exige contar barras.
+  //
+  // SEM REQUISIÇÃO NOVA: a série diária do ANO inteiro já vem no fetch da aba
+  // (`_dadosPAno`, agrupar=dia). Aqui ela só é reindexada por (mês, dia).
+  //
+  // Devolve um ponto por dia do eixo, com as três séries e a diferença já
+  // calculada — o balão não faz conta, só formata.
+  function serieComparar(linhasAno, mesAlvo, met, mesCorrente) {
+    var porMes = new Map();                   // 'YYYY-MM' -> Map(dia -> linha)
+    (linhasAno || []).forEach(function (l) {
+      var iso = String(l.data || l.chave);
+      var mes = iso.slice(0, 7), dia = Number(iso.slice(8, 10));
+      if (!porMes.has(mes)) porMes.set(mes, new Map());
+      porMes.get(mes).set(dia, l);
+    });
+
+    var mesAnt = somarMesesISO(mesAlvo, -1);
+    // A MÉDIA EXCLUI DOIS MESES, cada um por seu motivo.
+    //
+    // O CORRENTE, porque é parcial: entraria com meia contagem de dias e
+    // puxaria a média para baixo em todo dia que ele ainda não teve — uma
+    // linha de referência que desce porque o mês não acabou não é referência.
+    //
+    // O MÊS EXIBIDO, porque comparar um mês contra uma média que o CONTÉM é
+    // compará-lo com uma versão diluída de si mesmo, e a linha passa perto das
+    // barras quase por construção. É a MESMA regra do `mediaDiariaFechados` do
+    // modo Diário, e é de propósito: a linha cinza tem de significar a mesma
+    // coisa nos dois modos da mesma tela. Duas regras para a mesma linha
+    // obrigariam quem lê a consultar o código para saber qual está vendo.
+    //
+    // Consequência aceita: a média MUDA quando as setas andam (7 fechados em
+    // agosto, 8 em setembro), e a legenda diz quantos são.
+    var fechados = [...porMes.keys()].filter(function (m) {
+      return m < mesCorrente && m !== mesAlvo;
+    }).sort();
+
+    // EIXO: até o maior dia que ALGUMA das séries tem. Sem isto, comparar
+    // fevereiro com janeiro cortaria os dias 29 a 31 de janeiro, que existem.
+    var maxDia = diasNoMes(mesAlvo + '-01');
+    if (porMes.has(mesAnt)) maxDia = Math.max(maxDia, diasNoMes(mesAnt + '-01'));
+    fechados.forEach(function (m) { maxDia = Math.max(maxDia, diasNoMes(m + '-01')); });
+
+    var val = function (linha) { return linha ? numOuNull(linha[met.chave]) : null; };
+    var pontos = [];
+    for (var d = 1; d <= maxDia; d++) {
+      var lm = porMes.has(mesAlvo) ? (porMes.get(mesAlvo).get(d) || null) : null;
+      var la = porMes.has(mesAnt) ? (porMes.get(mesAnt).get(d) || null) : null;
+
+      // MÉDIA DO DIA d nos meses fechados. Mês que NÃO TEM o dia d fica fora
+      // deste ponto — não entra como zero. Dois motivos, e os dois importam:
+      // fevereiro não tem dia 31 (não existe), e um dia sem importação não
+      // vale zero, vale desconhecido.
+      var med = null;
+      if (met.razao) {
+        // MARGEM: razão das somas — soma o lucro e soma a venda daquele dia em
+        // todos os meses, e SÓ ENTÃO divide. A média das margens diárias daria
+        // outro número e daria peso igual a um dia grande e a um dia pequeno.
+        var sl = 0, sv = 0, nR = 0;
+        fechados.forEach(function (m) {
+          var l = porMes.get(m).get(d);
+          if (!l) return;
+          var vv = numOuNull(l.venda_liquida), lu = numOuNull(l.lucro);
+          if (vv === null || lu === null) return;
+          sl += lu; sv += vv; nR++;
+        });
+        med = (nR > 0 && sv !== 0) ? (sl / sv * 100) : null;
+      } else {
+        var soma = 0, nM = 0;
+        fechados.forEach(function (m) {
+          var v2 = val(porMes.get(m).get(d));
+          if (v2 === null) return;
+          soma += v2; nM++;
+        });
+        med = nM > 0 ? soma / nM : null;
+      }
+
+      var vMes = val(lm), vAnt = val(la);
+      // DIFERENÇA já pronta, absoluta e relativa. Só existe com os dois lados:
+      // "cresceu" contra um dia que não tem dado não é comparação.
+      var dif = (vMes !== null && vAnt !== null) ? (vMes - vAnt) : null;
+      var difPct = (dif !== null && vAnt !== 0) ? (dif / Math.abs(vAnt) * 100) : null;
+
+      pontos.push({
+        dia: d, chave: mesAlvo + '-' + String(d).padStart(2, '0'),
+        mes: vMes, ant: vAnt, med: med, dif: dif, dif_pct: difPct,
+        // O balão mostra a data real dos dois lados, não só o número do dia.
+        isoMes: mesAlvo + '-' + String(d).padStart(2, '0'),
+        isoAnt: mesAnt + '-' + String(d).padStart(2, '0'),
+        temMes: vMes !== null, temAnt: vAnt !== null,
+      });
+    }
+    return { pontos: pontos, mesAnt: mesAnt, fechados: fechados, maxDia: maxDia };
+  }
+
+  // ── DESENHADOR DE LINHAS ─────────────────────────────────────────
+  // SVG à mão, mesmas constantes de viewBox e a MESMA `escalaComZero` do
+  // gráfico de barras: duas escalas diferentes na mesma aba fariam o mesmo
+  // valor ocupar alturas diferentes em telas vizinhas.
+  //
+  // TRÊS DECISÕES QUE VÊM DO `preserveAspectRatio="none"` (herdado das barras,
+  // porque os rótulos são HTML posicionados em % e dependem dele):
+  //
+  // 1. `vector-effect: non-scaling-stroke` nas linhas. Sem isto a espessura
+  //    seria esticada por fatores diferentes em X e Y, e a linha "grossa"
+  //    ficaria grossa na horizontal e fina na vertical.
+  // 2. OS PONTOS SÃO HTML, não <circle>. Com o viewBox esticado (720x200 numa
+  //    caixa de ~347x150 em 375px, fatores 0,48 e 0,75) um círculo vira ovo.
+  //    Span posicionado em % é redondo em qualquer largura — e é o mesmo
+  //    recurso que os rótulos do eixo já usam.
+  // 3. FALHA QUEBRA A LINHA. Dia sem dado gera um segmento novo em vez de um
+  //    trecho reto ligando os vizinhos: interpolar por cima de um buraco
+  //    inventa dado, e no mês corrente faria a linha atravessar o futuro.
+  //    É também o que faz a linha do mês corrente PARAR onde o dado para, em
+  //    vez de cair a zero.
+  //
+  // `series`: [{ chave, cls, rot, pontos }] — a ordem é a de desenho, então a
+  // primeira fica por baixo. A de destaque vem por último.
+  function svgLinhas(pontos, opts) {
+    var o = opts || {};
+    var series = o.series || [];
+    if (!pontos || !pontos.length || !series.length) return '';
+    var rotuloY = o.rotuloY || function (v) { return nf(v, 1) + '%'; };
+
+    var num = function (v) { return (v === null || v === undefined || !Number.isFinite(Number(v))) ? null : Number(v); };
+    var valores = [];
+    pontos.forEach(function (p) {
+      series.forEach(function (se) { var v = num(p[se.chave]); if (v !== null) valores.push(v); });
+    });
+    if (!valores.length) return '';
+
+    var dom = escalaComZero(valores, null, o.piso);
+    var topo = dom.topo, base = dom.base;
+    var areaL = VB_W - M_ESQ - M_DIR;
+    var areaA = VB_H - M_TOPO - M_BASE;
+    var y = function (v) { return M_TOPO + (topo - v) / (topo - base) * areaA; };
+    var yZero = y(0);
+    var n = pontos.length;
+    // Um ponto por dia, o primeiro na borda esquerda e o último na direita.
+    // `n - 1` no divisor, e não `n`: com passo = areaL/n o último dia sobraria
+    // um passo antes da borda e o eixo pareceria cortado.
+    var px = function (i) { return M_ESQ + (n === 1 ? areaL / 2 : areaL * i / (n - 1)); };
+
+    // POLILINHAS, uma por trecho contíguo com dado.
+    var linhas = '';
+    series.forEach(function (se) {
+      var trecho = [];
+      var fecha = function () {
+        // Trecho de UM ponto só não vira polyline (não há linha entre um
+        // ponto e ele mesmo) — vira o marcador de ponto, abaixo.
+        if (trecho.length >= 2) {
+          linhas += '<polyline class="dre-lin ' + se.cls + '" vector-effect="non-scaling-stroke"' +
+            ' points="' + trecho.join(' ') + '"></polyline>';
+        }
+        trecho = [];
+      };
+      pontos.forEach(function (p, i) {
+        var v = num(p[se.chave]);
+        if (v === null) { fecha(); return; }
+        trecho.push(px(i).toFixed(2) + ',' + y(v).toFixed(2));
+      });
+      fecha();
+    });
+
+    // PONTOS em HTML (ver decisão 2). Só nas séries que pedem, e também nos
+    // trechos de um dia só — senão um dia isolado com dado desapareceria.
+    var marcas = '';
+    series.forEach(function (se) {
+      if (!se.pontos) return;
+      pontos.forEach(function (p, i) {
+        var v = num(p[se.chave]);
+        if (v === null) return;
+        marcas += '<span class="dre-pt ' + se.cls + '" style="left:' +
+          (px(i) / VB_W * 100).toFixed(3) + '%;top:' + (y(v) / VB_H * 100).toFixed(3) + '%"></span>';
+      });
+    });
+
+    // ALVOS: uma faixa vertical por dia, altura cheia. Mesma solução das
+    // barras — em 31 dias o ponto tem 4 unidades e ninguém acerta o mouse.
+    var alvos = '';
+    var passo = areaL / n;
+    pontos.forEach(function (p, i) {
+      alvos += '<rect class="dre-hit" x="' + (px(i) - passo / 2).toFixed(2) + '" y="' + M_TOPO +
+        '" width="' + passo.toFixed(2) + '" height="' + areaA + '" data-i="' + i + '"></rect>';
+    });
+
+    var marcasY = [];
+    if (topo !== 0) marcasY.push({ v: topo });
+    marcasY.push({ v: 0 });
+    if (base < 0) marcasY.push({ v: base, base: true });
+    var eixoY = marcasY.map(function (mk) {
+      return '<span class="dre-ey' + (mk.base ? ' base' : '') +
+        '" style="top:' + (y(mk.v) / VB_H * 100).toFixed(3) + '%">' + esc(rotuloY(mk.v)) + '</span>';
+    }).join('');
+
+    var rotulados = indicesRotulados(n, o.maxRotulos);
+    var eixoX = pontos.map(function (p, i) {
+      if (rotulados.indexOf(i) < 0) return '';
+      return '<span class="dre-ex" style="left:' +
+        ((px(i) - M_ESQ) / areaL * 100).toFixed(3) + '%">' + esc(String(p.dia)) + '</span>';
+    }).join('');
+
+    // Legenda e balão ficam com o CHAMADOR, como no gráfico de barras: são o
+    // mesmo .dre-legproj e o mesmo .dre-tip que o card já monta.
+    return '<div class="dre-plot">' +
+      '<div class="dre-area">' +
+        '<svg class="dre-graf dre-svg" viewBox="0 0 ' + VB_W + ' ' + VB_H + '"' +
+          ' preserveAspectRatio="none" role="img"' +
+          ' aria-label="' + esc(o.aria || 'Comparação por dia do mês') + '">' +
+          '<line class="dre-zero" x1="' + M_ESQ + '" y1="' + yZero.toFixed(2) +
+            '" x2="' + (VB_W - M_DIR) + '" y2="' + yZero.toFixed(2) + '"></line>' +
+          linhas + alvos +
+        '</svg>' +
+        eixoY + marcas +
+      '</div>' +
+      '<div class="dre-exs">' + eixoX + '</div>' +
+    '</div>';
   }
 
   // ── O BALÃO SEGUE A MÉTRICA ──────────────────────────────────────
@@ -3569,13 +3822,19 @@
         return '<button type="button" class="ftag' + (e.id === _escopoAno ? ' active' : '') +
           '" onclick="__dreEscopoAno(\'' + e.id + '\')">' + esc(e.rot) + '</button>';
       }).join('') +
-      // SELETOR DE MÊS, só no modo Diário. As setas param nos limites e dizem
-      // por quê no `title` — desabilitada e muda faria o usuário clicar duas
-      // vezes achando que travou.
-      (porDia ? (function () {
-        var lim = limitesMesDiario() || { min: modo.mesAlvo, max: modo.mesAlvo };
-        var ant = somarMesesISO(modo.mesAlvo, -1);
-        var prox = somarMesesISO(modo.mesAlvo, 1);
+      // SELETOR DE MÊS nos modos Diário E Comparar: os dois são sobre UM mês
+      // escolhido, e os dois leem o mesmo `_mesDiario`. No Ano não aparece —
+      // lá o eixo é o ano inteiro e não há mês a escolher.
+      // As setas param nos limites e dizem por quê no `title` — desabilitada e
+      // muda faria o usuário clicar duas vezes achando que travou.
+      //
+      // `mesSel` e não `modo.mesAlvo`: no modo Comparar o `modo` é o do ANO
+      // (o ramo dele roda antes de chegar aqui) e não tem `mesAlvo`.
+      ((porDia || _escopoAno === 'cmp') ? (function () {
+        var mesSel = porDia ? modo.mesAlvo : (_mesDiario || mesISO);
+        var lim = limitesMesDiario() || { min: mesSel, max: mesSel };
+        var ant = somarMesesISO(mesSel, -1);
+        var prox = somarMesesISO(mesSel, 1);
         var noMin = (ant < lim.min), noMax = (prox > lim.max);
         return '<span class="dre-navmes">' +
           '<button type="button" class="dre-passo" onclick="__dreMesPasso(-1)"' +
@@ -3584,8 +3843,8 @@
               ? 'Primeiro mês com dado no ano carregado (' + esc(lim.min) + ')'
               : 'Mês anterior') + '"' +
             ' aria-label="Mês anterior">‹</button>' +
-          '<b>' + esc(MESES_CURTO[Number(modo.mesAlvo.slice(5, 7)) - 1]) + '/' +
-            esc(modo.mesAlvo.slice(0, 4)) + '</b>' +
+          '<b>' + esc(MESES_CURTO[Number(mesSel.slice(5, 7)) - 1]) + '/' +
+            esc(mesSel.slice(0, 4)) + '</b>' +
           '<button type="button" class="dre-passo" onclick="__dreMesPasso(1)"' +
             (noMax ? ' disabled' : '') +
             ' title="' + (noMax ? 'O mês corrente é o último' : 'Mês seguinte') + '"' +
@@ -3593,6 +3852,118 @@
         '</span>';
       })() : '') +
       '</div>';
+
+    // ── MODO COMPARAR: card próprio, gráfico de LINHAS ────────────
+    // Sai ANTES dos dois de barra e devolve: os gráficos de barra não são
+    // tocados por este modo, e ramificar dentro deles trocaria três `if` por
+    // um caminho separado que já é mais curto.
+    if (_escopoAno === 'cmp') {
+      var mesCmp = _mesDiario || mesISO;
+      var cmp = serieComparar((_dadosPAno && _dadosPAno.linhas) || [], mesCmp, met, mesISO);
+      var rotMes = MESES_CURTO[Number(mesCmp.slice(5, 7)) - 1] + '/' + mesCmp.slice(2, 4);
+      var rotAnt = MESES_CURTO[Number(cmp.mesAnt.slice(5, 7)) - 1] + '/' + cmp.mesAnt.slice(2, 4);
+      // Quantos dias cada mês TEM — o balão usa para separar "não existe" de
+      // "sem dado". Ver a `nota` mais abaixo.
+      var dMes = diasNoMes(mesCmp + '-01');
+      var dAnt = diasNoMes(cmp.mesAnt + '-01');
+      var seriesCmp = [
+        // Ordem de DESENHO: a média por baixo, o mês escolhido por cima. Com o
+        // destaque embaixo, a linha fina cinza cruzaria por cima dele.
+        // "outros" e nao "do ano": a media EXCLUI o mes exibido, e quem le a
+        // linha cinza precisa saber disso pela legenda, sem abrir o codigo.
+        { chave: 'med', cls: 'med',
+          rot: 'média dos outros ' + cmp.fechados.length + ' fechado(s)' },
+        { chave: 'ant', cls: 'ant', rot: rotAnt },
+        { chave: 'mes', cls: 'mes', rot: rotMes, pontos: true },
+      ];
+      var svgCmp = svgLinhas(cmp.pontos, {
+        rotuloY: met.eixo,
+        maxRotulos: 10,
+        piso: met.razao ? 1 : undefined,
+        series: seriesCmp,
+        aria: met.rot + ': ' + rotMes + ' contra ' + rotAnt + ' e a média do ano, por dia do mês',
+      });
+      var nComp = cmp.pontos.filter(function (p) { return p.temMes && p.temAnt; }).length;
+
+      body.innerHTML = kpis +
+        '<div class="card" style="margin-top:.9rem">' +
+          '<div class="chdr">' +
+            '<div class="ctitle">' + esc(met.rot + ' — ' + rotMes + ' x ' + rotAnt) + '</div>' +
+            '<div class="csub">' + (svgCmp
+              ? 'alinhado pelo dia do mês · ' + nComp + ' dia(s) com os dois lados' +
+                ' · passe o mouse ou toque num dia'
+              : 'sem dado para comparar neste escopo') + '</div>' +
+            seletores +
+          '</div>' +
+          '<div class="cbody">' + (svgCmp
+            ? '<div class="dre-graf-wrap">' + svgCmp +
+                '<div class="dre-legproj">' + seriesCmp.slice().reverse().map(function (se) {
+                  return '<i><span class="dre-swl ' + se.cls + '"></span>' + esc(se.rot) + '</i>';
+                }).join('') + '</div>' +
+                '<div class="dre-tip" style="display:none"></div>' +
+              '</div>'
+            : '<div class="empty">Sem ' + esc(met.rot.toLowerCase()) + ' para comparar. ' +
+              'Escolha outra métrica ou outro mês acima.</div>') +
+          '</div>' +
+        '</div>';
+      // SEM rodapé aqui: a definição de lucro bruto é do SHELL
+      // (`dre-rodape`, sticky, montado uma vez em montarShell). Repetir punha
+      // o mesmo texto duas vezes na tela — e numa classe que não existe no
+      // CSS, então sem formatação nenhuma.
+
+      if (svgCmp) {
+        ligarTooltipGrafico(cmp.pontos, {
+          titulo: function (p) { return 'Dia ' + p.dia; },
+          medidas: function (p) {
+            var m = [
+              { rot: rotMes, val: p.temMes ? met.corpo(p.mes) : '—', forte: true },
+              { rot: rotAnt, val: p.temAnt ? met.corpo(p.ant) : '—', forte: true },
+            ];
+            // DIFERENÇA já calculada, absoluta E relativa, na mesma linha: é a
+            // conta que o usuário faria de cabeça olhando as duas linhas, e é
+            // por ela que ele está neste modo.
+            if (p.dif === null) {
+              m.push({ rot: 'Diferença', val: 'sem os dois lados', forte: true });
+            } else {
+              var sinal = p.dif > 0 ? '+' : '';
+              // MÉTRICA DE RAZÃO: a diferença absoluta entre duas margens é em
+              // PONTOS PERCENTUAIS, não em por cento. Sem a distinção o balão
+              // mostraria "-2,72%  (-22,2%)" — dois números com o mesmo
+              // sufixo medindo coisas diferentes, e o leitor não tem como
+              // saber qual é qual.
+              var abs = met.razao
+                ? sinal + nf(p.dif, 2) + ' p.p.'
+                : sinal + met.corpo(p.dif);
+              m.push({
+                rot: 'Diferença',
+                val: abs + (p.dif_pct === null ? '' : '  (' + sinal + nf(p.dif_pct, 1) + '%)'),
+                forte: true,
+              });
+            }
+            // MESMO rótulo da legenda: 'média do ano' aqui e 'média dos outros'
+            // lá seriam dois nomes para a mesma linha, na mesma tela.
+            m.push({ rot: 'média dos outros', val: p.med === null ? '—' : met.corpo(p.med) });
+            return m;
+          },
+          nota: function (p) {
+            // TRÊS AUSÊNCIAS DIFERENTES, e o balão diz qual: o mês não TEM o
+            // dia (fevereiro e o dia 31 — não existe), o dia ainda não chegou
+            // (mês corrente), ou o dia passou e não foi importado. Só a
+            // terceira é dado faltando; as duas primeiras são o calendário.
+            if (!p.temMes) {
+              if (p.dia > dMes) return rotMes + ' não tem dia ' + p.dia;
+              return p.isoMes > hoje ? 'dia ainda não chegou' : 'sem dado em ' + rotMes;
+            }
+            if (!p.temAnt) {
+              if (p.dia > dAnt) return rotAnt + ' não tem dia ' + p.dia;
+              return 'sem dado em ' + rotAnt;
+            }
+            return brData(p.isoMes) + ' x ' + brData(p.isoAnt);
+          },
+        });
+      }
+      return;
+    }
 
     // O CARD SAI MESMO SEM BARRA NENHUMA, e é de propósito: quando a métrica
     // escolhida não tem dado (litragem indisponível, por exemplo), esconder o
