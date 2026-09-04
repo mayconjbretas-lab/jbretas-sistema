@@ -40,6 +40,12 @@
   let _cmiFile     = null;   // File escolhido (só pro nome exibido)
   let _cmiB64      = null;   // dataURL base64 do arquivo (reusado no gravar)
   let _cmiPrev     = null;   // resposta do dry_run:true (prévia)
+  // Escopo da gravação. Default 'data': a planilha traz o histórico inteiro,
+  // com erro antigo já resolvido no banco; o que interessa no dia a dia é o
+  // custo do dia, para negociar com a distribuidora. Reimportar 169 datas
+  // reprocessa problema encerrado.
+  let _cmiEscopo   = 'data'; // 'data' = só a data escolhida | 'tudo' = planilha inteira
+  let _cmiDataSel  = null;   // ISO da data escolhida no seletor
 
   // ── Helpers de data ──────────────────────────────────────────────
   function hojeISO() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); }
@@ -244,6 +250,18 @@
       '.cmi-c.bad b{color:var(--danger)}' +
       '.cmi-faixa{font-size:.78rem;color:var(--text2);margin-bottom:.7rem}' +
       '.cmi-faixa b{color:var(--text);font-family:var(--mono)}' +
+      // Escopo da gravação. Os dois modos ficam lado a lado a partir de ~330px
+      // úteis (min-width 132 + gap) e empilham abaixo disso — a aba roda em
+      // logistica-mobile, onde a folha ocupa a largura toda do celular.
+      '.cmi-escopo{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;margin-bottom:.8rem}' +
+      '.cmi-escopo-tit{font-family:var(--mono);font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);margin-bottom:.5rem}' +
+      '.cmi-modo{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.55rem}' +
+      '.cmi-modo label{flex:1 1 132px;display:flex;align-items:center;gap:.42rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.45rem .6rem;font-size:.76rem;color:var(--text2);cursor:pointer;white-space:nowrap}' +
+      '.cmi-modo label.on{border-color:var(--accent);color:var(--text)}' +
+      '.cmi-modo input{accent-color:var(--accent);margin:0;flex:0 0 auto}' +
+      '.cmi-sel{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.5rem .6rem;color:var(--text);font-family:var(--mono);font-size:.8rem;outline:none}' +
+      '.cmi-sel:focus{border-color:var(--accent)}' +
+      '.cmi-sel:disabled{opacity:.4;cursor:not-allowed}' +
       '.cmi-info{font-size:.76rem;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:.55rem .7rem;margin-bottom:.7rem}' +
       '.cmi-bloq{background:var(--surface2);border:1px solid var(--danger);border-radius:10px;padding:.7rem .85rem;margin-bottom:.8rem}' +
       '.cmi-bloq-tit{font-family:var(--mono);font-size:.72rem;font-weight:700;color:var(--danger);text-transform:uppercase;letter-spacing:.03em;margin-bottom:.5rem}' +
@@ -333,6 +351,36 @@
     return { label, hoje: diff <= 0, dataCompleta };
   }
 
+  // Cobertura do custo no banco: até que dia existe custo DE PLANILHA.
+  // "Custo importado até DD/MM" responde a pergunta que o usuário faz de manhã
+  // — estou atrasado? — que "quando o import rodou" já não responde: com o
+  // import por data, rodar hoje não significa mais cobrir hoje.
+  function idadeCobertura(iso) {
+    const p = String(iso || '').split('-');
+    if (p.length !== 3) return null;
+    const dias = diaNum(spParts(new Date())) - Date.UTC(+p[0], +p[1] - 1, +p[2]) / 86400000;
+    // 0 = cobre hoje; 1 = cobre ontem, e a planilha do dia costuma chegar de
+    // manhã, então ontem ainda é normal. 2+ é lacuna de verdade → alerta.
+    return { label: p[2] + '/' + p[1], atrasado: dias >= 2, dias };
+  }
+
+  // Tooltip da cobertura: o dia coberto em primeiro lugar, o detalhe da última
+  // importação depois (quem, quando, quanto).
+  function tooltipCobertura(u, info, cob) {
+    const quando = cob.dias <= 0 ? 'hoje' : cob.dias === 1 ? 'ontem' : 'há ' + cob.dias + ' dias';
+    const linhas = ['Custo de planilha até ' + cob.label + ' (' + quando + ')'];
+    if (info) {
+      linhas.push('');
+      linhas.push('Última importação: ' + info.dataCompleta);
+      const partes = [];
+      if (u.custos != null) partes.push(Number(u.custos).toLocaleString('pt-BR') + ' linhas');
+      if (u.dias != null)   partes.push(u.dias + (u.dias === 1 ? ' data' : ' datas'));
+      if (partes.length) linhas.push(partes.join(' · '));
+      if (u.por) linhas.push(u.por);
+    }
+    return linhas.join('\n');
+  }
+
   // Tooltip nativo (title) com o detalhe completo; omite linhas de dado null.
   function tooltipImport(u, info) {
     const linhas = ['Última importação', info.dataCompleta];
@@ -348,6 +396,22 @@
     const el = document.getElementById('cm-ultimp');
     if (!el) return;
     const u = _dados && _dados.ultima_importacao;
+    // PREFERÊNCIA: a cobertura ("importado até DD/MM"). Sem ela — API antiga na
+    // janela de deploy, ou banco sem custo de planilha — cai no rótulo antigo
+    // ("planilha importada há X") em vez de a tela ficar muda.
+    const cob = idadeCobertura(_dados && _dados.custo_importado_ate);
+    if (cob) {
+      el.style.display = '';
+      const infoImp = (u && (u.em_iso || u.em)) ? idadeImport(u.em_iso || u.em) : null;
+      el.innerHTML =
+        '<span class="cm-imp-chip ' + (cob.atrasado ? 'cm-imp-old' : 'cm-imp-hoje') + '"' +
+          ' title="' + esc(tooltipCobertura(u || {}, infoImp, cob)) + '">' +
+          '<span class="cm-imp-ic">' + (cob.atrasado ? '⚠️' : '📄') + '</span>' +
+          '<span class="cm-imp-lbl">Custo importado até</span>' +
+          '<span class="cm-imp-quando">' + esc(cob.label) + '</span>' +
+        '</span>';
+      return;
+    }
     const iso = u && (u.em_iso || u.em);
     if (!u || !iso) { el.style.display = 'none'; el.innerHTML = ''; return; }   // null → nada
     const info = idadeImport(iso);
@@ -859,6 +923,40 @@
       '<div class="cmi-foot"><button class="cmi-btn ghost" onclick="__cmiFechar()">Fechar</button></div>';
   }
 
+  // A ÚNICA decisão de escopo — o rótulo do botão e a gravação leem daqui.
+  // Separado, o rótulo já mentiu: com data fora da lista dava "Gravar 0 linhas
+  // (planilha inteira)", contagem de uma decisão e escopo de outra. Aqui as
+  // duas saem juntas, então o botão não pode dizer uma coisa e a gravação
+  // fazer outra. data null = planilha inteira.
+  function escopoAtual(p) {
+    const det = (p && Array.isArray(p.datas_detalhe)) ? p.datas_detalhe : [];
+    const d = (_cmiEscopo === 'data' && _cmiDataSel) ? det.find(x => x.data === _cmiDataSel) : null;
+    return d ? { data: d.data, custos: d.custos }
+             : { data: null, custos: (p && p.resumo && p.resumo.custos != null) ? p.resumo.custos : 0 };
+  }
+
+  // Rótulo do botão: diz exatamente o que vai ao banco.
+  function rotuloGravar(p) {
+    const e = escopoAtual(p);
+    return 'Gravar ' + Number(e.custos).toLocaleString('pt-BR') +
+           ' linha' + (e.custos === 1 ? '' : 's') +
+           ' (' + (e.data ? brDDMM(e.data) : 'planilha inteira') + ')';
+  }
+
+  // Trocar de escopo NÃO refaz a prévia: são 2,3 MB de base64 por troca, e a
+  // quebra por data já veio no dry_run. Só o botão e o seletor mudam.
+  function atualizarEscopoUI() {
+    const btn = document.getElementById('cmi-gravar');
+    if (btn && _cmiPrev) btn.textContent = rotuloGravar(_cmiPrev);
+    const sel = document.getElementById('cmi-data-sel');
+    if (sel) sel.disabled = (_cmiEscopo !== 'data');
+    const labels = document.querySelectorAll('.cmi-modo label');
+    for (let i = 0; i < labels.length; i++) {
+      const inp = labels[i].querySelector('input');
+      labels[i].classList.toggle('on', !!inp && inp.value === _cmiEscopo);
+    }
+  }
+
   function renderPreviaImport(p, nome) {
     document.getElementById('cmi-title').textContent = 'Prévia da importação';
     document.getElementById('cmi-file-nome').textContent = nome || (_cmiFile ? _cmiFile.name : '');
@@ -884,6 +982,38 @@
 
     const infoManual = (resumo.preservado_manual > 0)
       ? '<div class="cmi-info">' + resumo.preservado_manual + ' linha(s) com origem manual não serão sobrescritas.</div>'
+      : '';
+
+    // ── Escopo da gravação ───────────────────────────────────────
+    // A conferência de datas acima roda sobre a planilha INTEIRA e não é
+    // afetada por esta escolha: ler tudo e gravar uma parte são coisas
+    // separadas. Sem datas_detalhe (API antiga) só resta a planilha inteira.
+    const det = Array.isArray(p.datas_detalhe) ? p.datas_detalhe : [];
+    if (det.length) {
+      if (!_cmiDataSel || !det.some(d => d.data === _cmiDataSel)) _cmiDataSel = det[0].data;
+    } else {
+      _cmiDataSel = null;
+      _cmiEscopo = 'tudo';
+    }
+    const opcaoModo = (val, txt) =>
+      '<label class="' + (_cmiEscopo === val ? 'on' : '') + '">' +
+        '<input type="radio" name="cmi-escopo" value="' + val + '"' +
+        (_cmiEscopo === val ? ' checked' : '') + ' onchange="__cmiEscopo(\'' + val + '\')">' + txt +
+      '</label>';
+    const escopoHtml = det.length
+      ? '<div class="cmi-escopo">' +
+          '<div class="cmi-escopo-tit">O que gravar</div>' +
+          '<div class="cmi-modo">' + opcaoModo('data', 'Só esta data') + opcaoModo('tudo', 'Planilha inteira') + '</div>' +
+          '<select class="cmi-sel" id="cmi-data-sel" onchange="__cmiDataSel(this.value)"' +
+            (_cmiEscopo === 'data' ? '' : ' disabled') + '>' +
+            det.map(d => '<option value="' + esc(d.data) + '"' + (d.data === _cmiDataSel ? ' selected' : '') + '>' +
+              // Só a data e o nº de custos: é o que decide a escolha, e cabe no
+              // select fechado a 375px. As cotações do dia não entram — o rótulo
+              // do botão já diz quanto vai ao banco.
+              esc(brDDMMAAAA(d.data)) + ' — ' + d.custos + ' custo' + (d.custos === 1 ? '' : 's') +
+            '</option>').join('') +
+          '</select>' +
+        '</div>'
       : '';
 
     const apt = p.avisos_por_tipo || {};
@@ -912,13 +1042,12 @@
       tbl = '<table class="cmi-tbl"><thead><tr><th>Posto</th><th>Comb</th><th>Custo</th></tr></thead><tbody>' + rows + '</tbody></table>';
     }
 
-    const n = resumo.custos != null ? resumo.custos : 0;
     const gravar = temBloq
       ? '<button class="cmi-btn" disabled>Gravar</button>'
-      : '<button class="cmi-btn" id="cmi-gravar" onclick="__cmiGravar()">Gravar ' + n + ' linha' + (n === 1 ? '' : 's') + '</button>';
+      : '<button class="cmi-btn" id="cmi-gravar" onclick="__cmiGravar()">' + esc(rotuloGravar(p)) + '</button>';
 
     document.getElementById('cmi-body').innerHTML =
-      cards + faixa + infoManual + bloqHtml + avisosHtml + tbl +
+      cards + faixa + escopoHtml + infoManual + bloqHtml + avisosHtml + tbl +
       '<div class="cmi-foot">' + gravar + '<button class="cmi-btn ghost" onclick="__cmiFechar()">Fechar</button></div>';
   }
 
@@ -941,6 +1070,7 @@
     try {
       const dataUrl = await lerArquivoDataURL(file);
       _cmiFile = file; _cmiB64 = dataUrl;
+      _cmiEscopo = 'data'; _cmiDataSel = null;   // default: só a data mais recente
       const { status, json } = await importFetch({ arquivoBase64: dataUrl, dry_run: true });
       if (status !== 200 || !json || json.ok !== true) { abrirModalErroImport(mensagemErroImport(status, json)); return; }
       _cmiPrev = json;
@@ -955,16 +1085,25 @@
 
   window.__cmiFechar = fecharModalImport;
 
+  window.__cmiEscopo  = function (m) { _cmiEscopo = (m === 'tudo') ? 'tudo' : 'data'; atualizarEscopoUI(); };
+  window.__cmiDataSel = function (v) { _cmiDataSel = v || null; atualizarEscopoUI(); };
+
   window.__cmiGravar = async function () {
     if (!_cmiB64) return;
     const btn = document.getElementById('cmi-gravar');
     if (btn) { btn.disabled = true; btn.textContent = 'Gravando…'; }
     try {
-      const { status, json } = await importFetch({ arquivoBase64: _cmiB64, dry_run: false });
+      // 'Só esta data' = de === ate. A API continua lendo e conferindo a
+      // planilha inteira; o filtro decide apenas o que vai ao banco.
+      const esc0 = escopoAtual(_cmiPrev);
+      const corpo = { arquivoBase64: _cmiB64, dry_run: false };
+      if (esc0.data) { corpo.data_de = esc0.data; corpo.data_ate = esc0.data; }
+      const { status, json } = await importFetch(corpo);
       if (status === 200 && json && json.ok) {
         fecharModalImport();
         const g = json.gravado || {};
-        let msg = 'Importação concluída.\n' +
+        let msg = 'Importação concluída' +
+          (esc0.data ? ' — ' + brDDMMAAAA(esc0.data) : ' — planilha inteira') + '.\n' +
           (g.custos_precos || 0) + ' custo(s) e ' + (g.custos_fornecedores || 0) + ' cotação(ões) gravados.';
         if (g.preservado_manual) msg += '\n' + g.preservado_manual + ' linha(s) manual preservada(s).';
         if (g.descartado)        msg += '\n' + g.descartado + ' linha(s) descartada(s) (sem cadastro).';
