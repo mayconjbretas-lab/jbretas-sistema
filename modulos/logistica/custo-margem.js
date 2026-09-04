@@ -799,6 +799,13 @@
       const ds = (a.datas || []).map(brDDMM).join(' e ');
       return 'Datas divergentes no mesmo bloco' + (a.bloco != null ? ' (linha ' + a.bloco + ')' : '') + ': ' + ds;
     }
+    if (a.tipo === 'BLOQUEANTE_datas_nao_lidas') {
+      const ds = a.datas || [];
+      const mostra = ds.slice(0, 12).map(brDDMMAAAA).join(', ');
+      return 'A aba tem ' + a.datas_na_aba + ' datas e o parser leu ' + a.datas_lidas +
+             '. Ficaram de fora: ' + mostra +
+             (ds.length > 12 ? ' (e mais ' + (ds.length - 12) + ')' : '');
+    }
     if (a.tipo === 'BLOQUEANTE_ano_suspeito')   return 'Ano suspeito: ' + brDDMMAAAA(a.data);
     if (a.tipo === 'BLOQUEANTE_data_duplicada') return 'Data repetida em dois blocos: ' + brDDMMAAAA(a.data);
     return a.tipo.replace(/^BLOQUEANTE_/, '').replace(/_/g, ' ') + (a.data ? ': ' + brDDMMAAAA(a.data) : '');
@@ -857,10 +864,16 @@
     document.getElementById('cmi-file-nome').textContent = nome || (_cmiFile ? _cmiFile.name : '');
     const arq = p.arquivo || {}, resumo = p.resumo || {}, bloq = p.bloqueantes || [], amostra = p.amostra || [];
     const temBloq = bloq.length > 0;
+    // Conferência do parser: datas da aba x datas lidas. Divergência aparece no
+    // card, não só na lista de bloqueantes — é a primeira coisa que se olha.
+    const faltando = Array.isArray(arq.datas_faltando) ? arq.datas_faltando : [];
 
     const cards =
       '<div class="cmi-cards">' +
-        '<div class="cmi-c"><b>' + (arq.datas != null ? arq.datas : '—') + '</b><span>Datas</span></div>' +
+        '<div class="cmi-c' + (faltando.length ? ' bad' : '') + '"><b>' +
+          (arq.datas != null ? arq.datas : '—') +
+          (faltando.length ? '/' + arq.datas_na_aba : '') +
+        '</b><span>Datas' + (faltando.length ? ' lidas' : '') + '</span></div>' +
         '<div class="cmi-c"><b>' + (resumo.postos_casados != null ? resumo.postos_casados : '—') + '/37</b><span>Postos casados</span></div>' +
         '<div class="cmi-c' + (temBloq ? ' bad' : '') + '"><b>' + bloq.length + '</b><span>Bloqueantes</span></div>' +
       '</div>';
@@ -871,6 +884,14 @@
 
     const infoManual = (resumo.preservado_manual > 0)
       ? '<div class="cmi-info">' + resumo.preservado_manual + ' linha(s) com origem manual não serão sobrescritas.</div>'
+      : '';
+
+    const apt = p.avisos_por_tipo || {};
+    const aptK = Object.keys(apt).filter(k => !/^BLOQUEANTE/.test(k)).sort();
+    const avisosHtml = aptK.length
+      ? '<div class="cmi-info"><b>Avisos:</b> ' +
+          aptK.map(k => esc(k.replace(/_/g, ' ')) + ' (' + apt[k] + ')').join(' · ') +
+        '</div>'
       : '';
 
     let bloqHtml = '';
@@ -897,7 +918,7 @@
       : '<button class="cmi-btn" id="cmi-gravar" onclick="__cmiGravar()">Gravar ' + n + ' linha' + (n === 1 ? '' : 's') + '</button>';
 
     document.getElementById('cmi-body').innerHTML =
-      cards + faixa + infoManual + bloqHtml + tbl +
+      cards + faixa + infoManual + bloqHtml + avisosHtml + tbl +
       '<div class="cmi-foot">' + gravar + '<button class="cmi-btn ghost" onclick="__cmiFechar()">Fechar</button></div>';
   }
 
