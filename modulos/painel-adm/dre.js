@@ -253,6 +253,12 @@
   // Quantidade: 3 casas + unidade. `linha` ausente = sem sufixo (ver o tfoot).
   function fmtQtd(v, linha) {
     if (vazio(v)) return '—';
+    // Linha de GRUPO: a soma só ganha sufixo se o grupo inteiro medir a mesma
+    // coisa. Grupo com litro e unidade juntos não tem grandeza — sai travessão,
+    // com o motivo no title da célula (ver motivoQtdGrupo).
+    if (linha && linha._grupo) {
+      return linha._qtdUnidade ? nf(v, 3) + linha._qtdUnidade : '—';
+    }
     return nf(v, 3) + (linha ? unidadeDe(linha.cat_nome) : '');
   }
   // Quantidade AGREGADA de um posto: soma LITRO de combustível com UNIDADE de
@@ -260,6 +266,111 @@
   // o motivo no title da coluna — a mesma decisão já tomada no total da aba
   // Mês. Rotular a soma como litro ou como unidade mentiria das duas formas.
   function fmtQtdMista(v) { return vazio(v) ? '—' : nf(v, 3); }
+  // ── GRUPOS da tabela por categoria ──────────────────────────────
+  // 25 categorias em 4 linhas. Quem responde "onde está o dinheiro" é o grupo;
+  // a categoria é detalhe, a um clique. A tela fica curta sem perder nada.
+  //
+  // TRÊS grupos são LISTA FECHADA (uma categoria cada) e o quarto é o RESTO.
+  // A direção importa: categoria nova que a TecnoX cadastre amanhã cai em
+  // PRODUTOS EM GERAL sozinha, em vez de virar linha órfã ou sumir da soma.
+  // Sumir seria o pior dos dois — o rodapé TOTAL vem da rota, não da soma das
+  // linhas da tela, então uma categoria perdida apareceria só como uma
+  // divergência silenciosa entre as linhas e o total.
+  //
+  // A ordem aqui é a do pedido, mas NÃO é a da tela: a tabela é ordenável e
+  // abre por venda líquida (aba Mês) ou margem (aba Dia), como antes.
+  var GRUPOS = [
+    { key: 'comb',   nome: 'COMBUSTIVEIS',                     so: ['COMBUSTIVEIS'] },
+    { key: 'geral',  nome: 'PRODUTOS EM GERAL',                so: null },
+    { key: 'icms',   nome: 'PRODUTOS ICMS TRIBUTADOS REVENDA', so: ['PRODUTOS ICMS TRIBUTADOS REVENDA'] },
+    { key: 'transp', nome: 'TRANSPORTADORA',                   so: ['TRANSPORTADORA'] },
+  ];
+  var GRUPO_RESTO = 'geral';
+
+  // Normalização igual à do `unidadeDe`: o export da TecnoX pode vir
+  // "COMBUSTÍVEIS" com acento, e comparar cru falharia calado — a categoria
+  // cairia no RESTO sem ninguém notar, porque nada quebra.
+  function normCat(s) {
+    return String(s == null ? '' : s)
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, ' ').trim().toUpperCase();
+  }
+  function grupoDe(catNome) {
+    var n = normCat(catNome);
+    for (var i = 0; i < GRUPOS.length; i++) {
+      if (GRUPOS[i].so && GRUPOS[i].so.indexOf(n) >= 0) return GRUPOS[i].key;
+    }
+    return GRUPO_RESTO;
+  }
+
+  // Agrega as linhas de categoria em UMA por grupo. As chaves são as MESMAS de
+  // uma linha de categoria (cat_nome, venda_liquida, …), de propósito: assim a
+  // ordenação, os formatadores e o CSS de coluna valem sem ramo novo. O que é
+  // exclusivo do grupo leva `_`: `_grupo`, `_cats`, `_qtdUnidade`.
+  var SOMAVEIS = ['venda_bruta', 'desconto_calc', 'venda_liquida', 'custo_total', 'lucro'];
+  function agruparCategorias(linhas) {
+    var porKey = {};
+    GRUPOS.forEach(function (g) {
+      porKey[g.key] = {
+        _grupo: g.key, _cats: [], cat_nome: g.nome,
+        venda_bruta: 0, desconto_calc: 0, venda_liquida: 0, custo_total: 0, lucro: 0,
+        quantidade: null, margem_pct: null,
+      };
+    });
+    (linhas || []).forEach(function (l) {
+      var g = porKey[grupoDe(l.cat_nome)];
+      g._cats.push(l);
+      SOMAVEIS.forEach(function (k) { g[k] += Number(l[k]) || 0; });
+      // Quantidade separada: null tem de continuar null. Se NENHUMA categoria
+      // do grupo trouxe quantidade, o grupo não tem quantidade — e zero diria
+      // "vendeu nada", que é afirmação diferente de "não veio no arquivo".
+      if (!vazio(l.quantidade)) {
+        g.quantidade = (g.quantidade === null ? 0 : g.quantidade) + Number(l.quantidade);
+      }
+    });
+    return GRUPOS
+      .map(function (g) { return porKey[g.key]; })
+      // Grupo sem nenhuma categoria no período não vira linha vazia: uma linha
+      // de zeros se lê como "este grupo não vendeu", e a verdade é que ele não
+      // existe neste recorte.
+      .filter(function (g) { return g._cats.length > 0; })
+      .map(function (g) {
+        // MARGEM DO GRUPO = razão das somas (lucro ÷ venda líquida), NUNCA a
+        // média das margens das categorias. A média daria o mesmo peso a uma
+        // categoria de R$ 200 e a uma de R$ 2 milhões, e produziria um número
+        // que não existe em lugar nenhum da operação.
+        // Venda líquida zero NÃO é margem zero: é ausência de base. Vira null,
+        // que o fmtPct mostra como travessão e a ordenação joga para o fim —
+        // a mesma regra que as linhas de categoria já seguem.
+        g.margem_pct = g.venda_liquida ? (g.lucro / g.venda_liquida) * 100 : null;
+        // QUANTIDADE: somar só tem sentido se todas as categorias do grupo
+        // medirem a MESMA coisa. COMBUSTIVEIS é tudo litro; PRODUTOS EM GERAL
+        // mistura LUBRIFICANTES A GRANEL (litro) com o resto (unidade), e aí
+        // sai travessão, como já é feito no rodapé da tabela.
+        // A unidade sai de `unidadeDe` por categoria, não de lista fixa: um
+        // "ARLA A GRANEL" que a TecnoX cadastre amanhã se classifica sozinho.
+        var uns = {};
+        g._cats.forEach(function (c) { uns[unidadeDe(c.cat_nome)] = 1; });
+        var lista = Object.keys(uns);
+        g._qtdUnidade = (lista.length === 1) ? lista[0] : null;
+        return g;
+      });
+  }
+
+  // Motivo do travessão na quantidade do grupo, para o `title` da célula.
+  function motivoQtdGrupo(g) {
+    var uns = {};
+    g._cats.forEach(function (c) { uns[unidadeDe(c.cat_nome)] = 1; });
+    var temL = !!uns[' L'], temU = !!uns[' un'];
+    if (temL && temU) {
+      var granel = g._cats.filter(function (c) { return unidadeDe(c.cat_nome) === ' L'; })
+        .map(function (c) { return c.cat_nome; });
+      return 'Sem total: o grupo mistura litros (' + granel.join(', ') +
+        ') com unidades das outras categorias.';
+    }
+    return 'Sem total: quantidade não informada no arquivo para este grupo.';
+  }
+
   // Percentual: 2 casas. null -> '—' (ver regra 2 no cabeçalho).
   function fmtPct(v) { return (v === null || v === undefined) ? '—' : nf(v, 2) + '%'; }
   // margem_pct ausente = venda líquida zero. NÃO é margem zero: é ausência de
@@ -370,8 +481,116 @@
     var det = tr.nextElementSibling;
     if (!det || det.className.indexOf('dre-det') < 0) return;
     var abrindo = det.className.indexOf('aberta') < 0;
-    det.className = abrindo ? 'dre-det aberta' : 'dre-det';
-    tr.className = abrindo ? 'aberto' : '';
+    // classList, NÃO className: a linha pode ter classes próprias e sobrescrever
+    // o className inteiro as apagava. Já quebrava a `sit-vazio` da tabela anual
+    // (perdia a cor no toque) e quebraria a `dre-cat` de dentro de um grupo, que
+    // perderia a classe que a mantém visível.
+    det.classList.toggle('aberta', abrindo);
+    tr.classList.toggle('aberto', abrindo);
+  };
+
+  // ── Linhas <tr> da tabela por categoria AGRUPADA ────────────────
+  // UMA função para as abas Mês e Dia: a tabela responde à mesma pergunta nas
+  // duas, e duas cópias divergiriam na primeira coluna nova. O que muda entre
+  // elas entra por parâmetro (colunas, colunas escondidas no celular, marcador
+  // de lacuna), não por ramo `if (aba)`.
+  //
+  // A ORDEM NO DOM importa: para cada grupo, a linha do grupo, o detalhe de
+  // celular DELE, e depois as categorias, cada uma seguida do seu detalhe.
+  // Assim `__dreDetalhe` continua achando o detalhe no nextElementSibling,
+  // exatamente como nas tabelas não agrupadas.
+  function trsAgrupados(grupos, cols, ocultas, colPorKey, comLacuna) {
+    function celulas(l, ehGrupo) {
+      return cols.map(function (c, i) {
+        var v = l[c.key];
+        var neg = (c.tipo === 'num' && !vazio(v) && Number(v) < 0) ? ' dre-neg' : '';
+        var tit = '';
+        if (i === 0) tit = ' title="' + esc(String(v == null ? '' : v)) + '"';
+        // Grupo cuja quantidade não tem grandeza: o motivo vai no title da
+        // própria célula — a mesma decisão já tomada no rodapé TOTAL.
+        if (c.key === 'quantidade' && ehGrupo && !l._qtdUnidade) {
+          tit = ' title="' + esc(motivoQtdGrupo(l)) + '"';
+        }
+        var marca = '';
+        if (i === 0 && comLacuna) {
+          if (ehGrupo) {
+            var n = l._cats.filter(temLacuna).length;
+            if (n) {
+              marca = '<span class="dre-lacuna" title="' + esc(n +
+                ' categoria(s) deste grupo com lançamento sem custo no arquivo da TecnoX. ' +
+                'Lucro e margem do grupo estão OTIMISTAS.') + '">*</span>';
+            }
+          } else if (temLacuna(l)) {
+            marca = '<span class="dre-lacuna" title="' + esc(textoLacuna(l)) + '">*</span>';
+          }
+        }
+        return '<td class="col-' + c.key + (c.tipo === 'num' ? ' num' : '') + neg + '"' + tit + '>'
+          + c.fmt(v, l) + marca + '</td>';
+      }).join('');
+    }
+    function detalhe(l) {
+      return ocultas.map(function (k) {
+        var c = colPorKey[k];
+        return '<div class="dre-det-par"><span>' + esc(c.rot) + '</span><b>' + c.fmt(l[k], l) + '</b></div>';
+      }).join('');
+    }
+
+    return grupos.map(function (g) {
+      // Grupo de UMA categoria só (ICMS TRIBUTADOS, TRANSPORTADORA) não ganha
+      // filhas: abrir mostraria uma linha com o mesmo nome e os mesmos números
+      // da que já está na tela. A linha SEGUE clicável no celular, onde ela
+      // tem quatro colunas escondidas para revelar — o que muda é só o chevron
+      // de expansão, que não promete o que não tem. Se a TecnoX cadastrar uma
+      // segunda categoria nesse grupo, ele passa a abrir sozinho.
+      var temFilhas = g._cats.length > 1;
+      var titulo = temFilhas
+        ? 'Clique para ver as ' + g._cats.length + ' categorias do grupo'
+        : 'Grupo de uma categoria só' + (ocultas.length ? ' — toque para ver ' + ocultas.length + ' coluna(s) a mais' : '');
+      var linhas =
+        '<tr class="dre-grp' + (temFilhas ? ' tem-cats' : '') + '" data-grupo="' + g._grupo + '"' +
+          ' onclick="__dreGrupo(this)" title="' + esc(titulo) + '">' + celulas(g, true) + '</tr>' +
+        '<tr class="dre-det"><td colspan="' + cols.length + '">' + detalhe(g) + '</td></tr>';
+      if (!temFilhas) return linhas;
+      // As categorias entram na MESMA ordenação pedida para os grupos: quem
+      // ordenou por lucro espera ver as categorias por lucro dentro do grupo
+      // também. `cols` é o mesmo conjunto, então a chave existe nas duas.
+      return linhas + g._cats.map(function (l) {
+        return '<tr class="dre-cat" data-grupo-pai="' + g._grupo + '"' +
+            ' onclick="__dreDetalhe(this)" title="' + esc(String(l.cat_nome || '')) + '">' +
+            celulas(l, false) + '</tr>' +
+          '<tr class="dre-det" data-grupo-pai="' + g._grupo + '"><td colspan="' + cols.length + '">' +
+            detalhe(l) + '</td></tr>';
+      }).join('');
+    }).join('');
+  }
+
+  // Abre/fecha um grupo. UM clique, dois efeitos: as categorias que o compõem
+  // e — no celular — o detalhe de colunas escondidas da própria linha do
+  // grupo. Sem o segundo, quem usa o celular perderia o acesso à quantidade,
+  // venda bruta, desconto e custo do grupo, que é regressão.
+  window.__dreGrupo = function (tr) {
+    if (!tr) return;
+    var abrindo = tr.className.indexOf('aberto') < 0;
+    tr.classList.toggle('aberto', abrindo);
+    var det = tr.nextElementSibling;
+    if (det && det.className.indexOf('dre-det') >= 0) det.classList.toggle('aberta', abrindo);
+    var tb = tr.parentNode;
+    if (!tb) return;
+    var filhas = tb.querySelectorAll('[data-grupo-pai="' + tr.getAttribute('data-grupo') + '"]');
+    for (var i = 0; i < filhas.length; i++) {
+      var f = filhas[i];
+      if (f.className.indexOf('dre-cat') >= 0) {
+        // `vis` é a visibilidade da categoria dentro do grupo; `aberto` é o
+        // estado do detalhe DELA no celular. Dois estados, dois nomes — com um
+        // só, fechar o grupo e fechar o detalhe seriam o mesmo gesto.
+        f.classList.toggle('vis', abrindo);
+        if (!abrindo) f.classList.remove('aberto');
+      } else if (!abrindo) {
+        // Detalhe de categoria: fechar o grupo fecha também. Sem isto ele
+        // reapareceria sozinho na próxima abertura, sem a linha dona.
+        f.classList.remove('aberta');
+      }
+    }
   };
 
   // ── CSS da aba, injetado uma vez ─────────────────────────────────
@@ -795,6 +1014,26 @@
       // torna exibível, então no desktop o toque na linha não faz nada e o
       // JS não precisa saber a largura da tela.
       '#s-dre .dre-det { display: none; }' +
+      // ── Tabela por categoria AGRUPADA ─────────────────────────
+      // Categoria começa escondida e aparece com `vis`, que o clique no grupo
+      // liga. Fechada por padrão é o ponto: a tela abre com 4 linhas.
+      '#s-dre .dre-table tr.dre-cat { display: none; }' +
+      '#s-dre .dre-table tr.dre-cat.vis { display: table-row; }' +
+      // Hierarquia por recuo e peso, não por cor: a tabela já usa cor para
+      // sinal de valor (dre-neg) e gastar cor aqui competiria com aquilo.
+      '#s-dre .dre-table tr.dre-grp td { font-weight: 700; color: var(--tx); }' +
+      '#s-dre .dre-table tr.dre-cat td:first-child { padding-left: 1.7rem; font-weight: 400; }' +
+      '#s-dre .dre-table tr.dre-cat td { color: var(--tx2); }' +
+      // Chevron do grupo em TODAS as larguras — no desktop a linha também abre,
+      // e sem afordância ninguém descobre que abre. Só nos grupos com mais de
+      // uma categoria: um chevron que abre uma linha idêntica à que já está na
+      // tela seria promessa vazia.
+      '#s-dre .dre-table tr.dre-grp.tem-cats { cursor: pointer; }' +
+      '#s-dre .dre-table tr.dre-grp.tem-cats td:first-child::before {' +
+        'content: "\\25B8"; display: inline-block; width: 1em; color: var(--tx3); font-size: .8em; }' +
+      '#s-dre .dre-table tr.dre-grp.tem-cats.aberto td:first-child::before {' +
+        'content: "\\25BE"; color: var(--ac); }' +
+      '#s-dre .dre-table tr.dre-grp.aberto td { background: var(--acd); }' +
       '#s-dre .dre-det-par { display: flex; justify-content: space-between; gap: .8rem; padding: .18rem 0; }' +
       '#s-dre .dre-det-par span { color: var(--tx3); }' +
       '#s-dre .dre-det-par b { font-family: var(--mono); color: var(--tx); font-weight: 700; }' +
@@ -814,6 +1053,27 @@
           'content: " \\25BE"; color: var(--tx3); font-size: .7em; }' +
         '#s-dre .dre-table tbody tr.aberto td:first-child::after { color: var(--ac); }' +
         '#s-dre .dre-table tbody tr.aberto td { background: var(--acd); }' +
+        // Grupo que já tem o chevron de expansão (::before) não leva o de
+        // detalhe (::after) também — dois chevrons na mesma célula, um do lado
+        // do outro, não dizem nada. O grupo de uma categoria só mantém o
+        // ::after: nele o toque revela mesmo as colunas escondidas.
+        '#s-dre .dre-table tbody tr.dre-grp.tem-cats td:first-child::after { content: none; }' +
+        // Recuo menor no celular: a coluna de categoria tem 25% de ~347px, e
+        // 1,7rem de recuo comeria um terço do espaço do nome.
+        '#s-dre .dre-table tr.dre-cat td:first-child { padding-left: .9rem; }' +
+        // NOME DO GRUPO QUEBRA EM VEZ DE TRUNCAR, e só ele. A elipse desta
+        // coluna foi feita para 25 linhas de categoria, onde alturas desiguais
+        // desalinhavam a tabela. Com QUATRO linhas de grupo o cálculo virou: em
+        // 375px a coluna tem 25% de ~347px, e aí "PRODUTOS EM GERAL" e
+        // "PRODUTOS ICMS TRIBUTADOS REVENDA" truncavam as duas para
+        // "PRODUTO…" — duas das quatro linhas ficavam indistinguíveis, e o
+        // grupo é justamente a linha que se lê primeiro. As categorias filhas
+        // seguem com elipse e title: lá a lista é longa de novo.
+        // overflow-wrap: anywhere, e nao overflow:visible — COMBUSTIVEIS e
+        // TRANSPORTADORA sao palavras unicas: sem quebra dentro da palavra elas
+        // vazariam por cima da coluna de dinheiro, que e pior que a elipse.
+        '#s-dre .dre-table tr.dre-grp td.col-cat_nome {' +
+          'white-space: normal; overflow-wrap: anywhere; }' +
         // O min-width de 9rem da Categoria é do DESKTOP e aqui é justamente o
         // que estoura: medido em 375px, os três valores de dinheiro pedem 286px
         // dos ~347 úteis, então a Categoria só pode ocupar o resto. Com 144px
@@ -2020,8 +2280,15 @@
       '</div>';
     }).join('') + '</div>';
 
-    // ── Tabela por categoria ──
-    var ordenadas = ordenar(linhas, _ord, COLS);
+    // ── Tabela por categoria, AGRUPADA em 4 linhas ──
+    // A ordenação roda sobre os GRUPOS, não sobre as categorias: são eles as
+    // linhas da tabela agora. As chaves são as mesmas, então `ordenar` e as
+    // setas do cabeçalho valem sem mudança.
+    var grupos = agruparCategorias(linhas);
+    var ordenadas = ordenar(grupos, _ord, COLS);
+    // Categorias ordenadas pelo MESMO critério dentro de cada grupo: quem
+    // ordenou por lucro espera as categorias por lucro ao abrir.
+    ordenadas.forEach(function (g) { g._cats = ordenar(g._cats, _ord, COLS); });
     // Cada th/td leva `col-<key>`, e é por essa classe que o CSS esconde
     // coluna em celular. NÃO por :nth-child: qualquer coluna nova ou reordenada
     // deslocaria os índices e passaria a esconder a coluna errada, calado.
@@ -2039,31 +2306,11 @@
         seta + '</th>';
     }).join('');
 
-    var trs = ordenadas.map(function (l, idx) {
-      var celulas = COLS.map(function (c) {
-        var v = l[c.key];
-        var neg = (c.tipo === 'num' && !vazio(v) && Number(v) < 0) ? ' dre-neg' : '';
-        // A categoria leva `title` com o nome inteiro: em celular a célula
-        // trunca com elipse (nome longo em 4 linhas desalinhava a tabela e
-        // jogava o chevron para uma linha só dele), então o nome completo
-        // precisa continuar acessível.
-        var tit = (c.key === 'cat_nome') ? ' title="' + esc(v) + '"' : '';
-        return '<td class="col-' + c.key + (c.tipo === 'num' ? ' num' : '') + neg + '"' + tit + '>'
-          + c.fmt(v, l) + '</td>';
-      }).join('');
-      // Linha de DETALHE com as 4 colunas que o celular esconde. É renderizada
-      // SEMPRE, em display:none; só o media query de celular a torna exibível.
-      // Assim existe um caminho de código só — o CSS decide se o toque abre
-      // algo — em vez de um ramo "se é mobile" no JS, que é o que faria a
-      // versão mobile divergir da desktop com o tempo.
-      var det = MOBILE_OCULTA.map(function (k) {
-        var c = COL_POR_KEY[k];
-        return '<div class="dre-det-par"><span>' + esc(c.rot) + '</span><b>' + c.fmt(l[k], l) + '</b></div>';
-      }).join('');
-      return '<tr onclick="__dreDetalhe(this)" title="Toque para ver quantidade, venda bruta, desconto e custo">'
-        + celulas + '</tr>'
-        + '<tr class="dre-det"><td colspan="' + COLS.length + '">' + det + '</td></tr>';
-    }).join('');
+    // O detalhe de celular (as 4 colunas escondidas) é renderizado SEMPRE, em
+    // display:none; só o media query o torna exibível. Um caminho de código
+    // só — o CSS decide se o toque abre algo — em vez de um ramo "se é
+    // mobile" no JS, que é o que faria mobile e desktop divergirem.
+    var trs = trsAgrupados(ordenadas, COLS, MOBILE_OCULTA, COL_POR_KEY, false);
 
     // Rodapé da tabela = os totais da ROTA, não a soma das linhas na tela.
     // São iguais hoje, mas se um dia a tela filtrar linhas, o total continua
@@ -2119,7 +2366,8 @@
       '<div class="card" style="margin-top:.9rem">' +
         '<div class="chdr">' +
           '<div class="ctitle">Por categoria</div>' +
-          '<div class="csub">' + ordenadas.length + ' categoria(s) · clique no cabeçalho para ordenar</div>' +
+          '<div class="csub">' + ordenadas.length + ' grupo(s) · ' + linhas.length +
+            ' categoria(s) · clique no grupo para abrir · clique no cabeçalho para ordenar</div>' +
         '</div>' +
         '<div class="cbody dre-scroll">' +
           '<table class="dre-table">' +
@@ -2199,7 +2447,13 @@
       '</div>';
 
     // UMA ordenação para gráfico e tabela — a mesma lista alimenta os dois.
-    var ordenadas = ordenar(linhas, ord, cols);
+    // Com posto escolhido as linhas são CATEGORIAS, e aí a tabela agrupa em 4
+    // (mesma regra da aba Mês). Sem posto as linhas são POSTOS e não há o que
+    // agrupar — o gráfico continua vindo de `linhas` nos dois casos, porque
+    // ele compara itens, não grupos.
+    var grupos = porCat ? agruparCategorias(linhas) : null;
+    var ordenadas = ordenar(grupos || linhas, ord, cols);
+    if (grupos) ordenadas.forEach(function (g) { g._cats = ordenar(g._cats, ord, cols); });
 
     // ── Gráfico: barras verticais, uma por posto (ou categoria) ──
     // `rotuloX: null` de propósito. O rótulo aqui seria o NOME do posto, e 37
@@ -2248,28 +2502,35 @@
         seta + '</th>';
     }).join('');
 
-    var trs = ordenadas.map(function (l) {
-      var celulas = cols.map(function (c, i) {
-        var v = l[c.key];
-        var neg = (c.tipo === 'num' && !vazio(v) && Number(v) < 0) ? ' dre-neg' : '';
-        var primeira = (i === 0);
-        var tit = primeira
-          ? ' title="' + esc(porCat ? String(v || '') : tituloPosto(l)) + '"' : '';
-        // MESMA marcação das outras abas: o `*` vai no rótulo da linha, com o
-        // detalhe no title, porque é ressalva de toda a linha.
-        var marca = (primeira && temLacuna(l))
-          ? '<span class="dre-lacuna" title="' + esc(textoLacuna(l)) + '">*</span>' : '';
-        return '<td class="col-' + c.key + (c.tipo === 'num' ? ' num' : '') + neg + '"' + tit + '>'
-          + c.fmt(v, l) + marca + '</td>';
+    var trs;
+    if (grupos) {
+      trs = trsAgrupados(ordenadas, cols, MOBILE_OCULTA_DIA, COL_POSTO_POR_KEY, true);
+    } else {
+      // Sem posto escolhido as linhas são POSTOS: não há o que agrupar, e a
+      // marcação segue a original, linha a linha.
+      trs = ordenadas.map(function (l) {
+        var celulas = cols.map(function (c, i) {
+          var v = l[c.key];
+          var neg = (c.tipo === 'num' && !vazio(v) && Number(v) < 0) ? ' dre-neg' : '';
+          var primeira = (i === 0);
+          var tit = primeira
+            ? ' title="' + esc(porCat ? String(v || '') : tituloPosto(l)) + '"' : '';
+          // MESMA marcação das outras abas: o `*` vai no rótulo da linha, com o
+          // detalhe no title, porque é ressalva de toda a linha.
+          var marca = (primeira && temLacuna(l))
+            ? '<span class="dre-lacuna" title="' + esc(textoLacuna(l)) + '">*</span>' : '';
+          return '<td class="col-' + c.key + (c.tipo === 'num' ? ' num' : '') + neg + '"' + tit + '>'
+            + c.fmt(v, l) + marca + '</td>';
+        }).join('');
+        var det = MOBILE_OCULTA_DIA.map(function (k) {
+          var c = COL_POSTO_POR_KEY[k];
+          return '<div class="dre-det-par"><span>' + esc(c.rot) + '</span><b>' + c.fmt(l[k], l) + '</b></div>';
+        }).join('');
+        return '<tr onclick="__dreDetalhe(this)" title="Toque para ver o custo">'
+          + celulas + '</tr>'
+          + '<tr class="dre-det"><td colspan="' + cols.length + '">' + det + '</td></tr>';
       }).join('');
-      var det = MOBILE_OCULTA_DIA.map(function (k) {
-        var c = COL_POSTO_POR_KEY[k];
-        return '<div class="dre-det-par"><span>' + esc(c.rot) + '</span><b>' + c.fmt(l[k], l) + '</b></div>';
-      }).join('');
-      return '<tr onclick="__dreDetalhe(this)" title="Toque para ver o custo">'
-        + celulas + '</tr>'
-        + '<tr class="dre-det"><td colspan="' + cols.length + '">' + det + '</td></tr>';
-    }).join('');
+    }
 
     var tfoot = '<tr>' + cols.map(function (c, i) {
       if (i === 0) return '<td class="col-' + c.key + '">' + (porCat ? 'TOTAL' : 'REDE') + '</td>';
@@ -2278,12 +2539,16 @@
       return '<td class="col-' + c.key + ' num' + neg + '">' + c.fmt(v) + '</td>';
     }).join('') + '</tr>';
 
-    var comLacuna = ordenadas.filter(temLacuna).length;
+    // Contagem sobre as CATEGORIAS, não sobre os grupos: o `*` da linha do
+    // grupo já resume o dele, e contar grupos diria "1 com *" onde há nove
+    // categorias com custo incompleto.
+    var comLacuna = (grupos ? linhas : ordenadas).filter(temLacuna).length;
     body.innerHTML = kpis + cardGraf +
       '<div class="card" style="margin-top:.9rem">' +
         '<div class="chdr">' +
           '<div class="ctitle">' + (porCat ? 'Por categoria' : 'Por posto') + '</div>' +
-          '<div class="csub">' + ordenadas.length + ' ' + oQue + '(s) · ' +
+          '<div class="csub">' + ordenadas.length + ' ' +
+            (grupos ? 'grupo(s) · ' + linhas.length + ' categoria(s) · clique no grupo para abrir' : oQue + '(s)') + ' · ' +
             'clique no cabeçalho para ordenar' +
             (porCat ? '' : ' · escolha um posto no filtro para ver as categorias dele') +
             (comLacuna
