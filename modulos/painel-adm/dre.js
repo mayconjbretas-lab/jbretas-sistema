@@ -718,9 +718,13 @@
         'box-shadow: 0 4px 14px rgba(0,0,0,.35); min-width: 9.5rem; }' +
       '#s-dre .dre-tip b { display: block; color: var(--tx); font-family: var(--mono);' +
         'font-size: .72rem; margin-bottom: .25rem; }' +
-      '#s-dre .dre-tip span { display: flex; justify-content: space-between; gap: .7rem;' +
+      '#s-dre .dre-tip span { display: flex; flex-wrap: wrap; gap: 0 .7rem;' +
         'font-family: var(--mono); color: var(--tx); }' +
       '#s-dre .dre-tip i { font-style: normal; color: var(--tx3); }' +
+      // `flex-wrap` + `margin-left:auto`: o valor fica à direita quando cabe
+      // ao lado do rótulo, e desce para a linha seguinte AINDA à direita
+      // quando o rótulo é longo. Ver o comentário no corpo do balão.
+      '#s-dre .dre-tip em { font-style: normal; margin-left: auto; text-align: right; }' +
       // ── GRÁFICO POR POSTO: barras HORIZONTAIS ────────────────────
       // Reusa .dre-bar / .dre-bar.neg (cor), .dre-hit (alvo de ponteiro),
       // .dre-zero (linha do zero) e o wrap .dre-graf-wrap — que é o que traz
@@ -1064,6 +1068,22 @@
         'transform: translate(-50%, -50%); pointer-events: none; }' +
       '#s-dre .dre-pt.mes { background: var(--ac); }' +
       '@media (max-width: 560px) { #s-dre .dre-pt { width: 4px; height: 4px; } }' +
+      // MARCADOR DE LEITURA: maior que o ponto fixo e com contorno na cor do
+      // fundo, que é o que o separa da linha por baixo dele. Sem o contorno,
+      // um círculo da MESMA cor da linha some dentro dela.
+      '#s-dre .dre-ptx { position: absolute; display: none; width: 9px; height: 9px;' +
+        'border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;' +
+        'border: 2px solid var(--bg); box-sizing: content-box; }' +
+      '#s-dre .dre-ptx.on { display: block; }' +
+      '#s-dre .dre-ptx.mes { background: var(--ac); }' +
+      '#s-dre .dre-ptx.ant { background: var(--brand-blue, #4bb0ea); }' +
+      '#s-dre .dre-ptx.med { background: var(--tx3); }' +
+      '@media (max-width: 560px) { #s-dre .dre-ptx { width: 8px; height: 8px; } }' +
+      // GUIA VERTICAL do dia lido. Tracejada e na cor de acento: contínua
+      // competiria com as três linhas de dado, que é o que se está lendo.
+      '#s-dre .dre-guia { display: none; stroke: var(--ac); stroke-width: 1;' +
+        'stroke-dasharray: 3 3; opacity: .8; }' +
+      '#s-dre .dre-guia.on { display: block; }' +
       // Amostra da legenda: um traço, não um quadrado — o quadrado das barras
       // não diz espessura nem tracejado, que é o que distingue estas três.
       '#s-dre .dre-swl { display: inline-block; width: 14px; height: 0; vertical-align: middle;' +
@@ -2133,6 +2153,12 @@
   //              botão não mudava nada na leitura e o número que o usuário
   //              pediu ficava no meio dos outros. Sem `medidas`, o corpo é o
   //              de antes — é o caminho dos outros dois gráficos.
+  //   destacar — função (índice) chamada quando o balão ABRE, e com `null`
+  //              quando fecha. É por ela que o gráfico de linhas marca o
+  //              ponto lido e acende a guia vertical: sem isso o balão diz
+  //              um número e nada na tela aponta de onde ele saiu. Os
+  //              gráficos de barra não passam a função e nada muda para eles
+  //              — a barra sob o cursor já é o destaque.
   //   aoClicar — função (linha) chamada no clique. Quem decide QUAIS fatias
   //              aceitam clique é o `clicavel` do desenhador, que marca as
   //              outras com `.sem-clique`.
@@ -2149,6 +2175,7 @@
     var titulo = o.titulo || function (l) { return brData(l.data || l.chave); };
     var esconder = function () {
       tip.style.display = 'none';
+      if (o.destacar) o.destacar(null);
       // Fechar o balão zera a seleção: reabrir a MESMA barra volta a ser um
       // primeiro toque, não um segundo.
       _barraSel = null; _barraAnt = null;
@@ -2156,8 +2183,10 @@
     var mostrar = function (ev) {
       var alvo = ev.target && ev.target.closest ? ev.target.closest('.dre-hit') : null;
       if (!alvo) { esconder(); return; }
-      var l = linhas[parseInt(alvo.getAttribute('data-i'), 10)];
+      var iAlvo = parseInt(alvo.getAttribute('data-i'), 10);
+      var l = linhas[iAlvo];
       if (!l) { esconder(); return; }
+      if (o.destacar) o.destacar(iAlvo);
       // `medidas` manda quando existe; sem ela, as quatro de sempre. A lista
       // é montada aqui e renderizada num lugar só, então destaque e contexto
       // não podem sair por formatações diferentes.
@@ -2169,18 +2198,24 @@
       ];
       tip.innerHTML =
         '<b>' + titulo(l) + '</b>' +
+        // O VALOR VAI DENTRO DE <em>, e não como texto solto. Texto solto num
+        // flex vira item anônimo, que o CSS não alcança: rótulo longo quebrava
+        // em duas linhas e o valor grudava no fim da ÚLTIMA linha do rótulo,
+        // no meio da caixa. Medido em 375px com "média do mesmo dia nos outros
+        // 8 meses". Com o elemento, `margin-left:auto` alinha o valor à
+        // direita quando ele cabe na linha e quando ele desce para a próxima.
         medidas.map(function (x) {
           return '<span' + (x.forte ? ' class="forte"' : '') + '><i>' + esc(x.rot) + '</i>' +
-            esc(x.val) + '</span>';
+            '<em>' + esc(x.val) + '</em></span>';
         }).join('') +
         // `extra`: medidas ADICIONAIS, no mesmo formato das de cima.
         (o.extra ? o.extra(l).map(function (x) {
-          return '<span><i>' + esc(x.rot) + '</i>' + esc(x.val) + '</span>';
+          return '<span><i>' + esc(x.rot) + '</i><em>' + esc(x.val) + '</em></span>';
         }).join('') : '') +
         // `nota`: linha final sem rótulo — a aba Projeção diz nela se o mês é
         // realizado ou projetado, que é a informação sem a qual os números
         // acima podem ser lidos como fato.
-        (o.nota ? '<span><i>&nbsp;</i>' + esc(o.nota(l)) + '</span>' : '');
+        (o.nota ? '<span><i>&nbsp;</i><em>' + esc(o.nota(l)) + '</em></span>' : '');
       tip.style.display = 'block';
       // Posiciona relativo ao WRAP do gráfico, não à página: o container rola
       // e coordenadas de viewport descolariam do balão ao rolar.
@@ -2272,6 +2307,14 @@
     }
     var tips = document.querySelectorAll('#s-dre .dre-tip');
     for (var j = 0; j < tips.length; j++) tips[j].style.display = 'none';
+    // O DESTAQUE TAMBÉM. Este listener fecha o balão por fora do `esconder`
+    // (ele não tem acesso ao closure dele), então o `destacar(null)` não roda
+    // aqui — e sem esta varredura o toque fora fechava o balão e deixava a
+    // guia e os marcadores acesos, apontando um dia cujo número já saiu da
+    // tela. Por CLASSE, como o `.dre-tip` acima: o listener não precisa saber
+    // qual gráfico está montado.
+    var acesos = document.querySelectorAll('#s-dre .dre-guia.on, #s-dre .dre-ptx.on');
+    for (var k = 0; k < acesos.length; k++) acesos[k].classList.remove('on');
     // Toque fora fecha o balão, então também zera a seleção — senão voltar à
     // mesma barra contaria como SEGUNDO toque e navegaria de surpresa.
     _barraSel = null; _barraAnt = null;
@@ -3438,15 +3481,38 @@
 
     // PONTOS em HTML (ver decisão 2). Só nas séries que pedem, e também nos
     // trechos de um dia só — senão um dia isolado com dado desapareceria.
-    var marcas = '';
+    //
+    // E um MARCADOR DE LEITURA por (série, dia), escondido, que o hover
+    // acende. Ele existe para as TRÊS séries, inclusive as que não têm ponto
+    // fixo: sem ponto no mês anterior e na média, o balão dá três números e
+    // nada na tela mostra de onde os dois últimos saíram.
+    //
+    // TODOS RENDERIZADOS, o CSS decide quem aparece — o mesmo caminho único
+    // do `dre-det` da tabela. A alternativa (criar o span no evento) mediria
+    // geometria no hover, e a geometria só existe aqui.
+    var marcas = '', leitura = '';
     series.forEach(function (se) {
-      if (!se.pontos) return;
       pontos.forEach(function (p, i) {
         var v = num(p[se.chave]);
-        if (v === null) return;
-        marcas += '<span class="dre-pt ' + se.cls + '" style="left:' +
-          (px(i) / VB_W * 100).toFixed(3) + '%;top:' + (y(v) / VB_H * 100).toFixed(3) + '%"></span>';
+        if (v === null) return;                 // série sem dado no dia: sem marcador
+        var pos = 'left:' + (px(i) / VB_W * 100).toFixed(3) + '%;top:' +
+          (y(v) / VB_H * 100).toFixed(3) + '%';
+        if (se.pontos) marcas += '<span class="dre-pt ' + se.cls + '" style="' + pos + '"></span>';
+        leitura += '<span class="dre-ptx ' + se.cls + '" data-i="' + i + '" style="' + pos + '"></span>';
       });
+    });
+
+    // GUIA VERTICAL, uma por dia, escondida. A faixa do `.dre-hit:hover` é um
+    // retângulo de 23 unidades a 14% de opacidade: ela diz mais ou menos onde
+    // o cursor está, não EM QUAL DIA o balão está. A guia é 1px no x exato do
+    // ponto, que é o que fecha a leitura entre o balão e a linha.
+    // Uma por dia em vez de uma reposicionada no evento, pelo mesmo motivo
+    // dos marcadores: o x sai da geometria, que vive aqui.
+    var guias = '';
+    pontos.forEach(function (p, i) {
+      guias += '<line class="dre-guia" data-i="' + i + '" x1="' + px(i).toFixed(2) +
+        '" y1="' + M_TOPO + '" x2="' + px(i).toFixed(2) +
+        '" y2="' + (M_TOPO + areaA).toFixed(2) + '"></line>';
     });
 
     // ALVOS: uma faixa vertical por dia, altura cheia. Mesma solução das
@@ -3483,9 +3549,11 @@
           ' aria-label="' + esc(o.aria || 'Comparação por dia do mês') + '">' +
           '<line class="dre-zero" x1="' + M_ESQ + '" y1="' + yZero.toFixed(2) +
             '" x2="' + (VB_W - M_DIR) + '" y2="' + yZero.toFixed(2) + '"></line>' +
-          linhas + alvos +
+          // Guia ANTES das linhas: ela é referência de posição, não dado, e
+          // não pode passar por cima da série que marca.
+          guias + linhas + alvos +
         '</svg>' +
-        eixoY + marcas +
+        eixoY + marcas + leitura +
       '</div>' +
       '<div class="dre-exs">' + eixoX + '</div>' +
     '</div>';
@@ -3869,10 +3937,13 @@
       var seriesCmp = [
         // Ordem de DESENHO: a média por baixo, o mês escolhido por cima. Com o
         // destaque embaixo, a linha fina cinza cruzaria por cima dele.
-        // "outros" e nao "do ano": a media EXCLUI o mes exibido, e quem le a
-        // linha cinza precisa saber disso pela legenda, sem abrir o codigo.
+        // A legenda DIZ O QUE A LINHA É, não como ela se chama: "média dos
+        // outros N fechado(s)" não explicava média de quê, sobre o quê. O
+        // "mesmo dia" é o ponto do modo — é a comparação do dia 3 com o dia 3
+        // —, e "outros" carrega a exclusão do mês exibido sem precisar de
+        // nota de rodapé.
         { chave: 'med', cls: 'med',
-          rot: 'média dos outros ' + cmp.fechados.length + ' fechado(s)' },
+          rot: 'média do mesmo dia nos outros ' + cmp.fechados.length + ' meses' },
         { chave: 'ant', cls: 'ant', rot: rotAnt },
         { chave: 'mes', cls: 'mes', rot: rotMes, pontos: true },
       ];
@@ -3914,6 +3985,24 @@
       if (svgCmp) {
         ligarTooltipGrafico(cmp.pontos, {
           titulo: function (p) { return 'Dia ' + p.dia; },
+          // MARCA O DIA LIDO: acende a guia vertical e os marcadores das três
+          // séries naquele dia. Os elementos já estão no DOM, escondidos (ver
+          // svgLinhas) — aqui só se liga a classe, então nada é medido nem
+          // criado durante o gesto.
+          //
+          // Serve mouse e toque pelo mesmo caminho: quem chama é o `mostrar`
+          // do balão, que já roda em pointerdown/pointermove/pointerleave.
+          destacar: function (i) {
+            var wrap = document.querySelector('#s-dre .dre-graf-wrap');
+            if (!wrap) return;
+            var alvos = wrap.querySelectorAll('.dre-guia, .dre-ptx');
+            for (var k = 0; k < alvos.length; k++) {
+              var liga = (i !== null && String(i) === alvos[k].getAttribute('data-i'));
+              // classList em SVG e em HTML: os dois suportam, e é por isso que
+              // guia e marcador podem ser varridos na mesma passada.
+              alvos[k].classList.toggle('on', liga);
+            }
+          },
           medidas: function (p) {
             var m = [
               { rot: rotMes, val: p.temMes ? met.corpo(p.mes) : '—', forte: true },
@@ -3940,9 +4029,10 @@
                 forte: true,
               });
             }
-            // MESMO rótulo da legenda: 'média do ano' aqui e 'média dos outros'
-            // lá seriam dois nomes para a mesma linha, na mesma tela.
-            m.push({ rot: 'média dos outros', val: p.med === null ? '—' : met.corpo(p.med) });
+            // MESMA FRASE DA LEGENDA. Dois nomes para a mesma linha na mesma
+            // tela obrigariam o leitor a decidir se são a mesma coisa.
+            m.push({ rot: 'média do mesmo dia nos outros ' + cmp.fechados.length + ' meses',
+              val: p.med === null ? '—' : met.corpo(p.med) });
             return m;
           },
           nota: function (p) {
