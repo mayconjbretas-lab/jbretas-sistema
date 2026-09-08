@@ -862,7 +862,17 @@
   function brDDMMAAAA(iso){ const p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(iso || ''); }
 
   // Bloqueante cru → texto legível (nunca JSON na tela).
+  //
+  // O import lê DUAS abas — custo de 'Preços impressos', cotação de 'Tabela de
+  // Preço' — e os tipos de problema se repetem entre elas. Sem dizer a aba, a
+  // frase manda conferir uma planilha sem dizer qual das duas.
   function textoBloqueante(a) {
+    const base = textoBloqueanteBase(a);
+    // O texto de cobertura já nomeia a aba na frase; não repete.
+    return (a && a.aba && a.tipo !== 'BLOQUEANTE_cobertura_custo')
+      ? base + '  [aba: ' + a.aba + ']' : base;
+  }
+  function textoBloqueanteBase(a) {
     if (!a || !a.tipo) return 'Problema não identificado na planilha.';
     if (a.tipo === 'BLOQUEANTE_datas_divergentes') {
       const ds = (a.datas || []).map(brDDMM).join(' e ');
@@ -876,8 +886,31 @@
              '. Ficaram de fora: ' + mostra +
              (ds.length > 12 ? ' (e mais ' + (ds.length - 12) + ')' : '');
     }
+    // Cobertura: os dois números distinguem a causa. Menos SLOTS = bloco fora
+    // da grade (deriva de layout). Slots certos e menos RESOLVIDOS = nome que
+    // deixou de casar com o cadastro.
+    if (a.tipo === 'BLOQUEANTE_cobertura_custo') {
+      const base = 'A aba "' + (a.aba || 'de custo') + '" cobriu ' + a.resolvidos +
+                   ' de ' + a.esperado + ' postos';
+      const nao = (a.nao_casaram || []);
+      const falta = (a.faltando || []);
+      if (nao.length) {
+        return base + '. Nome(s) que não casam com o cadastro: ' + nao.join(', ') +
+               (falta.length ? '. Sem dado: ' + falta.slice(0, 6).join(', ') +
+                 (falta.length > 6 ? ' (e mais ' + (falta.length - 6) + ')' : '') : '');
+      }
+      return base + ' (' + a.slots + ' bloco(s) na aba). Sem dado: ' +
+             falta.slice(0, 6).join(', ') +
+             (falta.length > 6 ? ' (e mais ' + (falta.length - 6) + ')' : '');
+    }
     if (a.tipo === 'BLOQUEANTE_ano_suspeito')   return 'Ano suspeito: ' + brDDMMAAAA(a.data);
-    if (a.tipo === 'BLOQUEANTE_data_duplicada') return 'Data repetida em dois blocos: ' + brDDMMAAAA(a.data);
+    if (a.tipo === 'BLOQUEANTE_data_duplicada') {
+      // `lados` diz se a repetição está no custo, na cotação ou nos dois — a
+      // frase é a mesma e sem isso não se sabe o que conferir na planilha.
+      const l = (a.lados || []).join(' e ');
+      return 'Data repetida em dois blocos: ' + brDDMMAAAA(a.data) +
+             (l ? ' (em ' + l + ')' : '');
+    }
     return a.tipo.replace(/^BLOQUEANTE_/, '').replace(/_/g, ' ') + (a.data ? ': ' + brDDMMAAAA(a.data) : '');
   }
 
@@ -963,11 +996,18 @@
   // (planilha inteira)", contagem de uma decisão e escopo de outra. Aqui as
   // duas saem juntas, então o botão não pode dizer uma coisa e a gravação
   // fazer outra. data null = planilha inteira.
+  // O escopo governa AS COTAÇÕES. O custo vem de 'Preços impressos', que só
+  // tem o dia corrente — para ele os dois modos dão o mesmo. A cotação vem da
+  // 'Tabela de Preço', que tem o ano todo: 'Só esta data' grava a do dia,
+  // 'Planilha inteira' grava o histórico.
   function escopoAtual(p) {
     const det = (p && Array.isArray(p.datas_detalhe)) ? p.datas_detalhe : [];
+    const r = (p && p.resumo) || {};
     const d = (_cmiEscopo === 'data' && _cmiDataSel) ? det.find(x => x.data === _cmiDataSel) : null;
-    return d ? { data: d.data, custos: d.custos }
-             : { data: null, custos: (p && p.resumo && p.resumo.custos != null) ? p.resumo.custos : 0 };
+    return d ? { data: d.data, custos: d.custos, cotacoes: d.cotacoes || 0 }
+             : { data: null,
+                 custos:   r.custos   != null ? r.custos   : 0,
+                 cotacoes: r.cotacoes != null ? r.cotacoes : 0 };
   }
 
   // ── O ESTADO DA TELA, resolvido UMA VEZ ──────────────────────────
@@ -1000,22 +1040,26 @@
     const e = escopoAtual(p);
     const bloq = (p && p.bloqueantes) || [];
     const travam = bloq.filter(a => bloqueiaAqui(a, e.data));
-    return {
+    // Espalha o escopo INTEIRO (data, custos, cotacoes). Listar campo a campo
+    // fez o `cotacoes` novo nao chegar aqui, e o rótulo do botão dizia
+    // "+ 0 cotações" — número errado no lugar que promete o que vai ao banco.
+    return Object.assign({}, e, {
       det: det,
-      data: e.data,            // null = planilha inteira
-      custos: e.custos,
       bloq: bloq,
       travam: travam,
       trava: travam.length > 0,
-    };
+    });
   }
 
   // Rótulo do botão: diz exatamente o que vai ao banco. `E` é OBRIGATÓRIO:
   // sem ele isto voltaria a ser uma leitura solta do escopo, e o rótulo já
   // mentiu uma vez por isso.
   function rotuloGravar(E) {
-    return 'Gravar ' + Number(E.custos).toLocaleString('pt-BR') +
-           ' linha' + (E.custos === 1 ? '' : 's') +
+    // Os DOIS números, porque vêm de abas diferentes e o escopo muda só um
+    // deles. Dizer '158 linhas' esconderia 3.882 cotações indo ao banco.
+    const n = (v) => Number(v || 0).toLocaleString('pt-BR');
+    return 'Gravar ' + n(E.custos) + ' custo' + (E.custos === 1 ? '' : 's') +
+           ' + ' + n(E.cotacoes) + ' cotaç' + (E.cotacoes === 1 ? 'ão' : 'ões') +
            ' (' + (E.data ? brDDMM(E.data) : 'planilha inteira') + ')';
   }
 
@@ -1030,10 +1074,14 @@
     // Conferência do parser: datas da aba x datas lidas. Divergência aparece
     // no card, não só na lista de bloqueantes — é a primeira coisa que se olha.
     const faltando = Array.isArray(arq.datas_faltando) ? arq.datas_faltando : [];
+    // DATAS DE CUSTO, não do arquivo: o custo vem de 'Preços impressos', que
+    // tem uma data. `arq.datas` conta a união com as cotações (170 na Tabela
+    // de Preço) e ali diria '170' ao lado de um custo de um dia só.
+    const ab = arq.abas || {};
+    const dCusto = (ab.custo && ab.custo.datas != null) ? ab.custo.datas : arq.datas;
     return '<div class="cmi-c' + (faltando.length ? ' bad' : '') + '"><b>' +
-        (arq.datas != null ? arq.datas : '—') +
-        (faltando.length ? '/' + arq.datas_na_aba : '') +
-      '</b><span>Datas' + (faltando.length ? ' lidas' : '') + '</span></div>' +
+        (dCusto != null ? dCusto : '—') +
+      '</b><span>Data' + (dCusto === 1 ? '' : 's') + ' de custo</span></div>' +
       '<div class="cmi-c"><b>' +
         (resumo.postos_casados != null ? resumo.postos_casados : '—') +
       '/37</b><span>Postos casados</span></div>' +
@@ -1147,6 +1195,22 @@
       ? '<div class="cmi-faixa">Período: <b>' + esc(brDDMMAAAA(arq.data_min)) + '</b> → <b>' + esc(brDDMMAAAA(arq.data_max)) + '</b></div>'
       : '';
 
+    // DE ONDE VEIO CADA COISA. Sem isto a troca de aba é invisível e a
+    // primeira dúvida de quem importa é 'leu de onde?'. O custo mudou de aba
+    // justamente para escapar dos erros antigos da Tabela de Preço; a cotação
+    // continua lá porque a aba nova não tem coluna de distribuidora.
+    const abas = arq.abas;
+    const origemHtml = abas
+      ? '<div class="cmi-info">' +
+          '<b>Custo:</b> aba “' + esc(abas.custo.aba) + '” — ' +
+            abas.custo.postos + ' postos, ' +
+            Number(abas.custo.linhas).toLocaleString('pt-BR') + ' linhas<br>' +
+          '<b>Cotação:</b> aba “' + esc(abas.cotacao.aba) + '” — ' +
+            abas.cotacao.datas + ' datas, ' +
+            Number(abas.cotacao.linhas).toLocaleString('pt-BR') + ' linhas' +
+        '</div>'
+      : '';
+
     const infoManual = (resumo.preservado_manual > 0)
       ? '<div class="cmi-info">' + resumo.preservado_manual + ' linha(s) com origem manual não serão sobrescritas.</div>'
       : '';
@@ -1165,19 +1229,31 @@
         '<input type="radio" name="cmi-escopo" value="' + val + '"' +
         (_cmiEscopo === val ? ' checked' : '') + ' onchange="__cmiEscopo(\'' + val + '\')">' + txt +
       '</label>';
+    // ESCOPO: a escolha vale para as COTAÇÕES.
+    //
+    // O custo vem de 'Preços impressos', que traz só o dia corrente — para ele
+    // os dois modos dão o mesmo resultado. A cotação vem da 'Tabela de Preço',
+    // que tem o histórico: 'Só esta data' grava a do dia, 'Planilha inteira'
+    // grava o ano todo. Não escondi o seletor porque ele é o único caminho
+    // para preencher histórico de distribuidora; o rótulo diz o que ele faz.
+    //
+    // Com UMA data de custo o select viraria uma caixa de uma opção só: sai
+    // como texto. `_cmiDataSel` continua guardando a data, então o escopo e o
+    // rótulo do botão não mudam de caminho.
+    const umaData = det.length === 1;
     const escopoHtml = det.length
       ? '<div class="cmi-escopo">' +
-          '<div class="cmi-escopo-tit">O que gravar</div>' +
+          '<div class="cmi-escopo-tit">Cotações: o que gravar</div>' +
           '<div class="cmi-modo">' + opcaoModo('data', 'Só esta data') + opcaoModo('tudo', 'Planilha inteira') + '</div>' +
-          '<select class="cmi-sel" id="cmi-data-sel" onchange="__cmiDataSel(this.value)"' +
-            (_cmiEscopo === 'data' ? '' : ' disabled') + '>' +
-            det.map(d => '<option value="' + esc(d.data) + '"' + (d.data === _cmiDataSel ? ' selected' : '') + '>' +
-              // Só a data e o nº de custos: é o que decide a escolha, e cabe no
-              // select fechado a 375px. As cotações do dia não entram — o rótulo
-              // do botão já diz quanto vai ao banco.
-              esc(brDDMMAAAA(d.data)) + ' — ' + d.custos + ' custo' + (d.custos === 1 ? '' : 's') +
-            '</option>').join('') +
-          '</select>' +
+          (umaData
+            ? '<div class="cmi-faixa">Data da planilha: <b>' + esc(brDDMMAAAA(det[0].data)) + '</b>' +
+                ' — ' + det[0].custos + ' custo' + (det[0].custos === 1 ? '' : 's') + '</div>'
+            : '<select class="cmi-sel" id="cmi-data-sel" onchange="__cmiDataSel(this.value)"' +
+                (_cmiEscopo === 'data' ? '' : ' disabled') + '>' +
+                det.map(d => '<option value="' + esc(d.data) + '"' + (d.data === _cmiDataSel ? ' selected' : '') + '>' +
+                  esc(brDDMMAAAA(d.data)) + ' — ' + d.custos + ' custo' + (d.custos === 1 ? '' : 's') +
+                '</option>').join('') +
+              '</select>') +
         '</div>'
       : '';
 
@@ -1210,7 +1286,7 @@
       esc(E.trava ? 'Gravar' : rotuloGravar(E)) + '</button>';
 
     document.getElementById('cmi-body').innerHTML =
-      cards + faixa + escopoHtml + infoManual + bloqHtml + avisosHtml + tbl +
+      cards + faixa + origemHtml + escopoHtml + infoManual + bloqHtml + avisosHtml + tbl +
       '<div class="cmi-foot">' + gravar + '<button class="cmi-btn ghost" onclick="__cmiFechar()">Fechar</button></div>';
   }
 
@@ -1269,7 +1345,8 @@
         const g = json.gravado || {};
         let msg = 'Importação concluída' +
           (esc0.data ? ' — ' + brDDMMAAAA(esc0.data) : ' — planilha inteira') + '.\n' +
-          (g.custos_precos || 0) + ' custo(s) e ' + (g.custos_fornecedores || 0) + ' cotação(ões) gravados.';
+          (g.custos_precos || 0) + ' custo(s) da aba de preços impressos e ' +
+          (g.custos_fornecedores || 0) + ' cotação(ões) da tabela de preço.';
         if (g.preservado_manual) msg += '\n' + g.preservado_manual + ' linha(s) manual preservada(s).';
         if (g.descartado)        msg += '\n' + g.descartado + ' linha(s) descartada(s) (sem cadastro).';
         // Gravou o dia pedido, mas a planilha continua torta em outros dias.

@@ -16,9 +16,9 @@
 
 <script>
 // ── O QUE ESTE TESTE FAZ DE DIFERENTE ────────────────────────────
-// Os testes anteriores injetavam _cmiDataSel como parametro e chamavam
-// htmlBloqueantes/bloqueiaAqui isolados. Por isso passaram verdes enquanto a
-// tela mostrava "4/4 travam" com o botao desabilitado: a sequencia real
+// Testes de unidade injetavam _cmiDataSel como parametro e chamavam
+// bloqueiaAqui/htmlBloqueantes isolados. Por isso ficaram verdes enquanto a
+// tela mostrava "4/4 travam" com Gravar desabilitado: a sequencia real
 // (_cmiDataSel comeca NULO e e resolvido durante o render) nunca rodava.
 //
 // Aqui roda o caminho do usuario: __cmImportFile com um File de verdade, o
@@ -28,30 +28,54 @@
 window.JBRETAS_CONFIG = { API_URL: 'http://localhost:0' };
 window.jbretasGetItem = () => 'token-de-teste';
 
+// Os 4 problemas reais da 'Tabela de Preco', de onde saem as COTACOES. Todos de
+// conteudo e de outros dias, entao nenhum trava a importacao do dia.
 const BLOQ = [
   { tipo:'BLOQUEANTE_datas_divergentes', bloco:1109, datas:['2026-06-30','2026-07-01'],
-    familia:'conteudo', datas_afetadas:['2026-06-30','2026-07-01'] },
+    familia:'conteudo', datas_afetadas:['2026-06-30','2026-07-01'], aba:'Tabela de Preço' },
   { tipo:'BLOQUEANTE_ano_suspeito', data:'2025-03-09',
-    familia:'conteudo', datas_afetadas:['2025-03-09'] },
-  { tipo:'BLOQUEANTE_data_duplicada', data:'2026-05-15',
-    familia:'conteudo', datas_afetadas:['2026-05-15'] },
-  { tipo:'BLOQUEANTE_data_duplicada', data:'2026-09-01',
-    familia:'conteudo', datas_afetadas:['2026-09-01'] },
+    familia:'conteudo', datas_afetadas:['2025-03-09'], aba:'Tabela de Preço' },
+  { tipo:'BLOQUEANTE_data_duplicada', data:'2026-05-15', lados:['custo','cotacao'],
+    familia:'conteudo', datas_afetadas:['2026-05-15'], aba:'Tabela de Preço' },
+  { tipo:'BLOQUEANTE_data_duplicada', data:'2026-09-01', lados:['custo','cotacao'],
+    familia:'conteudo', datas_afetadas:['2026-09-01'], aba:'Tabela de Preço' },
 ];
-const DRY = {
-  ok: true, dry_run: true,
-  arquivo: { nome:'ALTERACOES.xlsx', datas:170, data_min:'2025-12-31', data_max:'2026-09-08',
-             blocos:170, datas_na_aba:170, datas_lidas:170, datas_faltando:[] },
-  resumo: { custos:25479, cotacoes:3882, postos_casados:37, preservado_manual:0, descartado:0 },
-  bloqueantes: BLOQ,
-  avisos_por_tipo: {},
-  amostra: [{ posto:'P. JA', combustivel:'GC', custo:5.4169 }],
-  datas_detalhe: [
-    { data:'2026-09-08', custos:158 },
-    { data:'2026-09-04', custos:158 },
-    { data:'2026-09-01', custos:158 },
-  ],
+// Bloqueante de LEITURA da aba de custo: a conferencia de cobertura.
+const COBERTURA = {
+  tipo:'BLOQUEANTE_cobertura_custo', aba:'Preços impressos',
+  blocos:13, slots:36, resolvidos:36, esperado:37,
+  faltando:['P. TOPAZIO'], nao_casaram:[],
+  familia:'leitura', datas_afetadas:[],
 };
+
+const ABAS = {
+  custo:   { aba:'Preços impressos', blocos:13, postos:37, datas:1, linhas:158 },
+  cotacao: { aba:'Tabela de Preço',  datas:170, linhas:3882 },
+};
+// Cenario REAL: a aba de custo tem UMA data.
+const DRY_UM_DIA = {
+  ok:true, dry_run:true,
+  arquivo: { nome:'ALTERACOES.xlsx', datas:170, data_min:'2025-12-31', data_max:'2026-09-08',
+             blocos:13, datas_na_aba:1, datas_lidas:1, datas_faltando:[], abas:ABAS },
+  resumo: { custos:158, cotacoes:3882, postos_casados:37, preservado_manual:0, descartado:0 },
+  bloqueantes: BLOQ, avisos_por_tipo: { datas_divergentes:1 },
+  amostra: [{ posto:'P. JA', combustivel:'GC', custo:5.4169 }],
+  datas_detalhe: [{ data:'2026-09-08', custos:158, cotacoes:23 }],
+};
+// Cenario de RESERVA: aba de custo com varias datas. O seletor existe no codigo
+// e foi ele que expos o bug do card; se a aba mudar, tem de continuar coerente.
+// Sem este cenario a cobertura do __cmiDataSel se perde.
+const DRY_VARIAS = JSON.parse(JSON.stringify(DRY_UM_DIA));
+DRY_VARIAS.arquivo.abas.custo.datas = 3;
+DRY_VARIAS.arquivo.datas_na_aba = 3;
+DRY_VARIAS.arquivo.datas_lidas = 3;
+DRY_VARIAS.datas_detalhe = [
+  { data:'2026-09-08', custos:158, cotacoes:23 },
+  { data:'2026-09-04', custos:158, cotacoes:21 },
+  { data:'2026-09-01', custos:158, cotacoes:22 },
+];
+
+let DRY = DRY_UM_DIA;                       // trocado por importar(), abaixo
 
 // Intercepta so a rota do import; o resto passa.
 const fetchReal = window.fetch.bind(window);
@@ -60,22 +84,23 @@ window.fetch = async (url, opt) => {
     const corpo = JSON.parse(opt.body);
     window.__ultimoCorpo = corpo;
     if (corpo.dry_run) {
-      return new Response(JSON.stringify(DRY), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify(DRY), { status:200, headers:{ 'Content-Type':'application/json' } });
     }
     // Gravacao: responde como a API responderia para o escopo pedido.
     const dentro = (d) => (!corpo.data_de || d >= corpo.data_de) && (!corpo.data_ate || d <= corpo.data_ate);
-    const travam = BLOQ.filter(a => {
+    const todos = DRY.bloqueantes || [];
+    const travam = todos.filter(a => {
       const ds = a.datas_afetadas || [];
       return a.familia !== 'conteudo' || !ds.length || ds.some(dentro);
     });
     if (travam.length) {
       return new Response(JSON.stringify({ ok:false, erro:'importação bloqueada',
-        bloqueantes: travam, fora_do_escopo: BLOQ.filter(a => travam.indexOf(a) < 0) }),
-        { status: 409, headers: { 'Content-Type': 'application/json' } });
+        bloqueantes: travam, fora_do_escopo: todos.filter(a => travam.indexOf(a) < 0) }),
+        { status:409, headers:{ 'Content-Type':'application/json' } });
     }
     return new Response(JSON.stringify({ ok:true, dry_run:false, arquivo: DRY.arquivo,
       gravado: { custos_precos:158, custos_fornecedores:23, preservado_manual:0, descartado:0 },
-      fora_do_escopo: BLOQ }), { status:200, headers:{ 'Content-Type':'application/json' } });
+      fora_do_escopo: todos }), { status:200, headers:{ 'Content-Type':'application/json' } });
   }
   return fetchReal(url, opt);
 };
@@ -104,15 +129,12 @@ document.write('<script src="' + window.__ARQ + '"><\/script>');
   };
 
   // ── leitores do DOM: e sobre isso que o teste afirma ──
-  // Le o card com OU SEM o container #cmi-cards: a versao antiga nao tem o id,
-  // e o teste tem de REPORTAR a falha, nao estourar. (Estourou na 1a tentativa
-  // contra o arquivo velho — leitor fragil meu, nao defeito do codigo.)
-  const cardTravam = () => {
-    const cs = document.querySelectorAll('.cmi-cards .cmi-c');
-    for (const c of cs) {
+  const cardPor = (rot) => {
+    for (const c of document.querySelectorAll('.cmi-cards .cmi-c')) {
       const sp = c.querySelector('span');
-      if (sp && /Travam/.test(sp.textContent)) {
+      if (sp && new RegExp(rot, 'i').test(sp.textContent)) {
         return { texto: c.querySelector('b').textContent.trim(),
+                 rotulo: sp.textContent.trim(),
                  vermelho: c.classList.contains('bad') };
       }
     }
@@ -128,132 +150,200 @@ document.write('<script src="' + window.__ARQ + '"><\/script>');
     titulo: d.querySelector('.cmi-bloq-tit').textContent.trim(),
     itens: [...d.querySelectorAll('li')].map(li => li.textContent.trim()),
   }));
+  const corpoTexto = () => document.getElementById('cmi-body').innerText;
+
+  // Roda o caminho do usuario do zero, com o payload pedido.
+  async function importar(payload) {
+    DRY = payload;
+    window.__ultimoAlerta = null;
+    const ov = document.getElementById('cmi-overlay');
+    if (ov) ov.remove();                     // forca remontar o modal
+    const file = new File([new Blob(['x'])], 'ALTERACOES DE PRECOS 2026 (17).xlsx',
+      { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    await window.__cmImportFile({ files:[file], value:'' });
+    for (let i = 0; i < 80 && !document.getElementById('cmi-gravar'); i++) await new Promise(r => setTimeout(r, 25));
+  }
 
   // ══════════════════════════════════════════════════════════════
-  H('1. o caminho do usuário: escolher o arquivo');
-  // File de verdade; o modulo le com FileReader.
-  const file = new File([new Blob(['conteudo-irrelevante'])], 'ALTERACOES DE PRECOS 2026 (17).xlsx',
-    { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  await window.__cmImportFile({ files: [file], value: '' });
-  // Espera o render (a cadeia e assincrona: FileReader -> fetch -> render).
-  for (let i = 0; i < 60 && !document.getElementById('cmi-gravar'); i++) await new Promise(r => setTimeout(r, 25));
-
+  H('1. o caminho do usuário, cenário real (uma data de custo)');
+  await importar(DRY_UM_DIA);
   chk(!!document.getElementById('cmi-body'), 'o modal foi montado pelo próprio módulo');
   chk(window.__ultimoCorpo && window.__ultimoCorpo.dry_run === true,
-    'o dry_run saiu com dry_run:true e sem filtro de data',
-    window.__ultimoCorpo ? JSON.stringify({ dry_run: window.__ultimoCorpo.dry_run,
-      de: window.__ultimoCorpo.data_de || null }) : '?');
+    'o dry_run saiu sem filtro de data',
+    JSON.stringify({ dry_run: window.__ultimoCorpo.dry_run, de: window.__ultimoCorpo.data_de || null }));
 
-  H('2. card, botão e seção na 1ª abertura — o bug relatado');
+  H('2. a tela diz DE QUAL ABA veio cada coisa');
   {
-    const c = cardTravam(), b = botao(), s = secoes();
-    chk(!!document.getElementById('cmi-cards'),
-      'os cards tem container com id (sem ele o atualizarEscopoUI nao os alcanca)');
+    const t = corpoTexto();
+    chk(/Custo:[\s\S]*Preços impressos/.test(t), 'o custo aparece como vindo de “Preços impressos”');
+    chk(/Cotação:[\s\S]*Tabela de Preço/.test(t), 'a cotação, de “Tabela de Preço”');
+    chk(/37 postos/.test(t), 'com os 37 postos da aba de custo');
+    chk(/3\.882 linhas/.test(t), 'e as 3.882 cotações da tabela de preço');
+    const c = cardPor('custo');
+    chk(!!c && c.texto === '1', 'o card conta 1 DATA DE CUSTO, não as 170 do arquivo',
+      c ? c.texto + ' / ' + c.rotulo : '(sem card)');
+  }
+
+  H('3. card, botão e seção: nada trava a importação do dia');
+  {
+    const c = cardPor('Travam'), b = botao(), s = secoes();
     chk(!!c && c.texto === '0/4', 'card diz 0/4', c ? c.texto : '(sem card)');
     chk(!!c && !c.vermelho, 'card NÃO está em vermelho');
-    chk(b.existe && b.id === 'cmi-gravar', 'botão existe com id cmi-gravar');
     chk(b.existe && b.disabled === false, 'botão HABILITADO', 'disabled=' + b.disabled);
-    chk(b.texto === 'Gravar 158 linhas (08/09)', 'rótulo do botão certo', b.texto);
-    chk(s.length === 1, 'uma única seção', s.length + ' seção(ões)');
-    chk(s.length === 1 && s[0].aviso === true, 'e ela é a ÂMBAR (classe aviso)');
-    chk(s.length === 1 && /OUTROS dias/.test(s[0].titulo), 'título diz OUTROS dias', s[0] && s[0].titulo);
-    chk(s.length === 1 && s[0].itens.length === 4, 'com os 4 problemas',
-      s[0] ? s[0].itens.length + ' item(ns)' : '?');
-    chk(s.length === 1 && s[0].itens.some(t => /1109/.test(t)) &&
-        s[0].itens.some(t => /09\/03\/2025/.test(t)) &&
-        s[0].itens.some(t => /15\/05\/2026/.test(t)) &&
-        s[0].itens.some(t => /01\/09\/2026/.test(t)),
-      'e são os 4 esperados (linha 1109, 09/03/2025, 15/05/2026, 01/09/2026)');
+    chk(b.texto === 'Gravar 158 custos + 23 cotações (08/09)',
+      'o rótulo diz os DOIS números, que vêm de abas diferentes', b.texto);
+    chk(s.length === 1 && s[0].aviso === true, 'uma seção, âmbar');
+    chk(s.length === 1 && /OUTROS dias/.test(s[0].titulo), 'título diz OUTROS dias');
+    chk(s.length === 1 && s[0].itens.length === 4, 'com os 4 problemas', s[0] && s[0].itens.length + '');
+    chk(s.length === 1 && s[0].itens.every(t => /Tabela de Preço/.test(t)),
+      'e cada um diz que é da aba Tabela de Preço');
+    chk(s.length === 1 && s[0].itens.some(t => /em custo e cotacao/.test(t)),
+      'a duplicata diz de qual lado a repetição está');
   }
 
-  H('3. alternar para "Planilha inteira" e voltar');
+  H('4. o seletor governa as COTAÇÕES');
   {
+    const t = corpoTexto();
+    chk(/Cotações: o que gravar/.test(t), 'o título do seletor diz que a escolha é das cotações');
+    chk(!document.getElementById('cmi-data-sel'),
+      'com UMA data de custo não há select de uma opção só');
+    chk(/Data da planilha:/.test(t) && /08\/09\/2026/.test(t), 'a data aparece como texto');
+
     window.__cmiEscopo('tudo');
-    let c = cardTravam(), b = botao(), s = secoes();
-    chk(c && c.texto === '4/4', 'planilha inteira: card 4/4', c && c.texto);
-    chk(c && c.vermelho, 'e o card fica vermelho');
-    chk(b.disabled === true, 'botão travado', 'disabled=' + b.disabled);
-    chk(s.length === 1 && s[0].aviso === false, 'seção vermelha, sem âmbar',
-      s.map(x => x.aviso ? 'aviso' : 'bloq').join('+'));
+    let b = botao(), c = cardPor('Travam');
+    chk(c && c.texto === '4/4', 'planilha inteira: os 4 problemas travam', c && c.texto);
+    chk(b.disabled === true, 'botão travado');
+    chk(b.texto === 'Gravar', 'travado, o rótulo NAO promete número nenhum', b.texto);
 
     window.__cmiEscopo('data');
-    c = cardTravam(); b = botao(); s = secoes();
-    chk(c && c.texto === '0/4', 'voltou: card 0/4 de novo', c && c.texto);
-    chk(c && !c.vermelho, 'card sem vermelho');
-    chk(b.disabled === false, 'botão liberado de novo');
-    chk(b.texto === 'Gravar 158 linhas (08/09)', 'com o rótulo certo', b.texto);
-    chk(s.length === 1 && s[0].aviso === true, 'seção âmbar de volta');
+    b = botao(); c = cardPor('Travam');
+    chk(b.texto === 'Gravar 158 custos + 23 cotações (08/09)', 'voltou ao dia', b.texto);
+    chk(c && c.texto === '0/4', 'card 0/4 de novo', c && c.texto);
+    chk(b.disabled === false, 'botão liberado');
   }
 
-  H('4. trocar a data no seletor: card, botão e seção juntos');
+  H('4b. planilha inteira, sem bloqueante: o rótulo mostra o histórico');
   {
-    // 01/09 TEM problema (data repetida). Os três têm de mudar no mesmo passo.
-    window.__cmiDataSel('2026-09-01');
-    let c = cardTravam(), b = botao(), s = secoes();
-    chk(c && c.texto === '1/4', 'card vira 1/4', c && c.texto);
-    chk(c && c.vermelho, 'card fica vermelho');
-    chk(b.disabled === true, 'botão trava', 'disabled=' + b.disabled);
-    chk(s.length === 2, 'duas seções: a que trava e a de outros dias', s.length + '');
-    chk(s.length === 2 && s[0].aviso === false && /01\/09\/2026/.test(s[0].titulo),
-      'a 1ª é vermelha e NOMEIA 01/09/2026', s[0] && s[0].titulo);
-    chk(s.length === 2 && s[0].itens.length === 1, 'com 1 item', s[0] && s[0].itens.length + '');
-    chk(s.length === 2 && s[1].aviso === true && s[1].itens.length === 3,
-      'a 2ª é âmbar com os outros 3', s[1] && s[1].itens.length + '');
+    // Sem problema nenhum na planilha o botão fica livre nos dois modos, e é
+    // ali que se ve o numero que o escopo muda: 23 cotações do dia contra 3.882
+    // do histórico. Com bloqueante o rótulo é só "Gravar" (acima), então este
+    // cenário é o único que prova o rótulo de planilha inteira.
+    const limpo = JSON.parse(JSON.stringify(DRY_UM_DIA));
+    limpo.bloqueantes = [];
+    limpo.avisos_por_tipo = {};
+    await importar(limpo);
+    let b = botao();
+    chk(b.disabled === false, 'sem bloqueante: liberado');
+    chk(b.texto === 'Gravar 158 custos + 23 cotações (08/09)', 'só esta data', b.texto);
+    window.__cmiEscopo('tudo');
+    b = botao();
+    chk(b.disabled === false, 'planilha inteira: continua liberado');
+    chk(b.texto === 'Gravar 158 custos + 3.882 cotações (planilha inteira)',
+      'e o custo é o MESMO — o escopo muda só a cotação', b.texto);
+    window.__cmiEscopo('data');
+  }
 
-    // 04/09 nao tem problema: volta a coerência, tudo no mesmo passo.
+  H('5. bloqueante de LEITURA da aba de custo trava em qualquer escopo');
+  {
+    const comCobertura = JSON.parse(JSON.stringify(DRY_UM_DIA));
+    comCobertura.bloqueantes = [COBERTURA].concat(BLOQ);
+    await importar(comCobertura);
+    const b = botao(), s = secoes(), c = cardPor('Travam');
+    chk(b.disabled === true, 'só esta data: travado', 'disabled=' + b.disabled);
+    chk(c && c.texto === '1/5', 'card 1/5: a cobertura trava, os 4 de conteúdo não', c && c.texto);
+    chk(s.length === 2 && s[0].aviso === false && /LEITURA/.test(s[0].titulo),
+      'a seção de LEITURA vem primeiro, em vermelho', s[0] && s[0].titulo);
+    chk(s.length === 2 && /36 de 37 postos/.test(s[0].itens[0] || ''),
+      'e a frase diz quantos postos a aba cobriu', s[0] && s[0].itens[0]);
+    chk(s.length === 2 && /P\. TOPAZIO/.test(s[0].itens[0] || ''), 'e QUAL ficou sem dado');
+
+    window.__cmiEscopo('tudo');
+    chk(botao().disabled === true, 'planilha inteira: continua travado');
+    window.__cmiEscopo('data');
+    chk(botao().disabled === true, 'e volta travado — leitura não depende do escopo');
+  }
+
+  H('6. cobertura por alias que não casa: mensagem diferente');
+  {
+    const alias = JSON.parse(JSON.stringify(DRY_UM_DIA));
+    alias.bloqueantes = [Object.assign({}, COBERTURA,
+      { slots:37, resolvidos:36, nao_casaram:['BOMBOM FIL'], faltando:['P. BOMBOM FILIAL'] })];
+    await importar(alias);
+    const s = secoes();
+    chk(s.length === 1 && /não casam com o cadastro/.test(s[0].itens[0] || ''),
+      'a frase aponta o nome que não casou, não deriva de layout', s[0] && s[0].itens[0]);
+    chk(s.length === 1 && /BOMBOM FIL/.test(s[0].itens[0] || ''), 'e diz o nome');
+  }
+
+  H('7. várias datas de custo: card, botão e seção mudam juntos');
+  {
+    await importar(DRY_VARIAS);
+    chk(!!document.getElementById('cmi-data-sel'), 'com 3 datas o select aparece');
+    let c = cardPor('Travam'), b = botao(), s = secoes();
+    chk(c && c.texto === '0/4', '08/09: card 0/4', c && c.texto);
+    chk(b.texto === 'Gravar 158 custos + 23 cotações (08/09)', 'rótulo do dia', b.texto);
+
+    // 01/09 TEM problema. Os três têm de mudar no mesmo passo.
+    window.__cmiDataSel('2026-09-01');
+    c = cardPor('Travam'); b = botao(); s = secoes();
+    chk(c && c.texto === '1/4', 'card vira 1/4', c && c.texto);
+    chk(b.disabled === true, 'botão trava');
+    chk(s.length === 2 && s[0].aviso === false && /01\/09\/2026/.test(s[0].titulo),
+      'seção vermelha nomeia 01/09/2026', s[0] && s[0].titulo);
+    chk(s.length === 2 && s[1].aviso === true && s[1].itens.length === 3,
+      'e a âmbar fica com os outros 3', s[1] && s[1].itens.length + '');
+
     window.__cmiDataSel('2026-09-04');
-    c = cardTravam(); b = botao(); s = secoes();
+    c = cardPor('Travam'); b = botao(); s = secoes();
     chk(c && c.texto === '0/4', 'data limpa: card 0/4', c && c.texto);
     chk(b.disabled === false, 'botão liberado');
-    chk(b.texto === 'Gravar 158 linhas (04/09)', 'rótulo acompanha a data nova', b.texto);
+    chk(b.texto === 'Gravar 158 custos + 21 cotações (04/09)',
+      'rótulo acompanha a data E a contagem de cotações dela', b.texto);
     chk(s.length === 1 && s[0].aviso === true, 'só a seção âmbar');
   }
 
-  H('5. as três leituras nunca discordam (varre todas as datas)');
+  H('8. as leituras nunca discordam');
   {
-    // A invariante que o bug violava: card, botão e seção contam a MESMA coisa.
-    let incoerentes = [];
+    const incoerentes = [];
     for (const d of ['2026-09-08','2026-09-04','2026-09-01']) {
       window.__cmiDataSel(d);
-      const c = cardTravam(), b = botao(), s = secoes();
-      if (!c) { incoerentes.push(d + ' sem card legivel'); continue; }
+      const c = cardPor('Travam'), b = botao(), s = secoes();
+      if (!c) { incoerentes.push(d + ' sem card'); continue; }
       const nCard = parseInt(c.texto.split('/')[0], 10);
       const nSecao = s.filter(x => !x.aviso).reduce((t, x) => t + x.itens.length, 0);
-      const trava = b.disabled;
-      if (nCard !== nSecao || trava !== (nCard > 0) || c.vermelho !== (nCard > 0)) {
+      if (nCard !== nSecao || b.disabled !== (nCard > 0) || c.vermelho !== (nCard > 0)) {
         incoerentes.push(d + ' card=' + nCard + ' secao=' + nSecao +
-          ' botao=' + (trava ? 'travado' : 'livre') + ' vermelho=' + c.vermelho);
+          ' botao=' + (b.disabled ? 'travado' : 'livre'));
       }
     }
     window.__cmiEscopo('tudo');
     {
-      const c = cardTravam(), b = botao(), s = secoes();
+      const c = cardPor('Travam'), b = botao(), s = secoes();
       const nCard = c ? parseInt(c.texto.split('/')[0], 10) : -1;
       const nSecao = s.filter(x => !x.aviso).reduce((t, x) => t + x.itens.length, 0);
-      if (nCard !== nSecao || b.disabled !== (nCard > 0)) {
-        incoerentes.push('tudo card=' + nCard + ' secao=' + nSecao);
-      }
+      if (nCard !== nSecao || b.disabled !== (nCard > 0)) incoerentes.push('tudo card=' + nCard + ' secao=' + nSecao);
     }
     chk(incoerentes.length === 0, 'card = seção = botão em 3 datas + planilha inteira',
       incoerentes.length ? incoerentes.join(' | ') : '4 escopos coerentes');
-    window.__cmiEscopo('data');
-    window.__cmiDataSel('2026-09-08');
   }
 
-  H('6. gravar de verdade: o servidor concorda com o botão');
+  H('9. gravar de verdade: o servidor concorda com o botão');
   {
+    await importar(DRY_UM_DIA);
     await window.__cmiGravar();
-    for (let i = 0; i < 40 && !window.__ultimoAlerta; i++) await new Promise(r => setTimeout(r, 25));
+    for (let i = 0; i < 60 && !window.__ultimoAlerta; i++) await new Promise(r => setTimeout(r, 25));
     const corpo = window.__ultimoCorpo || {};
     chk(corpo.dry_run === false, 'a gravação saiu com dry_run:false');
     chk(corpo.data_de === '2026-09-08' && corpo.data_ate === '2026-09-08',
-      'e com de === ate === a data do botão',
-      corpo.data_de + ' -> ' + corpo.data_ate);
+      'e com de === ate === a data do botão', corpo.data_de + ' -> ' + corpo.data_ate);
     chk(/Importação concluída/.test(window.__ultimoAlerta || ''),
-      'a API aceitou (nenhum 409): o botão não prometeu o que o servidor recusa',
+      'a API aceitou: o botão não prometeu o que o servidor recusa',
       (window.__ultimoAlerta || '(sem alerta)').split('\n')[0]);
+    chk(/preços impressos/.test(window.__ultimoAlerta || '') &&
+        /tabela de preço/.test(window.__ultimoAlerta || ''),
+      'e a confirmação diz de qual aba veio cada número');
     chk(/em outros dias/.test(window.__ultimoAlerta || ''),
-      'e o aviso dos outros dias apareceu na confirmação');
+      'e avisa que a planilha continua com problema em outros dias');
   }
 
   linhas.push('');
