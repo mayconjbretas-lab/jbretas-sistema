@@ -268,6 +268,11 @@
       '.cmi-bloq ul{margin:0 0 .5rem;padding-left:1.1rem;display:flex;flex-direction:column;gap:.28rem}' +
       '.cmi-bloq li{font-size:.8rem;color:var(--text)}' +
       '.cmi-fix{font-size:.74rem;color:var(--text2)}' +
+      // Aviso reusa a estrutura do bloqueante e troca so a cor: ambar em vez
+      // de vermelho. Vermelho ali diria "nao da para gravar", que e o oposto
+      // do que a secao informa.
+      '.cmi-bloq.aviso{border-color:var(--warning)}' +
+      '.cmi-bloq.aviso .cmi-bloq-tit{color:var(--warning)}' +
       '.cmi-tbl{width:100%;border-collapse:collapse;font-size:.78rem;margin-bottom:.9rem}' +
       '.cmi-tbl th{text-align:right;font-family:var(--mono);font-size:.56rem;letter-spacing:.03em;text-transform:uppercase;color:var(--text3);padding:0 .4rem .4rem;border-bottom:1px solid var(--border)}' +
       '.cmi-tbl th:first-child{text-align:left}' +
@@ -861,7 +866,8 @@
     if (!a || !a.tipo) return 'Problema não identificado na planilha.';
     if (a.tipo === 'BLOQUEANTE_datas_divergentes') {
       const ds = (a.datas || []).map(brDDMM).join(' e ');
-      return 'Datas divergentes no mesmo bloco' + (a.bloco != null ? ' (linha ' + a.bloco + ')' : '') + ': ' + ds;
+      return 'Datas divergentes no mesmo bloco' + (a.bloco != null ? ' (linha ' + a.bloco + ')' : '') +
+             ': ' + ds + ' — o bloco inteiro foi descartado';
     }
     if (a.tipo === 'BLOQUEANTE_datas_nao_lidas') {
       const ds = a.datas || [];
@@ -873,6 +879,35 @@
     if (a.tipo === 'BLOQUEANTE_ano_suspeito')   return 'Ano suspeito: ' + brDDMMAAAA(a.data);
     if (a.tipo === 'BLOQUEANTE_data_duplicada') return 'Data repetida em dois blocos: ' + brDDMMAAAA(a.data);
     return a.tipo.replace(/^BLOQUEANTE_/, '').replace(/_/g, ' ') + (a.data ? ': ' + brDDMMAAAA(a.data) : '');
+  }
+
+  // ── LEITURA x CONTEÚDO ───────────────────────────────────────────
+  // A API manda cada bloqueante com `familia` e `datas_afetadas`. Aqui só se
+  // decide o que a tela mostra e se o botão Gravar fica de pé.
+  //
+  // LEITURA trava sempre: o parser não leu tudo que existe na aba, e a data
+  // escolhida pode estar incompleta sem nada aparecer.
+  //
+  // CONTEÚDO trava só se alcançar o dia escolhido. Erro de digitação em março
+  // não pode impedir a importação de hoje — era o que acontecia.
+  //
+  // No modo "Planilha inteira" tudo alcança, porque o escopo é tudo.
+  //
+  // API antiga não manda `familia`: cai em 'leitura', que é o comportamento de
+  // antes (trava sempre). O lado seguro é travar.
+  function familiaBloq(a) {
+    return (a && a.familia === 'conteudo') ? 'conteudo' : 'leitura';
+  }
+
+  // Este bloqueante trava o escopo escolhido AGORA na tela?
+  // Espelha o bloqueiaGravacao da API — a decisão final é dela; esta cópia
+  // existe só para o botão não prometer uma gravação que o servidor recusa.
+  function bloqueiaAqui(a, dataEscolhida) {
+    if (familiaBloq(a) === 'leitura') return true;
+    if (!dataEscolhida) return true;                 // planilha inteira: tudo alcança
+    const ds = (a && Array.isArray(a.datas_afetadas)) ? a.datas_afetadas : [];
+    if (!ds.length) return true;                     // alcance desconhecido: trava
+    return ds.indexOf(dataEscolhida) !== -1;
   }
 
   // status HTTP + corpo → mensagem legível.
@@ -946,8 +981,19 @@
   // Trocar de escopo NÃO refaz a prévia: são 2,3 MB de base64 por troca, e a
   // quebra por data já veio no dry_run. Só o botão e o seletor mudam.
   function atualizarEscopoUI() {
+    // Trocar a data muda QUEM trava: um problema de conteúdo de outro dia
+    // vira aviso, e um do dia novo vira trava. Reescreve a seção e o estado
+    // do botão junto — se só o rótulo mudasse, o botão prometeria gravar um
+    // dia que o servidor vai recusar (ou ficaria travado num dia limpo).
+    const area = document.getElementById('cmi-bloq-area');
+    if (area && _cmiPrev) area.innerHTML = htmlBloqueantes(_cmiPrev);
     const btn = document.getElementById('cmi-gravar');
-    if (btn && _cmiPrev) btn.textContent = rotuloGravar(_cmiPrev);
+    if (btn && _cmiPrev) {
+      const trava = (_cmiPrev.bloqueantes || [])
+        .some(a => bloqueiaAqui(a, escopoAtual(_cmiPrev).data));
+      btn.disabled = trava;
+      btn.textContent = trava ? 'Gravar' : rotuloGravar(_cmiPrev);
+    }
     const sel = document.getElementById('cmi-data-sel');
     if (sel) sel.disabled = (_cmiEscopo !== 'data');
     const labels = document.querySelectorAll('.cmi-modo label');
@@ -957,11 +1003,68 @@
     }
   }
 
+  // Seção de bloqueantes, separada por família. Sai como função porque trocar
+  // a data escolhida muda QUEM trava, e a troca não refaz a prévia: o
+  // atualizarEscopoUI reescreve só este pedaço.
+  function htmlBloqueantes(p) {
+    const bloq = (p && p.bloqueantes) || [];
+    if (!bloq.length) return '';
+    const dataSel = escopoAtual(p).data;              // null = planilha inteira
+
+    const leitura  = bloq.filter(a => familiaBloq(a) === 'leitura');
+    const conteudo = bloq.filter(a => familiaBloq(a) === 'conteudo');
+    const cTrava   = conteudo.filter(a => bloqueiaAqui(a, dataSel));
+    const cAvisa   = conteudo.filter(a => !bloqueiaAqui(a, dataSel));
+
+    const lista = (arr) => '<ul>' + arr.map(a => '<li>' + esc(textoBloqueante(a)) + '</li>').join('') + '</ul>';
+    let h = '';
+
+    // LEITURA: trava em qualquer escopo. Vem primeiro porque é a mais grave —
+    // com a leitura errada não se sabe nem o que se está gravando.
+    if (leitura.length) {
+      h += '<div class="cmi-bloq">' +
+        '<div class="cmi-bloq-tit">⛔ Erro de LEITURA da planilha — trava sempre</div>' +
+        lista(leitura) +
+        '<div class="cmi-fix">O parser não leu tudo que existe na aba. ' +
+        'Enquanto isso não for corrigido nada pode ser gravado, nem um dia só: ' +
+        'a data escolhida pode estar incompleta sem aparecer na tela.</div>' +
+      '</div>';
+    }
+
+    // CONTEÚDO que alcança o dia escolhido: trava esta gravação.
+    if (cTrava.length) {
+      h += '<div class="cmi-bloq">' +
+        '<div class="cmi-bloq-tit">⛔ Problema de CONTEÚDO ' +
+          (dataSel ? 'em ' + esc(brDDMMAAAA(dataSel)) : 'na planilha') + '</div>' +
+        lista(cTrava) +
+        '<div class="cmi-fix">' + (dataSel
+          ? 'É o dia que você escolheu gravar. Corrija na planilha, ou escolha outra data.'
+          : 'Corrija na planilha, salve e importe de novo — ou grave um dia só.') +
+        '</div>' +
+      '</div>';
+    }
+
+    // CONTEÚDO em outros dias: aviso. Não trava, mas continua na tela — o
+    // problema não desapareceu, só não é deste dia.
+    if (cAvisa.length) {
+      h += '<div class="cmi-bloq aviso">' +
+        '<div class="cmi-bloq-tit">⚠️ Problema de CONTEÚDO em OUTROS dias — não trava esta importação</div>' +
+        lista(cAvisa) +
+        '<div class="cmi-fix">Fora do que você vai gravar agora. ' +
+        'Essas linhas não vão ao banco. Vale corrigir na planilha quando der.</div>' +
+      '</div>';
+    }
+    return h;
+  }
+
   function renderPreviaImport(p, nome) {
     document.getElementById('cmi-title').textContent = 'Prévia da importação';
     document.getElementById('cmi-file-nome').textContent = nome || (_cmiFile ? _cmiFile.name : '');
     const arq = p.arquivo || {}, resumo = p.resumo || {}, bloq = p.bloqueantes || [], amostra = p.amostra || [];
-    const temBloq = bloq.length > 0;
+    // O card e o botão contam quem TRAVA o escopo escolhido, não a lista
+    // inteira: com 4 problemas em outros dias e nenhum no dia de hoje, o
+    // número que importa é zero.
+    const temBloq = bloq.some(a => bloqueiaAqui(a, escopoAtual(p).data));
     // Conferência do parser: datas da aba x datas lidas. Divergência aparece no
     // card, não só na lista de bloqueantes — é a primeira coisa que se olha.
     const faltando = Array.isArray(arq.datas_faltando) ? arq.datas_faltando : [];
@@ -973,7 +1076,10 @@
           (faltando.length ? '/' + arq.datas_na_aba : '') +
         '</b><span>Datas' + (faltando.length ? ' lidas' : '') + '</span></div>' +
         '<div class="cmi-c"><b>' + (resumo.postos_casados != null ? resumo.postos_casados : '—') + '/37</b><span>Postos casados</span></div>' +
-        '<div class="cmi-c' + (temBloq ? ' bad' : '') + '"><b>' + bloq.length + '</b><span>Bloqueantes</span></div>' +
+        '<div class="cmi-c' + (temBloq ? ' bad' : '') + '"><b>' +
+          bloq.filter(a => bloqueiaAqui(a, escopoAtual(p).data)).length +
+          (bloq.length ? '/' + bloq.length : '') +
+        '</b><span>Travam' + (bloq.length ? ' / total' : '') + '</span></div>' +
       '</div>';
 
     const faixa = (arq.data_min || arq.data_max)
@@ -1024,15 +1130,10 @@
         '</div>'
       : '';
 
-    let bloqHtml = '';
-    if (temBloq) {
-      bloqHtml =
-        '<div class="cmi-bloq">' +
-          '<div class="cmi-bloq-tit">⛔ ' + bloq.length + ' bloqueante' + (bloq.length === 1 ? '' : 's') + '</div>' +
-          '<ul>' + bloq.map(a => '<li>' + esc(textoBloqueante(a)) + '</li>').join('') + '</ul>' +
-          '<div class="cmi-fix">Corrija na planilha, salve e importe de novo.</div>' +
-        '</div>';
-    }
+    // Container de id fixo: o atualizarEscopoUI reescreve só o conteúdo dele
+    // quando a data escolhida muda, sem recriar o select (recriar tiraria o
+    // foco de quem está navegando pelo teclado).
+    const bloqHtml = '<div id="cmi-bloq-area">' + htmlBloqueantes(p) + '</div>';
 
     let tbl = '';
     if (amostra.length) {
@@ -1042,9 +1143,12 @@
       tbl = '<table class="cmi-tbl"><thead><tr><th>Posto</th><th>Comb</th><th>Custo</th></tr></thead><tbody>' + rows + '</tbody></table>';
     }
 
-    const gravar = temBloq
-      ? '<button class="cmi-btn" disabled>Gravar</button>'
-      : '<button class="cmi-btn" id="cmi-gravar" onclick="__cmiGravar()">' + esc(rotuloGravar(p)) + '</button>';
+    // O botão existe SEMPRE com o mesmo id, travado ou não: antes o caminho
+    // travado renderizava um botão sem id, e o atualizarEscopoUI não achava
+    // mais nada para reabilitar quando a data mudava para uma sem problema.
+    const gravar = '<button class="cmi-btn" id="cmi-gravar" onclick="__cmiGravar()"' +
+      (temBloq ? ' disabled' : '') + '>' +
+      esc(temBloq ? 'Gravar' : rotuloGravar(p)) + '</button>';
 
     document.getElementById('cmi-body').innerHTML =
       cards + faixa + escopoHtml + infoManual + bloqHtml + avisosHtml + tbl +
@@ -1107,13 +1211,25 @@
           (g.custos_precos || 0) + ' custo(s) e ' + (g.custos_fornecedores || 0) + ' cotação(ões) gravados.';
         if (g.preservado_manual) msg += '\n' + g.preservado_manual + ' linha(s) manual preservada(s).';
         if (g.descartado)        msg += '\n' + g.descartado + ' linha(s) descartada(s) (sem cadastro).';
+        // Gravou o dia pedido, mas a planilha continua torta em outros dias.
+        // Dizer aqui é o que evita a trava virar problema invisível.
+        const fora = Array.isArray(json.fora_do_escopo) ? json.fora_do_escopo : [];
+        if (fora.length) {
+          msg += '\n\nAtenção: a planilha ainda tem ' + fora.length +
+                 ' problema(s) em outros dias, que não foram gravados:\n' +
+                 fora.map(a => '· ' + textoBloqueante(a)).join('\n');
+        }
         alert(msg);
         await carregar(_dataISO);              // recarrega o dia atual (sem reload de página)
         return;
       }
       if (status === 409) {                     // bloqueantes → reabre a prévia com eles
         if (json && Array.isArray(json.bloqueantes) && _cmiPrev) {
-          _cmiPrev = Object.assign({}, _cmiPrev, { bloqueantes: json.bloqueantes });
+          // O 409 devolve as duas listas separadas (quem travou + os de fora
+          // do escopo). A prévia trabalha com UMA lista anotada e reclassifica
+          // sozinha, então junta as duas de volta aqui.
+          const fora = Array.isArray(json.fora_do_escopo) ? json.fora_do_escopo : [];
+          _cmiPrev = Object.assign({}, _cmiPrev, { bloqueantes: json.bloqueantes.concat(fora) });
           renderPreviaImport(_cmiPrev, _cmiFile ? _cmiFile.name : '');
         } else {
           const pv = await importFetch({ arquivoBase64: _cmiB64, dry_run: true });
