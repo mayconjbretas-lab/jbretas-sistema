@@ -7,7 +7,8 @@
 // O ADM define o PRÉ-PEDIDO (único campo editável) por posto/dia/
 // combustível. Salva via POST /medicao (campo 'pre_pedido'), que
 // cai SOMENTE LEITURA na Logística e é gravado no histórico `pedidos`.
-// Lê via GET /medicao/:posto (mês atual). NENHUM cálculo muda aqui —
+// Lê via GET /medicao/:posto com mes/ano explícitos do fuso de Brasília
+// (hojeInfo). NENHUM cálculo muda aqui —
 // medição/venda/carga são só apresentados; a data mostra HOJE.
 // ================================================================
 (function () {
@@ -36,13 +37,25 @@
     return { iso: d.getFullYear() + '-' + mm + '-' + dd, dd, mm };
   }
 
+  // HOJE NO FUSO DE BRASÍLIA, não no relógio do aparelho — mesmo padrão do
+  // hojeBrasil() da matriz da Logística (shared/js/matriz-medicao.js).
+  //
+  // É UMA "hoje" SÓ para os dois usos, e é por isso que está aqui e não em
+  // cada um: daqui sai o MÊS pedido ao GET /medicao/:posto (ver carregarGrade)
+  // e daqui sai o DIA que acha a medição de ontem para a projeção e destaca a
+  // linha de hoje. Com `new Date()` local, um aparelho adiantado à meia-noite
+  // pedia a grade de um mês e procurava o dia de outro.
+  //
+  // `en-CA` devolve 'AAAA-MM-DD' já com zero à esquerda, que é o formato que
+  // `dd`/`mm` sempre tiveram (`med-row-08` depende disso).
   function hojeInfo() {
-    const d = new Date();
+    const p = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }).split('-');
     return {
-      dd:   String(d.getDate()).padStart(2, '0'),
-      mm:   String(d.getMonth() + 1).padStart(2, '0'),
-      aaaa: d.getFullYear(),
-      dia:  d.getDate(),
+      dd:   p[2],
+      mm:   p[1],
+      aaaa: parseInt(p[0], 10),
+      dia:  parseInt(p[2], 10),
+      mes:  parseInt(p[1], 10),
     };
   }
 
@@ -257,12 +270,25 @@
     atualizarFaixa();
   }
 
-  // ── Carrega os dados de um posto (GET /medicao/:posto, mês atual) ─
+  // ── Carrega os dados de um posto (GET /medicao/:posto) ───────────
+  // MANDA mes e ano SEMPRE, como os outros três chamadores da rota já fazem
+  // (shared/js/matriz-medicao.js, admin/medicao-mobile.js, logistica/
+  // medicao-pdf.js). Esta era a única que omitia e ficava no default do
+  // servidor — e o default lia o relógio do PROCESSO, que no Railway é UTC:
+  // no último dia do mês, das 21h às 23h59 de Brasília, a grade vinha do mês
+  // SEGUINTE e aparecia vazia (em 31/12, do ano seguinte).
+  //
+  // O default da rota já foi corrigido para hojeBrasilISO(), mas continua
+  // sendo rede de segurança: quem EXIBE o mês é quem tem de dizer qual mês
+  // quer. Depender de default de servidor deixa a tela à mercê de uma
+  // mudança de fuso no deploy.
   async function carregarGrade(postoNome) {
     const frame = document.getElementById('med-frame');
     frame.innerHTML = '<div class="med-msg">Carregando…</div>';
+    const h = hojeInfo();
     try {
-      _dados = await apiFetch('/medicao/' + encodeURIComponent(postoNome));
+      _dados = await apiFetch('/medicao/' + encodeURIComponent(postoNome) +
+                              '?mes=' + h.mes + '&ano=' + h.aaaa);
       renderGrade();
     } catch (err) {
       frame.innerHTML = '<div class="med-erro">Erro ao carregar: ' + esc(err.message || err) + '</div>';
