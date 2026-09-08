@@ -1,0 +1,226 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alternador ADM / TI</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<!-- CSS real do painel-adm: e dele que sai o .btn-mobile, o botao
+     cujo estilo o alternador tem de acompanhar. -->
+<link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+<style>
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  /* Cabeçalho de mentira, com a mesma estrutura dos dois painéis: é onde o
+     módulo se injeta. Só o necessário — .topbar-right e o #theme-btn. */
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+  #palco .topbar-right { display:flex; align-items:center; gap:.6rem; }
+</style>
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script>
+// Testa o alternador pelo caminho do usuário: monta o cabeçalho real, põe uma
+// sessão no localStorage, roda o módulo e afirma sobre o DOM resultante.
+//
+// O módulo é auto-executável e injeta uma vez só (guarda por id), então cada
+// caso limpa o palco e o <style> antes de rodar de novo.
+const RAIZ = '/';
+window.caminhoRaiz = () => RAIZ;
+
+let USUARIO = null;
+window.getUsuarioLogado = () => USUARIO;
+
+// location.pathname é read-only: o módulo lê `location.pathname` direto, então
+// o caso troca a URL de verdade com history.replaceState. Mais fiel que dublar
+// o location — é exatamente o que o navegador entrega em produção.
+function irPara(path) { history.replaceState(null, '', path); }
+
+function palcoLimpo() {
+  document.getElementById('palco').innerHTML =
+    '<div class="topbar"><div class="topbar-right">' +
+      // .btn-mobile REAL, na mesma posicao de producao: as afirmacoes de estilo
+      // comparam o alternador contra ELE, nao contra numeros escritos no teste.
+      '<button class="btn-mobile" id="ref-mobile">📲 Versão Mobile</button>' +
+      '<button class="theme-btn" id="theme-btn">🌙</button>' +
+      '<button class="btn-logout">SAIR</button>' +
+    '</div></div>';
+  const st = document.getElementById('painel-switch-style');
+  if (st) st.remove();
+}
+</script>
+
+<script src="/shared/js/painel-switch.js"></script>
+
+<script>
+(async () => {
+  const linhas = [];
+  let falhas = 0;
+  const H = (t) => linhas.push('<h3>' + t + '</h3>');
+  const chk = (ok, txt, obtido) => {
+    if (!ok) falhas++;
+    linhas.push('<span class="' + (ok ? 'ok' : 'bad') + '">' + (ok ? '  ok  ' : ' FALHA ') + '</span>' +
+      txt + (obtido !== undefined ? '   <span style="color:var(--text3)">[' + obtido + ']</span>' : ''));
+  };
+
+  // Roda o módulo do zero para um usuário e um painel.
+  function montar(usuario, path) {
+    USUARIO = usuario;
+    irPara(path);
+    palcoLimpo();
+    // Reexecuta o módulo: recarrega o script, que é auto-executável.
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      // Caminho ABSOLUTO: o irPara() troca a URL com replaceState, e um src
+      // relativo passaria a resolver a partir do painel simulado (404, e o
+      // teste ficava pendurado no onload que nunca vinha).
+      s.src = '/shared/js/painel-switch.js?n=' + Math.random();
+      s.onload = () => resolve(ler());
+      s.onerror = () => reject(new Error('nao carregou ' + s.src));
+      document.body.appendChild(s);
+    });
+  }
+  function ler() {
+    const cx = document.getElementById('painel-switch');
+    if (!cx) return { existe: false };
+    const segs = [...cx.querySelectorAll('.pswitch-seg')].map(e => ({
+      rot: e.textContent.trim(),
+      ativo: e.classList.contains('ativo'),
+      tag: e.tagName,
+      href: e.getAttribute('href'),
+      aria: e.getAttribute('aria-current'),
+    }));
+    const tema = document.getElementById('theme-btn');
+    return {
+      existe: true, segs,
+      antesDoTema: !!(tema && cx.compareDocumentPosition(tema) & Node.DOCUMENT_POSITION_FOLLOWING),
+      dentroDaBarra: !!cx.closest('.topbar-right'),
+    };
+  }
+
+  const ADM_TI    = { nome: 'Maycon', perfil: 'ADM', ti: true };
+  const ADM_COMUM = { nome: 'Outro',  perfil: 'ADM', ti: false };
+
+  // ══════════════════════════════════════════════════════════════
+  H('1. ADM com ti=true, no painel ADM');
+  {
+    const r = await montar(ADM_TI, '/modulos/painel-adm/');
+    chk(r.existe, 'o alternador aparece');
+    chk(r.existe && r.segs.length === 2, 'com dois segmentos', r.segs && r.segs.length);
+    chk(r.existe && r.segs[0].rot === 'ADM' && r.segs[1].rot === 'TI',
+      'rotulados ADM e TI, nessa ordem', r.segs && r.segs.map(s => s.rot).join('/'));
+    chk(r.existe && r.segs[0].ativo && !r.segs[1].ativo,
+      'o ADM está marcado como ativo (é onde se está)');
+    chk(r.existe && r.segs[0].tag === 'SPAN', 'o ativo NÃO é link — clicar recarregaria por nada', r.segs && r.segs[0].tag);
+    chk(r.existe && r.segs[0].aria === 'page', 'e leva aria-current=page');
+    chk(r.existe && r.segs[1].tag === 'A', 'o destino é um <a> de verdade', r.segs && r.segs[1].tag);
+    chk(r.existe && r.segs[1].href === '/modulos/painel-ti/',
+      'apontando para /modulos/painel-ti/', r.segs && r.segs[1].href);
+    chk(r.existe && r.antesDoTema, 'posicionado ANTES do botão de tema, no mesmo slot do Versão Mobile');
+    chk(r.existe && r.dentroDaBarra, 'e dentro da .topbar-right');
+  }
+
+  H('2. ADM com ti=true, no painel TI — espelhado');
+  {
+    const r = await montar(ADM_TI, '/modulos/painel-ti/');
+    chk(r.existe, 'o alternador aparece também aqui');
+    chk(r.existe && r.segs[1].ativo && !r.segs[0].ativo,
+      'agora o TI é o ativo', r.existe && r.segs.map(s => s.rot + (s.ativo ? '*' : '')).join('/'));
+    chk(r.existe && r.segs[0].tag === 'A' && r.segs[0].href === '/modulos/painel-adm/',
+      'e o ADM virou o link, para /modulos/painel-adm/', r.existe && r.segs[0].href);
+    chk(r.existe && r.antesDoTema, 'mesma posição do outro painel');
+  }
+
+  H('3. quem NÃO tem ti=true não vê nada');
+  {
+    let r = await montar(ADM_COMUM, '/modulos/painel-adm/');
+    chk(!r.existe, 'ADM comum (ti=false): nenhum alternador');
+    r = await montar({ nome: 'X', perfil: 'ADM' }, '/modulos/painel-adm/');
+    chk(!r.existe, 'ti ausente também não mostra — a condição é ti === true');
+    r = await montar({ nome: 'X', perfil: 'ADM', ti: 'true' }, '/modulos/painel-adm/');
+    chk(!r.existe, 'ti como STRING "true" não vale: comparação estrita');
+    r = await montar({ nome: 'G', perfil: 'GERENTE', ti: true }, '/modulos/painel-adm/');
+    chk(!r.existe, 'perfil não-ADM não vê, mesmo com ti=true');
+    r = await montar(null, '/modulos/painel-adm/');
+    chk(!r.existe, 'sem sessão não injeta nada');
+  }
+
+  H('4. impersonação esconde o alternador');
+  {
+    // O painel-ti troca `jbretas_usuario` pelo alvo (sem ti) e guarda o
+    // original em jbretas_ti_backup. A condição lê o usuário CORRENTE, então
+    // o alternador some enquanto se vê como outra pessoa — quem está
+    // impersonado não deve pular para o TI.
+    localStorage.setItem('jbretas_visao_ti', JSON.stringify({ nome: 'Alvo' }));
+    const r = await montar({ nome: 'Alvo', perfil: 'ADM', ti: false }, '/modulos/painel-adm/');
+    chk(!r.existe, 'vendo como outro ADM: alternador oculto');
+    localStorage.removeItem('jbretas_visao_ti');
+  }
+
+  H('5. fora dos dois painéis não injeta');
+  {
+    const r = await montar(ADM_TI, '/modulos/logistica/');
+    chk(!r.existe, 'em /modulos/logistica/ não aparece');
+  }
+
+  H('6. estilo: mesma linguagem do .btn-mobile, ativo marcado');
+  {
+    const r = await montar(ADM_TI, '/modulos/painel-adm/');
+    const cx = document.getElementById('painel-switch');
+    const ativo = cx.querySelector('.pswitch-seg.ativo');
+    const link  = cx.querySelector('a.pswitch-seg');
+    const cs = getComputedStyle(cx), ca = getComputedStyle(ativo), cl = getComputedStyle(link);
+    const ref = getComputedStyle(document.getElementById('ref-mobile'));
+    // Os dois segmentos lado a lado. Nao afirmo `display:inline-flex`: dentro
+    // de um flex container (a .topbar-right, no palco e em producao) o display
+    // do item e blockificado para `flex`, e a assercao anterior media isso.
+    const rA = ativo.getBoundingClientRect(), rL = link.getBoundingClientRect();
+    chk(Math.abs(rA.top - rL.top) < 2 && rL.left > rA.left,
+      'os dois segmentos ficam lado a lado, na mesma linha',
+      'top ' + Math.round(rA.top) + '/' + Math.round(rL.top));
+    chk(cs.borderTopWidth === ref.borderTopWidth && cs.borderTopStyle === ref.borderTopStyle,
+      'borda igual à do .btn-mobile', cs.borderTopWidth + ' vs ' + ref.borderTopWidth);
+    // Comparado contra o botao REAL, nao contra 0.72*16: assim vale em qualquer
+    // largura, e se o .btn-mobile mudar de tamanho o teste acusa a divergencia.
+    chk(ca.fontSize === ref.fontSize,
+      'fonte do MESMO tamanho do .btn-mobile', ca.fontSize + ' vs ' + ref.fontSize);
+    chk(ca.fontWeight === ref.fontWeight, 'e do mesmo peso', ca.fontWeight + ' vs ' + ref.fontWeight);
+    chk(ca.fontFamily === ref.fontFamily, 'e da mesma família', ca.fontFamily === ref.fontFamily);
+    chk(ca.color !== cl.color, 'ATIVO e destino têm cores DIFERENTES — é o que marca qual é qual',
+      'ativo=' + ca.color + ' destino=' + cl.color);
+    chk(ca.backgroundColor !== 'rgba(0, 0, 0, 0)', 'o ativo tem fundo preenchido', ca.backgroundColor);
+    chk(cl.backgroundColor === 'rgba(0, 0, 0, 0)', 'e o destino não', cl.backgroundColor);
+    chk(cl.textDecorationLine === 'none', 'o link não sai sublinhado', cl.textDecorationLine);
+    chk(document.querySelectorAll('#painel-switch-style').length === 1,
+      'o <style> é injetado UMA vez, mesmo recarregando o módulo');
+  }
+
+  H('7. injetar duas vezes não duplica');
+  {
+    await montar(ADM_TI, '/modulos/painel-adm/');
+    // Segunda execução no MESMO palco: o guarda por id tem de segurar.
+    await new Promise((resolve) => {
+      const s = document.createElement('script');
+      s.src = '/shared/js/painel-switch.js?n=' + Math.random();
+      s.onload = resolve;
+      s.onerror = () => resolve();
+      document.body.appendChild(s);
+    });
+    chk(document.querySelectorAll('#painel-switch').length === 1,
+      'um alternador só no cabeçalho', document.querySelectorAll('.pswitch').length + ' .pswitch');
+  }
+
+  linhas.push('');
+  linhas.push(falhas
+    ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+    : '<span class="ok">todas as afirmações passaram</span>');
+  document.getElementById('res').innerHTML = linhas.join('\n');
+  window.__falhas = falhas; window.__pronto = true;
+})().catch(e => {
+  document.getElementById('res').innerHTML = '<span class="bad">ERRO: ' + e.message + '\n' + e.stack + '</span>';
+  window.__falhas = -1; window.__pronto = true;
+});
+</script>
