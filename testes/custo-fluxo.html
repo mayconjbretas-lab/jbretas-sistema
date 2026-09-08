@@ -1,0 +1,270 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Custo — fluxo real da importação</title>
+<link rel="stylesheet" href="../shared/css/base.css">
+<style>
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok   { color:var(--ok); }
+  .bad  { color:var(--danger); font-weight:700; }
+  h3    { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+          color:var(--text2); margin:16px 0 4px; }
+  #res  { white-space:pre-wrap; }
+</style>
+<div id="res">rodando…</div>
+
+<script>
+// ── O QUE ESTE TESTE FAZ DE DIFERENTE ────────────────────────────
+// Os testes anteriores injetavam _cmiDataSel como parametro e chamavam
+// htmlBloqueantes/bloqueiaAqui isolados. Por isso passaram verdes enquanto a
+// tela mostrava "4/4 travam" com o botao desabilitado: a sequencia real
+// (_cmiDataSel comeca NULO e e resolvido durante o render) nunca rodava.
+//
+// Aqui roda o caminho do usuario: __cmImportFile com um File de verdade, o
+// dry_run interceptado no window.fetch, o modal montado pelo proprio modulo, e
+// os handlers publicos __cmiEscopo / __cmiDataSel. As afirmacoes sao sobre o
+// DOM resultante, nao sobre valores de retorno.
+window.JBRETAS_CONFIG = { API_URL: 'http://localhost:0' };
+window.jbretasGetItem = () => 'token-de-teste';
+
+const BLOQ = [
+  { tipo:'BLOQUEANTE_datas_divergentes', bloco:1109, datas:['2026-06-30','2026-07-01'],
+    familia:'conteudo', datas_afetadas:['2026-06-30','2026-07-01'] },
+  { tipo:'BLOQUEANTE_ano_suspeito', data:'2025-03-09',
+    familia:'conteudo', datas_afetadas:['2025-03-09'] },
+  { tipo:'BLOQUEANTE_data_duplicada', data:'2026-05-15',
+    familia:'conteudo', datas_afetadas:['2026-05-15'] },
+  { tipo:'BLOQUEANTE_data_duplicada', data:'2026-09-01',
+    familia:'conteudo', datas_afetadas:['2026-09-01'] },
+];
+const DRY = {
+  ok: true, dry_run: true,
+  arquivo: { nome:'ALTERACOES.xlsx', datas:170, data_min:'2025-12-31', data_max:'2026-09-08',
+             blocos:170, datas_na_aba:170, datas_lidas:170, datas_faltando:[] },
+  resumo: { custos:25479, cotacoes:3882, postos_casados:37, preservado_manual:0, descartado:0 },
+  bloqueantes: BLOQ,
+  avisos_por_tipo: {},
+  amostra: [{ posto:'P. JA', combustivel:'GC', custo:5.4169 }],
+  datas_detalhe: [
+    { data:'2026-09-08', custos:158 },
+    { data:'2026-09-04', custos:158 },
+    { data:'2026-09-01', custos:158 },
+  ],
+};
+
+// Intercepta so a rota do import; o resto passa.
+const fetchReal = window.fetch.bind(window);
+window.fetch = async (url, opt) => {
+  if (String(url).indexOf('/custos/importar') >= 0) {
+    const corpo = JSON.parse(opt.body);
+    window.__ultimoCorpo = corpo;
+    if (corpo.dry_run) {
+      return new Response(JSON.stringify(DRY), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    // Gravacao: responde como a API responderia para o escopo pedido.
+    const dentro = (d) => (!corpo.data_de || d >= corpo.data_de) && (!corpo.data_ate || d <= corpo.data_ate);
+    const travam = BLOQ.filter(a => {
+      const ds = a.datas_afetadas || [];
+      return a.familia !== 'conteudo' || !ds.length || ds.some(dentro);
+    });
+    if (travam.length) {
+      return new Response(JSON.stringify({ ok:false, erro:'importação bloqueada',
+        bloqueantes: travam, fora_do_escopo: BLOQ.filter(a => travam.indexOf(a) < 0) }),
+        { status: 409, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({ ok:true, dry_run:false, arquivo: DRY.arquivo,
+      gravado: { custos_precos:158, custos_fornecedores:23, preservado_manual:0, descartado:0 },
+      fora_do_escopo: BLOQ }), { status:200, headers:{ 'Content-Type':'application/json' } });
+  }
+  return fetchReal(url, opt);
+};
+window.alert = (m) => { window.__ultimoAlerta = m; };
+</script>
+
+<script>
+// ?arquivo=<url> aponta para outra copia do modulo — serve para provar que uma
+// regressao futura QUEBRA este teste (foi como se confirmou que ele pega o bug
+// do card 4/4: 10 falhas na versao anterior, 0 na corrigida). Sem o parametro,
+// testa o modulo do repo.
+window.__ARQ = new URLSearchParams(location.search).get('arquivo')
+  || '../modulos/logistica/custo-margem.js';
+document.write('<script src="' + window.__ARQ + '"><\/script>');
+</script>
+
+<script>
+(async () => {
+  const linhas = ['arquivo: ' + window.__ARQ, ''];
+  let falhas = 0;
+  const H = (t) => linhas.push('<h3>' + t + '</h3>');
+  const chk = (ok, txt, obtido) => {
+    if (!ok) falhas++;
+    linhas.push('<span class="' + (ok ? 'ok' : 'bad') + '">' + (ok ? '  ok  ' : ' FALHA ') + '</span>' +
+      txt + (obtido !== undefined ? '   <span style="color:var(--text3)">[' + obtido + ']</span>' : ''));
+  };
+
+  // ── leitores do DOM: e sobre isso que o teste afirma ──
+  // Le o card com OU SEM o container #cmi-cards: a versao antiga nao tem o id,
+  // e o teste tem de REPORTAR a falha, nao estourar. (Estourou na 1a tentativa
+  // contra o arquivo velho — leitor fragil meu, nao defeito do codigo.)
+  const cardTravam = () => {
+    const cs = document.querySelectorAll('.cmi-cards .cmi-c');
+    for (const c of cs) {
+      const sp = c.querySelector('span');
+      if (sp && /Travam/.test(sp.textContent)) {
+        return { texto: c.querySelector('b').textContent.trim(),
+                 vermelho: c.classList.contains('bad') };
+      }
+    }
+    return null;
+  };
+  const botao = () => {
+    const b = document.getElementById('cmi-gravar');
+    return b ? { existe:true, id:b.id, disabled:b.disabled, texto:b.textContent.trim() }
+             : { existe:false };
+  };
+  const secoes = () => [...document.querySelectorAll('#cmi-bloq-area .cmi-bloq')].map(d => ({
+    aviso: d.classList.contains('aviso'),
+    titulo: d.querySelector('.cmi-bloq-tit').textContent.trim(),
+    itens: [...d.querySelectorAll('li')].map(li => li.textContent.trim()),
+  }));
+
+  // ══════════════════════════════════════════════════════════════
+  H('1. o caminho do usuário: escolher o arquivo');
+  // File de verdade; o modulo le com FileReader.
+  const file = new File([new Blob(['conteudo-irrelevante'])], 'ALTERACOES DE PRECOS 2026 (17).xlsx',
+    { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  await window.__cmImportFile({ files: [file], value: '' });
+  // Espera o render (a cadeia e assincrona: FileReader -> fetch -> render).
+  for (let i = 0; i < 60 && !document.getElementById('cmi-gravar'); i++) await new Promise(r => setTimeout(r, 25));
+
+  chk(!!document.getElementById('cmi-body'), 'o modal foi montado pelo próprio módulo');
+  chk(window.__ultimoCorpo && window.__ultimoCorpo.dry_run === true,
+    'o dry_run saiu com dry_run:true e sem filtro de data',
+    window.__ultimoCorpo ? JSON.stringify({ dry_run: window.__ultimoCorpo.dry_run,
+      de: window.__ultimoCorpo.data_de || null }) : '?');
+
+  H('2. card, botão e seção na 1ª abertura — o bug relatado');
+  {
+    const c = cardTravam(), b = botao(), s = secoes();
+    chk(!!document.getElementById('cmi-cards'),
+      'os cards tem container com id (sem ele o atualizarEscopoUI nao os alcanca)');
+    chk(!!c && c.texto === '0/4', 'card diz 0/4', c ? c.texto : '(sem card)');
+    chk(!!c && !c.vermelho, 'card NÃO está em vermelho');
+    chk(b.existe && b.id === 'cmi-gravar', 'botão existe com id cmi-gravar');
+    chk(b.existe && b.disabled === false, 'botão HABILITADO', 'disabled=' + b.disabled);
+    chk(b.texto === 'Gravar 158 linhas (08/09)', 'rótulo do botão certo', b.texto);
+    chk(s.length === 1, 'uma única seção', s.length + ' seção(ões)');
+    chk(s.length === 1 && s[0].aviso === true, 'e ela é a ÂMBAR (classe aviso)');
+    chk(s.length === 1 && /OUTROS dias/.test(s[0].titulo), 'título diz OUTROS dias', s[0] && s[0].titulo);
+    chk(s.length === 1 && s[0].itens.length === 4, 'com os 4 problemas',
+      s[0] ? s[0].itens.length + ' item(ns)' : '?');
+    chk(s.length === 1 && s[0].itens.some(t => /1109/.test(t)) &&
+        s[0].itens.some(t => /09\/03\/2025/.test(t)) &&
+        s[0].itens.some(t => /15\/05\/2026/.test(t)) &&
+        s[0].itens.some(t => /01\/09\/2026/.test(t)),
+      'e são os 4 esperados (linha 1109, 09/03/2025, 15/05/2026, 01/09/2026)');
+  }
+
+  H('3. alternar para "Planilha inteira" e voltar');
+  {
+    window.__cmiEscopo('tudo');
+    let c = cardTravam(), b = botao(), s = secoes();
+    chk(c && c.texto === '4/4', 'planilha inteira: card 4/4', c && c.texto);
+    chk(c && c.vermelho, 'e o card fica vermelho');
+    chk(b.disabled === true, 'botão travado', 'disabled=' + b.disabled);
+    chk(s.length === 1 && s[0].aviso === false, 'seção vermelha, sem âmbar',
+      s.map(x => x.aviso ? 'aviso' : 'bloq').join('+'));
+
+    window.__cmiEscopo('data');
+    c = cardTravam(); b = botao(); s = secoes();
+    chk(c && c.texto === '0/4', 'voltou: card 0/4 de novo', c && c.texto);
+    chk(c && !c.vermelho, 'card sem vermelho');
+    chk(b.disabled === false, 'botão liberado de novo');
+    chk(b.texto === 'Gravar 158 linhas (08/09)', 'com o rótulo certo', b.texto);
+    chk(s.length === 1 && s[0].aviso === true, 'seção âmbar de volta');
+  }
+
+  H('4. trocar a data no seletor: card, botão e seção juntos');
+  {
+    // 01/09 TEM problema (data repetida). Os três têm de mudar no mesmo passo.
+    window.__cmiDataSel('2026-09-01');
+    let c = cardTravam(), b = botao(), s = secoes();
+    chk(c && c.texto === '1/4', 'card vira 1/4', c && c.texto);
+    chk(c && c.vermelho, 'card fica vermelho');
+    chk(b.disabled === true, 'botão trava', 'disabled=' + b.disabled);
+    chk(s.length === 2, 'duas seções: a que trava e a de outros dias', s.length + '');
+    chk(s.length === 2 && s[0].aviso === false && /01\/09\/2026/.test(s[0].titulo),
+      'a 1ª é vermelha e NOMEIA 01/09/2026', s[0] && s[0].titulo);
+    chk(s.length === 2 && s[0].itens.length === 1, 'com 1 item', s[0] && s[0].itens.length + '');
+    chk(s.length === 2 && s[1].aviso === true && s[1].itens.length === 3,
+      'a 2ª é âmbar com os outros 3', s[1] && s[1].itens.length + '');
+
+    // 04/09 nao tem problema: volta a coerência, tudo no mesmo passo.
+    window.__cmiDataSel('2026-09-04');
+    c = cardTravam(); b = botao(); s = secoes();
+    chk(c && c.texto === '0/4', 'data limpa: card 0/4', c && c.texto);
+    chk(b.disabled === false, 'botão liberado');
+    chk(b.texto === 'Gravar 158 linhas (04/09)', 'rótulo acompanha a data nova', b.texto);
+    chk(s.length === 1 && s[0].aviso === true, 'só a seção âmbar');
+  }
+
+  H('5. as três leituras nunca discordam (varre todas as datas)');
+  {
+    // A invariante que o bug violava: card, botão e seção contam a MESMA coisa.
+    let incoerentes = [];
+    for (const d of ['2026-09-08','2026-09-04','2026-09-01']) {
+      window.__cmiDataSel(d);
+      const c = cardTravam(), b = botao(), s = secoes();
+      if (!c) { incoerentes.push(d + ' sem card legivel'); continue; }
+      const nCard = parseInt(c.texto.split('/')[0], 10);
+      const nSecao = s.filter(x => !x.aviso).reduce((t, x) => t + x.itens.length, 0);
+      const trava = b.disabled;
+      if (nCard !== nSecao || trava !== (nCard > 0) || c.vermelho !== (nCard > 0)) {
+        incoerentes.push(d + ' card=' + nCard + ' secao=' + nSecao +
+          ' botao=' + (trava ? 'travado' : 'livre') + ' vermelho=' + c.vermelho);
+      }
+    }
+    window.__cmiEscopo('tudo');
+    {
+      const c = cardTravam(), b = botao(), s = secoes();
+      const nCard = c ? parseInt(c.texto.split('/')[0], 10) : -1;
+      const nSecao = s.filter(x => !x.aviso).reduce((t, x) => t + x.itens.length, 0);
+      if (nCard !== nSecao || b.disabled !== (nCard > 0)) {
+        incoerentes.push('tudo card=' + nCard + ' secao=' + nSecao);
+      }
+    }
+    chk(incoerentes.length === 0, 'card = seção = botão em 3 datas + planilha inteira',
+      incoerentes.length ? incoerentes.join(' | ') : '4 escopos coerentes');
+    window.__cmiEscopo('data');
+    window.__cmiDataSel('2026-09-08');
+  }
+
+  H('6. gravar de verdade: o servidor concorda com o botão');
+  {
+    await window.__cmiGravar();
+    for (let i = 0; i < 40 && !window.__ultimoAlerta; i++) await new Promise(r => setTimeout(r, 25));
+    const corpo = window.__ultimoCorpo || {};
+    chk(corpo.dry_run === false, 'a gravação saiu com dry_run:false');
+    chk(corpo.data_de === '2026-09-08' && corpo.data_ate === '2026-09-08',
+      'e com de === ate === a data do botão',
+      corpo.data_de + ' -> ' + corpo.data_ate);
+    chk(/Importação concluída/.test(window.__ultimoAlerta || ''),
+      'a API aceitou (nenhum 409): o botão não prometeu o que o servidor recusa',
+      (window.__ultimoAlerta || '(sem alerta)').split('\n')[0]);
+    chk(/em outros dias/.test(window.__ultimoAlerta || ''),
+      'e o aviso dos outros dias apareceu na confirmação');
+  }
+
+  linhas.push('');
+  linhas.push(falhas
+    ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+    : '<span class="ok">todas as afirmações passaram</span>');
+  document.getElementById('res').innerHTML = linhas.join('\n');
+  window.__falhas = falhas;
+  window.__pronto = true;
+})().catch(e => {
+  document.getElementById('res').innerHTML = '<span class="bad">ERRO: ' + e.message + '\n' + e.stack + '</span>';
+  window.__falhas = -1; window.__pronto = true;
+});
+</script>

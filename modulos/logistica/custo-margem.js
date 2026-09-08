@@ -970,29 +970,97 @@
              : { data: null, custos: (p && p.resumo && p.resumo.custos != null) ? p.resumo.custos : 0 };
   }
 
-  // Rótulo do botão: diz exatamente o que vai ao banco.
-  function rotuloGravar(p) {
+  // ── O ESTADO DA TELA, resolvido UMA VEZ ──────────────────────────
+  // Isto existe por causa de um bug real: `_cmiDataSel` começa nulo (o
+  // __cmImportFile zera antes do dry_run) e era resolvido NO MEIO do
+  // renderPreviaImport. As leituras que vinham antes dessa linha viam null,
+  // e `bloqueiaAqui(a, null)` significa "planilha inteira", onde tudo trava.
+  // Resultado: a seção classificava certo (é montada depois) e o card e o
+  // botão diziam o contrário — "4/4 travam" e Gravar desabilitado, com os 4
+  // problemas em outros dias.
+  //
+  // Duas regras aqui, e as duas importam:
+  //   1. RESOLVER A DATA ANTES de qualquer leitura. É a primeira coisa que
+  //      esta função faz, e ninguém lê o escopo sem passar por ela.
+  //   2. DECIDIR UMA VEZ. Card, botão, seção e atualizarEscopoUI recebem este
+  //      objeto; nenhum deles chama bloqueiaAqui por conta própria. Antes eram
+  //      quatro chamadas em três momentos diferentes — e por isso divergiam.
+  //
+  // É idempotente: chamar de novo com a data já válida não muda nada, então o
+  // render e o atualizarEscopoUI podem chamar à vontade.
+  function estadoEscopo(p) {
+    // Sem datas_detalhe (API antiga) só resta a planilha inteira.
+    const det = (p && Array.isArray(p.datas_detalhe)) ? p.datas_detalhe : [];
+    if (det.length) {
+      if (!_cmiDataSel || !det.some(d => d.data === _cmiDataSel)) _cmiDataSel = det[0].data;
+    } else {
+      _cmiDataSel = null;
+      _cmiEscopo = 'tudo';
+    }
     const e = escopoAtual(p);
-    return 'Gravar ' + Number(e.custos).toLocaleString('pt-BR') +
-           ' linha' + (e.custos === 1 ? '' : 's') +
-           ' (' + (e.data ? brDDMM(e.data) : 'planilha inteira') + ')';
+    const bloq = (p && p.bloqueantes) || [];
+    const travam = bloq.filter(a => bloqueiaAqui(a, e.data));
+    return {
+      det: det,
+      data: e.data,            // null = planilha inteira
+      custos: e.custos,
+      bloq: bloq,
+      travam: travam,
+      trava: travam.length > 0,
+    };
+  }
+
+  // Rótulo do botão: diz exatamente o que vai ao banco. `E` é OBRIGATÓRIO:
+  // sem ele isto voltaria a ser uma leitura solta do escopo, e o rótulo já
+  // mentiu uma vez por isso.
+  function rotuloGravar(E) {
+    return 'Gravar ' + Number(E.custos).toLocaleString('pt-BR') +
+           ' linha' + (E.custos === 1 ? '' : 's') +
+           ' (' + (E.data ? brDDMM(E.data) : 'planilha inteira') + ')';
+  }
+
+  // Os três cards. Saem como função porque o terceiro depende do escopo, e
+  // trocar a data tem de reescrevê-lo — antes o atualizarEscopoUI mexia na
+  // seção e no botão e NÃO nos cards, então o card continuava dizendo "4/4
+  // travam" depois de o botão já ter liberado. Reescreve os três juntos: os
+  // dois primeiros não dependem do escopo, mas separá-los abriria de novo a
+  // porta de um pedaço da tela ficar velho.
+  function htmlCards(p, E) {
+    const arq = p.arquivo || {}, resumo = p.resumo || {};
+    // Conferência do parser: datas da aba x datas lidas. Divergência aparece
+    // no card, não só na lista de bloqueantes — é a primeira coisa que se olha.
+    const faltando = Array.isArray(arq.datas_faltando) ? arq.datas_faltando : [];
+    return '<div class="cmi-c' + (faltando.length ? ' bad' : '') + '"><b>' +
+        (arq.datas != null ? arq.datas : '—') +
+        (faltando.length ? '/' + arq.datas_na_aba : '') +
+      '</b><span>Datas' + (faltando.length ? ' lidas' : '') + '</span></div>' +
+      '<div class="cmi-c"><b>' +
+        (resumo.postos_casados != null ? resumo.postos_casados : '—') +
+      '/37</b><span>Postos casados</span></div>' +
+      // Conta quem TRAVA o escopo escolhido, não a lista inteira: com 4
+      // problemas em outros dias e nenhum no dia escolhido, o número é zero.
+      '<div class="cmi-c' + (E.trava ? ' bad' : '') + '"><b>' +
+        E.travam.length + (E.bloq.length ? '/' + E.bloq.length : '') +
+      '</b><span>Travam' + (E.bloq.length ? ' / total' : '') + '</span></div>';
   }
 
   // Trocar de escopo NÃO refaz a prévia: são 2,3 MB de base64 por troca, e a
   // quebra por data já veio no dry_run. Só o botão e o seletor mudam.
   function atualizarEscopoUI() {
-    // Trocar a data muda QUEM trava: um problema de conteúdo de outro dia
-    // vira aviso, e um do dia novo vira trava. Reescreve a seção e o estado
-    // do botão junto — se só o rótulo mudasse, o botão prometeria gravar um
-    // dia que o servidor vai recusar (ou ficaria travado num dia limpo).
+    if (!_cmiPrev) return;
+    // UMA decisão para os três pedaços que dependem do escopo. Trocar a data
+    // muda QUEM trava: problema de conteúdo de outro dia vira aviso, e um do
+    // dia novo vira trava. Card, seção e botão são reescritos do MESMO E —
+    // se cada um recalculasse, voltariam a divergir.
+    const E = estadoEscopo(_cmiPrev);
+    const cards = document.getElementById('cmi-cards');
+    if (cards) cards.innerHTML = htmlCards(_cmiPrev, E);
     const area = document.getElementById('cmi-bloq-area');
-    if (area && _cmiPrev) area.innerHTML = htmlBloqueantes(_cmiPrev);
+    if (area) area.innerHTML = htmlBloqueantes(_cmiPrev, E);
     const btn = document.getElementById('cmi-gravar');
-    if (btn && _cmiPrev) {
-      const trava = (_cmiPrev.bloqueantes || [])
-        .some(a => bloqueiaAqui(a, escopoAtual(_cmiPrev).data));
-      btn.disabled = trava;
-      btn.textContent = trava ? 'Gravar' : rotuloGravar(_cmiPrev);
+    if (btn) {
+      btn.disabled = E.trava;
+      btn.textContent = E.trava ? 'Gravar' : rotuloGravar(E);
     }
     const sel = document.getElementById('cmi-data-sel');
     if (sel) sel.disabled = (_cmiEscopo !== 'data');
@@ -1006,15 +1074,20 @@
   // Seção de bloqueantes, separada por família. Sai como função porque trocar
   // a data escolhida muda QUEM trava, e a troca não refaz a prévia: o
   // atualizarEscopoUI reescreve só este pedaço.
-  function htmlBloqueantes(p) {
-    const bloq = (p && p.bloqueantes) || [];
+  //
+  // `E` vem de estadoEscopo — a MESMA decisão que o card e o botão usam. A
+  // seção acertava sozinha antes justamente porque era montada depois de a
+  // data ser resolvida; agora não depende mais de ordem nenhuma.
+  function htmlBloqueantes(p, E) {
+    const bloq = E.bloq;
     if (!bloq.length) return '';
-    const dataSel = escopoAtual(p).data;              // null = planilha inteira
+    const dataSel = E.data;                           // null = planilha inteira
 
+    const trava = new Set(E.travam);
     const leitura  = bloq.filter(a => familiaBloq(a) === 'leitura');
     const conteudo = bloq.filter(a => familiaBloq(a) === 'conteudo');
-    const cTrava   = conteudo.filter(a => bloqueiaAqui(a, dataSel));
-    const cAvisa   = conteudo.filter(a => !bloqueiaAqui(a, dataSel));
+    const cTrava   = conteudo.filter(a => trava.has(a));
+    const cAvisa   = conteudo.filter(a => !trava.has(a));
 
     const lista = (arr) => '<ul>' + arr.map(a => '<li>' + esc(textoBloqueante(a)) + '</li>').join('') + '</ul>';
     let h = '';
@@ -1060,27 +1133,15 @@
   function renderPreviaImport(p, nome) {
     document.getElementById('cmi-title').textContent = 'Prévia da importação';
     document.getElementById('cmi-file-nome').textContent = nome || (_cmiFile ? _cmiFile.name : '');
-    const arq = p.arquivo || {}, resumo = p.resumo || {}, bloq = p.bloqueantes || [], amostra = p.amostra || [];
-    // O card e o botão contam quem TRAVA o escopo escolhido, não a lista
-    // inteira: com 4 problemas em outros dias e nenhum no dia de hoje, o
-    // número que importa é zero.
-    const temBloq = bloq.some(a => bloqueiaAqui(a, escopoAtual(p).data));
-    // Conferência do parser: datas da aba x datas lidas. Divergência aparece no
-    // card, não só na lista de bloqueantes — é a primeira coisa que se olha.
-    const faltando = Array.isArray(arq.datas_faltando) ? arq.datas_faltando : [];
+    const arq = p.arquivo || {}, resumo = p.resumo || {}, amostra = p.amostra || [];
+    // PRIMEIRA COISA DA FUNÇÃO: resolve a data escolhida e decide quem trava.
+    // Tudo abaixo lê deste E. Era exatamente aqui que estava o bug — o card e
+    // o botão liam o escopo ANTES da linha que escolhia a data, viam null, e
+    // null significa "planilha inteira", onde todo bloqueante trava.
+    const E = estadoEscopo(p);
 
-    const cards =
-      '<div class="cmi-cards">' +
-        '<div class="cmi-c' + (faltando.length ? ' bad' : '') + '"><b>' +
-          (arq.datas != null ? arq.datas : '—') +
-          (faltando.length ? '/' + arq.datas_na_aba : '') +
-        '</b><span>Datas' + (faltando.length ? ' lidas' : '') + '</span></div>' +
-        '<div class="cmi-c"><b>' + (resumo.postos_casados != null ? resumo.postos_casados : '—') + '/37</b><span>Postos casados</span></div>' +
-        '<div class="cmi-c' + (temBloq ? ' bad' : '') + '"><b>' +
-          bloq.filter(a => bloqueiaAqui(a, escopoAtual(p).data)).length +
-          (bloq.length ? '/' + bloq.length : '') +
-        '</b><span>Travam' + (bloq.length ? ' / total' : '') + '</span></div>' +
-      '</div>';
+    // id fixo: o atualizarEscopoUI reescreve os cards quando a data muda.
+    const cards = '<div class="cmi-cards" id="cmi-cards">' + htmlCards(p, E) + '</div>';
 
     const faixa = (arq.data_min || arq.data_max)
       ? '<div class="cmi-faixa">Período: <b>' + esc(brDDMMAAAA(arq.data_min)) + '</b> → <b>' + esc(brDDMMAAAA(arq.data_max)) + '</b></div>'
@@ -1093,14 +1154,12 @@
     // ── Escopo da gravação ───────────────────────────────────────
     // A conferência de datas acima roda sobre a planilha INTEIRA e não é
     // afetada por esta escolha: ler tudo e gravar uma parte são coisas
-    // separadas. Sem datas_detalhe (API antiga) só resta a planilha inteira.
-    const det = Array.isArray(p.datas_detalhe) ? p.datas_detalhe : [];
-    if (det.length) {
-      if (!_cmiDataSel || !det.some(d => d.data === _cmiDataSel)) _cmiDataSel = det[0].data;
-    } else {
-      _cmiDataSel = null;
-      _cmiEscopo = 'tudo';
-    }
+    // separadas.
+    //
+    // A escolha da data JÁ FOI FEITA pelo estadoEscopo, no topo — aqui só se
+    // desenha. Resolver de novo neste ponto é o que criava a ordem em que o
+    // card lia antes e a seção lia depois.
+    const det = E.det;
     const opcaoModo = (val, txt) =>
       '<label class="' + (_cmiEscopo === val ? 'on' : '') + '">' +
         '<input type="radio" name="cmi-escopo" value="' + val + '"' +
@@ -1133,7 +1192,7 @@
     // Container de id fixo: o atualizarEscopoUI reescreve só o conteúdo dele
     // quando a data escolhida muda, sem recriar o select (recriar tiraria o
     // foco de quem está navegando pelo teclado).
-    const bloqHtml = '<div id="cmi-bloq-area">' + htmlBloqueantes(p) + '</div>';
+    const bloqHtml = '<div id="cmi-bloq-area">' + htmlBloqueantes(p, E) + '</div>';
 
     let tbl = '';
     if (amostra.length) {
@@ -1147,8 +1206,8 @@
     // travado renderizava um botão sem id, e o atualizarEscopoUI não achava
     // mais nada para reabilitar quando a data mudava para uma sem problema.
     const gravar = '<button class="cmi-btn" id="cmi-gravar" onclick="__cmiGravar()"' +
-      (temBloq ? ' disabled' : '') + '>' +
-      esc(temBloq ? 'Gravar' : rotuloGravar(p)) + '</button>';
+      (E.trava ? ' disabled' : '') + '>' +
+      esc(E.trava ? 'Gravar' : rotuloGravar(E)) + '</button>';
 
     document.getElementById('cmi-body').innerHTML =
       cards + faixa + escopoHtml + infoManual + bloqHtml + avisosHtml + tbl +
@@ -1199,7 +1258,9 @@
     try {
       // 'Só esta data' = de === ate. A API continua lendo e conferindo a
       // planilha inteira; o filtro decide apenas o que vai ao banco.
-      const esc0 = escopoAtual(_cmiPrev);
+      // Mesmo estado que o botão mostrou. escopoAtual direto aqui voltaria a
+      // ser uma leitura solta — e é o rótulo do botão que o usuário aprovou.
+      const esc0 = estadoEscopo(_cmiPrev);
       const corpo = { arquivoBase64: _cmiB64, dry_run: false };
       if (esc0.data) { corpo.data_de = esc0.data; corpo.data_ate = esc0.data; }
       const { status, json } = await importFetch(corpo);

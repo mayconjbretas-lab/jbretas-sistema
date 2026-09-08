@@ -14,7 +14,12 @@ const v = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
 // Descobre TODOS os *.html varrendo o repo a partir da raiz deste script,
 // em vez de lista fixa (senão módulos novos ficam de fora do cache-bust).
 // Ignora node_modules, .git, .wrangler e demais pastas ocultas/de build.
-const IGNORAR = new Set(['node_modules', 'dist', 'build']);
+// 'testes' fica fora: as paginas de teste nao vao para o Cloudflare (ver
+// .assetsignore), entao cache-busting ali nao serve para nada — e um bump
+// que as toca poe ruido em todo commit futuro. Pior: o custo-fluxo.html
+// monta o src do modulo por concatenacao, e o ?v= injetado entrava no meio
+// do parametro ?arquivo=, que e como o teste prova que pega regressao.
+const IGNORAR = new Set(['node_modules', 'dist', 'build', 'testes']);
 function descobrirHtmls(dirAbs, baseAbs) {
   const achados = [];
   for (const entry of fs.readdirSync(dirAbs, { withFileTypes: true })) {
