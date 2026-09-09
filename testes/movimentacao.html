@@ -143,6 +143,20 @@ CEN.bernardo = {
   ],
 };
 
+// SINAIS (camada 2). O bernardo real de 08/09 tem um amarelo de margem.
+CEN.bernardo.sinais = {
+  total: 1, vermelhos: 0, amarelos: 1,
+  itens: [
+    { tipo: 'MARGEM', nivel: 'amarelo', escopo: 'Gasolina comum',
+      titulo: 'Margem fora da faixa do posto', unidade: 'rs_litro',
+      medido: 0.6412, medido_rs: null,
+      esperado: 0.7188, esperado_min: 0.6503, esperado_max: 0.7873,
+      esperado_rotulo: 'faixa do posto', base_dias: 11,
+      detalhe: 'abaixo da faixa de 3σ dos outros 11 dias' },
+  ],
+  nao_avaliados: [],
+};
+
 // Cenario com o que o Bernardo NAO tem: cartao generico cod 82, cupom sem
 // forma, combustivel fora do mapa, canal 99, 14 frentistas (passa do teto de
 // 10 e mostra o botao), e um turno '?'.
@@ -165,12 +179,66 @@ for (let i = 6; i <= 14; i++) CEN.sujo.por_frentista.push(
   { chave: 'F IT FRENTISTA NUMERO ' + i, rotulo: 'F IT FRENTISTA NUMERO ' + i,
     litros: 900 - i * 20, liquido: 5400 - i * 100, itens: 20 - i, cupons_aprox: 20 - i, cupons_exato: false, pct_liquido: 3.2 - i * 0.1 });
 
+// O cenario sujo leva os TRES alarmes juntos, na ORDEM EM QUE A ROTA MANDA:
+// vermelho primeiro (movSinais ordena antes de responder — ver teste-sinais.js
+// caso 8). A tela NAO reordena de proposito; quem decide gravidade e a rota, e
+// uma segunda ordenacao aqui divergiria dela na primeira calibragem.
+CEN.sujo.sinais = {
+  total: 3, vermelhos: 1, amarelos: 2,
+  itens: [
+    { tipo: 'DESCONTO', nivel: 'vermelho', escopo: null,
+      titulo: 'Desconto acima do normal do posto', unidade: 'pct',
+      medido: 3.1024, medido_rs: 5068.42,
+      esperado: 0.8912, esperado_min: null, esperado_max: null,
+      esperado_rotulo: 'média do posto', base_dias: 250,
+      detalhe: '3,5× a média do posto' },
+    { tipo: 'MARGEM', nivel: 'amarelo', escopo: 'Diesel S10',
+      titulo: 'Margem fora da faixa do posto', unidade: 'rs_litro',
+      medido: 0.4541, medido_rs: null,
+      esperado: 0.7007, esperado_min: 0.5793, esperado_max: 0.8221,
+      esperado_rotulo: 'faixa do posto', base_dias: 11,
+      detalhe: 'abaixo da faixa de 3σ dos outros 11 dias' },
+    { tipo: 'PAGAMENTO', nivel: 'amarelo', escopo: null,
+      titulo: 'Pagamentos somam MENOS que a venda', unidade: 'pct',
+      medido: -0.4412, medido_rs: -734.19,
+      esperado: 0, esperado_min: 0, esperado_max: 2,
+      esperado_rotulo: 'teto do rollup', base_dias: null,
+      detalhe: 'o troco só explica sobra para cima; para baixo não há explicação conhecida' },
+  ],
+  nao_avaliados: [
+    { tipo: 'MARGEM', escopo: 'GAS NATURAL VEICULAR', motivo: 'sem custo',
+      detalhe: 'não há custo cadastrado para GAS NATURAL VEICULAR neste dia' },
+  ],
+};
+
+// Dia limpo: nenhum sinal, e nada por avaliar.
+CEN.limpo = JSON.parse(JSON.stringify(CEN.bernardo));
+CEN.limpo.consulta.posto_nome = 'P. ALEX';
+CEN.limpo.sinais = { total: 0, vermelhos: 0, amarelos: 0, itens: [], nao_avaliados: [] };
+
+// Fim de semana: nenhum sinal, MAS a margem nem foi olhada. E uma frase
+// diferente de "dia limpo", e a tela precisa dizer as duas.
+CEN.fds = JSON.parse(JSON.stringify(CEN.bernardo));
+CEN.fds.consulta.data = '2026-09-05';
+CEN.fds.sinais = {
+  total: 0, vermelhos: 0, amarelos: 0, itens: [],
+  nao_avaliados: CEN.bernardo.por_combustivel.map(c => ({
+    tipo: 'MARGEM', escopo: c.rotulo, motivo: 'sem custo',
+    detalhe: 'nenhum custo lançado nesta data (custos_precos não é lançado em fim de semana e feriado)',
+  })),
+};
+
 // Dia com venda e SEM dimensao PAGAMENTO — antes de 01/09/2026.
 CEN.sem_pgto = JSON.parse(JSON.stringify(CEN.bernardo));
 CEN.sem_pgto.consulta.data = '2026-08-25';
 CEN.sem_pgto.pagamento_disponivel = false;
 CEN.sem_pgto.dia.cupons_aprox = null;
 CEN.sem_pgto.por_pagamento = { formas: [], tipos: [], total_valor: 0, total_pernas: 0 };
+CEN.sem_pgto.sinais = {
+  total: 0, vermelhos: 0, amarelos: 0, itens: [],
+  nao_avaliados: [{ tipo: 'PAGAMENTO', escopo: null, motivo: 'sem forma de pagamento',
+                    detalhe: 'a TecnoX passou a mandar `pagamentos` em 01/09/2026' }],
+};
 
 // Dia sem rollup nenhum.
 CEN.sem_dado = {
@@ -215,6 +283,9 @@ CEN.zerado = {
     linhas.push('<span class="' + (ok ? 'ok' : 'bad') + '">' + (ok ? '  ok  ' : ' FALHA ') + '</span>' + txt +
       (obtido !== undefined ? '   <span style="color:var(--text3)">[' + String(obtido).slice(0, 120) + ']</span>' : ''));
   };
+  // EQ: igualdade estrutural em cima do chk, para os casos que comparam valor.
+  const EQ = (a, b, txt) => chk(JSON.stringify(a) === JSON.stringify(b), txt,
+    JSON.stringify(a) + (JSON.stringify(a) === JSON.stringify(b) ? '' : ' != ' + JSON.stringify(b)));
   const corpo = () => document.getElementById('mv-corpo');
   const txt = () => corpo().textContent.replace(/\s+/g, ' ');
   const pintar = (c) => window.mvPintar(JSON.parse(JSON.stringify(CEN[c])));
@@ -363,6 +434,78 @@ CEN.zerado = {
   const msg = document.getElementById('mv-msg');
   chk(msg.style.display !== 'none' && /Acesso restrito ao TI/.test(msg.textContent),
       'erro da rota aparece na faixa, sem apagar a tela em silencio', msg.textContent);
+
+  // ── 12. SINAIS (camada 2) ─────────────────────────────────────
+  H('12 · faixa de sinais');
+  pintar('sujo');
+  const fx = corpo().querySelector('.mv-sinais');
+  chk(!!fx, 'a faixa existe');
+  // Tem de vir ANTES dos cards: e o motivo de a tela existir.
+  chk(fx.compareDocumentPosition(corpo().querySelector('.mv-cards')) & Node.DOCUMENT_POSITION_FOLLOWING,
+      'a faixa vem ANTES dos cards do dia');
+  EQ(fx.querySelector('.mv-sinais-tit').textContent.replace(/\s+/g, ' ').trim(),
+     '3 sinais neste dia1 vermelho · 2 amarelos', 'titulo conta e classifica (textContent cola o contador)',
+     fx.querySelector('.mv-sinais-tit').textContent.replace(/\s+/g, ' ').trim());
+  const sin = [...fx.querySelectorAll('.mv-sinal')];
+  EQ(sin.length, 3, 'tres sinais desenhados');
+  // ORDEM: quem ordena e a rota (vermelho primeiro). A tela tem de PRESERVAR
+  // essa ordem — nao reordenar, e nao embaralhar.
+  EQ(sin.map(x => x.classList.contains('vermelho') ? 'V' : 'A').join(''), 'VAA',
+     'a tela preserva a ordem da rota: vermelho primeiro, amarelos depois');
+  EQ(sin.filter(x => x.classList.contains('amarelo')).length, 2, 'e dois amarelos');
+  // AMARELO E VERMELHO DISTINTOS: classes diferentes, e cores diferentes de
+  // verdade no CSS computado (nao so nome de classe).
+  const corV = getComputedStyle(sin[0]).borderLeftColor;
+  const corA = getComputedStyle(sin.find(x => x.classList.contains('amarelo'))).borderLeftColor;
+  chk(corV !== corA, 'vermelho e amarelo tem cor de borda diferente', corV + ' x ' + corA);
+  chk(getComputedStyle(sin[0]).backgroundColor !== getComputedStyle(sin.find(x => x.classList.contains('amarelo'))).backgroundColor,
+      'e fundo diferente — a distincao nao depende so da borda');
+  // MEDIDO E ESPERADO LADO A LADO, como o pedido descreve.
+  const tVerm = sin[0].textContent.replace(/\s+/g, ' ');
+  chk(/Desconto acima do normal do posto/.test(tVerm), 'o sinal e nomeado', tVerm.slice(0, 60));
+  // Uma casa acima de 1%, duas abaixo (mvPct e adaptativo) — e exatamente o
+  // formato do pedido: "desconto 3,1% · media do posto 0,9%".
+  chk(/3,1%/.test(tVerm), 'traz o valor medido com uma casa');
+  chk(/média do posto 0,89%/.test(tVerm), 'e o esperado do posto ao lado', tVerm);
+  chk(/250 dias/.test(tVerm), 'com o tamanho da base');
+  chk(/R\$ 5\.068,42/.test(tVerm), 'e o desconto em R$, nao so o percentual');
+  // Margem: faixa com as duas pontas, em R$/L.
+  const tMarg = sin.find(x => /Margem/.test(x.textContent)).textContent.replace(/\s+/g, ' ');
+  chk(/R\$ 0,4541\/L/.test(tMarg), 'margem medida em R$/L com 4 casas', tMarg);
+  chk(/faixa do posto R\$ 0,5793\/L a R\$ 0,8221\/L/.test(tMarg), 'faixa com as duas pontas', tMarg);
+  // Pagamento negativo dentro do teto: o caso que so acende por ser negativo.
+  const tPg = sin.find(x => /Pagamentos somam/.test(x.textContent)).textContent.replace(/\s+/g, ' ');
+  chk(/-0,44%/.test(tPg), 'delta negativo aparece com sinal', tPg);
+  chk(/teto do rollup/.test(tPg), 'e diz contra o que foi comparado');
+  // Nao avaliado aparece mesmo havendo sinais.
+  chk(/Não avaliado:/.test(fx.textContent), 'o que nao foi avaliado tambem e dito');
+  chk(/GAS NATURAL VEICULAR/.test(fx.querySelector('.mv-sinais-na').textContent),
+      'nomeando o combustivel sem custo');
+
+  H('13 · dia limpo x dia sem base');
+  pintar('limpo');
+  const fxL = corpo().querySelector('.mv-sinais');
+  chk(/Nenhum sinal neste dia/.test(fxL.textContent), 'dia limpo diz que esta limpo — nao fica em branco');
+  EQ(fxL.querySelectorAll('.mv-sinal').length, 0, 'sem itens');
+  EQ(fxL.querySelector('.mv-sinais-na'), null, 'e sem linha de "nao avaliado" quando tudo foi avaliado');
+  chk(fxL.querySelector('.mv-sinais-tit').classList.contains('limpo'), 'o titulo muda de cor no dia limpo');
+  // Fim de semana: limpo E com margem nao avaliada. Sao frases diferentes.
+  pintar('fds');
+  const fxF = corpo().querySelector('.mv-sinais');
+  chk(/Nenhum sinal neste dia/.test(fxF.textContent), 'fim de semana tambem diz "nenhum sinal"');
+  chk(/fim de semana e feriado/.test(fxF.querySelector('.mv-sinais-na').textContent),
+      'MAS avisa que a margem nao foi avaliada, e por que');
+  EQ(fxF.querySelectorAll('.mv-sinais-na b').length, 4, 'um por combustivel nao avaliado');
+  pintar('sem_pgto');
+  chk(/pagamentos/.test(corpo().querySelector('.mv-sinais-na').textContent),
+      'dia sem forma de pagamento explica que o alarme 3 nao rodou');
+
+  H('14 · payload sem o bloco de sinais nao quebra a tela');
+  const velho = JSON.parse(JSON.stringify(CEN.bernardo));
+  delete velho.sinais;
+  window.mvPintar(velho);
+  EQ(corpo().querySelector('.mv-sinais'), null, 'sem o bloco, a faixa some em vez de inventar');
+  EQ(corpo().querySelectorAll('.mv-card').length, 5, 'e a camada 1 continua desenhada');
 
   // ── 11. ontemLocal(): o bug de fuso dos DOIS campos de data ───
   // Os campos de data da sonda e da movimentacao usavam

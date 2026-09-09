@@ -1093,8 +1093,71 @@ function mvRender() {
     return;
   }
 
-  el.innerHTML = mvCards(d) + mvBlocoComb(d) + mvBlocoTurno(d) +
+  el.innerHTML = mvSinais(d) + mvCards(d) + mvBlocoComb(d) + mvBlocoTurno(d) +
                  mvBlocoPagamento(d) + mvBlocoFrentista(d) + mvBlocoCanal(d);
+}
+
+// ── Faixa de sinais (camada 2) ──
+// Quem decide o que é sinal, de que nível e contra qual referência é a rota
+// (movSinais no server.js). Aqui só se formata número e se escolhe a cor —
+// mesma divisão da camada 1. Um limiar duplicado aqui divergiria do backend
+// na primeira calibragem, e a tela passaria a discordar do que ela própria
+// mostra como "esperado".
+function mvValorSinal(n, unidade) {
+  if (n == null) return '—';
+  return unidade === 'rs_litro'
+    ? 'R$ ' + Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) + '/L'
+    : mvPct(n);
+}
+function mvSinais(d) {
+  const s = d.sinais;
+  // Payload de antes da camada 2 (ou rota velha em cache): não inventa faixa.
+  if (!s) return '';
+
+  const itens = (s.itens || []).map(x => {
+    const ic = x.nivel === 'vermelho' ? '🔴' : '🟡';
+    // O ESPERADO VEM SEMPRE JUNTO DO MEDIDO, na mesma linha. Um número
+    // sozinho ("desconto 3,10%") não diz se é muito — só ao lado do normal
+    // daquele posto ele vira informação.
+    const esp = (x.esperado_min != null && x.esperado_max != null && x.tipo === 'MARGEM')
+      ? mvValorSinal(x.esperado_min, x.unidade) + ' a ' + mvValorSinal(x.esperado_max, x.unidade)
+      : mvValorSinal(x.esperado, x.unidade);
+    const rs = (x.medido_rs != null && x.unidade === 'pct') ? ' (' + txBRL(x.medido_rs) + ')' : '';
+    return '<div class="mv-sinal ' + x.nivel + '">' +
+      '<span class="mv-sinal-ic">' + ic + '</span>' +
+      '<span class="mv-sinal-txt">' +
+        '<div class="mv-sinal-nome">' + escapeHtml(x.titulo) +
+          (x.escopo ? ' — ' + escapeHtml(x.escopo) : '') + '</div>' +
+        '<div class="mv-sinal-num"><b>' + mvValorSinal(x.medido, x.unidade) + '</b>' + rs +
+          ' <span class="esp">· ' + escapeHtml(x.esperado_rotulo || 'esperado') + ' ' + esp +
+          (x.base_dias ? ' (' + x.base_dias + ' dias)' : '') + '</span></div>' +
+        '<div class="mv-sinal-det">' + escapeHtml(x.detalhe || '') + '</div>' +
+      '</span>' +
+    '</div>';
+  }).join('');
+
+  // "Não avaliado" não é o mesmo que "não há sinal". Fim de semana e feriado
+  // não têm custo lançado, e sem esta linha o dia apareceria limpo quando na
+  // verdade a margem nem foi olhada.
+  const na = (s.nao_avaliados || []).length
+    ? '<div class="mv-sinais-na">Não avaliado: ' +
+      s.nao_avaliados.map(x => '<b>' + escapeHtml(x.tipo.toLowerCase()) +
+        (x.escopo ? ' (' + escapeHtml(x.escopo) + ')' : '') + '</b> — ' + escapeHtml(x.detalhe)).join(' · ') +
+      '</div>'
+    : '';
+
+  if (!s.total) {
+    return '<div class="mv-sinais">' +
+      '<div class="mv-sinais-tit limpo">Sinais do dia</div>' +
+      '<div class="mv-sinais-ok">✅ Nenhum sinal neste dia.</div>' + na + '</div>';
+  }
+  const cont = [];
+  if (s.vermelhos) cont.push(s.vermelhos + ' vermelho' + (s.vermelhos > 1 ? 's' : ''));
+  if (s.amarelos) cont.push(s.amarelos + ' amarelo' + (s.amarelos > 1 ? 's' : ''));
+  return '<div class="mv-sinais">' +
+    '<div class="mv-sinais-tit tem">' + s.total + (s.total > 1 ? ' sinais' : ' sinal') + ' neste dia' +
+      '<span class="mv-sinais-cont">' + cont.join(' · ') + '</span></div>' +
+    itens + na + '</div>';
 }
 
 function mvDataBR(iso) {
