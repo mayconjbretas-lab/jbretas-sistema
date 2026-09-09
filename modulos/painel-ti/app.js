@@ -75,6 +75,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   ligarControles();
   ligarControlesUsuarios();
   ligarControlesTecnox();
+  ligarControlesMov();
   await carregarUsuarios();
 });
 
@@ -628,6 +629,13 @@ window.atualizarBloqueio = atualizarBloqueio;
 window.carregarItens     = carregarItens;
 window.renderItens       = renderItens;
 window.mudarStatusItem   = mudarStatusItem;
+// Movimentação do dia. `mvPintar` existe para o harness de render poder
+// injetar um payload sem servidor e sem sessão — é o único jeito de testar
+// as telas do TI, que exigem login. Não é usado pela aba.
+window.mvCarregar        = mvCarregar;
+window.ontemLocal        = ontemLocal;
+window.ligarControlesMov = ligarControlesMov;
+window.mvPintar          = function (payload) { _mvDado = payload; _mvFrentTodos = false; mvRender(); };
 
 // ════════════════════════════════════════════════════════════════
 // ABA API TecnoX — diagnóstico da sonda (POST /tecnox/sonda executa+grava;
@@ -675,8 +683,13 @@ function ligarControlesTecnox() {
 
 function txAoAbrir() {
   rxCarregar();                               // saúde do rollup: 1 consulta, rápida
-  if (!_txPostos.length) txCarregarPostos();  // carrega postos e, ao fim, o histórico
-  else txCarregarHistorico();
+  if (!_txPostos.length) txCarregarPostos();  // carrega postos e, ao fim, histórico + movimentação
+  else {
+    txCarregarHistorico();
+    // Movimentação só na PRIMEIRA abertura: reabrir a aba não muda o rollup,
+    // e recarregar apagaria o "mostrar todos" que a pessoa já expandiu.
+    if (!_mvDado) mvCarregar();
+  }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -763,22 +776,52 @@ async function rxCarregar() {
   }
 }
 
+// UM fetch de /postos serve os DOIS seletores da aba, com listas diferentes
+// de propósito: a sonda precisa de CNPJ (é o parâmetro da API da TecnoX) e
+// filtra por ele; a movimentação lê o rollup, que é chaveado por posto_id, e
+// por isso não filtra — um posto sem CNPJ cadastrado teria sonda impossível
+// mas movimentação normal, e escondê-lo aqui seria esconder venda.
 async function txCarregarPostos() {
   const sel = document.getElementById('tx-posto');
+  const selMv = document.getElementById('mv-posto');
   try {
     const resp = await apiFetch('/postos');
-    _txPostos = (resp.postos || [])
-      .filter(p => p.cnpj && String(p.cnpj).trim())
+    const todos = (resp.postos || []).slice()
       .sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+    _txPostos = todos.filter(p => p.cnpj && String(p.cnpj).trim());
     if (sel) sel.innerHTML = _txPostos.length
       ? _txPostos.map(p => '<option value="' + escapeHtml(p.cnpj) + '">' + escapeHtml(p.nome) + '</option>').join('')
       : '<option value="">Nenhum posto com CNPJ</option>';
+    if (selMv) selMv.innerHTML = todos.length
+      ? todos.map(p => '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.nome) + '</option>').join('')
+      : '<option value="">Nenhum posto ativo</option>';
     const inp = document.getElementById('tx-data');   // default: ontem
-    if (inp && !inp.value) { const d = new Date(); d.setDate(d.getDate() - 1); inp.value = d.toISOString().slice(0, 10); }
+    if (inp && !inp.value) inp.value = ontemLocal();
+    const inpMv = document.getElementById('mv-data');
+    if (inpMv && !inpMv.value) inpMv.value = ontemLocal();
     txCarregarHistorico();
+    mvCarregar();
   } catch (err) {
     if (sel) sel.innerHTML = '<option value="">Erro ao carregar postos</option>';
+    if (selMv) selMv.innerHTML = '<option value="">Erro ao carregar postos</option>';
   }
+}
+
+// Ontem no fuso de QUEM OLHA, montado campo por campo. Serve os DOIS campos
+// de data da aba (sonda e movimentação).
+//
+// `toISOString()` NÃO serve, e era o que os dois usavam: ele converte para
+// UTC, e depois das 21h de Brasília o UTC já está no dia seguinte — então
+// "ontem" saía como HOJE. É o mesmo bug de fuso que o teste-medicao-fuso.js
+// documentou na API, do outro lado do sistema. As duas telas erravam junto:
+// a sonda pedia à TecnoX um dia que ainda está acontecendo, e a movimentação
+// abriria em "sem dado" porque o rollup noturno não coletou hoje.
+function ontemLocal() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + mm + '-' + dd;
 }
 
 async function txCarregarHistorico() {
@@ -922,6 +965,332 @@ function txRenderSoma() {
       '</tr></thead><tbody>' + linhas + '</tbody></table></div>' +
       (semLitros ? '<div class="tx-nota">litros indisponíveis — a API não devolve quantidade</div>' : '') +
     '</div></div>';
+}
+
+// ════════════════════════════════════════════════════════════════
+// MOVIMENTAÇÃO DO DIA — camada 1 da auditoria por posto.
+// Lê GET /tecnox/movimentacao, que agrega o ROLLUP (tecnox_venda_dia +
+// tecnox_venda_produto_dia + tecnox_venda_dim_dia). NÃO chama a API da
+// TecnoX: responde em milissegundos, e é por isso que não há botão
+// "consultar" — recarrega ao trocar posto ou data.
+//
+// A TELA NÃO CALCULA NADA. Rótulo de combustível, nome de forma de
+// pagamento, ressalva do cartão genérico, ordem dos turnos e a marca de
+// contagem aproximada vêm PRONTOS da rota — mesmo desenho do card de saúde
+// do rollup ("aqui só se pinta o que o servidor decidiu"). Duas cópias da
+// regra divergiriam na primeira mudança.
+// ════════════════════════════════════════════════════════════════
+let _mvCarregando = false;
+let _mvDado = null;
+let _mvFrentTodos = false;      // quebra de frentista expandida?
+const MV_FRENT_TETO = 10;       // frentistas mostrados antes do "mostrar todos"
+
+// Formatadores. Nos cards e nas linhas o litro vai SEM decimal e o real SEM
+// centavo de propósito: em 375px "26.954,988 L" e "R$ 166.282,98" estouram a
+// largura da célula e quebram no meio do número. A precisão cheia continua no
+// payload — a tela é de leitura, não de conferência contábil.
+function mvInt(n)  { return Number(n || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 }); }
+function mvBRL0(n) { return 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 }); }
+// Percentual com casa ADAPTATIVA: abaixo de 1% vai com duas casas. Com uma
+// casa fixa, uma forma de pagamento de 0,03% e uma de 0,14% viravam as duas
+// "0,0%" e "0,1%" — e um desconto de R$ 53 em R$ 163 mil aparecia como
+// "0,0% do bruto", que lê como zero.
+function mvPct(n) {
+  if (n == null) return '—';
+  const casas = Math.abs(Number(n)) < 1 ? 2 : 1;
+  return Number(n).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }) + '%';
+}
+function mvMsg(txt, tipo) {
+  const el = document.getElementById('mv-msg'); if (!el) return;
+  if (!txt) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = ''; el.textContent = txt;
+  el.className = 'tx-msg ' + (tipo === 'erro' ? 'tx-msg-erro' : 'tx-msg-ok');
+}
+
+const mvMet = (valor, unid, cls) =>
+  '<span class="mv-met' + (cls ? ' ' + cls : '') + '"><b>' + valor + '</b>' +
+  (unid ? ' ' + escapeHtml(unid) : '') + '</span>';
+
+// Uma linha de quebra. `pct` desenha a barra de fundo; null = sem barra.
+// O badge do código é omitido quando ele É o nome: combustível que o rollup
+// não mapeou vem com codigo === rotulo (a descrição crua), e mostrar os dois
+// dava "GAS NATURAL VEICULARGAS NATURAL VEICULAR" na linha.
+function mvRow(nome, cod, mets, pct) {
+  const larg = (pct != null && pct > 0) ? Math.min(100, Number(pct)) : 0;
+  const badge = (cod && String(cod) !== String(nome))
+    ? '<span class="mv-cod">' + escapeHtml(cod) + '</span>' : '';
+  return '<div class="mv-row">' +
+    (larg ? '<div class="mv-bar" style="width:' + larg.toFixed(2) + '%"></div>' : '') +
+    '<span class="mv-nome">' + badge + escapeHtml(nome) + '</span>' +
+    '<span class="mv-mets">' + mets.join('') + '</span>' +
+  '</div>';
+}
+function mvBloco(titulo, contagem, legenda, corpo, extra) {
+  return '<div class="mv-bloco">' +
+    '<div class="mv-bloco-tit">' + escapeHtml(titulo) +
+      (contagem ? '<span class="mv-bloco-cont">' + escapeHtml(contagem) + '</span>' : '') + '</div>' +
+    (legenda ? '<div class="mv-legenda">' + legenda + '</div>' : '') +
+    corpo + (extra || '') +
+  '</div>';
+}
+// Marca de contagem aproximada. cupons_exato=false quer dizer que o grupo
+// somou mais de um combustível, e aí o mesmo cupom pode estar em dois Sets.
+const mvCup = (r) => (r.cupons_exato ? '' : '~') + mvInt(r.cupons_aprox);
+
+function ligarControlesMov() {
+  ['mv-posto', 'mv-data'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', () => { _mvFrentTodos = false; mvCarregar(); });
+  });
+  // Delegação: o botão "mostrar todos" é recriado a cada render.
+  const corpo = document.getElementById('mv-corpo');
+  if (corpo) corpo.addEventListener('click', (e) => {
+    const b = e.target.closest ? e.target.closest('#mv-frent-mais') : null;
+    if (!b) return;
+    _mvFrentTodos = true;
+    mvRender();
+  });
+}
+
+async function mvCarregar() {
+  const el = document.getElementById('mv-corpo'); if (!el) return;
+  const posto_id = (document.getElementById('mv-posto') || {}).value || '';
+  const data = (document.getElementById('mv-data') || {}).value || '';
+  if (!posto_id || !/^\d{4}-\d{2}-\d{2}$/.test(data)) {
+    el.innerHTML = '<div class="empty-state">Selecione posto e data.</div>';
+    return;
+  }
+  if (_mvCarregando) return;
+  _mvCarregando = true;
+  mvMsg('', '');
+  el.innerHTML = '<div class="empty-state">Carregando…</div>';
+  try {
+    _mvDado = await apiFetch('/tecnox/movimentacao?posto_id=' + encodeURIComponent(posto_id) +
+                             '&data=' + encodeURIComponent(data));
+    mvRender();
+  } catch (err) {
+    _mvDado = null;
+    el.innerHTML = '';
+    mvMsg('Não foi possível ler a movimentação: ' + (err.message || err), 'erro');
+  } finally {
+    _mvCarregando = false;
+  }
+}
+
+function mvRender() {
+  const el = document.getElementById('mv-corpo'); if (!el) return;
+  const d = _mvDado;
+  if (!d) { el.innerHTML = ''; return; }
+
+  // Dia sem rollup. É a MESMA marca que o cron usa como retomada (ausência de
+  // linha em tecnox_venda_dia), então dizer "sem dado" aqui não é a tela
+  // desistindo: é o estado real da coleta daquele par posto/dia.
+  if (!d.tem_dado) {
+    el.innerHTML = '<div class="empty-state">Sem dado para esta data.<br>' +
+      '<span style="font-size:.74rem;color:var(--text3)">O rollup não tem venda de ' +
+      escapeHtml(d.consulta.posto_nome) + ' em ' + escapeHtml(mvDataBR(d.consulta.data)) +
+      '. Confira a saúde do rollup noturno acima.</span></div>';
+    return;
+  }
+
+  el.innerHTML = mvCards(d) + mvBlocoComb(d) + mvBlocoTurno(d) +
+                 mvBlocoPagamento(d) + mvBlocoFrentista(d) + mvBlocoCanal(d);
+}
+
+function mvDataBR(iso) {
+  const p = String(iso || '').split('-');
+  return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(iso || '');
+}
+
+// ── Cards do dia ──
+// A ORDEM não é decorativa: cupons (aproximado) vem colado em abastecimentos
+// (exato) para a diferença entre os dois ficar visível em vez de virar
+// pergunta. Ver o bloco de contagem em GET /tecnox/movimentacao.
+function mvCards(d) {
+  const dia = d.dia;
+  const card = (num, lbl, sub, cls) =>
+    '<div class="mv-card"><div class="mv-card-num' + (cls ? ' ' + cls : '') + '">' + num + '</div>' +
+    '<div class="mv-card-lbl">' + escapeHtml(lbl) + '</div>' +
+    (sub ? '<div class="mv-card-sub">' + escapeHtml(sub) + '</div>' : '') + '</div>';
+
+  const cupons = dia.cupons_aprox == null
+    ? card('—', 'cupons', 'sem forma de pgto no dia')
+    : card('~' + mvInt(dia.cupons_aprox), 'cupons', 'aprox. · soma por forma', 'aprox');
+
+  const cards = cupons +
+    card(mvInt(dia.abastecimentos), 'abastecimentos', 'itens de combustível') +
+    card(mvInt(dia.litros) + ' L', 'litros', mvInt(dia.litros_por_abastecimento) + ' L por abast.') +
+    card(mvBRL0(dia.venda_total), 'venda líquida',
+         'comb ' + mvBRL0(dia.liquido_combustivel) + ' + prod ' + mvBRL0(dia.produtos_rs)) +
+    card(txBRL(dia.rs_por_abastecimento), 'R$ / abast.', 'ticket médio');
+
+  // A nota explica o til UMA vez, aqui. O card sozinho não ensina por que o
+  // número de cupons não fecha, e sem isso alguém vai somar as quebras e
+  // achar que a tela está errada.
+  const nota = '<div class="mv-nota">O rollup guarda cupons distintos <b>por combustível</b>, ' +
+    'então não existe contagem exata de cupom do dia: somar as linhas conta duas vezes ' +
+    'quem abasteceu dois combustíveis (medido: +12,5% em média, +29,3% no pior caso). ' +
+    'O <b>abastecimento</b> (item de combustível) é exato e é o denominador do ticket. ' +
+    'O cupom aproximado vem da soma por forma de pagamento, que erra ' +
+    'só no pagamento dividido (+2,2% em média).</div>';
+
+  return '<div class="mv-cards">' + cards + '</div>' + nota +
+    (dia.desconto > 0
+      ? '<div class="mv-nota">Desconto concedido no dia: <b>' + txBRL(dia.desconto) +
+        '</b> (' + mvPct(dia.bruto > 0 ? dia.desconto / dia.bruto * 100 : null) + ' do bruto).</div>'
+      : '<div class="mv-nota">Nenhum desconto concedido no dia.</div>');
+}
+
+// ── Faturamento por combustível ──
+function mvBlocoComb(d) {
+  const linhas = d.por_combustivel.map(c => mvRow(c.rotulo, c.codigo, [
+    mvMet(mvInt(c.litros), 'L'),
+    mvMet(mvBRL0(c.liquido), '', 'rs'),
+    mvMet(c.rs_litro == null ? '—' : c.rs_litro.toFixed(3), 'R$/L'),
+    mvMet(mvInt(c.itens), 'ab'),
+    mvMet(mvPct(c.pct_liquido), ''),
+  ], c.pct_liquido)).join('');
+  return mvBloco('Faturamento por combustível', d.dia.combustiveis + ' combustíveis',
+    'L = litros · R$/L = preço médio ponderado do dia (mistura à vista, frota e prazo) · ab = abastecimentos · % do líquido de combustível',
+    linhas);
+}
+
+// ── Quebra por turno ──
+function mvBlocoTurno(d) {
+  if (!d.por_turno.length) {
+    return mvBloco('Por turno', null, null,
+      '<div class="empty-state">Sem quebra por turno neste dia.</div>');
+  }
+  const linhas = d.por_turno.map(t => mvRow('Turno ' + t.chave, null, [
+    mvMet(mvInt(t.litros), 'L'),
+    mvMet(mvBRL0(t.liquido), '', 'rs'),
+    mvMet(mvInt(t.itens), 'ab'),
+    mvMet(mvCup(t), 'cup'),
+    mvMet(mvPct(t.pct_liquido), ''),
+  ], t.pct_liquido)).join('');
+  // A ressalva do turno é obrigatória: a numeração da TecnoX não é contínua
+  // nem cronológica, e quem lê "turno 1, turno 2, turno 4" vai supor as duas
+  // coisas se ninguém disser o contrário.
+  const chaves = d.por_turno.map(t => t.chave).join(', ');
+  const aviso = '<div class="mv-aviso">Turnos deste dia: <b>' + escapeHtml(chaves) + '</b>. ' +
+    'A numeração vem da TecnoX e <b>não é contínua nem cronológica</b> — um posto pode ter 1, 2 e 4, ' +
+    'e o turno de número maior pode ser a madrugada. A tela lista só os turnos que existem no dia, ' +
+    'na ordem da chave, e não completa a série.</div>';
+  return mvBloco('Por turno', d.por_turno.length + ' turnos',
+    'ab = abastecimentos · cup = cupons (<b>~</b> = aproximado, o turno somou mais de um combustível)',
+    linhas, aviso);
+}
+
+// ── Quebra por forma de pagamento ──
+function mvBlocoPagamento(d) {
+  if (!d.pagamento_disponivel) {
+    return mvBloco('Por forma de pagamento', null, null,
+      '<div class="empty-state">Sem forma de pagamento neste dia.</div>',
+      '<div class="mv-aviso">A TecnoX começou a mandar o array <b>pagamentos</b> na capa do cupom em ' +
+      '<b>01/09/2026</b>. Dia anterior a isso tem venda no rollup, mas não tem quebra por forma — ' +
+      'não é falha da coleta.</div>');
+  }
+  const p = d.por_pagamento;
+  // Totais por ind_tipo primeiro: é o balde do DRE e é o que responde "quanto
+  // foi cartão" sem ler 17 linhas de operadora.
+  const chips = p.tipos.map(t =>
+    '<div class="mv-tipo"><span class="mv-tipo-cod">' + escapeHtml(t.ind_tipo) + '</span>' +
+    escapeHtml(t.rotulo) + ' <b>' + mvBRL0(t.valor) + '</b> ' +
+    '<span style="color:var(--text3)">' + mvPct(t.pct_valor) + ' · ' + t.formas + ' forma(s)</span></div>').join('');
+
+  const linhas = p.formas.map(f => mvRow(f.rotulo, f.ind_tipo + '|' + f.cod, [
+    mvMet(mvBRL0(f.valor), '', 'rs'),
+    mvMet(mvInt(f.cupons), 'cup'),
+    mvMet(mvInt(f.pernas), 'pernas'),
+    mvMet(mvPct(f.pct_valor), ''),
+  ], f.pct_valor)).join('');
+
+  const avisos = [];
+  const genericas = p.formas.filter(f => f.sem_adquirente);
+  if (genericas.length) {
+    const soma = genericas.reduce((s, f) => s + f.valor, 0);
+    avisos.push('<div class="mv-aviso">Este posto tem <b>' + mvBRL0(soma) + '</b> (' +
+      mvPct(p.total_valor > 0 ? soma / p.total_valor * 100 : null) +
+      ') em cartão cadastrado de forma <b>genérica no PDV</b> (código 82). ' +
+      'O dado não diz qual adquirente foi — Getnet, Safra, Cielo — e a tela não chuta. ' +
+      'Para abrir por adquirente aqui, o cadastro do PDV precisa ser corrigido.</div>');
+  }
+  const semForma = p.formas.filter(f => f.sem_forma);
+  if (semForma.length) {
+    avisos.push('<div class="mv-aviso">Há <b>' + mvInt(semForma.reduce((s, f) => s + f.cupons, 0)) +
+      ' cupom(ns) sem forma de pagamento informada</b> (' +
+      mvBRL0(semForma.reduce((s, f) => s + f.valor, 0)) + '). ' +
+      'É um balde explícito do rollup, não silêncio — o faturamento aparece, só não se sabe como foi pago.</div>');
+  }
+  // A soma das formas fica ~0,5% ACIMA da venda porque val_pagamento é o valor
+  // ENTREGUE (troco). Dizer isso aqui evita que a diferença pareça erro da tela.
+  const delta = p.total_valor - d.dia.venda_total;
+  const deltaPct = d.dia.venda_total > 0 ? delta / d.dia.venda_total * 100 : null;
+  avisos.push('<div class="mv-nota">Soma das formas: <b>' + mvBRL0(p.total_valor) +
+    '</b> · venda do dia: <b>' + mvBRL0(d.dia.venda_total) + '</b> · diferença <b>' +
+    (delta >= 0 ? '+' : '') + mvBRL0(delta) + '</b> (' + (deltaPct >= 0 ? '+' : '') + mvPct(deltaPct) +
+    '). Diferença positiva pequena é esperada: <b>val_pagamento é o valor entregue</b>, não o aplicado ' +
+    '— cupom de R$ 74,20 pago com R$ 100,00 vem como 100,00, e a sobra fica na perna de dinheiro. ' +
+    'As pernas de cartão são exatas.</div>');
+
+  return mvBloco('Por forma de pagamento', p.formas.length + ' formas · ' + p.tipos.length + ' categorias',
+    'Sem coluna de litros: pagamento paga o cupom inteiro e o rollup <b>não rateia litro</b> entre as pernas. ' +
+    'cup = cupons que usaram a forma (exato) · pernas = nº de pagamentos',
+    '<div class="mv-tipos">' + chips + '</div>' + linhas, avisos.join(''));
+}
+
+// ── Quebra por frentista ──
+function mvBlocoFrentista(d) {
+  const todos = d.por_frentista;
+  if (!todos.length) {
+    return mvBloco('Por frentista', null, null,
+      '<div class="empty-state">Sem quebra por frentista neste dia.</div>');
+  }
+  const mostra = _mvFrentTodos ? todos : todos.slice(0, MV_FRENT_TETO);
+  const linhas = mostra.map(f => mvRow(f.chave, null, [
+    mvMet(mvInt(f.litros), 'L'),
+    mvMet(mvBRL0(f.liquido), '', 'rs'),
+    mvMet(mvInt(f.itens), 'ab'),
+    mvMet(mvCup(f), 'cup'),
+    mvMet(mvPct(f.pct_liquido), ''),
+  ], f.pct_liquido)).join('');
+  const mais = (!_mvFrentTodos && todos.length > MV_FRENT_TETO)
+    ? '<button class="mv-mais" id="mv-frent-mais" type="button">mostrar todos os ' + todos.length + ' frentistas</button>'
+    : '';
+  // SEM_FRENTISTA é o balde do rollup para item cujo `funcionario` traz razão
+  // social em vez de pessoa. Aparece como está, para o total continuar fechando.
+  const temSem = todos.some(f => f.chave === 'SEM_FRENTISTA');
+  const nota = temSem
+    ? '<div class="mv-nota"><b>SEM_FRENTISTA</b> é o balde do rollup para item em que a TecnoX manda ' +
+      'razão social no lugar do nome da pessoa. Fica visível para o total fechar, em vez de sumir do ranking.</div>'
+    : '';
+  return mvBloco('Por frentista', todos.length + ' frentistas',
+    'ab = abastecimentos · cup = cupons (<b>~</b> = aproximado) · % do líquido de combustível',
+    linhas, mais + nota);
+}
+
+// ── Quebra por canal ──
+function mvBlocoCanal(d) {
+  if (!d.por_canal.length) {
+    return mvBloco('Por canal', null, null,
+      '<div class="empty-state">Sem quebra por canal neste dia.</div>');
+  }
+  const linhas = d.por_canal.map(c => mvRow(c.rotulo, c.chave, [
+    mvMet(mvInt(c.litros), 'L'),
+    mvMet(mvBRL0(c.liquido), '', 'rs'),
+    mvMet(mvInt(c.itens), 'ab'),
+    mvMet(mvCup(c), 'cup'),
+    mvMet(mvPct(c.pct_liquido), ''),
+  ], c.pct_liquido)).join('');
+  // Canal ≠ forma de pagamento. O rollup só tem três canais, porque canal vem
+  // de duas flags da capa (venda_99 / venda_soutag) e o resto é pista. Good
+  // Card, Ticket Car e afins são FORMA DE PAGAMENTO e estão no bloco de cima.
+  const nota = '<div class="mv-nota">O canal vem das flags da capa do cupom e só tem três valores: ' +
+    '<b>99</b>, <b>Soutag</b> e <b>pista</b>. Good Card, Ticket Car, Abastece Aí e afins não são canal — ' +
+    'são forma de pagamento, e estão na quebra acima.</div>';
+  return mvBloco('Por canal', d.por_canal.length + ' canais',
+    'ab = abastecimentos · cup = cupons (<b>~</b> = aproximado) · % do líquido de combustível',
+    linhas, nota);
 }
 
 function txRenderHistorico() {

@@ -350,3 +350,128 @@
 .tx-h-ok { margin-left: auto; font-family: var(--mono); font-size: .68rem; color: var(--ok); }
 .tx-h-erro { margin-left: auto; font-family: var(--mono); font-size: .68rem; color: var(--danger);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ════════════════════════════════════════════════════════════════
+   MOVIMENTAÇÃO DO DIA (camada 1 da auditoria)
+   As quebras são LISTA de linhas flex, não <table>: em 375px uma tabela
+   de 4 colunas só caberia com scroll horizontal, e dado principal atrás
+   de scroll lateral não é lido. Aqui a linha reflui — nome na primeira
+   linha, métricas na segunda — sem esconder nenhuma coluna.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Cards do dia ── */
+.mv-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);   /* mobile-first: 2 por linha */
+  gap: 8px;
+  margin-bottom: .8rem;
+}
+@media (min-width: 620px) { .mv-cards { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 980px) { .mv-cards { grid-template-columns: repeat(5, 1fr); } }
+.mv-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .7rem .8rem;
+  min-width: 0;
+}
+.mv-card-num {
+  font-family: var(--mono); font-size: 1.1rem; font-weight: 700; color: var(--text);
+  line-height: 1.2; overflow-wrap: anywhere;
+}
+/* O card de cupons é o único aproximado. Cor de aviso em vez de nota de pé
+   de página: o til sozinho não ensina que o número não fecha. */
+.mv-card-num.aprox { color: var(--warning); }
+.mv-card-lbl {
+  font-size: .58rem; letter-spacing: .06em; text-transform: uppercase;
+  font-family: var(--mono); color: var(--text3); margin-top: 4px;
+}
+.mv-card-sub { font-size: .58rem; font-family: var(--mono); color: var(--text3); margin-top: 2px; opacity: .85; }
+
+/* ── Bloco de quebra ── */
+.mv-bloco { margin-top: 1rem; }
+.mv-bloco-tit {
+  display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap;
+  font-family: var(--mono); font-size: .68rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--accent);
+  padding-bottom: .35rem; border-bottom: 1px solid var(--border);
+}
+.mv-bloco-cont { font-weight: 400; color: var(--text3); letter-spacing: .04em; text-transform: none; }
+.mv-legenda {
+  font-family: var(--mono); font-size: .62rem; color: var(--text3);
+  margin-top: .35rem; line-height: 1.5;
+}
+
+/* ── Linha de quebra ── */
+.mv-row {
+  position: relative;
+  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+  padding: .5rem .55rem;
+  border-bottom: 1px solid var(--border);
+}
+.mv-row:last-child { border-bottom: none; }
+/* Barra proporcional ao % do dia. Fica ATRÁS (z-index 0) e o texto vem por
+   cima com position:relative — sem ela, "quem é grande aqui" exige comparar
+   número por número. */
+.mv-bar {
+  position: absolute; top: 0; bottom: 0; left: 0;
+  background: var(--accent-dim2);
+  border-radius: 0 4px 4px 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.mv-nome {
+  position: relative; z-index: 1;
+  flex: 1 1 10rem; min-width: 0;
+  font-size: .78rem; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mv-cod {
+  font-family: var(--mono); font-size: .6rem; color: var(--text3);
+  border: 1px solid var(--border); border-radius: 4px; padding: 1px 4px; margin-right: 5px;
+}
+.mv-mets {
+  position: relative; z-index: 1;
+  display: flex; gap: .85rem; margin-left: auto;
+}
+.mv-met { font-family: var(--mono); font-size: .72rem; color: var(--text3); white-space: nowrap; }
+.mv-met b { color: var(--text); font-weight: 700; }
+.mv-met.rs b { color: var(--accent); }
+/* Em 375px as métricas passam a ocupar a linha inteira embaixo do nome e se
+   espalham. Sem isto elas quebram uma por linha e cada item da quebra fica
+   com 4 alturas. */
+@media (max-width: 560px) {
+  .mv-mets { margin-left: 0; width: 100%; justify-content: space-between; gap: .4rem; }
+  .mv-met { font-size: .68rem; }
+  .mv-nome { flex: 1 1 100%; white-space: normal; }
+}
+
+/* ── Chips de total por ind_tipo ── */
+.mv-tipos { display: flex; flex-wrap: wrap; gap: 6px; margin: .5rem 0 .2rem; }
+.mv-tipo {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  padding: .4rem .6rem; font-family: var(--mono); font-size: .68rem; color: var(--text2);
+  display: flex; align-items: baseline; gap: .4rem; flex-wrap: wrap;
+}
+.mv-tipo-cod { color: var(--text3); font-size: .58rem; border: 1px solid var(--border); border-radius: 4px; padding: 0 3px; }
+.mv-tipo b { color: var(--text); }
+
+/* ── Avisos e notas dentro dos blocos ── */
+.mv-aviso {
+  font-family: var(--mono); font-size: .66rem; line-height: 1.5;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  border-left: 3px solid var(--warning);
+  border-radius: 0 6px 6px 0;
+  padding: .5rem .65rem; margin-top: .5rem;
+}
+.mv-nota {
+  font-family: var(--mono); font-size: .64rem; line-height: 1.5;
+  color: var(--text3); margin-top: .5rem;
+}
+.mv-mais {
+  background: none; border: 1px dashed var(--border2); border-radius: 8px;
+  color: var(--text3); font-family: var(--mono); font-size: .66rem;
+  padding: .4rem .7rem; margin-top: .5rem; cursor: pointer; width: 100%;
+}
+.mv-mais:hover { color: var(--accent); border-color: var(--accent); }

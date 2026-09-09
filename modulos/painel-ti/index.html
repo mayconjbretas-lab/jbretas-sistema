@@ -13,8 +13,8 @@
 <link rel="apple-touch-icon" href="/shared/icon-192.png">
 <meta name="theme-color" content="#0a0d1c">
 <link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
-<link rel="stylesheet" href="../../shared/css/base.css?v=202609081754">
-<link rel="stylesheet" href="painel-ti.css?v=202609081754">
+<link rel="stylesheet" href="../../shared/css/base.css?v=202609091015">
+<link rel="stylesheet" href="painel-ti.css?v=202609091015">
 <script>
   (function(){
     var t = localStorage.getItem('jb_theme') || 'dark';
@@ -142,7 +142,7 @@
       <div class="page-header">
         <div>
           <div class="page-title">🔌 API TecnoX</div>
-          <div class="page-date">Saúde do rollup noturno e sonda de diagnóstico dos campos do retorno</div>
+          <div class="page-date">Movimentação por posto, saúde do rollup noturno e sonda de diagnóstico dos campos do retorno</div>
         </div>
       </div>
 
@@ -159,6 +159,33 @@
           <div id="rx-saude"><div class="empty-state">Carregando…</div></div>
           <div id="rx-reincidentes"></div>
           <div id="rx-hist"></div>
+        </div>
+      </div>
+
+      <!-- ══════ MOVIMENTAÇÃO DO DIA — camada 1 da auditoria ══════
+           NOVA SUB-SEÇÃO: não substitui a sonda abaixo. São ferramentas de
+           jobs diferentes — a sonda pergunta "a TecnoX ainda manda o campo X?"
+           (chamada de ~30s à API deles), esta pergunta "o que o posto vendeu
+           neste dia?" e responde do ROLLUP, em milissegundos, sem tocar na API.
+           Vem depois da saúde do rollup de propósito: aquele card é que diz se
+           o número aqui é de hoje ou está velho.
+           Sem botão de consultar — a fonte é o banco, então recarrega sozinha
+           ao trocar posto ou data. -->
+      <div class="section">
+        <div class="section-header">
+          <span class="section-icon">📊</span>
+          <span class="section-title">Movimentação do dia</span>
+          <span style="margin-left:auto;font-family:var(--mono);font-size:.62rem;color:var(--text3)" id="mv-fonte">rollup · sem chamar a TecnoX</span>
+        </div>
+        <div class="section-body">
+          <div class="tx-controls">
+            <label class="tx-f"><span>Posto</span>
+              <select id="mv-posto" class="tx-inp"><option value="">Carregando…</option></select></label>
+            <label class="tx-f"><span>Data</span>
+              <input type="date" id="mv-data" class="tx-inp"></label>
+          </div>
+          <div id="mv-msg" class="tx-msg" style="display:none"></div>
+          <div id="mv-corpo"><div class="empty-state">Selecione posto e data.</div></div>
         </div>
       </div>
 
@@ -261,12 +288,12 @@
   <div id="toast-msg"></div>
 </div>
 
-<script src="../../shared/js/config.js?v=202609081754"></script>
-<script src="../../shared/js/api.js?v=202609081754"></script>
-<script src="../../shared/js/auth.js?v=202609081754"></script>
+<script src="../../shared/js/config.js?v=202609091015"></script>
+<script src="../../shared/js/api.js?v=202609091015"></script>
+<script src="../../shared/js/auth.js?v=202609091015"></script>
 <!-- Alternador ADM/TI no cabecalho (mesmo modulo do painel-adm).
      DEPOIS do auth.js: le getUsuarioLogado/caminhoRaiz de la. -->
-<script src="../../shared/js/painel-switch.js?v=202609081754"></script>
-<script src="app.js?v=202609081754"></script>
+<script src="../../shared/js/painel-switch.js?v=202609091015"></script>
+<script src="app.js?v=202609091015"></script>
 </body>
 </html>

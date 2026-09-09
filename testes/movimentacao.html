@@ -1,0 +1,429 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Movimentação do dia — camada 1</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<!-- CSS real do painel-ti: e dele que saem .mv-* e .tx-* -->
+<link rel="stylesheet" href="/modulos/painel-ti/painel-ti.css">
+<style>
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+  .barra { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; }
+  .barra button { background:var(--surface2); border:1px solid var(--border); color:var(--text2);
+                  font-family:var(--mono); font-size:11px; padding:5px 9px; border-radius:6px; cursor:pointer; }
+  .barra button:hover { border-color:var(--accent); color:var(--accent); }
+</style>
+
+<div id="res">rodando…</div>
+
+<!-- Trocar o cenario a mao para inspecionar o visual em 375 / 430 / 1280. -->
+<div class="barra" id="barra"></div>
+
+<!-- PALCO: a mesma marcacao da sub-secao em modulos/painel-ti/index.html.
+     Copia literal de proposito — o teste tem de ver o que producao ve
+     (.section > .section-body em volta muda o padding e a largura util). -->
+<div id="palco">
+  <div class="section">
+    <div class="section-header">
+      <span class="section-icon">📊</span>
+      <span class="section-title">Movimentação do dia</span>
+      <span style="margin-left:auto;font-family:var(--mono);font-size:.62rem;color:var(--text3)" id="mv-fonte">rollup · sem chamar a TecnoX</span>
+    </div>
+    <div class="section-body">
+      <div class="tx-controls">
+        <label class="tx-f"><span>Posto</span>
+          <select id="mv-posto" class="tx-inp"><option value="11111111-2222-3333-4444-555555555555">P. BERNARDO</option></select></label>
+        <label class="tx-f"><span>Data</span>
+          <input type="date" id="mv-data" class="tx-inp" value="2026-09-08"></label>
+      </div>
+      <div id="mv-msg" class="tx-msg" style="display:none"></div>
+      <div id="mv-corpo"><div class="empty-state">Selecione posto e data.</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// TESTE de tela — sub-secao "Movimentação do dia" (camada 1 da auditoria
+// na aba API TecnoX do Painel TI).
+//
+// POR QUE HARNESS DE DOM, e nao teste de unidade: a aba do TI exige sessao
+// (exigirSessao redireciona quem nao tem perfil.ti), entao nao da para abrir
+// a tela real num teste. Aqui o app.js e injetado DEPOIS do DOMContentLoaded
+// — assim o init dele nunca roda, nada de /usuarios nem de topbar — e so as
+// funcoes de movimentacao sao exercitadas, contra o CSS de producao.
+//
+// O QUE AFIRMA (o que a camada 1 nao pode errar):
+//  1. os cards usam ABASTECIMENTO (exato) e marcam o cupom como aproximado;
+//  2. turno 3 que nao existe no dia NAO aparece, e a ordem e 1,2,4;
+//  3. cartao generico (cod 82) sai com a ressalva de adquirente;
+//  4. combustivel sem mapa aparece com a descricao crua;
+//  5. dia sem dado diz "sem dado", e dia sem PAGAMENTO diz outra coisa —
+//     sao dois vazios diferentes;
+//  6. canal nao promete Good Card;
+//  7. as quebras nao trazem coluna de litros no pagamento;
+//  8. a URL da rota sai com posto_id e data (mvCarregar de verdade).
+//
+// Rodar: npx --yes serve -l 5501 .   →   http://localhost:5501/testes/movimentacao
+// (sem o .html na URL — ver testes/README.md)
+// ================================================================
+
+// ── apiFetch dublado. Guarda a URL pedida para o caso 8. ──
+let ULTIMA_URL = null;
+let RESPOSTA = null;
+window.apiFetch = async function (url) {
+  ULTIMA_URL = url;
+  if (RESPOSTA instanceof Error) throw RESPOSTA;
+  return RESPOSTA;
+};
+
+// ── Cenarios ────────────────────────────────────────────────────
+// BERNARDO e o dado REAL de 2026-09-08 (via sondar-movimentacao.js), truncado
+// nos frentistas. Serve de cenario visual fiel, nao de numero inventado.
+const CEN = {};
+
+CEN.bernardo = {
+  success: true,
+  consulta: { posto_id: '11111111-2222-3333-4444-555555555555', posto_nome: 'P. BERNARDO', data: '2026-09-08' },
+  tem_dado: true, pagamento_disponivel: true,
+  dia: {
+    litros: 26954.988, bruto: 163388.9, desconto: 53.41, liquido_combustivel: 163335.49,
+    produtos_rs: 2947.49, lubrificante_rs: 1512.3, produtos_itens: 26,
+    venda_total: 166282.98, abastecimentos: 588,
+    rs_por_abastecimento: 277.78, litros_por_abastecimento: 45.842,
+    cupons_aprox: 585, combustiveis: 4,
+  },
+  por_combustivel: [
+    { codigo: 'S10',  rotulo: 'Diesel S10',     litros: 14478.463, bruto: 91834.33, desconto: 0,     liquido: 91834.33, itens: 104, cupons: 102, rs_litro: 6.3428, pct_liquido: 56.2242 },
+    { codigo: 'S500', rotulo: 'Diesel S500',    litros: 5994.801,  bruto: 35108.94, desconto: 0,     liquido: 35108.94, itens: 48,  cupons: 48,  rs_litro: 5.8566, pct_liquido: 21.4949 },
+    { codigo: 'GC',   rotulo: 'Gasolina comum', litros: 4757.014,  bruto: 29239.99, desconto: 53.41, liquido: 29186.58, itens: 349, cupons: 348, rs_litro: 6.1355, pct_liquido: 17.8686 },
+    { codigo: 'ET',   rotulo: 'Etanol',         litros: 1724.71,   bruto: 7205.64,  desconto: 0,     liquido: 7205.64,  itens: 87,  cupons: 87,  rs_litro: 4.1779, pct_liquido: 4.4116 },
+  ],
+  // Turnos 1, 2 e 4 — SEM o 3. E o caso real que a tela nao pode "consertar".
+  por_turno: [
+    { chave: '1', rotulo: '1', litros: 16642.241, liquido: 101232.27, itens: 428, cupons_aprox: 426, cupons_exato: false, pct_liquido: 61.9787 },
+    { chave: '2', rotulo: '2', litros: 6061.085,  liquido: 36402.12,  itens: 111, cupons_aprox: 111, cupons_exato: false, pct_liquido: 22.2869 },
+    { chave: '4', rotulo: '4', litros: 4251.662,  liquido: 25701.10,  itens: 49,  cupons_aprox: 48,  cupons_exato: false, pct_liquido: 15.7351 },
+  ],
+  por_pagamento: {
+    formas: [
+      { ind_tipo: 'NP', cod: '2',   desc: 'NOTA A PRAZO',         rotulo: 'NOTA A PRAZO',         sem_adquirente: false, sem_forma: false, valor: 54224.53, cupons: 32,  pernas: 32,  pct_valor: 32.5354 },
+      { ind_tipo: 'CC', cod: '119', desc: 'SAFRA MASTER CREDITO', rotulo: 'SAFRA MASTER CREDITO', sem_adquirente: false, sem_forma: false, valor: 24318.89, cupons: 100, pernas: 100, pct_valor: 14.5917 },
+      { ind_tipo: 'CD', cod: '123', desc: 'SAFRA VISA DEBITO',    rotulo: 'SAFRA VISA DEBITO',    sem_adquirente: false, sem_forma: false, valor: 14094.53, cupons: 58,  pernas: 58,  pct_valor: 8.4569 },
+      { ind_tipo: 'CD', cod: '128', desc: 'SAFRA PIX',            rotulo: 'SAFRA PIX',            sem_adquirente: false, sem_forma: false, valor: 13674.04, cupons: 95,  pernas: 95,  pct_valor: 8.2046 },
+      { ind_tipo: 'CC', cod: '68',  desc: 'TICKET CAR',           rotulo: 'TICKET CAR',           sem_adquirente: false, sem_forma: false, valor: 9666.07,  cupons: 14,  pernas: 14,  pct_valor: 5.8 },
+      { ind_tipo: 'DI', cod: '1',   desc: 'DINHEIRO',             rotulo: 'DINHEIRO',             sem_adquirente: false, sem_forma: false, valor: 8902.41,  cupons: 76,  pernas: 76,  pct_valor: 5.3415 },
+      { ind_tipo: 'HV', cod: '73',  desc: 'CONTRA VALE',          rotulo: 'CONTRA VALE',          sem_adquirente: false, sem_forma: false, valor: 200.00,   cupons: 1,   pernas: 1,   pct_valor: 0.12 },
+    ],
+    tipos: [
+      { ind_tipo: 'CC', rotulo: 'Crédito / frota', valor: 57557.30, cupons_aprox: 246, pernas: 246, formas: 9, pct_valor: 34.5346 },
+      { ind_tipo: 'NP', rotulo: 'A prazo',         valor: 54224.53, cupons_aprox: 32,  pernas: 32,  formas: 1, pct_valor: 32.5354 },
+      { ind_tipo: 'CD', rotulo: 'Débito',          valor: 45778.12, cupons_aprox: 279, pernas: 279, formas: 5, pct_valor: 27.4674 },
+      { ind_tipo: 'DI', rotulo: 'Dinheiro',        valor: 8902.41,  cupons_aprox: 76,  pernas: 76,  formas: 1, pct_valor: 5.3415 },
+      { ind_tipo: 'HV', rotulo: 'Vale / haver',    valor: 200.00,   cupons_aprox: 1,   pernas: 1,   formas: 1, pct_valor: 0.12 },
+    ],
+    total_valor: 166662.36, total_pernas: 508,
+  },
+  por_frentista: [
+    { chave: 'F BE WEVERTON ALEHANDRO MENDES MARQUES', rotulo: 'F BE WEVERTON ALEHANDRO MENDES MARQUES', litros: 4714.718, liquido: 28181.07, itens: 84,  cupons_aprox: 84,  cupons_exato: false, pct_liquido: 17.2534 },
+    { chave: 'F BE GESSICA VIEIRA DE OLIVEIRA',        rotulo: 'F BE GESSICA VIEIRA DE OLIVEIRA',        litros: 4128.628, liquido: 25246.07, itens: 111, cupons_aprox: 111, cupons_exato: false, pct_liquido: 15.4565 },
+    { chave: 'F BE THAIS ARAUJO DA SILVA',             rotulo: 'F BE THAIS ARAUJO DA SILVA',             litros: 3900.906, liquido: 23694.03, itens: 83,  cupons_aprox: 83,  cupons_exato: false, pct_liquido: 14.5064 },
+    { chave: 'F BE JOSE GERALDO DE ARAUJO',            rotulo: 'F BE JOSE GERALDO DE ARAUJO',            litros: 3288.371, liquido: 20509.04, itens: 74,  cupons_aprox: 74,  cupons_exato: false, pct_liquido: 12.5563 },
+    { chave: 'F BE REGINALDO SANTOS SILVA',            rotulo: 'F BE REGINALDO SANTOS SILVA',            litros: 2625.062, liquido: 16084.55, itens: 37,  cupons_aprox: 37,  cupons_exato: false, pct_liquido: 9.8475 },
+  ],
+  por_canal: [
+    { chave: 'NORMAL', rotulo: 'Pista (sem app)', litros: 22674.608, liquido: 137788.08, itens: 563, cupons_aprox: 561, cupons_exato: false, pct_liquido: 84.3597 },
+    { chave: 'SOUTAG', rotulo: 'Soutag',          litros: 4280.38,   liquido: 25547.41,  itens: 25,  cupons_aprox: 25,  cupons_exato: true,  pct_liquido: 15.6403 },
+  ],
+};
+
+// Cenario com o que o Bernardo NAO tem: cartao generico cod 82, cupom sem
+// forma, combustivel fora do mapa, canal 99, 14 frentistas (passa do teto de
+// 10 e mostra o botao), e um turno '?'.
+CEN.sujo = JSON.parse(JSON.stringify(CEN.bernardo));
+CEN.sujo.consulta.posto_nome = 'P. ITAPOA';
+CEN.sujo.dia.combustiveis = 5;
+CEN.sujo.por_combustivel.push(
+  { codigo: 'GAS NATURAL VEICULAR', rotulo: 'GAS NATURAL VEICULAR', litros: 812.4, bruto: 4900, desconto: 0, liquido: 4900, itens: 22, cupons: 22, rs_litro: 6.0315, pct_liquido: 2.9999 });
+CEN.sujo.por_turno.push(
+  { chave: '?', rotulo: '?', litros: 12.5, liquido: 80.0, itens: 1, cupons_aprox: 1, cupons_exato: true, pct_liquido: 0.049 });
+CEN.sujo.por_pagamento.formas.unshift(
+  { ind_tipo: 'CC', cod: '82', desc: 'CARTAO', rotulo: 'CARTAO (adquirente não identificada no PDV)',
+    sem_adquirente: true, sem_forma: false, valor: 66454.32, cupons: 421, pernas: 421, pct_valor: 39.8735 });
+CEN.sujo.por_pagamento.formas.push(
+  { ind_tipo: '??', cod: '0', desc: 'SEM_PAGAMENTO', rotulo: 'Cupom sem forma informada',
+    sem_adquirente: false, sem_forma: true, valor: 404.0, cupons: 1, pernas: 1, pct_valor: 0.2424 });
+CEN.sujo.por_canal.push(
+  { chave: '99', rotulo: 'App 99', litros: 1902.4, liquido: 11500.0, itens: 61, cupons_aprox: 61, cupons_exato: false, pct_liquido: 7.0407 });
+for (let i = 6; i <= 14; i++) CEN.sujo.por_frentista.push(
+  { chave: 'F IT FRENTISTA NUMERO ' + i, rotulo: 'F IT FRENTISTA NUMERO ' + i,
+    litros: 900 - i * 20, liquido: 5400 - i * 100, itens: 20 - i, cupons_aprox: 20 - i, cupons_exato: false, pct_liquido: 3.2 - i * 0.1 });
+
+// Dia com venda e SEM dimensao PAGAMENTO — antes de 01/09/2026.
+CEN.sem_pgto = JSON.parse(JSON.stringify(CEN.bernardo));
+CEN.sem_pgto.consulta.data = '2026-08-25';
+CEN.sem_pgto.pagamento_disponivel = false;
+CEN.sem_pgto.dia.cupons_aprox = null;
+CEN.sem_pgto.por_pagamento = { formas: [], tipos: [], total_valor: 0, total_pernas: 0 };
+
+// Dia sem rollup nenhum.
+CEN.sem_dado = {
+  success: true,
+  consulta: { posto_id: '11111111-2222-3333-4444-555555555555', posto_nome: 'P. BAHAMAS', data: '2026-09-20' },
+  tem_dado: false, pagamento_disponivel: false,
+};
+
+// Dia zerado: nenhum litro, nenhum abastecimento. As divisoes tem de virar
+// '—' e nao NaN/Infinity na tela.
+CEN.zerado = {
+  success: true,
+  consulta: { posto_id: '11111111-2222-3333-4444-555555555555', posto_nome: 'P. ZERO', data: '2026-09-08' },
+  tem_dado: true, pagamento_disponivel: false,
+  dia: { litros: 0, bruto: 0, desconto: 0, liquido_combustivel: 0, produtos_rs: 0, lubrificante_rs: 0,
+         produtos_itens: 0, venda_total: 0, abastecimentos: 0, rs_por_abastecimento: null,
+         litros_por_abastecimento: null, cupons_aprox: null, combustiveis: 1 },
+  por_combustivel: [{ codigo: 'GC', rotulo: 'Gasolina comum', litros: 0, bruto: 0, desconto: 0, liquido: 0,
+                      itens: 0, cupons: 0, rs_litro: null, pct_liquido: null }],
+  por_turno: [], por_frentista: [], por_canal: [],
+  por_pagamento: { formas: [], tipos: [], total_valor: 0, total_pernas: 0 },
+};
+</script>
+
+<!-- app.js DEPOIS do DOMContentLoaded: o init dele nao roda (sem sessao,
+     sem /usuarios, sem topbar) e sobram so as funcoes de movimentacao. -->
+<script>
+(async () => {
+  await new Promise(r => {
+    const s = document.createElement('script');
+    s.src = '/modulos/painel-ti/app.js';
+    s.onload = r; s.onerror = () => { document.getElementById('res').textContent = 'FALHA: app.js nao carregou'; };
+    document.head.appendChild(s);
+  });
+  window.ligarControlesMov();
+
+  const linhas = [];
+  let falhas = 0;
+  const H = (t) => linhas.push('<h3>' + t + '</h3>');
+  const chk = (ok, txt, obtido) => {
+    if (!ok) falhas++;
+    linhas.push('<span class="' + (ok ? 'ok' : 'bad') + '">' + (ok ? '  ok  ' : ' FALHA ') + '</span>' + txt +
+      (obtido !== undefined ? '   <span style="color:var(--text3)">[' + String(obtido).slice(0, 120) + ']</span>' : ''));
+  };
+  const corpo = () => document.getElementById('mv-corpo');
+  const txt = () => corpo().textContent.replace(/\s+/g, ' ');
+  const pintar = (c) => window.mvPintar(JSON.parse(JSON.stringify(CEN[c])));
+
+  // ── 1. Cards: abastecimento exato, cupom marcado ──────────────
+  H('1 · cards do dia (P. BERNARDO 08/09, dado real)');
+  pintar('bernardo');
+  const cards = [...corpo().querySelectorAll('.mv-card')];
+  chk(cards.length === 5, 'cinco cards', cards.length);
+  const cardPor = (lbl) => cards.find(c => c.querySelector('.mv-card-lbl').textContent.trim() === lbl);
+  chk(cardPor('abastecimentos').querySelector('.mv-card-num').textContent.trim() === '588',
+      'abastecimentos = 588 (soma de itens, exato)',
+      cardPor('abastecimentos').querySelector('.mv-card-num').textContent.trim());
+  const numCup = cardPor('cupons').querySelector('.mv-card-num');
+  chk(numCup.textContent.trim() === '~585', 'cupons vem com til', numCup.textContent.trim());
+  chk(numCup.classList.contains('aprox'), 'card de cupons marcado como aproximado');
+  chk(cardPor('litros').querySelector('.mv-card-num').textContent.trim() === '26.955 L',
+      'litros sem decimal', cardPor('litros').querySelector('.mv-card-num').textContent.trim());
+  chk(cardPor('venda líquida').querySelector('.mv-card-num').textContent.includes('166.283'),
+      'venda liquida = combustivel + produto',
+      cardPor('venda líquida').querySelector('.mv-card-num').textContent.trim());
+  chk(cardPor('R$ / abast.').querySelector('.mv-card-num').textContent.trim() === 'R$ 277,78',
+      'ticket = R$ por abastecimento', cardPor('R$ / abast.').querySelector('.mv-card-num').textContent.trim());
+  chk(/não existe contagem exata de cupom do dia/.test(txt()),
+      'a nota explica por que o cupom nao fecha');
+  // R$ 53,41 em R$ 163.388 de bruto = 0,03%. Com uma casa fixa isso lia
+  // "0,0%", ou seja: zero. Abaixo de 1% o percentual ganha duas casas.
+  chk(/Desconto concedido no dia: R\$ 53,41 \(0,03% do bruto\)/.test(txt()),
+      'desconto do dia com percentual que nao arredonda para zero',
+      (txt().match(/Desconto concedido[^.]*\./) || [''])[0]);
+
+  // ── 2. Turno: nao inventa o 3 ─────────────────────────────────
+  H('2 · quebra por turno');
+  const turnos = [...corpo().querySelectorAll('.mv-bloco')]
+    .find(b => /POR TURNO/i.test(b.querySelector('.mv-bloco-tit').textContent));
+  const nomesTurno = [...turnos.querySelectorAll('.mv-nome')].map(n => n.textContent.trim());
+  chk(JSON.stringify(nomesTurno) === JSON.stringify(['Turno 1', 'Turno 2', 'Turno 4']),
+      'mostra 1, 2 e 4 nesta ordem — e NAO inventa turno 3', nomesTurno.join(' | '));
+  chk(!/Turno 3/.test(turnos.textContent), 'turno 3 nao existe na tela');
+  chk(/não é contínua nem cronológica/.test(turnos.textContent.replace(/\s+/g, ' ')),
+      'avisa que a numeracao nao e continua nem cronologica');
+  chk(/~426/.test(turnos.textContent), 'cupom do turno vem com til (somou 2 combustiveis)');
+
+  // ── 3. Pagamento: generico, sem-forma, sem litros ─────────────
+  H('3 · quebra por forma de pagamento (cenario sujo: cod 82 + sem forma)');
+  pintar('sujo');
+  const pgto = [...corpo().querySelectorAll('.mv-bloco')]
+    .find(b => /FORMA DE PAGAMENTO/i.test(b.querySelector('.mv-bloco-tit').textContent));
+  const tPgto = pgto.textContent.replace(/\s+/g, ' ');
+  chk(/CARTAO \(adquirente não identificada no PDV\)/.test(tPgto),
+      'cod 82 sai com a ressalva no rotulo, sem chutar adquirente');
+  chk(/cartão cadastrado de forma genérica no PDV/.test(tPgto),
+      'aviso explica o cadastro generico e quanto e');
+  chk(/Cupom sem forma informada/.test(tPgto), 'sentinela SEM_PAGAMENTO ganha nome legivel');
+  chk(!/SEM_PAGAMENTO/.test(tPgto), 'a sentinela crua nao vaza para a tela');
+  chk(!/\bL\b/.test([...pgto.querySelectorAll('.mv-met')].map(m => m.textContent).join(' ')),
+      'nenhuma metrica de litro na quebra de pagamento');
+  chk(/não rateia litro/.test(tPgto), 'a legenda diz por que nao ha litro aqui');
+  chk(/val_pagamento é o valor entregue/.test(tPgto), 'explica a diferenca (troco) contra a venda');
+  const chips = [...pgto.querySelectorAll('.mv-tipo')].map(c => c.textContent.replace(/\s+/g, ' ').trim());
+  chk(chips.length === 5, 'cinco categorias de ind_tipo', chips.length);
+  // textContent cola o badge do codigo no rotulo (o espaco e o gap do flex).
+  chk(chips.some(c => /^CCCrédito \/ frota R\$ 57\.557 34,5% · 9 forma\(s\)$/.test(c)),
+      'chip do balde CC traz codigo, rotulo, valor, % e nº de formas', chips[0]);
+  // Combustivel sem mapa nao repete o nome no badge do codigo.
+  const linhaGnv = [...corpo().querySelectorAll('.mv-row')]
+    .find(r => /GAS NATURAL VEICULAR/.test(r.textContent));
+  chk(!linhaGnv.querySelector('.mv-cod'), 'combustivel sem mapa nao mostra badge repetindo o nome',
+      linhaGnv.querySelector('.mv-nome').textContent.trim());
+
+  // ── 4. Combustivel sem mapa ───────────────────────────────────
+  H('4 · combustivel fora do MAPA_COMB');
+  const bComb = [...corpo().querySelectorAll('.mv-bloco')]
+    .find(b => /POR COMBUSTÍVEL/i.test(b.querySelector('.mv-bloco-tit').textContent));
+  chk(/GAS NATURAL VEICULAR/.test(bComb.textContent),
+      'descricao crua aparece em vez de sumir do faturamento');
+
+  // ── 5. Turno '?' vai para o fim ───────────────────────────────
+  H('5 · balde de turno desconhecido');
+  const t2 = [...corpo().querySelectorAll('.mv-bloco')]
+    .find(b => /POR TURNO/i.test(b.querySelector('.mv-bloco-tit').textContent));
+  const nomes2 = [...t2.querySelectorAll('.mv-nome')].map(n => n.textContent.trim());
+  chk(nomes2[nomes2.length - 1] === 'Turno ?',
+      'turno "?" fica no FIM, nao na frente', nomes2.join(' | '));
+
+  // ── 6. Canal nao promete Good Card ────────────────────────────
+  H('6 · quebra por canal');
+  const canal = [...corpo().querySelectorAll('.mv-bloco')]
+    .find(b => /POR CANAL/i.test(b.querySelector('.mv-bloco-tit').textContent));
+  const nomesCanal = [...canal.querySelectorAll('.mv-nome')].map(n => n.textContent.trim());
+  chk(nomesCanal.length === 3, 'tres canais', nomesCanal.join(' | '));
+  chk(/App 99/.test(canal.textContent) && /Soutag/.test(canal.textContent) && /Pista/.test(canal.textContent),
+      'os tres sao 99, Soutag e pista');
+  chk(/Good Card, Ticket Car, Abastece Aí e afins não são canal/.test(canal.textContent.replace(/\s+/g, ' ')),
+      'diz que Good Card e forma de pagamento, nao canal');
+
+  // ── 7. Frentista: teto e expansao ─────────────────────────────
+  H('7 · quebra por frentista');
+  let frent = [...corpo().querySelectorAll('.mv-bloco')]
+    .find(b => /POR FRENTISTA/i.test(b.querySelector('.mv-bloco-tit').textContent));
+  chk(frent.querySelectorAll('.mv-row').length === 10, 'mostra 10 de 14', frent.querySelectorAll('.mv-row').length);
+  const btn = document.getElementById('mv-frent-mais');
+  chk(!!btn && /todos os 14 frentistas/.test(btn.textContent), 'botao oferece os 14', btn && btn.textContent);
+  btn.click();
+  frent = [...corpo().querySelectorAll('.mv-bloco')]
+    .find(b => /POR FRENTISTA/i.test(b.querySelector('.mv-bloco-tit').textContent));
+  chk(frent.querySelectorAll('.mv-row').length === 14, 'depois do clique, os 14',
+      frent.querySelectorAll('.mv-row').length);
+  chk(!document.getElementById('mv-frent-mais'), 'botao desaparece quando ja mostra todos');
+
+  // ── 8. Dois vazios diferentes ─────────────────────────────────
+  H('8 · dia sem PAGAMENTO x dia sem DADO');
+  pintar('sem_pgto');
+  const tSem = txt();
+  chk(/Sem forma de pagamento neste dia/.test(tSem), 'sem-pagamento diz o que falta');
+  chk(/01\/09\/2026/.test(tSem), 'explica que a TecnoX passou a mandar pagamentos em 01/09/2026');
+  chk(!/Sem dado para esta data/.test(tSem), 'dia com venda NAO e tratado como sem dado');
+  chk(document.querySelector('.mv-card-num').textContent.trim() === '—',
+      'card de cupons vira travessao, nao zero nem chute',
+      document.querySelector('.mv-card-num').textContent.trim());
+  chk([...corpo().querySelectorAll('.mv-row')].length > 0, 'as outras quebras continuam desenhadas');
+
+  pintar('sem_dado');
+  chk(/Sem dado para esta data/.test(txt()), 'sem rollup diz "sem dado para esta data"');
+  chk(/P\. BAHAMAS/.test(txt()) && /20\/09\/2026/.test(txt()),
+      'nomeia posto e data em pt-BR', txt().slice(0, 110));
+  chk(corpo().querySelectorAll('.mv-card').length === 0, 'nenhum card com numero inventado');
+
+  // ── 9. Dia zerado: sem NaN ────────────────────────────────────
+  H('9 · dia zerado');
+  pintar('zerado');
+  const tZero = txt();
+  chk(!/NaN|Infinity|undefined|null/.test(tZero), 'nenhum NaN/Infinity/undefined na tela', tZero.slice(0, 130));
+  chk(/Nenhum desconto concedido/.test(tZero), 'diz que nao houve desconto');
+  chk(/Sem quebra por turno/.test(tZero), 'quebra vazia tem mensagem propria');
+
+  // ── 10. mvCarregar de verdade: URL e erro ─────────────────────
+  H('10 · mvCarregar (caminho real do fetch)');
+  RESPOSTA = CEN.bernardo;
+  await window.mvCarregar();
+  chk(ULTIMA_URL === '/tecnox/movimentacao?posto_id=11111111-2222-3333-4444-555555555555&data=2026-09-08',
+      'URL sai com posto_id e data', ULTIMA_URL);
+  chk(corpo().querySelectorAll('.mv-card').length === 5, 'render pelo caminho do fetch');
+  RESPOSTA = new Error('Acesso restrito ao TI');
+  await window.mvCarregar();
+  const msg = document.getElementById('mv-msg');
+  chk(msg.style.display !== 'none' && /Acesso restrito ao TI/.test(msg.textContent),
+      'erro da rota aparece na faixa, sem apagar a tela em silencio', msg.textContent);
+
+  // ── 11. ontemLocal(): o bug de fuso dos DOIS campos de data ───
+  // Os campos de data da sonda e da movimentacao usavam
+  // `new Date(); setDate(-1); toISOString().slice(0,10)`. toISOString converte
+  // para UTC: num fuso negativo, depois das 21h o UTC ja virou o dia, e
+  // "ontem" saia como HOJE. Mesmo bug que o teste-medicao-fuso.js documentou
+  // na API. Aqui o relogio e congelado para a janela do bug existir de fato.
+  H('11 · ontemLocal() e o fuso (janela das 21h)');
+  const DateReal = window.Date;
+  function comRelogio(iso, fn) {
+    const t = new DateReal(iso).getTime();
+    window.Date = class extends DateReal {
+      constructor() { if (!arguments.length) super(t); else super(...arguments); }
+      static now() { return t; }
+    };
+    try { return fn(); } finally { window.Date = DateReal; }
+  }
+  // "Ontem" independente da implementacao: -24h e le os getters LOCAIS.
+  const ontemEsperado = (iso) => {
+    const d = new DateReal(new DateReal(iso).getTime() - 86400000);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+           '-' + String(d.getDate()).padStart(2, '0');
+  };
+  // Como era ANTES, para provar que o teste discrimina.
+  const comoEraAntes = () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); };
+
+  const offMin = new DateReal().getTimezoneOffset();   // 180 em Brasilia (UTC-3)
+  const CASOS = [
+    // 21h30 local do ultimo dia do mes: o UTC ja esta no mes seguinte.
+    { iso: '2026-10-01T00:30:00Z', nome: '30/09 21:30 BRT (vira o mes em UTC)' },
+    { iso: '2027-01-01T02:00:00Z', nome: '31/12 23:00 BRT (vira o ano em UTC)' },
+    { iso: '2026-09-30T23:59:00Z', nome: '30/09 20:59 BRT (fora da janela)' },
+    { iso: '2026-03-01T02:00:00Z', nome: '28/02 23:00 BRT (ano nao bissexto)' },
+    { iso: '2026-09-09T15:00:00Z', nome: '09/09 12:00 BRT (meio-dia comum)' },
+  ];
+  let divergiu = 0;
+  CASOS.forEach(c => {
+    const obtido = comRelogio(c.iso, () => window.ontemLocal());
+    const antes  = comRelogio(c.iso, comoEraAntes);
+    const esp    = ontemEsperado(c.iso);
+    chk(obtido === esp, c.nome + ' → ontem local', obtido + (antes !== esp ? '  (antes dava ' + antes + ')' : ''));
+    if (antes !== esp) divergiu++;
+  });
+  // Se em NENHUM caso a versao antiga divergisse, o teste nao provaria nada.
+  // Em fuso negativo (Brasilia = +180 de offset) a janela existe.
+  chk(offMin <= 0 || divergiu >= 2,
+      'o teste discrimina: a versao antiga erra em pelo menos 2 casos',
+      divergiu + ' divergência(s), offset ' + offMin + 'min');
+
+  // ── Barra de cenarios p/ inspecao visual ──────────────────────
+  const barra = document.getElementById('barra');
+  barra.innerHTML = Object.keys(CEN).map(k => '<button data-cen="' + k + '">' + k + '</button>').join('');
+  barra.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    RESPOSTA = null; document.getElementById('mv-msg').style.display = 'none';
+    pintar(b.getAttribute('data-cen'));
+  });
+  pintar('sujo');   // cenario default: o que tem TODOS os casos de aviso
+
+  document.getElementById('res').innerHTML =
+    '<b>' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>' : '<span class="ok">TUDO OK</span>') +
+    '</b>  ·  ' + (linhas.filter(l => /ok  |FALHA/.test(l)).length) + ' afirmações<br>' + linhas.join('<br>');
+})();
+</script>
