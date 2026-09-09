@@ -13,8 +13,8 @@
 <link rel="apple-touch-icon" href="/shared/icon-192.png">
 <meta name="theme-color" content="#0a0d1c">
 <link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
-<link rel="stylesheet" href="../../shared/css/base.css?v=202609091430">
-<link rel="stylesheet" href="painel-ti.css?v=202609091430">
+<link rel="stylesheet" href="../../shared/css/base.css?v=202609091952">
+<link rel="stylesheet" href="painel-ti.css?v=202609091952">
 <script>
   (function(){
     var t = localStorage.getItem('jb_theme') || 'dark';
@@ -181,8 +181,20 @@
           <div class="tx-controls">
             <label class="tx-f"><span>Posto</span>
               <select id="mv-posto" class="tx-inp"><option value="">Carregando…</option></select></label>
-            <label class="tx-f"><span>Data</span>
+            <label class="tx-f"><span>Recorte</span>
+              <select id="mv-modo" class="tx-inp">
+                <option value="dia">Dia único</option>
+                <option value="periodo">Intervalo</option>
+              </select></label>
+            <!-- Os três campos de data convivem e só um par fica visível.
+                 Trocar o `type` de um input só, ou recriar o campo, perderia o
+                 valor já escolhido ao alternar o recorte. -->
+            <label class="tx-f" id="mv-f-data"><span>Data</span>
               <input type="date" id="mv-data" class="tx-inp"></label>
+            <label class="tx-f" id="mv-f-de" hidden><span>De</span>
+              <input type="date" id="mv-de" class="tx-inp"></label>
+            <label class="tx-f" id="mv-f-ate" hidden><span>Até</span>
+              <input type="date" id="mv-ate" class="tx-inp"></label>
           </div>
           <div id="mv-msg" class="tx-msg" style="display:none"></div>
           <div id="mv-corpo"><div class="empty-state">Selecione posto e data.</div></div>
@@ -288,12 +300,12 @@
   <div id="toast-msg"></div>
 </div>
 
-<script src="../../shared/js/config.js?v=202609091430"></script>
-<script src="../../shared/js/api.js?v=202609091430"></script>
-<script src="../../shared/js/auth.js?v=202609091430"></script>
+<script src="../../shared/js/config.js?v=202609091952"></script>
+<script src="../../shared/js/api.js?v=202609091952"></script>
+<script src="../../shared/js/auth.js?v=202609091952"></script>
 <!-- Alternador ADM/TI no cabecalho (mesmo modulo do painel-adm).
      DEPOIS do auth.js: le getUsuarioLogado/caminhoRaiz de la. -->
-<script src="../../shared/js/painel-switch.js?v=202609091430"></script>
-<script src="app.js?v=202609091430"></script>
+<script src="../../shared/js/painel-switch.js?v=202609091952"></script>
+<script src="app.js?v=202609091952"></script>
 </body>
 </html>

@@ -359,6 +359,42 @@
    linha, métricas na segunda — sem esconder nenhuma coluna.
    ════════════════════════════════════════════════════════════════ */
 
+/* `.tx-f` declara display:flex, que VENCE o `[hidden] { display:none }` do
+   navegador — seletor de classe tem especificidade maior que o atributo na
+   folha do UA. Sem esta linha, `el.hidden = true` não esconde nada e os três
+   campos de data aparecem juntos no modo intervalo. */
+.tx-f[hidden] { display: none; }
+
+/* ── Escopo da consulta (posto · dia ou intervalo) ── */
+.mv-escopo {
+  font-family: var(--mono); font-size: .68rem; color: var(--text3);
+  margin-bottom: .7rem; line-height: 1.5;
+}
+.mv-escopo b { color: var(--text2); font-weight: 700; }
+
+/* ── Lista de dias com sinal (modo intervalo) ──
+   Cada dia é um BOTÃO, não um <div> com onclick: ele muda o filtro da tela,
+   então precisa de foco por teclado e de papel de botão para leitor de tela. */
+.mv-dia-sinal {
+  display: flex; align-items: baseline; gap: .55rem; flex-wrap: wrap;
+  width: 100%; text-align: left; cursor: pointer;
+  background: none; border: none; border-left: 3px solid transparent;
+  border-radius: 8px; padding: .5rem .7rem; margin-bottom: 5px;
+  font-family: inherit; color: var(--text);
+}
+.mv-dia-sinal.vermelho { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.mv-dia-sinal.amarelo  { border-left-color: var(--warning); background: color-mix(in srgb, var(--warning) 10%, transparent); }
+.mv-dia-sinal:hover, .mv-dia-sinal:focus-visible {
+  border-left-color: var(--accent);
+  background: var(--accent-dim);
+  outline: none;
+}
+.mv-dia-data { font-family: var(--mono); font-size: .78rem; font-weight: 700; color: var(--text); flex: none; }
+.mv-dia-txt  { font-size: .74rem; color: var(--text2); min-width: 0; flex: 1 1 10rem; }
+.mv-dia-ir   { font-family: var(--mono); font-size: .62rem; color: var(--text3); margin-left: auto; flex: none; }
+.mv-dia-sinal:hover .mv-dia-ir, .mv-dia-sinal:focus-visible .mv-dia-ir { color: var(--accent); }
+@media (max-width: 560px) { .mv-dia-ir { margin-left: 0; width: 100%; } }
+
 /* ── Faixa de sinais (camada 2) ──
    Fica ANTES dos cards: o que destoa é o motivo de a tela existir, e não
    pode depender de rolar até achar. */

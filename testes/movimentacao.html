@@ -39,8 +39,17 @@
       <div class="tx-controls">
         <label class="tx-f"><span>Posto</span>
           <select id="mv-posto" class="tx-inp"><option value="11111111-2222-3333-4444-555555555555">P. BERNARDO</option></select></label>
-        <label class="tx-f"><span>Data</span>
+        <label class="tx-f"><span>Recorte</span>
+          <select id="mv-modo" class="tx-inp">
+            <option value="dia">Dia único</option>
+            <option value="periodo">Intervalo</option>
+          </select></label>
+        <label class="tx-f" id="mv-f-data"><span>Data</span>
           <input type="date" id="mv-data" class="tx-inp" value="2026-09-08"></label>
+        <label class="tx-f" id="mv-f-de" hidden><span>De</span>
+          <input type="date" id="mv-de" class="tx-inp"></label>
+        <label class="tx-f" id="mv-f-ate" hidden><span>Até</span>
+          <input type="date" id="mv-ate" class="tx-inp"></label>
       </div>
       <div id="mv-msg" class="tx-msg" style="display:none"></div>
       <div id="mv-corpo"><div class="empty-state">Selecione posto e data.</div></div>
@@ -90,7 +99,9 @@ const CEN = {};
 
 CEN.bernardo = {
   success: true,
-  consulta: { posto_id: '11111111-2222-3333-4444-555555555555', posto_nome: 'P. BERNARDO', data: '2026-09-08' },
+  consulta: { posto_id: '11111111-2222-3333-4444-555555555555', posto_nome: 'P. BERNARDO',
+              modo: 'dia', de: '2026-09-08', ate: '2026-09-08', data: '2026-09-08' },
+  periodo: { dias_com_dado: 1, primeiro: '2026-09-08', ultimo: '2026-09-08' },
   tem_dado: true, pagamento_disponivel: true,
   dia: {
     litros: 26954.988, bruto: 163388.9, desconto: 53.41, liquido_combustivel: 163335.49,
@@ -228,6 +239,50 @@ CEN.fds.sinais = {
   })),
 };
 
+
+// INTERVALO. Os alarmes viram LISTA DE DIAS — nao somam. O cenario tem
+// vermelho e amarelo em dias diferentes, e 34 frentistas (passa do gatilho
+// de 30, entao a tela mostra 20 e agrupa 14).
+CEN.periodo = JSON.parse(JSON.stringify(CEN.bernardo));
+CEN.periodo.consulta = { posto_id: '11111111-2222-3333-4444-555555555555', posto_nome: 'P. BERNARDO',
+                         modo: 'periodo', de: '2026-09-01', ate: '2026-09-08', data: null };
+CEN.periodo.periodo = { dias_com_dado: 8, primeiro: '2026-09-01', ultimo: '2026-09-08' };
+CEN.periodo.sinais = {
+  por_dia: true, dias_com_dado: 8, dias_com_sinal: 3, dias_com_nao_avaliado: 2,
+  total: 4, vermelhos: 1, amarelos: 3,
+  dias: [
+    { data: '2026-09-04', total: 1, vermelhos: 0, amarelos: 1,
+      itens: [{ tipo: 'MARGEM', nivel: 'amarelo', escopo: 'Gasolina aditivada',
+                titulo_curto: 'margem fora da faixa', detalhe: 'abaixo da faixa de 3 sigma dos outros 11 dias' }] },
+    { data: '2026-09-05', total: 1, vermelhos: 1, amarelos: 0,
+      itens: [{ tipo: 'DESCONTO', nivel: 'vermelho', escopo: null,
+                titulo_curto: 'desconto anormal', detalhe: '5,8x a media do posto' }] },
+    { data: '2026-09-07', total: 2, vermelhos: 0, amarelos: 2,
+      itens: [{ tipo: 'DESCONTO', nivel: 'amarelo', escopo: null,
+                titulo_curto: 'desconto anormal', detalhe: '2,4x a media do posto' },
+              { tipo: 'PAGAMENTO', nivel: 'amarelo', escopo: null,
+                titulo_curto: 'pagamento menor que a venda', detalhe: 'o troco so explica sobra para cima' }] },
+  ],
+};
+CEN.periodo.por_frentista = Array.from({ length: 34 }, (_, i) => ({
+  chave: 'F BE FRENTISTA ' + String(i + 1).padStart(2, '0'),
+  rotulo: 'F BE FRENTISTA ' + String(i + 1).padStart(2, '0'),
+  litros: 5000 - i * 120, liquido: 30000 - i * 700, itens: 200 - i * 4,
+  cupons_aprox: 200 - i * 4, cupons_exato: false, pct_liquido: 6 - i * 0.14,
+}));
+
+// Intervalo LIMPO: nenhum dia acendeu, e nada ficou por avaliar.
+CEN.periodo_limpo = JSON.parse(JSON.stringify(CEN.periodo));
+CEN.periodo_limpo.sinais = { por_dia: true, dias_com_dado: 8, dias_com_sinal: 0,
+                             dias_com_nao_avaliado: 0, total: 0, vermelhos: 0, amarelos: 0, dias: [] };
+
+// Intervalo pedido LONGO com pouco dado: pediu 01/01 a 08/09 e o rollup so
+// tem 19 dias. A tela nao pode deixar parecer que somou oito meses.
+CEN.periodo_longo = JSON.parse(JSON.stringify(CEN.periodo));
+CEN.periodo_longo.consulta.de = '2026-01-01';
+CEN.periodo_longo.periodo = { dias_com_dado: 19, primeiro: '2026-08-21', ultimo: '2026-09-08' };
+CEN.periodo_longo.sinais.dias_com_dado = 19;
+
 // Dia com venda e SEM dimensao PAGAMENTO — antes de 01/09/2026.
 CEN.sem_pgto = JSON.parse(JSON.stringify(CEN.bernardo));
 CEN.sem_pgto.consulta.data = '2026-08-25';
@@ -243,7 +298,8 @@ CEN.sem_pgto.sinais = {
 // Dia sem rollup nenhum.
 CEN.sem_dado = {
   success: true,
-  consulta: { posto_id: '11111111-2222-3333-4444-555555555555', posto_nome: 'P. BAHAMAS', data: '2026-09-20' },
+  consulta: { posto_id: '11111111-2222-3333-4444-555555555555', posto_nome: 'P. BAHAMAS',
+              modo: 'dia', de: '2026-09-20', ate: '2026-09-20', data: '2026-09-20' },
   tem_dado: false, pagamento_disponivel: false,
 };
 
@@ -251,7 +307,9 @@ CEN.sem_dado = {
 // '—' e nao NaN/Infinity na tela.
 CEN.zerado = {
   success: true,
-  consulta: { posto_id: '11111111-2222-3333-4444-555555555555', posto_nome: 'P. ZERO', data: '2026-09-08' },
+  consulta: { posto_id: '11111111-2222-3333-4444-555555555555', posto_nome: 'P. ZERO',
+              modo: 'dia', de: '2026-09-08', ate: '2026-09-08', data: '2026-09-08' },
+  periodo: { dias_com_dado: 1, primeiro: '2026-09-08', ultimo: '2026-09-08' },
   tem_dado: true, pagamento_disponivel: false,
   dia: { litros: 0, bruto: 0, desconto: 0, liquido_combustivel: 0, produtos_rs: 0, lubrificante_rs: 0,
          produtos_itens: 0, venda_total: 0, abastecimentos: 0, rs_por_abastecimento: null,
@@ -289,6 +347,13 @@ CEN.zerado = {
   const corpo = () => document.getElementById('mv-corpo');
   const txt = () => corpo().textContent.replace(/\s+/g, ' ');
   const pintar = (c) => window.mvPintar(JSON.parse(JSON.stringify(CEN[c])));
+  // Espera uma condicao virar verdadeira (com teto), em vez de chutar um
+  // setTimeout: o que se quer e o estado, nao um numero de milissegundos.
+  const ate = async (cond, ms = 2000) => {
+    const fim = Date.now() + ms;
+    while (Date.now() < fim) { if (cond()) return true; await new Promise(r => setTimeout(r, 5)); }
+    return cond();
+  };
 
   // ── 1. Cards: abastecimento exato, cupom marcado ──────────────
   H('1 · cards do dia (P. BERNARDO 08/09, dado real)');
@@ -382,19 +447,17 @@ CEN.zerado = {
   chk(/Good Card, Ticket Car, Abastece Aí e afins não são canal/.test(canal.textContent.replace(/\s+/g, ' ')),
       'diz que Good Card e forma de pagamento, nao canal');
 
-  // ── 7. Frentista: teto e expansao ─────────────────────────────
-  H('7 · quebra por frentista');
-  let frent = [...corpo().querySelectorAll('.mv-bloco')]
+  // ── 7. Frentista: lista curta sai inteira ─────────────────
+  // 14 nomes esta ABAIXO do gatilho de 30: cortar so esconderia dado sem ganho
+  // de leitura. O agrupamento existe para intervalo longo — caso 17.
+  H('7 · quebra por frentista (lista curta)');
+  const frent = [...corpo().querySelectorAll('.mv-bloco')]
     .find(b => /POR FRENTISTA/i.test(b.querySelector('.mv-bloco-tit').textContent));
-  chk(frent.querySelectorAll('.mv-row').length === 10, 'mostra 10 de 14', frent.querySelectorAll('.mv-row').length);
-  const btn = document.getElementById('mv-frent-mais');
-  chk(!!btn && /todos os 14 frentistas/.test(btn.textContent), 'botao oferece os 14', btn && btn.textContent);
-  btn.click();
-  frent = [...corpo().querySelectorAll('.mv-bloco')]
-    .find(b => /POR FRENTISTA/i.test(b.querySelector('.mv-bloco-tit').textContent));
-  chk(frent.querySelectorAll('.mv-row').length === 14, 'depois do clique, os 14',
+  chk(frent.querySelectorAll('.mv-row').length === 14, 'os 14 frentistas saem inteiros',
       frent.querySelectorAll('.mv-row').length);
-  chk(!document.getElementById('mv-frent-mais'), 'botao desaparece quando ja mostra todos');
+  chk(!document.getElementById('mv-frent-mais'), 'e sem linha de agrupamento');
+  chk(/14 frentistas/.test(frent.querySelector('.mv-bloco-tit').textContent),
+      'o cabecalho conta os 14');
 
   // ── 8. Dois vazios diferentes ─────────────────────────────────
   H('8 · dia sem PAGAMENTO x dia sem DADO');
@@ -434,6 +497,87 @@ CEN.zerado = {
   const msg = document.getElementById('mv-msg');
   chk(msg.style.display !== 'none' && /Acesso restrito ao TI/.test(msg.textContent),
       'erro da rota aparece na faixa, sem apagar a tela em silencio', msg.textContent);
+
+
+  H('15 - modo INTERVALO: a faixa vira lista de dias');
+  pintar('periodo');
+  const fxP = corpo().querySelector('.mv-sinais');
+  EQ(fxP.querySelector('.mv-sinais-tit').textContent.replace(/\s+/g, ' ').trim(),
+     '3 dias com sinal neste intervalode 8 com dado - 1 vermelho - 3 amarelos'.replace(/-/g, '\u00b7'),
+     'titulo conta DIAS com sinal, nao sinais');
+  const linhasDia = [...fxP.querySelectorAll('.mv-dia-sinal')];
+  EQ(linhasDia.length, 3, 'uma linha por dia com sinal');
+  EQ(linhasDia.map(x => x.getAttribute('data-dia')), ['2026-09-04', '2026-09-05', '2026-09-07'],
+     'os dias saem na ordem que a rota mandou');
+  EQ(linhasDia.map(x => x.classList.contains('vermelho') ? 'V' : 'A').join(''), 'AVA',
+     'o dia herda a cor do PIOR sinal que teve');
+  chk(/04\/09/.test(linhasDia[0].textContent), 'data em pt-BR',
+      linhasDia[0].textContent.replace(/\s+/g, ' ').trim());
+  chk(/margem fora da faixa \(Gasolina aditivada\)/.test(linhasDia[0].textContent),
+      'resumo nomeia o sinal e o escopo');
+  chk(/desconto anormal .* pagamento menor que a venda/.test(linhasDia[2].textContent),
+      'dia com dois sinais lista os dois', linhasDia[2].textContent.replace(/\s+/g, ' ').trim());
+  chk(linhasDia.every(x => x.tagName === 'BUTTON'), 'cada dia e um <button> - foco por teclado');
+  chk(/ver o dia/.test(fxP.textContent), 'a linha diz que leva ao dia');
+  // Somar sinais no intervalo seria errado: os cards somam, a faixa NAO.
+  chk(!/4 sinais neste/.test(fxP.textContent), 'NAO soma os 4 sinais como se fossem do intervalo');
+  chk(/nao avaliado/.test(fxP.textContent.normalize('NFD').replace(/[\u0300-\u036f]/g, '')),
+      'diz que houve dia com sinal nao avaliado');
+
+  H('16 - clicar num dia troca o filtro para aquele dia');
+  RESPOSTA = CEN.bernardo; ULTIMA_URL = null;
+  document.getElementById('mv-modo').value = 'periodo';
+  linhasDia[1].click();
+  // O clique dispara mvCarregar(), que e assincrono: um tick nao basta e a
+  // corrida deixava o render do dia chegar DEPOIS do proximo caso.
+  await ate(() => (document.getElementById('mv-data') || {}).value === '2026-09-05'
+                  && corpo().querySelectorAll('.mv-card').length === 5);
+  EQ(document.getElementById('mv-modo').value, 'dia', 'o recorte volta para dia unico');
+  EQ(document.getElementById('mv-data').value, '2026-09-05', 'e a data vira a do dia clicado');
+  chk(/data=2026-09-05/.test(ULTIMA_URL || ''), 'a rota e chamada com aquele dia', ULTIMA_URL);
+  chk(!/de=|ate=/.test(ULTIMA_URL || ''), 'e sem de/ate');
+  EQ(document.getElementById('mv-f-data').hidden, false, 'o campo Data reaparece');
+  EQ(document.getElementById('mv-f-de').hidden, true, 'e os de/ate somem');
+  // O atributo hidden nao basta: .tx-f declara display:flex, que vence o
+  // [hidden] do navegador. Sem `.tx-f[hidden]{display:none}` no CSS os tres
+  // campos de data apareciam juntos. Afirma sobre o ESTILO COMPUTADO.
+  EQ(getComputedStyle(document.getElementById('mv-f-de')).display, 'none',
+     'e somem de verdade — display computado, nao so o atributo');
+  chk(getComputedStyle(document.getElementById('mv-f-data')).display !== 'none',
+      'enquanto o campo Data volta a ocupar espaco');
+
+  H('17 - escopo e teto de frentista no intervalo');
+  pintar('periodo');
+  const esc = corpo().querySelector('.mv-escopo').textContent.replace(/\s+/g, ' ');
+  chk(/01\/09\/2026 a 08\/09\/2026/.test(esc) && /8 dias com dado/.test(esc),
+      'escopo diz posto e intervalo', esc);
+  let frP = [...corpo().querySelectorAll('.mv-bloco')]
+    .find(b => /POR FRENTISTA/i.test(b.querySelector('.mv-bloco-tit').textContent));
+  EQ(frP.querySelectorAll('.mv-row').length, 20, '34 frentistas -> mostra os 20 maiores');
+  const btnFr = document.getElementById('mv-frent-mais');
+  chk(/\+ 14 frentistas/.test(btnFr.textContent), 'e agrupa os outros 14',
+      btnFr.textContent.replace(/\s+/g, ' ').trim());
+  chk(/R\$/.test(btnFr.textContent), 'com o quanto o resto soma');
+  btnFr.click();
+  frP = [...corpo().querySelectorAll('.mv-bloco')]
+    .find(b => /POR FRENTISTA/i.test(b.querySelector('.mv-bloco-tit').textContent));
+  EQ(frP.querySelectorAll('.mv-row').length, 34, 'clicar no grupo abre os 34');
+  // Abaixo do gatilho lista todos - cortar 21 nomes so esconderia dado.
+  pintar('bernardo');
+  const frD = [...corpo().querySelectorAll('.mv-bloco')]
+    .find(b => /POR FRENTISTA/i.test(b.querySelector('.mv-bloco-tit').textContent));
+  EQ(frD.querySelectorAll('.mv-row').length, 5, 'lista curta sai inteira, sem agrupar');
+  EQ(document.getElementById('mv-frent-mais'), null, 'e sem botao de agrupar');
+
+  H('18 - intervalo limpo x intervalo longo com pouco dado');
+  pintar('periodo_limpo');
+  chk(/Nenhum sinal neste intervalo/.test(corpo().textContent), 'intervalo limpo diz que esta limpo');
+  chk(/8 dia\(s\) conferido\(s\)/.test(corpo().textContent), 'e quantos dias conferiu');
+  EQ(corpo().querySelectorAll('.mv-dia-sinal').length, 0, 'sem linhas de dia');
+  pintar('periodo_longo');
+  const escL = corpo().querySelector('.mv-escopo').textContent.replace(/\s+/g, ' ');
+  chk(/19 dias com dado no rollup/.test(escL), 'pediu 8 meses e diz que so 19 dias tem dado', escL);
+  chk(/de 21\/08\/2026 a 08\/09\/2026/.test(escL), 'e mostra a janela real que o rollup cobre', escL);
 
   // ── 12. SINAIS (camada 2) ─────────────────────────────────────
   H('12 · faixa de sinais');

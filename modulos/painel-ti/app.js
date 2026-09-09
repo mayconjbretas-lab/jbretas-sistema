@@ -983,7 +983,12 @@ function txRenderSoma() {
 let _mvCarregando = false;
 let _mvDado = null;
 let _mvFrentTodos = false;      // quebra de frentista expandida?
-const MV_FRENT_TETO = 10;       // frentistas mostrados antes do "mostrar todos"
+// Num intervalo longo a lista de frentistas cresce com a rotação do posto.
+// Abaixo do GATILHO lista tudo — cortar uma lista de 22 nomes só esconderia
+// dado sem ganho de leitura. Acima, mostra os MAIORES e agrupa o resto numa
+// linha só, que continua clicável para abrir.
+const MV_FRENT_GATILHO = 30;
+const MV_FRENT_TOPO = 20;
 
 // Formatadores. Nos cards e nas linhas o litro vai SEM decimal e o real SEM
 // centavo de propósito: em 375px "26.954,988 L" e "R$ 166.282,98" estouram a
@@ -1037,36 +1042,94 @@ function mvBloco(titulo, contagem, legenda, corpo, extra) {
 // somou mais de um combustível, e aí o mesmo cupom pode estar em dois Sets.
 const mvCup = (r) => (r.cupons_exato ? '' : '~') + mvInt(r.cupons_aprox);
 
+// Mostra o par de campos do recorte escolhido. Ao entrar no intervalo pela
+// primeira vez, semeia de/até com a semana que termina na data já escolhida —
+// abrir com os dois campos vazios obrigaria dois cliques antes de ver algo.
+function mvAplicarModo(semear) {
+  const modo = (document.getElementById('mv-modo') || {}).value || 'dia';
+  const fData = document.getElementById('mv-f-data');
+  const fDe = document.getElementById('mv-f-de');
+  const fAte = document.getElementById('mv-f-ate');
+  if (fData) fData.hidden = modo !== 'dia';
+  if (fDe) fDe.hidden = modo !== 'periodo';
+  if (fAte) fAte.hidden = modo !== 'periodo';
+  if (modo === 'periodo' && semear) {
+    const inpDe = document.getElementById('mv-de');
+    const inpAte = document.getElementById('mv-ate');
+    const base = (document.getElementById('mv-data') || {}).value || ontemLocal();
+    if (inpAte && !inpAte.value) inpAte.value = base;
+    if (inpDe && !inpDe.value) {
+      const d = new Date(base + 'T12:00:00');   // meio-dia: imune a fuso
+      d.setDate(d.getDate() - 7);
+      inpDe.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+                    '-' + String(d.getDate()).padStart(2, '0');
+    }
+  }
+  return modo;
+}
+
 function ligarControlesMov() {
-  ['mv-posto', 'mv-data'].forEach(id => {
+  ['mv-posto', 'mv-data', 'mv-de', 'mv-ate'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => { _mvFrentTodos = false; mvCarregar(); });
   });
-  // Delegação: o botão "mostrar todos" é recriado a cada render.
+  const selModo = document.getElementById('mv-modo');
+  if (selModo) selModo.addEventListener('change', () => {
+    _mvFrentTodos = false;
+    mvAplicarModo(true);
+    mvCarregar();
+  });
+  // Delegação: os dois alvos são recriados a cada render.
   const corpo = document.getElementById('mv-corpo');
   if (corpo) corpo.addEventListener('click', (e) => {
-    const b = e.target.closest ? e.target.closest('#mv-frent-mais') : null;
-    if (!b) return;
-    _mvFrentTodos = true;
-    mvRender();
+    if (!e.target.closest) return;
+    if (e.target.closest('#mv-frent-mais')) { _mvFrentTodos = true; mvRender(); return; }
+    // Clicar num dia da lista de sinais TROCA O FILTRO para aquele dia. É o
+    // caminho do resumo para o detalhe: no intervalo a faixa só diz quais dias
+    // acenderam, e o detalhe completo é o que a tela de dia único já mostra.
+    const dia = e.target.closest('.mv-dia-sinal');
+    if (dia) {
+      const d = dia.getAttribute('data-dia');
+      if (!d) return;
+      const selM = document.getElementById('mv-modo');
+      const inpD = document.getElementById('mv-data');
+      if (selM) selM.value = 'dia';
+      if (inpD) inpD.value = d;
+      _mvFrentTodos = false;
+      mvAplicarModo(false);
+      mvCarregar();
+    }
   });
 }
 
 async function mvCarregar() {
   const el = document.getElementById('mv-corpo'); if (!el) return;
   const posto_id = (document.getElementById('mv-posto') || {}).value || '';
-  const data = (document.getElementById('mv-data') || {}).value || '';
-  if (!posto_id || !/^\d{4}-\d{2}-\d{2}$/.test(data)) {
-    el.innerHTML = '<div class="empty-state">Selecione posto e data.</div>';
-    return;
+  const modo = mvAplicarModo(false);
+  const reData = /^\d{4}-\d{2}-\d{2}$/;
+  let qs;
+  if (modo === 'periodo') {
+    const de = (document.getElementById('mv-de') || {}).value || '';
+    const ate = (document.getElementById('mv-ate') || {}).value || '';
+    if (!posto_id || !reData.test(de) || !reData.test(ate)) {
+      el.innerHTML = '<div class="empty-state">Selecione posto e o intervalo.</div>';
+      return;
+    }
+    qs = '&de=' + encodeURIComponent(de) + '&ate=' + encodeURIComponent(ate);
+  } else {
+    const data = (document.getElementById('mv-data') || {}).value || '';
+    if (!posto_id || !reData.test(data)) {
+      el.innerHTML = '<div class="empty-state">Selecione posto e data.</div>';
+      return;
+    }
+    qs = '&data=' + encodeURIComponent(data);
   }
   if (_mvCarregando) return;
   _mvCarregando = true;
   mvMsg('', '');
   el.innerHTML = '<div class="empty-state">Carregando…</div>';
   try {
-    _mvDado = await apiFetch('/tecnox/movimentacao?posto_id=' + encodeURIComponent(posto_id) +
-                             '&data=' + encodeURIComponent(data));
+    _mvDado = await apiFetch('/tecnox/movimentacao?posto_id=' + encodeURIComponent(posto_id) + qs);
     mvRender();
   } catch (err) {
     _mvDado = null;
@@ -1085,15 +1148,32 @@ function mvRender() {
   // Dia sem rollup. É a MESMA marca que o cron usa como retomada (ausência de
   // linha em tecnox_venda_dia), então dizer "sem dado" aqui não é a tela
   // desistindo: é o estado real da coleta daquele par posto/dia.
+  const periodo = d.consulta.modo === 'periodo';
+  const quando = periodo
+    ? mvDataBR(d.consulta.de) + ' a ' + mvDataBR(d.consulta.ate)
+    : mvDataBR(d.consulta.data || d.consulta.de);
+
   if (!d.tem_dado) {
-    el.innerHTML = '<div class="empty-state">Sem dado para esta data.<br>' +
+    el.innerHTML = '<div class="empty-state">Sem dado para ' + (periodo ? 'este intervalo' : 'esta data') + '.<br>' +
       '<span style="font-size:.74rem;color:var(--text3)">O rollup não tem venda de ' +
-      escapeHtml(d.consulta.posto_nome) + ' em ' + escapeHtml(mvDataBR(d.consulta.data)) +
+      escapeHtml(d.consulta.posto_nome) + ' em ' + escapeHtml(quando) +
       '. Confira a saúde do rollup noturno acima.</span></div>';
     return;
   }
 
-  el.innerHTML = mvSinais(d) + mvCards(d) + mvBlocoComb(d) + mvBlocoTurno(d) +
+  // No intervalo, DIAS COM DADO não é o mesmo que dias pedidos: o rollup só
+  // tem 19 dias hoje, então pedir 01/01 a 08/09 soma 19 e não 251. Sem dizer
+  // isso, o total pareceria de oito meses.
+  const dd = d.periodo ? d.periodo.dias_com_dado : 1;
+  const escopo = '<div class="mv-escopo"><b>' + escapeHtml(d.consulta.posto_nome) + '</b> · ' +
+    escapeHtml(quando) +
+    (periodo ? ' · <b>' + dd + '</b> dia' + (dd > 1 ? 's' : '') + ' com dado no rollup' +
+      (d.periodo && d.periodo.primeiro !== d.consulta.de
+        ? ' (de ' + escapeHtml(mvDataBR(d.periodo.primeiro)) + ' a ' + escapeHtml(mvDataBR(d.periodo.ultimo)) + ')'
+        : '')
+      : '') + '</div>';
+
+  el.innerHTML = escopo + mvSinais(d) + mvCards(d) + mvBlocoComb(d) + mvBlocoTurno(d) +
                  mvBlocoPagamento(d) + mvBlocoFrentista(d) + mvBlocoCanal(d);
 }
 
@@ -1113,6 +1193,7 @@ function mvSinais(d) {
   const s = d.sinais;
   // Payload de antes da camada 2 (ou rota velha em cache): não inventa faixa.
   if (!s) return '';
+  if (s.por_dia) return mvSinaisPeriodo(s);
 
   const itens = (s.itens || []).map(x => {
     const ic = x.nivel === 'vermelho' ? '🔴' : '🟡';
@@ -1202,6 +1283,47 @@ function mvCards(d) {
       ? '<div class="mv-nota">Desconto concedido no dia: <b>' + txBRL(dia.desconto) +
         '</b> (' + mvPct(dia.bruto > 0 ? dia.desconto / dia.bruto * 100 : null) + ' do bruto).</div>'
       : '<div class="mv-nota">Nenhum desconto concedido no dia.</div>');
+}
+
+// ── Faixa de sinais no modo INTERVALO ──
+// Os alarmes são por DIA e continuam sendo: comparar oito dias somados contra
+// a média diária do posto misturaria unidades, e um desconto anormal de um dia
+// diluído em oito desapareceria. Então aqui a faixa não soma nada — ela LISTA
+// os dias que acenderam, e cada linha leva ao dia.
+function mvSinaisPeriodo(s) {
+  const na = s.dias_com_nao_avaliado
+    ? '<div class="mv-sinais-na"><b>' + s.dias_com_nao_avaliado + '</b> de <b>' + s.dias_com_dado +
+      '</b> dia(s) tiveram algum sinal <b>não avaliado</b> por falta de base — abra o dia para ver qual.</div>'
+    : '';
+  if (!s.dias_com_sinal) {
+    return '<div class="mv-sinais">' +
+      '<div class="mv-sinais-tit limpo">Sinais do intervalo</div>' +
+      '<div class="mv-sinais-ok">✅ Nenhum sinal neste intervalo — ' + s.dias_com_dado +
+      ' dia(s) conferido(s).</div>' + na + '</div>';
+  }
+  const linhas = s.dias.map(dia => {
+    // O dia herda a cor do PIOR sinal que teve.
+    const nivel = dia.vermelhos ? 'vermelho' : 'amarelo';
+    const resumo = dia.itens
+      .map(x => x.titulo_curto + (x.escopo ? ' (' + x.escopo + ')' : ''))
+      .join(' · ');
+    // Só o primeiro detalhe: a linha é resumo, e o resto está a um clique.
+    const det = dia.itens.length && dia.itens[0].detalhe ? ' — ' + dia.itens[0].detalhe : '';
+    return '<button type="button" class="mv-dia-sinal ' + nivel + '" data-dia="' + escapeHtml(dia.data) + '">' +
+      '<span class="mv-dia-data">' + (dia.vermelhos ? '🔴' : '🟡') + ' ' + escapeHtml(mvDataBR(dia.data)) + '</span>' +
+      '<span class="mv-dia-txt">' + escapeHtml(resumo) +
+        '<span style="color:var(--text3)">' + escapeHtml(det) + '</span></span>' +
+      '<span class="mv-dia-ir">ver o dia →</span>' +
+    '</button>';
+  }).join('');
+  const cont = [];
+  if (s.vermelhos) cont.push(s.vermelhos + ' vermelho' + (s.vermelhos > 1 ? 's' : ''));
+  if (s.amarelos) cont.push(s.amarelos + ' amarelo' + (s.amarelos > 1 ? 's' : ''));
+  return '<div class="mv-sinais">' +
+    '<div class="mv-sinais-tit tem">' + s.dias_com_sinal +
+      (s.dias_com_sinal > 1 ? ' dias com sinal' : ' dia com sinal') + ' neste intervalo' +
+      '<span class="mv-sinais-cont">de ' + s.dias_com_dado + ' com dado · ' + cont.join(' · ') + '</span></div>' +
+    linhas + na + '</div>';
 }
 
 // ── Faturamento por combustível ──
@@ -1309,7 +1431,11 @@ function mvBlocoFrentista(d) {
     return mvBloco('Por frentista', null, null,
       '<div class="empty-state">Sem quebra por frentista neste dia.</div>');
   }
-  const mostra = _mvFrentTodos ? todos : todos.slice(0, MV_FRENT_TETO);
+  // Corta só quando a lista fica grande de verdade. Num intervalo longo a
+  // rotação do posto empilha nomes; num dia são ~10 e cortar seria esconder
+  // dado sem ganho nenhum de leitura.
+  const corta = !_mvFrentTodos && todos.length > MV_FRENT_GATILHO;
+  const mostra = corta ? todos.slice(0, MV_FRENT_TOPO) : todos;
   const linhas = mostra.map(f => mvRow(f.chave, null, [
     mvMet(mvInt(f.litros), 'L'),
     mvMet(mvBRL0(f.liquido), '', 'rs'),
@@ -1317,9 +1443,19 @@ function mvBlocoFrentista(d) {
     mvMet(mvCup(f), 'cup'),
     mvMet(mvPct(f.pct_liquido), ''),
   ], f.pct_liquido)).join('');
-  const mais = (!_mvFrentTodos && todos.length > MV_FRENT_TETO)
-    ? '<button class="mv-mais" id="mv-frent-mais" type="button">mostrar todos os ' + todos.length + ' frentistas</button>'
-    : '';
+  // O resto vira UMA linha com o que ele soma — e continua clicável. O total
+  // do bloco tem de continuar fechando com os cards mesmo cortado; escondido
+  // sem somar, o rodapé passaria a discordar da tela.
+  let mais = '';
+  if (corta) {
+    const resto = todos.slice(MV_FRENT_TOPO);
+    const rs = resto.reduce((s, f) => s + f.liquido, 0);
+    const litros = resto.reduce((s, f) => s + f.litros, 0);
+    const ab = resto.reduce((s, f) => s + f.itens, 0);
+    mais = '<button class="mv-mais" id="mv-frent-mais" type="button">+ ' + resto.length +
+      ' frentistas — ' + mvBRL0(rs) + ' · ' + mvInt(litros) + ' L · ' + mvInt(ab) +
+      ' ab   (mostrar todos)</button>';
+  }
   // SEM_FRENTISTA é o balde do rollup para item cujo `funcionario` traz razão
   // social em vez de pessoa. Aparece como está, para o total continuar fechando.
   const temSem = todos.some(f => f.chave === 'SEM_FRENTISTA');
