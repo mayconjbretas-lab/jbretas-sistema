@@ -10,11 +10,13 @@
     { id: 'compra',    sec: 's-compra',    icone: '\u{1F9FE}', rotulo: 'Compra',       render: 'renderCompra', glow: true },
     { id: 'forn',      sec: 's-forn',      icone: '\u{1F4CA}', rotulo: 'Fornecedores', render: 'renderFornecedores' },
     { id: 'simulador', sec: 's-simulador', icone: '\u2696\uFE0F', rotulo: 'Simulador', render: 'renderSimulador' },
-    // Mercado de custo de compra (bandeira branca). Roda nos dois hosts: no
-    // painel-adm em tela larga vem com o LANCAMENTO, no admin mobile vem SO o
-    // painel (leitura). Quem decide e o proprio mercado.js pela largura -- por
-    // isso a entrada aqui nao tem flag nenhuma.
-    { id: 'mercado',   sec: 's-mercado',   icone: '\u{1F3F7}\uFE0F', rotulo: 'Mercado', render: 'renderMercado' },
+    // O MERCADO SAIU DAQUI. Ele virou o terceiro botao da barra de Relatorios
+    // (ao lado do DRE e da Movimentacao do dia), e passou a ser aberto por
+    // relAbrir('mercado') como os outros dois. Deixa-lo tambem aqui daria dois
+    // caminhos para a mesma tela, e o de dentro do Custos era pior: a tira que
+    // o mercado.js desenhava chamava __navCusto, que troca a .scr por baixo da
+    // aba Relatorios e deixava o usuario no Custo com Relatorios ainda aceso.
+    // A tira foi removida de dentro do mercado.js junto com esta linha.
   ];
 
   var estiloInjetado = false;

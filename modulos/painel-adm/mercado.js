@@ -21,9 +21,10 @@
 (function () {
   'use strict';
 
-  // Largura mínima. Lançar 20 preços não cabe em tela de celular; o
-  // nav-custo já esconde o botão abaixo disto (flag desktopOnly), este
-  // guard cobre quem chegar por __navCusto direto ou redimensionando.
+  // Largura mínima. Lançar 20 preços não cabe em tela de celular, então
+  // abaixo disto monta-se o shell SÓ-PAINEL (leitura). O botão "Mercado" da
+  // barra de Relatórios aparece nas duas larguras — é este guard, e só ele,
+  // que decide qual shell sobe.
   // 800 (era 900): janela não-maximizada de ~835px útil precisa passar. A grade
   // cabe porque os slots quebram em 2 linhas (.mrc-slots é auto-fit).
   const MIN_LARGURA = 800;
@@ -368,7 +369,11 @@
         '<div class="mrc-head">' +
           '<div class="mrc-title">Mercado — custo de compra</div>' +
         '</div>' +
-        (window.navCustoHTML ? window.navCustoHTML('mercado') : '') +
+        // SEM a tira do nav-custo: esta tela agora e um relatorio, aberto pelo
+        // botao "Mercado" da barra de Relatorios. Volta-se por ela, como no
+        // DRE e na Movimentacao. A tira levava para Custo/Compra/Fornecedores
+        // trocando a .scr por baixo da aba, deixando Relatorios aceso na
+        // navegacao e outra tela no corpo.
         '<div class="mrc-head">' +
           '<div class="mrc-data">DIA ' +
             '<input type="date" id="mrc-data" onchange="__mrcData(this.value)">' +
@@ -390,7 +395,6 @@
     sec.innerHTML =
       '<div class="mrc-wrap">' +
         '<div class="mrc-head"><div class="mrc-title">Mercado</div></div>' +
-        (window.navCustoHTML ? window.navCustoHTML('mercado') : '') +
         '<div id="mrc-painel"></div>' +
       '</div>';
   }

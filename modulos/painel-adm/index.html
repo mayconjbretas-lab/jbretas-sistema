@@ -191,21 +191,27 @@
            acima das 4 sub-abas que o próprio DRE já monta. -->
       <!-- Seletor de relatorios. Botoes do sistema (.fueltab, o mesmo das
            sub-abas do DRE e dos chips dos relatorios) — nao um card. Hoje so
-           o DRE e a Movimentacao do dia; o Mercado entra como irmao aqui, e o
-           .fueltab-row ja quebra linha sozinho quando nao couberem. -->
+           o DRE, a Movimentacao do dia e o Mercado, e o .fueltab-row ja quebra
+           linha sozinho quando nao couberem. -->
       <div class="fueltab-row" id="rel-seletor">
         <button class="fueltab" type="button" id="rel-btn-dre" onclick="relAbrir('dre')">DRE</button>
         <button class="fueltab" type="button" id="rel-btn-mov" onclick="relAbrir('mov')">Movimentação do dia</button>
+        <button class="fueltab" type="button" id="rel-btn-mercado" onclick="relAbrir('mercado')">Mercado</button>
       </div>
       <div id="s-relat-lista"></div>
       <section class="scr" id="s-dre"></section>
       <section class="scr" id="s-movmes"></section>
+      <!-- Mercado — custo de compra. MESMO mercado.js dos dois módulos, sem
+           fork; ele escolhe o shell pela largura (completo >= 800px, só-painel
+           abaixo). Aninhado aqui, e não solto na main, pelo mesmo motivo do
+           #s-dre: quem manda na visibilidade é a classe `active`, e o
+           relAbrir() a alterna para a vista escolhida. -->
+      <section class="scr" id="s-mercado"></section>
     </section>
     <section class="scr" id="s-custo"></section>
     <section class="scr" id="s-forn"></section>
     <section class="scr" id="s-compra"></section>
     <section class="scr" id="s-simulador"></section>
-    <section class="scr" id="s-mercado"></section>
     <section class="scr" id="s-mais"><div class="em-construcao">➕ Mais — em construção</div></section>
   </main>
 
