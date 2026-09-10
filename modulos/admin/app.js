@@ -107,20 +107,19 @@ let _relatVista = 'relat';
 function renderRelatArea() {
   const lista = document.getElementById('s-relat-lista');
   const dre = document.getElementById('s-dre');
-  const card = document.getElementById('rel-card-dre');
-  const acao = document.getElementById('rel-cb-acao');
+  const btn = document.getElementById('rel-btn-dre');
   const mostrarDre = _relatVista === 'dre';
   if (lista) lista.hidden = mostrarDre;
   // O #s-dre é .scr: quem manda na visibilidade é a classe `active`
   // (.scr{display:none} / #s-dre.active{display:block}, esta injetada pelo
   // próprio dre.js). `hidden` não bastaria — id com classe vence o atributo.
   if (dre) dre.classList.toggle('active', mostrarDre);
-  // O card NÃO some ao abrir: continua no topo e vira o caminho de volta.
-  if (card) {
-    card.classList.toggle('aberto', mostrarDre);
-    card.setAttribute('aria-expanded', mostrarDre ? 'true' : 'false');
+  // O botão fica ACESO enquanto o DRE está aberto, e é por ele que se volta —
+  // `.active` é o estado que o .fueltab já desenha, o mesmo das sub-abas.
+  if (btn) {
+    btn.classList.toggle('active', mostrarDre);
+    btn.setAttribute('aria-pressed', mostrarDre ? 'true' : 'false');
   }
-  if (acao) acao.textContent = mostrarDre ? '← voltar aos relatórios' : 'abrir →';
   // Render sob demanda: o DRE faz GET /dre e não deve disparar para quem só
   // quer os relatórios. Os dois renders são idempotentes.
   if (mostrarDre) renderDre(dre);

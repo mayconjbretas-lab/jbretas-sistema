@@ -146,11 +146,17 @@ html, body { height: 100%; overflow: hidden; }
 .fueltab:hover { border-color: var(--bd2); }
 .fueltab.active { background: var(--acd); border-color: var(--ac); color: var(--ac); }
 
-/* ── Aba RELATÓRIOS: card de destaque do DRE ──
-   As regras mudaram para shared/css/rel-card.css: o painel MOBILE
-   (modulos/admin) passou a ter o mesmo card e não carrega este arquivo.
-   Uma definição, dois consumidores — duplicar faria o card divergir no
-   primeiro ajuste. */
+/* ── Aba RELATÓRIOS: seletor de relatórios ──
+   O seletor é uma .fueltab-row com botões .fueltab — o MESMO estilo que as
+   sub-abas do DRE e os chips dos relatórios já usam, e que existe idêntico no
+   admin.css do mobile. Por isso não há CSS próprio nenhum: o card que havia
+   aqui saiu, e o shared/css/rel-card.css que o hospedava foi removido.
+
+   Só esta regra precisou sobreviver, e só no desktop: #s-relat é .scr, e aqui
+   .scr.active é display:flex (linha) — com os três filhos (seletor, lista e
+   seção do DRE) isso os poria lado a lado. No mobile o .scr.active já é
+   display:block, então lá não falta nada. */
+#s-relat.active { display: block; }
 
 /* Botões de combustível POR CARD (aba Comparação) — versão compacta do .fueltab */
 .cmp-card-fuels { display: flex; gap: 4px; flex-wrap: wrap; margin: .5rem 0 .6rem; }

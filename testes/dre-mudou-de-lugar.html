@@ -4,10 +4,6 @@
 <title>DRE mudou de lugar — nada mudou dentro</title>
 <link rel="stylesheet" href="/shared/css/base.css">
 <link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
-<!-- Mesmas folhas da pagina real: o card de Relatorios mudou para o
-     shared, porque o painel MOBILE tambem o usa e nao carrega o
-     painel-adm.css. Sem esta linha o harness perde regras da pagina. -->
-<link rel="stylesheet" href="/shared/css/rel-card.css">
 <style>
   body { margin:0; padding:12px; background:var(--bg,#0a0d1c); color:var(--tx,#eee);
          font-family:var(--mono,monospace); font-size:12px; line-height:1.7; }
@@ -172,15 +168,8 @@ function montarPalco(estrutura) {
     palco.innerHTML =
       '<main class="pa-main">' +
         '<section class="scr active" id="s-relat">' +
-          '<div class="rel-destaque">' +
-            '<button class="rel-cardbig aberto" id="rel-card-dre" type="button">' +
-              '<span class="rel-cb-ic">🧾</span>' +
-              '<span class="rel-cb-txt">' +
-                '<span class="rel-cb-nome">DRE — Produtos e Combustíveis</span>' +
-                '<span class="rel-cb-sub">Venda, custo e lucro por categoria</span>' +
-              '</span>' +
-              '<span class="rel-cb-acao" id="rel-cb-acao">← voltar aos relatórios</span>' +
-            '</button>' +
+          '<div class="fueltab-row" id="rel-seletor">' +
+            '<button class="fueltab active" type="button" id="rel-btn-dre">DRE</button>' +
           '</div>' +
          '<div id="s-relat-lista" hidden></div>' +
           '<section class="scr active" id="s-dre"></section>' +
@@ -316,16 +305,23 @@ const SUBABAS = ['dia', 'mes', 'posto', 'projecao'];
   chk(!document.getElementById('nb-dre'), 'nenhum botao DRE na navegacao de baixo');
   // O card e grande de verdade, nao uma aba de texto: era 80x39px sem fundo
   // nem borda. Mede-se o que o CSS produz, nao o que a classe promete.
-  const cb = document.getElementById('rel-card-dre');
-  const rcb = cb.getBoundingClientRect();
-  chk(rcb.height >= 70, 'o card tem altura de card (>=70px), nao de aba', Math.round(rcb.height) + 'px');
-  chk(getComputedStyle(cb).backgroundColor !== 'rgba(0, 0, 0, 0)',
-      'e tem fundo — a aba antiga era transparente', getComputedStyle(cb).backgroundColor);
-  chk(getComputedStyle(cb).borderTopWidth !== '0px',
-      'e borda — a aba antiga nao tinha', getComputedStyle(cb).borderTopWidth);
-  chk(!!cb.querySelector('.rel-cb-ic') && !!cb.querySelector('.rel-cb-nome')
-      && !!cb.querySelector('.rel-cb-sub'),
-      'com icone, nome e uma linha do que e');
+  // O seletor e um BOTAO do sistema, nao um card: reusa .fueltab, o mesmo
+  // estilo das sub-abas do DRE e dos chips dos relatorios. Mede-se o que o
+  // CSS produz, e nao o nome da classe.
+  const bt = document.getElementById('rel-btn-dre');
+  chk(!!bt && bt.tagName === 'BUTTON', 'o seletor e um <button>', bt && bt.tagName);
+  const rb = bt.getBoundingClientRect();
+  chk(rb.height > 0 && rb.height <= 44,
+      'com altura de botao (<=44px), nao de card', Math.round(rb.height) + 'px');
+  chk(rb.width <= 140, 'e largura de botao, sem esticar pela coluna',
+      Math.round(rb.width) + 'px');
+  chk(bt.textContent.trim() === 'DRE', 'so o nome, sem descricao', bt.textContent.trim());
+  chk(!bt.querySelector('span'), 'e sem icone nem subtitulo');
+  chk(getComputedStyle(bt.parentElement).display === 'flex',
+      'a fileira e flex — os proximos relatorios entram lado a lado',
+      getComputedStyle(bt.parentElement).display);
+  chk(getComputedStyle(bt.parentElement).flexWrap === 'wrap',
+      'e quebra linha quando nao couberem', getComputedStyle(bt.parentElement).flexWrap);
   chk(!!document.getElementById('nb-relat'), 'Relatorios continua la');
   chk(document.getElementById('nb-relat').classList.contains('active'),
       'e fica ATIVO enquanto se olha o DRE — nao se saiu da aba Relatorios');
@@ -423,10 +419,10 @@ const SUBABAS = ['dia', 'mes', 'posto', 'projecao'];
   chk(getComputedStyle(rw).maxWidth === '1100px',
       'e o CSS `#s-relat .rel-wrap` ainda alcanca no lugar novo',
       rw ? getComputedStyle(rw).maxWidth : '—');
-  chk(!!document.getElementById('rel-card-dre'), 'o card do DRE sobreviveu ao innerHTML');
+  chk(!!document.getElementById('rel-btn-dre'), 'o botao do DRE sobreviveu ao innerHTML');
   // O card tem de vir ANTES dos relatorios da rede — e o pedido: primeira
   // coisa que aparece ao entrar em Relatorios.
-  chk(!!(document.getElementById('rel-card-dre').compareDocumentPosition(lista)
+  chk(!!(document.getElementById('rel-btn-dre').compareDocumentPosition(lista)
          & Node.DOCUMENT_POSITION_FOLLOWING),
       'e esta ANTES da lista de relatorios no DOM');
   chk(!!document.getElementById('s-dre'), 'e a section do DRE tambem');
@@ -434,14 +430,20 @@ const SUBABAS = ['dia', 'mes', 'posto', 'projecao'];
       'o DRE ja montado nao foi apagado por montar Relatorios ao lado');
   lista.hidden = true;
 
-  H('8 · 375px sem scroll lateral');
-  const larguraAntes = document.documentElement.style.width;
-  document.documentElement.style.width = '375px';
-  await new Promise(r => setTimeout(r, 60));
-  const fora = [...document.querySelectorAll('#s-dre *')]
-    .filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.right > 375 + 1; }).length;
-  chk(fora === 0, 'nenhum elemento do DRE passa dos 375px', fora + ' elementos');
-  document.documentElement.style.width = larguraAntes;
+  H('8 · largura: medida de FORA, nao aqui');
+  // Este caso tentava 375px com documentElement.style.width e afirmava que
+  // nada transbordava. Era invalido: media query le o VIEWPORT, e mexer na
+  // largura de um elemento nao muda a avaliacao dela — a pagina seguia no
+  // layout largo e a medida nao dizia nada sobre 375px. Passava por sorte.
+  //
+  // O que vale de largura e medido redimensionando o viewport de verdade,
+  // fora do harness. O que fica aqui e a garantia estrutural: o DRE nao tem
+  // largura fixa em px que impeca a tela estreita de acomoda-lo.
+  const wrapDre = document.querySelector('#s-dre .dre-wrap');
+  chk(!!wrapDre, 'o .dre-wrap existe');
+  chk(getComputedStyle(wrapDre).width !== '' && getComputedStyle(wrapDre).maxWidth === '1100px',
+      'e e limitado por max-width (nao por width fixo), entao encolhe sozinho',
+      getComputedStyle(wrapDre).maxWidth);
 
   document.getElementById('res').innerHTML =
     '<b>' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>' : '<span class="ok">TUDO OK</span>') +

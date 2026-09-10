@@ -15,9 +15,6 @@
      Usa tokens --sf/--ac/--tx* resolvidos pela camada de alias em painel-adm.css. -->
 <link rel="stylesheet" href="../admin/coleta-revisao/coleta-revisao.css?v=202609101540">
 <link rel="stylesheet" href="painel-adm.css?v=202609101540">
-<!-- Card de destaque da aba Relatorios. Compartilhado com o painel MOBILE
-     (modulos/admin), que nao carrega o painel-adm.css. -->
-<link rel="stylesheet" href="../../shared/css/rel-card.css?v=202609101540">
 <link rel="stylesheet" href="medicao.css?v=202609101540">
 <link rel="stylesheet" href="kpi.css?v=202609101540">
 <script>
@@ -189,15 +186,12 @@
            É um BOTÃO com estado, não dois: abre o DRE e volta pelo mesmo
            lugar, sempre no topo. Um par de abas somaria uma segunda navegação
            acima das 4 sub-abas que o próprio DRE já monta. -->
-      <div class="rel-destaque">
-        <button class="rel-cardbig" id="rel-card-dre" type="button" onclick="relToggleDre()">
-          <span class="rel-cb-ic">🧾</span>
-          <span class="rel-cb-txt">
-            <span class="rel-cb-nome">DRE — Produtos e Combustíveis</span>
-            <span class="rel-cb-sub">Venda, custo e lucro por categoria · Dia, Mês, Por Posto e Projeção</span>
-          </span>
-          <span class="rel-cb-acao" id="rel-cb-acao">abrir →</span>
-        </button>
+      <!-- Seletor de relatorios. Botoes do sistema (.fueltab, o mesmo das
+           sub-abas do DRE e dos chips dos relatorios) — nao um card. Hoje so
+           o DRE; Movimentacao do dia e Mercado entram como irmaos aqui, e o
+           .fueltab-row ja quebra linha sozinho quando nao couberem. -->
+      <div class="fueltab-row" id="rel-seletor">
+        <button class="fueltab" type="button" id="rel-btn-dre" onclick="relToggleDre()">DRE</button>
       </div>
       <div id="s-relat-lista"></div>
       <section class="scr" id="s-dre"></section>
