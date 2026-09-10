@@ -59,6 +59,25 @@
 
   // ── Chips de grupos (mostrar/esconder colunas) ──────────────────
   const CHAVE_GRUPOS_FECHADOS = 'jb_matriz_grupos_fechados';
+  // Zoom da matriz: escala o .spreadsheet-frame por font-size, e o @media
+  // compacto e todo em em/ch — entao td, input, cabecalho e capacidade
+  // acompanham sem regra propria por nivel.
+  const CHAVE_ZOOM = 'jb_matriz_zoom';
+  const NIVEIS_ZOOM = [0.85, 1, 1.15, 1.3, 1.5];
+  let _zoomIdx = 1;
+
+  function lerZoom() {
+    const v = parseInt(localStorage.getItem(CHAVE_ZOOM));
+    return (v >= 0 && v < NIVEIS_ZOOM.length) ? v : 1;
+  }
+  function aplicarZoom() {
+    if (!_frameMatriz) return;
+    _frameMatriz.style.setProperty('--mm-zoom', NIVEIS_ZOOM[_zoomIdx]);
+    const n = _frameMatriz.parentNode.querySelector('.mm-zoom-nivel');
+    if (n) n.textContent = Math.round(NIVEIS_ZOOM[_zoomIdx] * 100) + '%';
+    try { localStorage.setItem(CHAVE_ZOOM, String(_zoomIdx)); } catch (_) {}
+    if (typeof ajustarSticky === 'function') ajustarSticky();
+  }
   const ROTULO_CHIP = {
     medicao: 'MEDIÇÃO',
     venda: 'VENDA', diferenca: 'Δ DIF.', carga: 'CARGA',
@@ -884,6 +903,11 @@
           '</span></div>' +
         '<div class="mm-actions" style="display:flex;align-items:center;gap:1rem;">' +
           '<div class="mm-grupos" role="group" aria-label="Grupos de colunas"></div>' +
+          '<div class="mm-zoom" role="group" aria-label="Zoom da matriz">' +
+            '<button type="button" data-z="-1" title="Diminuir" aria-label="Diminuir zoom">A−</button>' +
+            '<span class="mm-zoom-nivel">100%</span>' +
+            '<button type="button" data-z="1" title="Aumentar" aria-label="Aumentar zoom">A+</button>' +
+          '</div>' +
           '<div class="scroll-indicator">↔ Scroll horizontal para ver tudo</div>' +
         '</div>' +
       '</div>' +
@@ -923,6 +947,13 @@
       aplicarGruposFechados();
     });
     aplicarGruposFechados();
+    _zoomIdx = lerZoom();
+    container.querySelector('.mm-zoom').addEventListener('click', e => {
+      const b = e.target.closest('button[data-z]'); if (!b) return;
+      _zoomIdx = Math.min(NIVEIS_ZOOM.length - 1, Math.max(0, _zoomIdx + parseInt(b.dataset.z)));
+      aplicarZoom();
+    });
+    aplicarZoom();
     _mesSel.addEventListener('change', () => {
       const [a, m] = _mesSel.value.split('-').map(Number);
       if (a && m) { _ano = a; _mes = m; recarregarMes(); }

@@ -312,20 +312,19 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
 
 /* Matriz compacta — desktop */
 @media (min-width: 900px) {
-  .ss-table { font-size: .78rem; }
-  /* Sem o min-width:100% da regra base a tabela para de esticar pra preencher
-     o frame: com grupos fechados as colunas mantem a largura, em vez de
-     dividirem a sobra entre si. table-layout segue no default (auto). */
-  .ss-table { width: auto; min-width: 0; }
-  .ss-table th, .ss-table td { padding: .3rem .4rem; min-width: calc(var(--mm-ch, 6) * 1ch + .9rem); }
-  .ss-table .sticky-col { min-width: 64px; width: 64px; }
-  .mm-thead th { height: 28px; }
-  .mm-thead tr:first-child th { font-size: .62rem; letter-spacing: .2px; }
-  .mm-thead tr:last-child th { font-size: .64rem; }
-  .cell-in { width: calc(var(--mm-ch, 6) * 1ch + 6px); padding: 1px 2px; font-size: .78rem; }
-  .cell-val { font-size: .78rem; }
-  .mm-cap { font-size: .58rem; }
-  /* A faixa entre grupos é feita com border-right (16px, ver .grp-end acima);
-     na compacta vai à metade pra não comer o espaço que as colunas ganharam. */
+  .spreadsheet-frame { --mm-fs: calc(.78rem * var(--mm-zoom, 1)); font-size: var(--mm-fs); }
+  .ss-table { font-size: 1em; width: auto; min-width: 0; }
+  .ss-table th, .ss-table td { padding: .38em .5em; min-width: calc(var(--mm-ch, 6) * 1ch + 1.15em); }
+  .ss-table .sticky-col { min-width: 5.2em; width: 5.2em; }
+  .mm-thead th { height: calc(2.25 * var(--mm-fs)); }
+  .mm-thead tr:first-child th { font-size: .8em; letter-spacing: .2px; }
+  .mm-thead tr:last-child th { font-size: .82em; }
+  .cell-in { width: calc(var(--mm-ch, 6) * 1ch + .5em); padding: 1px 2px; font-size: 1em; }
+  .cell-val { font-size: 1em; }
+  .mm-cap { font-size: .75em; }
   .ss-table td.grp-end, .ss-table th.grp-end { border-right-width: 8px; }
+  .mm-zoom { display:inline-flex; gap:2px; }
+  .mm-zoom button { min-width:26px; height:22px; padding:0 6px; font:700 .68rem/1 var(--mono); border:1px solid var(--border2); border-radius:4px; background:transparent; color:var(--text2); cursor:pointer; }
+  .mm-zoom button:hover { color:var(--text); border-color:var(--text2); }
+  .mm-zoom .mm-zoom-nivel { min-width:34px; text-align:center; font:700 .66rem/22px var(--mono); color:var(--text2); }
 }
