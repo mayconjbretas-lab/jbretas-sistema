@@ -72,12 +72,19 @@
 }
 
 /* ── Blocos ────────────────────────────────────────────────────── */
-/* auto-fit + minmax, e não um número fixo de colunas: com 9 combustíveis
-   dá 3 por linha no desktop e 1 no celular sem media query nenhuma, e a
-   linha final não fica com um bloco esticado sozinho. */
+/* NÚMERO FIXO DE COLUNAS, e não auto-fit. O auto-fit parecia mais esperto e
+   estava ERRADO: com minmax(230px) uma tela de 1280 cabe CINCO blocos, e o
+   que se pediu foi convênio 2 por linha e combustível 3. O engano passou
+   despercebido porque a primeira fixture de teste tinha só 3 combustíveis —
+   com os 9 reais, a tela de produção sairia com 5. A escada é explícita:
+   3 colunas no desktop, 2 no meio-termo, 1 no celular. */
 .mm-blocos { display: grid; gap: 12px; }
-.mm-2 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-.mm-3 { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.mm-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mm-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* minmax(0, 1fr) e não 1fr: o mínimo automático de um item de grid é o
+   tamanho do conteúdo, e um número longo empurraria a coluna, estourando a
+   linha para fora da tela. */
+@media (max-width: 1040px) { .mm-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .mm-bloco {
   background: var(--sf2); border: 1px solid var(--bd);
@@ -227,6 +234,11 @@
     font-family: var(--mono); font-size: .64rem; color: var(--tx3);
     margin-top: 4px;
   }
+  /* No modo Ano a quantidade das categorias de loja é PEÇA, não litro. Esta
+     regra mora DENTRO do corte de 700px junto da que ela sobrescreve: solta
+     lá fora, a `content` valia em qualquer largura e a dica aparecia no
+     desktop — onde o detalhe já está visível e não há nada para tocar. */
+  .mm-tocavel.mm-un:not(.aberto)::after { content: 'toque para ver a quantidade'; }
 
   .mm-f select { min-width: 0; width: 100%; }
   .mm-f { flex: 1 1 140px; }
@@ -243,4 +255,111 @@
   .mm-total .mm-num { font-size: 2.5rem; }
   .mm-filtros { gap: 8px; }
   .mm-graf-y { min-width: 40px; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MODO ANO — acumulado de 01/01 até hoje, SEM comparação.
+   Reusa .mm-bloco, .mm-num, .mm-det e .mm-total inteiros: é a mesma
+   tela. O que existe só aqui é o peso da categoria (no lugar da
+   variação, que não há), a nota de fonte, e o gráfico de barras.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Ocupa o lugar do .mm-var no modo Mês. Deliberadamente SEM cor de
+   sinal: verde e vermelho aqui sugeririam alta e queda, e não há
+   contra o que subir ou cair. */
+.mm-peso {
+  font-family: var(--mono); font-size: .82rem; color: var(--tx2);
+}
+
+/* Nota de fonte/escopo. Não é aviso — é a legenda que diz de onde o
+   número veio. Por isso não tem caixa nem borda: um segundo bloco
+   emoldurado competiria com o .mm-aviso-caixa logo acima. */
+.mm-nota {
+  text-align: center; color: var(--tx3); font-size: .74rem;
+  line-height: 1.45; margin: -.3rem auto .9rem; max-width: 640px;
+  font-family: var(--sans);
+}
+
+/* ── Barras mês a mês ─────────────────────────────────────────── */
+/* HTML/flex, não SVG: são no máximo 12 barras, a altura é uma % e o
+   rótulo é texto normal. Um viewBox esticado aqui só traria de volta
+   os problemas de escala que o gráfico de linha teve de resolver. */
+.mm-barras { display: flex; align-items: stretch; gap: 6px; height: 220px; }
+.mm-col {
+  flex: 1 1 0; min-width: 0; display: flex; flex-direction: column;
+}
+/* O invólucro é a caixa de referência da altura da barra: com
+   `height:100%` no .mm-col a barra cheia empurraria o rótulo para
+   fora do gráfico. */
+.mm-col-plot { flex: 1; display: flex; align-items: flex-end; }
+.mm-barra {
+  width: 100%; background: var(--ac);
+  border-radius: 4px 4px 0 0; min-height: 2px;
+}
+/* MÊS COM MENOS POSTOS QUE A REDE. Listrado E mais apagado, e com o
+   asterisco no rótulo: a barra é menor por cobertura, não por venda,
+   e quem lê um gráfico crescente não supõe que o denominador mudou.
+   Três marcas porque a listra sozinha some no celular. */
+.mm-barra.parcial {
+  background: repeating-linear-gradient(45deg,
+    var(--ac) 0 4px, transparent 4px 8px);
+  opacity: .5;
+}
+.mm-col-rot {
+  font-family: var(--mono); font-size: .64rem; color: var(--tx3);
+  text-align: center; padding-top: 5px; height: 18px;
+  white-space: nowrap; overflow: hidden;
+}
+.mm-col-rot i { color: var(--ac); font-style: normal; }
+.mm-legenda-pe {
+  text-align: center; color: var(--tx3); font-size: .68rem;
+  font-family: var(--mono); margin-top: .7rem; line-height: 1.4;
+}
+
+@media (max-width: 700px) {
+  .mm-barras { height: 180px; gap: 4px; }
+  .mm-peso { font-size: .9rem; }
+  .mm-col-rot { font-size: .58rem; }
+}
+
+/* ── A janela real, colada em cada bloco ───────────────────────── */
+/* Repetida em doze blocos DE PROPÓSITO: o filtro diz "setembro" e o
+   número é de 01/09 a 09/09. Quem lê um bloco isolado — ou tira um
+   print dele — não vê o cabeçalho, e foi assim que R$ 3.990.044 de
+   nove dias virou "o mês de setembro" na cabeça de quem olhou.
+
+   Discreta de propósito também: é rodapé de conferência, não a
+   informação principal. Some do caminho de quem já sabe. */
+/* --tx2, e NAO --tx3. Medido: --tx3 sobre --sf2 da 3,36 de contraste em
+   10,2px, abaixo do minimo 4,5 do WCAG AA para texto pequeno — e uma linha
+   que existe PARA SER LIDA nao pode ser a menos legivel do bloco. Com --tx2
+   o contraste vai a 7,29 e ela continua claramente subordinada ao numero,
+   que e 3x maior. */
+.mm-periodo {
+  font-family: var(--mono); font-size: .7rem; color: var(--tx2);
+  margin-top: auto; padding-top: 6px;
+  letter-spacing: .02em; opacity: .85;
+}
+/* margin-top:auto acima empurra o período para o pé do bloco: numa
+   grade, blocos da mesma linha têm a mesma altura, e sem isso a linha
+   de período flutuaria em alturas diferentes de bloco para bloco. */
+
+@media (max-width: 700px) {
+  .mm-periodo { font-size: .74rem; padding-top: 8px; }
+}
+
+/* ── Comparação POR DIA ────────────────────────────────────────── */
+/* Quando os dois meses têm contagens de dias diferentes o total não
+   compara, mas a média diária compara. As duas médias vão logo abaixo
+   da variação: sem elas, "+5,8% por dia" seria mais um número para
+   conferir sem base. */
+.mm-media {
+  font-family: var(--mono); font-size: .7rem; color: var(--tx2);
+  opacity: .85; line-height: 1.4;
+}
+/* Nota dentro da caixa de aviso — explica por que NÃO há botão. Some
+   junto com o botão quando alinhar resolveria. */
+.mm-nota-caixa {
+  margin-top: 8px; font-size: .78rem; color: var(--tx3);
+  font-family: var(--mono); line-height: 1.45;
 }
