@@ -1,0 +1,332 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRE mudou de lugar — nada mudou dentro</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+<style>
+  body { margin:0; padding:12px; background:var(--bg,#0a0d1c); color:var(--tx,#eee);
+         font-family:var(--mono,monospace); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok,#0a0); }
+  .bad { color:var(--dg,#c00); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--tx2,#999); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--bd,#333); padding:8px; margin:10px 0; }
+</style>
+
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script>
+// ================================================================
+// TESTE de tela — o DRE saiu da .bnav e virou uma vista DENTRO de Relatorios.
+//
+// O PEDIDO ERA "so mover": mesmos dados, mesmas 4 sub-abas, mesmo dre.js. Um
+// teste que so olhasse a estrutura nova nao provaria isso — provaria que a
+// estrutura nova renderiza ALGUMA coisa. Entao este teste e DIFERENCIAL:
+// monta o MESMO dre.js, com o MESMO payload, nas DUAS estruturas, e exige que
+// o texto das 4 sub-abas seja IDENTICO. Se o texto bate nas quatro, o "nada
+// mudou dentro" esta provado, e nao afirmado.
+//
+// COMO RODA EM DUAS PASSADAS: dre.js guarda `_shellPronto` no modulo, entao
+// montar duas vezes na mesma pagina pularia o segundo montarShell. A primeira
+// carga monta a estrutura ANTIGA (#s-dre solto na main, como era), guarda o
+// retrato no sessionStorage e recarrega; a segunda monta a estrutura NOVA
+// (#s-dre aninhado no #s-relat, com o seletor de vista) e compara.
+//
+// O QUE MAIS AFIRMA, alem do retrato:
+//  · o #s-dre continua com o MESMO id (os ~210 seletores do dre.js sao
+//    `#s-dre .algo` — trocar o id seria reescrever o dre.js);
+//  · o botao de importar (ehTI) aparece para TI e NAO aparece para ADM;
+//  · trocar de vista nao mexe na .bnav (continua-se na aba Relatorios);
+//  · nao ha overflow horizontal em 375.
+//
+// Rodar: npx --yes serve -l 5501 .  →  /testes/dre-mudou-de-lugar
+//
+// SEM O .html NA URL, de proposito: o `serve` redireciona /x.html para /x e
+// DESCARTA a query string. Com .html o ?estrutura= e ignorado, a primeira
+// passada roda de novo e o retrato e reescrito — o teste passa sempre, sem
+// comparar nada. Mesma armadilha ja anotada no testes/README.md.
+//
+// PROVANDO QUE ELE DISCRIMINA: /testes/dre-mudou-de-lugar?sabotar=1 soma R$
+// 1.000 a uma linha do payload na segunda passada. Medido: acusa a sub-aba
+// MES apontando o caractere exato da divergencia — so ela, porque CATS
+// alimenta `agrupar=categoria`, que e a fonte do Mes; Dia, Por Posto e
+// Projecao leem outras variantes e seguem iguais. Se ?sabotar=1 der TUDO OK,
+// o teste esta cego e nao vale como prova.
+// ================================================================
+
+// ── Sessao dublada. TI para o botao de importar aparecer. ──
+let USUARIO = { nome: 'TESTE', perfil: 'ADM', ti: true };
+window.getUsuarioLogado = () => USUARIO;
+window.JBRETAS_CONFIG = { API_URL: 'http://localhost:0' };
+
+// ── Payload fixo. NAO precisa ser realista, precisa ser IDENTICO nas duas
+//    passadas — e a mesma entrada nos dois lados que torna o retrato uma prova.
+const CATS = [
+  { chave: 'COMBUSTIVEIS',  quantidade: 138420.5, venda_bruta: 861230.44, acrescimo: 0,
+    desconto_arq: 1231.30, venda_liquida: 859999.14, custo_total: 792140.22,
+    litros: 138420.5, vl_comb: 859999.14, vl_prod: 0, ct_comb: 792140.22, ct_prod: 0,
+    sc_linhas: 0, sc_venda_liquida: 0 },
+  { chave: 'LUBRIFICANTES', quantidade: 412, venda_bruta: 28110.00, acrescimo: 0,
+    desconto_arq: 110.00, venda_liquida: 28000.00, custo_total: 18400.00,
+    litros: 0, vl_comb: 0, vl_prod: 28000.00, ct_comb: 0, ct_prod: 18400.00,
+    sc_linhas: 0, sc_venda_liquida: 0 },
+  { chave: 'ADITIVOS',      quantidade: 208, venda_bruta: 9400.00, acrescimo: 0,
+    desconto_arq: 0, venda_liquida: 9400.00, custo_total: 5900.00,
+    litros: 0, vl_comb: 0, vl_prod: 9400.00, ct_comb: 0, ct_prod: 5900.00,
+    sc_linhas: 2, sc_venda_liquida: 140.00 },
+];
+const POSTOS_L = [
+  { chave: 'P. BERNARDO', quantidade: 90120.3, venda_bruta: 560000.00, acrescimo: 0,
+    desconto_arq: 800.00, venda_liquida: 559200.00, custo_total: 515000.00,
+    litros: 90120.3, vl_comb: 545000.00, vl_prod: 14200.00, ct_comb: 502000.00, ct_prod: 13000.00,
+    sc_linhas: 0, sc_venda_liquida: 0 },
+  { chave: 'P. ITAPOA', quantidade: 48920.2, venda_bruta: 338740.44, acrescimo: 0,
+    desconto_arq: 541.30, venda_liquida: 338199.14, custo_total: 301440.22,
+    litros: 48300.2, vl_comb: 314999.14, vl_prod: 23200.00, ct_comb: 290140.22, ct_prod: 11300.00,
+    sc_linhas: 2, sc_venda_liquida: 140.00 },
+];
+const somaTot = (ls) => {
+  const t = { quantidade: 0, venda_bruta: 0, acrescimo: 0, desconto_arq: 0, venda_liquida: 0,
+              custo_total: 0, litros: 0, vl_comb: 0, vl_prod: 0, ct_comb: 0, ct_prod: 0,
+              sc_linhas: 0, sc_venda_liquida: 0 };
+  ls.forEach(l => Object.keys(t).forEach(k => { t[k] += Number(l[k]) || 0; }));
+  return t;
+};
+// Serie por dia: valores FIXOS por data (nada de random — o retrato tem de
+// bater entre as duas passadas).
+function porDia(ini, fim) {
+  const out = [];
+  const d = new Date(ini + 'T12:00:00'), f = new Date(fim + 'T12:00:00');
+  let i = 0;
+  while (d <= f && i < 400) {
+    const iso = d.toISOString().slice(0, 10);
+    const k = 1 + ((i % 7) * 0.03);
+    out.push({ data: iso, chave: iso, quantidade: 4200 * k, venda_bruta: 29000 * k, acrescimo: 0,
+      desconto_arq: 40 * k, venda_liquida: 28960 * k, custo_total: 26100 * k,
+      litros: 4200 * k, vl_comb: 27000 * k, vl_prod: 1960 * k,
+      ct_comb: 24500 * k, ct_prod: 1600 * k, sc_linhas: 0, sc_venda_liquida: 0 });
+    d.setDate(d.getDate() + 1); i++;
+  }
+  return out;
+}
+
+let CHAMADAS = [];
+window.apiFetch = async function (url) {
+  CHAMADAS.push(url);
+  // Relatorios: shell so precisa responder algo com a forma certa; o que se
+  // testa aqui e o PONTO DE MONTAGEM e o alcance do CSS, nao os numeros.
+  if (url.startsWith('/relatorios')) {
+    return { success: true, data: '2026-08-31', postos: [], totais: {},
+             inicio: '2026-08-01', fim: '2026-08-31', linhas: [], mix: [], produtos: [] };
+  }
+  if (url.startsWith('/postos')) {
+    return { success: true, postos: [
+      { id: 'aaaaaaaa-1111-2222-3333-444444444444', nome: 'P. BERNARDO' },
+      { id: 'bbbbbbbb-1111-2222-3333-444444444444', nome: 'P. ITAPOA' },
+    ] };
+  }
+  const q = new URLSearchParams(url.split('?')[1] || '');
+  const ini = q.get('inicio') || '2026-08-01', fim = q.get('fim') || '2026-08-31';
+  const agrupar = q.get('agrupar') || 'categoria';
+  const linhas = agrupar === 'posto' ? POSTOS_L : agrupar === 'dia' ? porDia(ini, fim) : CATS;
+  const dias = Math.round((new Date(fim) - new Date(ini)) / 86400000) + 1;
+  return { periodo: { inicio: ini, fim, dias }, totais: somaTot(linhas), linhas };
+};
+
+// ── As duas estruturas ──────────────────────────────────────────
+// ANTIGA: #s-dre solto na .pa-main, com botao proprio na .bnav.
+// NOVA:   #s-dre aninhado no #s-relat, atras do seletor de vista.
+// A marcacao da NOVA e copia do modulos/painel-adm/index.html.
+function montarPalco(estrutura) {
+  const palco = document.getElementById('palco');
+  if (estrutura === 'antiga') {
+    palco.innerHTML =
+      '<main class="pa-main">' +
+        '<section class="scr" id="s-relat"></section>' +
+        '<section class="scr active" id="s-dre"></section>' +
+      '</main>' +
+      '<nav class="bnav">' +
+        '<button class="nbtn" id="nb-relat">Relatórios</button>' +
+        '<button class="nbtn active" id="nb-dre">DRE</button>' +
+      '</nav>';
+  } else {
+    palco.innerHTML =
+      '<main class="pa-main">' +
+        '<section class="scr active" id="s-relat">' +
+          '<div class="rel-sub" id="rel-sub">' +
+            '<button class="rel-subbtn" type="button" id="rsb-relat">📊 Relatórios</button>' +
+            '<button class="rel-subbtn active" type="button" id="rsb-dre">🧾 DRE</button>' +
+          '</div>' +
+          '<div id="s-relat-lista" hidden></div>' +
+          '<section class="scr active" id="s-dre"></section>' +
+        '</section>' +
+      '</main>' +
+      '<nav class="bnav">' +
+        '<button class="nbtn active" id="nb-relat">Relatórios</button>' +
+      '</nav>';
+  }
+}
+
+// Espera uma condicao virar verdadeira (com teto) — o DRE carrega por fetch.
+const ate = async (cond, ms = 4000) => {
+  const fim = Date.now() + ms;
+  while (Date.now() < fim) { if (cond()) return true; await new Promise(r => setTimeout(r, 15)); }
+  return cond();
+};
+// Retrato de uma sub-aba: o texto que o usuario le, sem espaco variavel.
+const retrato = () => document.getElementById('s-dre').innerText.replace(/\s+/g, ' ').trim();
+const SUBABAS = ['dia', 'mes', 'posto', 'projecao'];
+</script>
+
+<script src="/modulos/painel-adm/dre.js"></script>
+<script src="/modulos/painel-adm/relatorios.js"></script>
+
+<script>
+(async () => {
+  const linhas = [];
+  let falhas = 0;
+  const H = (t) => linhas.push('<h3>' + t + '</h3>');
+  const chk = (ok, txt, obtido) => {
+    if (!ok) falhas++;
+    linhas.push('<span class="' + (ok ? 'ok' : 'bad') + '">' + (ok ? '  ok  ' : ' FALHA ') + '</span>' + txt +
+      (obtido !== undefined ? '   <span style="color:var(--tx3,#777)">[' + String(obtido).slice(0, 140) + ']</span>' : ''));
+  };
+
+  const params = new URLSearchParams(location.search);
+  const estrutura = params.get('estrutura') === 'nova' ? 'nova' : 'antiga';
+  // Sabotagem opcional: muda UM numero na segunda passada, para provar que a
+  // comparacao enxerga diferenca. Sem isto, "os retratos batem" poderia
+  // significar apenas que o teste nao esta comparando nada.
+  const sabotar = params.get('sabotar') === '1';
+  if (sabotar && estrutura === 'nova') CATS[0].venda_liquida += 1000;
+  montarPalco(estrutura);
+
+  // ── Renderiza o DRE e tira o retrato das 4 sub-abas ──
+  const sec = document.getElementById('s-dre');
+  window.renderDre(sec);
+  await ate(() => retrato().length > 200 && !/Carregando/i.test(retrato()));
+
+  const fotos = {};
+  for (const id of SUBABAS) {
+    window.__dreSubaba(id);
+    await ate(() => {
+      const b = document.querySelector('#dre-subabas .fueltab.active');
+      return b && !/Carregando/i.test(retrato()) && retrato().length > 200;
+    });
+    await new Promise(r => setTimeout(r, 120));   // deixa o grafico assentar
+    fotos[id] = retrato();
+  }
+
+  if (estrutura === 'antiga') {
+    // Primeira passada: guarda e recarrega na estrutura NOVA.
+    sessionStorage.setItem('dre_antiga', JSON.stringify(fotos));
+    sessionStorage.setItem('dre_chamadas', JSON.stringify(CHAMADAS));
+    document.getElementById('res').innerHTML =
+      'estrutura ANTIGA fotografada (' + SUBABAS.length + ' sub-abas) — recarregando na NOVA…';
+    // Carrega o ?sabotar junto, senao a segunda passada perderia a sabotagem
+    // e o teste de discriminacao passaria em silencio.
+    location.search = '?estrutura=nova' + (sabotar ? '&sabotar=1' : '');
+    return;
+  }
+
+  // ── Segunda passada: compara ──
+  const antes = JSON.parse(sessionStorage.getItem('dre_antiga') || 'null');
+  const chamadasAntes = JSON.parse(sessionStorage.getItem('dre_chamadas') || '[]');
+  if (!antes) {
+    document.getElementById('res').innerHTML =
+      '<span class="bad">sem retrato da estrutura antiga — abra /testes/dre-mudou-de-lugar sem query</span>';
+    return;
+  }
+
+  H('1 · o texto das 4 sub-abas e IDENTICO nas duas estruturas');
+  for (const id of SUBABAS) {
+    const igual = antes[id] === fotos[id];
+    let onde = '';
+    if (!igual) {
+      let i = 0; while (i < antes[id].length && antes[id][i] === fotos[id][i]) i++;
+      onde = 'diverge no char ' + i + ': antes “' + antes[id].slice(i, i + 60) +
+             '” / agora “' + fotos[id].slice(i, i + 60) + '”';
+    }
+    chk(igual, 'sub-aba ' + id.toUpperCase() + ' — mesmo conteudo (' + fotos[id].length + ' chars)', onde || undefined);
+  }
+
+  H('2 · as mesmas chamadas de API, na mesma ordem');
+  chk(JSON.stringify(CHAMADAS) === JSON.stringify(chamadasAntes),
+      CHAMADAS.length + ' chamadas identicas',
+      CHAMADAS.length === chamadasAntes.length ? undefined : chamadasAntes.length + ' antes x ' + CHAMADAS.length + ' agora');
+
+  H('3 · a section manteve o id (os ~210 seletores do dre.js dependem dele)');
+  chk(!!document.getElementById('s-dre'), 'o #s-dre existe');
+  chk(document.getElementById('s-dre').closest('#s-relat') !== null,
+      'e agora esta DENTRO do #s-relat');
+  chk(document.getElementById('s-dre').classList.contains('scr'),
+      'continua sendo .scr (quem esconde/mostra e a classe active)');
+  // Prova de que o CSS do dre.js ainda alcanca o conteudo no lugar novo.
+  const wrap = document.querySelector('#s-dre .dre-wrap');
+  chk(!!wrap, 'o .dre-wrap montou');
+  chk(getComputedStyle(wrap).maxWidth === '1100px',
+      'e o CSS `#s-dre .dre-wrap` ainda se aplica no lugar novo',
+      getComputedStyle(wrap).maxWidth);
+  chk(getComputedStyle(document.getElementById('s-relat')).display === 'block',
+      '#s-relat.active e display:block — senao os 3 filhos ficariam lado a lado',
+      getComputedStyle(document.getElementById('s-relat')).display);
+
+  H('4 · as 4 sub-abas continuam la, e so elas');
+  const abas = [...document.querySelectorAll('#dre-subabas .fueltab')].map(b => b.textContent.trim());
+  chk(abas.length === 4, 'quatro sub-abas', abas.join(' | '));
+  chk(/Dia/.test(abas[0]) && /Mês/.test(abas[1]) && /Por Posto/.test(abas[2]) && /Projeção/.test(abas[3]),
+      'Dia, Mês, Por Posto e Projeção, nesta ordem', abas.join(' | '));
+
+  H('5 · o botao de importar (ehTI) sobreviveu a mudanca');
+  chk(!!document.getElementById('dre-imp-btn'), 'TI ve o botao de importar planilha');
+  chk(!!document.getElementById('dre-imp-file'), 'e o input de arquivo escondido');
+  chk(typeof window.__dreImpAbrir === 'function', '__dreImpAbrir continua exposto');
+  const btnImp = document.getElementById('dre-imp-btn');
+  chk(btnImp.closest('#s-dre') !== null, 'o botao esta dentro do #s-dre, no topo da vista');
+
+  H('6 · a .bnav nao tem mais botao de DRE');
+  chk(!document.getElementById('nb-dre'), 'nenhum botao DRE na navegacao de baixo');
+  chk(!!document.getElementById('nb-relat'), 'Relatorios continua la');
+  chk(document.getElementById('nb-relat').classList.contains('active'),
+      'e fica ATIVO enquanto se olha o DRE — nao se saiu da aba Relatorios');
+
+  H('7 · a OUTRA vista: Relatorios monta no #s-relat-lista');
+  // O renderRelatorios faz `sec.innerHTML = …`. Passar #s-relat direto
+  // apagaria o seletor de vista e a section do DRE junto — por isso ele passou
+  // a receber um filho proprio. E o CSS dele e escrito como `#s-relat .rel-wrap`:
+  // com o wrap agora em #s-relat > #s-relat-lista > .rel-wrap, o seletor
+  // descendente tem de continuar alcancando. Isto e medido, nao deduzido.
+  const lista = document.getElementById('s-relat-lista');
+  lista.hidden = false;
+  window.renderRelatorios(lista);
+  await ate(() => !!lista.querySelector('.rel-wrap'), 3000);
+  const rw = lista.querySelector('.rel-wrap');
+  chk(!!rw, 'o shell de Relatorios montou dentro do #s-relat-lista');
+  chk(getComputedStyle(rw).maxWidth === '1100px',
+      'e o CSS `#s-relat .rel-wrap` ainda alcanca no lugar novo',
+      rw ? getComputedStyle(rw).maxWidth : '—');
+  chk(!!document.getElementById('rel-sub'), 'o seletor de vista sobreviveu ao innerHTML');
+  chk(!!document.getElementById('s-dre'), 'e a section do DRE tambem');
+  chk(!!document.getElementById('dre-imp-btn'),
+      'o DRE ja montado nao foi apagado por montar Relatorios ao lado');
+  lista.hidden = true;
+
+  H('8 · 375px sem scroll lateral');
+  const larguraAntes = document.documentElement.style.width;
+  document.documentElement.style.width = '375px';
+  await new Promise(r => setTimeout(r, 60));
+  const fora = [...document.querySelectorAll('#s-dre *')]
+    .filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.right > 375 + 1; }).length;
+  chk(fora === 0, 'nenhum elemento do DRE passa dos 375px', fora + ' elementos');
+  document.documentElement.style.width = larguraAntes;
+
+  document.getElementById('res').innerHTML =
+    '<b>' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>' : '<span class="ok">TUDO OK</span>') +
+    '</b>  ·  ' + linhas.filter(l => /ok  |FALHA/.test(l)).length + ' afirmações' +
+    '  ·  <span style="color:var(--tx3,#777)">retratos de ' + SUBABAS.length + ' sub-abas comparados</span><br>' +
+    linhas.join('<br>');
+})();
+</script>
