@@ -57,6 +57,53 @@
     { chave: 'pedido',    titulo: '📋 PEDIDO FINAL (APROVADO) (L)', classe: 'h-ped'   },
   ];
 
+  // ── Chips de grupos (mostrar/esconder colunas) ──────────────────
+  const CHAVE_GRUPOS_FECHADOS = 'jb_matriz_grupos_fechados';
+  const ROTULO_CHIP = {
+    venda: 'VENDA', diferenca: 'Δ DIF.', carga: 'CARGA',
+    previsao: 'PREVISÃO', prePedido: 'PRÉ-PEDIDO', pedido: 'PEDIDO'
+  };
+  let _frameMatriz = null;
+  let _gruposFechados = new Set();
+
+  function lerGruposFechados() {
+    try { return new Set(JSON.parse(localStorage.getItem(CHAVE_GRUPOS_FECHADOS) || '[]')); }
+    catch (_) { return new Set(); }
+  }
+  function gravarGruposFechados() {
+    try { localStorage.setItem(CHAVE_GRUPOS_FECHADOS, JSON.stringify([..._gruposFechados])); }
+    catch (_) {}
+  }
+  function aplicarGruposFechados() {
+    if (!_frameMatriz) return;
+    CATEGORIAS_MEDICAO.forEach(cat => {
+      _frameMatriz.classList.toggle('oculta-' + cat.chave, _gruposFechados.has(cat.chave));
+    });
+    const wrap = _frameMatriz.parentNode.querySelector('.mm-grupos');
+    if (!wrap) return;
+    wrap.querySelectorAll('.mm-chip').forEach(chip => {
+      const f = _gruposFechados.has(chip.dataset.grupo);
+      chip.classList.toggle('off', f);
+      const b = chip.querySelector('button');
+      b.textContent = f ? '+' : '−';
+      b.setAttribute('aria-expanded', String(!f));
+      b.setAttribute('aria-label', (f ? 'Mostrar ' : 'Esconder ') + chip.dataset.grupo);
+    });
+  }
+  function montarChipsGrupos() {
+    if (!_frameMatriz) return;
+    const wrap = _frameMatriz.parentNode.querySelector('.mm-grupos');
+    if (!wrap) return;
+    wrap.innerHTML = categoriasVisiveis()
+      .filter(cat => cat.chave !== 'medicao')
+      .map(cat =>
+        '<span class="mm-chip ' + cat.classe + '" data-grupo="' + cat.chave + '">' +
+          (ROTULO_CHIP[cat.chave] || cat.chave) +
+          '<button type="button" title="Mostrar/esconder ' + (ROTULO_CHIP[cat.chave] || cat.chave) + '">−</button>' +
+        '</span>').join('');
+    aplicarGruposFechados();
+  }
+
   // Venda usa combustiveisVenda; as demais categorias usam grupos.
   function colunasDaCategoria(chave, grupos, combustiveisVenda) {
     return chave === 'venda' ? combustiveisVenda : grupos;
@@ -290,7 +337,7 @@
       let n = colunasDaCategoria(cat.chave, grupos, combustiveisVenda).length;
       if (cat.chave === 'venda') n += 1; // + coluna TOTAL
       const grpEnd = (ci < cats.length - 1) ? ' grp-end' : '';
-      row1 += '<th colspan="' + n + '" class="' + cat.classe + grpEnd + '">' + cat.titulo + '</th>';
+      row1 += '<th colspan="' + n + '" class="' + cat.classe + grpEnd + '" data-grupo="' + cat.chave + '">' + cat.titulo + '</th>';
     });
     row1 += '</tr>';
     let row2 = '<tr>';
@@ -304,12 +351,13 @@
         // menor (.mm-cap), sem espaço antes da barra (ET/45L). Sem tanque → só o código.
         const cap = (cat.chave === 'medicao' && g.capacidade != null)
           ? '<span class="mm-cap">/' + fmtCapacidade(g.capacidade) + '</span>' : '';
-        row2 += '<th' + grpEnd + '>' + g.abv + cap + '</th>';
+        row2 += '<th' + grpEnd + ' data-grupo="' + cat.chave + '">' + g.abv + cap + '</th>';
       });
-      if (ehVenda) row2 += '<th class="grp-end col-total-venda">TOTAL</th>';
+      if (ehVenda) row2 += '<th class="grp-end col-total-venda" data-grupo="venda">TOTAL</th>';
     });
     row2 += '</tr>';
     _thead.innerHTML = row1 + row2;
+    montarChipsGrupos();
   }
 
   // Um motivo só: com a trava unificada por mês da linha, 'mês anterior' e
@@ -350,6 +398,7 @@
           const val    = valores[i];
           // na Venda o grp-end vai pro TOTAL (adicionado após este loop)
           const grpEnd = (i === cols.length - 1 && !ehVenda) ? ' grp-end' : '';
+          const dg = ' data-grupo="' + cat.chave + '"';
           // DIFERENÇA na borda: some na da FRENTE sempre, e na de TRÁS só quando
           // não veio âncora (?margem=1, ou API antiga). Com âncora o 31/08
           // calcula normalmente numa tela de setembro — inclusive depois que
@@ -371,17 +420,17 @@
             // 'não se aplica' faria parecer que houve dia sem número.
             // Sem o <span id="prev_/diff_">, recalcularPrevisaoEDiff simplesmente
             // não acha o elemento e passa adiante (os dois pintores já guardam).
-            html += '<td class="' + grpEnd + ' cell-na"></td>';
+            html += '<td class="' + grpEnd + ' cell-na"' + dg + '></td>';
           } else if (cat.chave === 'previsao') {
             // Preenchido por recalcularPrevisaoEDiff após montar as linhas.
-            html += '<td class="' + grpEnd + '"><span class="cell-val" id="prev_' + diaIdx + '_' + i + '">—</span></td>';
+            html += '<td class="' + grpEnd + '"' + dg + '><span class="cell-val" id="prev_' + diaIdx + '_' + i + '">—</span></td>';
           } else if (cat.chave === 'diferenca') {
-            html += '<td class="' + grpEnd + '"><span class="cell-val cell-diff" id="diff_' + diaIdx + '_' + i + '">—</span></td>';
+            html += '<td class="' + grpEnd + '"' + dg + '><span class="cell-val cell-diff" id="diff_' + diaIdx + '_' + i + '">—</span></td>';
           } else if (EDITAVEIS.includes(cat.chave) && !soLeitura) {
             // Célula editável (Medição/Venda/Carga/Pedido) — mesmo padrão do app antigo.
             BASELINE[diaIdx + '|' + cat.chave + '|' + col.comb] = (val === undefined ? null : val);
             const combAttr = String(col.comb).replace(/"/g, '&quot;');
-            html += '<td class="' + grpEnd + '"><input type="text" inputmode="numeric" class="cell-in"' +
+            html += '<td class="' + grpEnd + '"' + dg + '><input type="text" inputmode="numeric" class="cell-in"' +
               ' data-dia="' + diaIdx + '" data-campo="' + cat.chave + '" data-comb="' + combAttr + '"' +
               ' value="' + fmtLitrosEdit(val) + '"' +
               ' onfocus="onCelulaFocus(this)" oninput="onCelulaDigito(this)"' +
@@ -395,14 +444,14 @@
             const motivo = soLeitura
               ? MOTIVO_MES_FECHADO
               : 'Somente leitura — definido no Painel ADM';
-            html += '<td class="' + grpEnd + ' td-ro" title="' + motivo + '">' +
+            html += '<td class="' + grpEnd + ' td-ro"' + dg + ' title="' + motivo + '">' +
               '<span class="cell-val cell-ro' + vazia + '">' + fmtL(val) + '</span></td>';
           }
         });
         if (ehVenda) {
           const totalVenda = somaVendaDia(valores);
           const vaziaT = (totalVenda === null) ? ' cell-vazia' : '';
-          html += '<td class="grp-end"><span class="cell-val cell-total-venda' + vaziaT + '" id="vtot_' + diaIdx + '">' +
+          html += '<td class="grp-end" data-grupo="venda"><span class="cell-val cell-total-venda' + vaziaT + '" id="vtot_' + diaIdx + '">' +
             (totalVenda === null ? '—' : fmtL(totalVenda)) + '</span></td>';
         }
       });
@@ -810,6 +859,7 @@
             '</span>' +
           '</span></div>' +
         '<div class="mm-actions" style="display:flex;align-items:center;gap:1rem;">' +
+          '<div class="mm-grupos" role="group" aria-label="Grupos de colunas"></div>' +
           '<div class="scroll-indicator">↔ Scroll horizontal para ver tudo</div>' +
         '</div>' +
       '</div>' +
@@ -835,6 +885,20 @@
       if (b && !b.disabled) { mudarMes(parseInt(b.dataset.delta, 10)); return; }
       if (e.target.closest('.mm-mes-hoje')) irParaMesCorrente();
     });
+    // Chips de grupo: estado no modulo (sobrevive a troca de mes/posto, que
+    // remonta o cabecalho) + storage (sobrevive a recarga). O clique so mexe
+    // em classes no .spreadsheet-frame — a tabela nao e reconstruida, entao
+    // input digitado e nao salvo continua la.
+    _frameMatriz = container.querySelector('.spreadsheet-frame');
+    _gruposFechados = lerGruposFechados();
+    container.querySelector('.mm-grupos').addEventListener('click', e => {
+      const b = e.target.closest('.mm-chip button'); if (!b) return;
+      const chave = b.closest('.mm-chip').dataset.grupo;
+      _gruposFechados.has(chave) ? _gruposFechados.delete(chave) : _gruposFechados.add(chave);
+      gravarGruposFechados();
+      aplicarGruposFechados();
+    });
+    aplicarGruposFechados();
     _mesSel.addEventListener('change', () => {
       const [a, m] = _mesSel.value.split('-').map(Number);
       if (a && m) { _ano = a; _mes = m; recarregarMes(); }

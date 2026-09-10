@@ -258,3 +258,53 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
 .red-bl-val { font-family: var(--mono); font-weight: 700; color: var(--text); font-size: .82rem; margin-top: 2px; }
 .red-bl-total { background: var(--accent-dim); border-color: var(--accent); }
 .red-bl-total .red-bl-lbl, .red-bl-total .red-bl-val { color: var(--accent); }
+
+/* ===== Chips de grupo (mostrar/esconder colunas) =====
+   Ficam na .mm-actions, à esquerda do .scroll-indicator. Reusam a classe
+   .h-* do cabeçalho pra herdar a cor da categoria — mas .h-* traz
+   background e border-bottom com !important (ver .h-med..h-ped acima),
+   feitos pra uma th de cabeçalho, não pra um chip. Os dois blocos abaixo
+   desfazem só isso; a cor do texto (currentColor) é o que queremos manter. */
+.mm-grupos { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.mm-chip {
+  display:inline-flex; align-items:center; gap:6px; padding:2px 4px 2px 9px;
+  border-radius:6px; border:1px solid currentColor; font-family:var(--mono);
+  font-size:.66rem; font-weight:700; letter-spacing:.3px; text-transform:uppercase;
+  background:color-mix(in srgb, currentColor 14%, transparent); line-height:1;
+}
+/* --chip-cor: a cor da categoria como valor próprio. currentColor não serve
+   pro botão: dentro dele `color` vira var(--surface2) (o glifo), e aí
+   `background: currentColor` resolveria pra surface2 — botão invisível.
+   Especificidade (0,2,0) + !important pra vencer o !important de .h-*. */
+.mm-chip.h-med   { --chip-cor: var(--c-med);   }
+.mm-chip.h-ven   { --chip-cor: var(--c-ven);   }
+.mm-chip.h-dif   { --chip-cor: var(--c-dif);   }
+.mm-chip.h-carga { --chip-cor: var(--c-carga); }
+.mm-chip.h-prev  { --chip-cor: var(--c-prev);  }
+.mm-chip.h-pre   { --chip-cor: var(--c-pre);   }
+.mm-chip.h-ped   { --chip-cor: var(--c-ped);   }
+.mm-chip.h-med, .mm-chip.h-ven, .mm-chip.h-dif, .mm-chip.h-carga,
+.mm-chip.h-prev, .mm-chip.h-pre, .mm-chip.h-ped {
+  background:color-mix(in srgb, var(--chip-cor) 14%, transparent) !important;
+  border:1px solid currentColor !important;
+}
+.mm-chip button {
+  width:20px; height:20px; padding:0; border-radius:4px; border:1px solid var(--chip-cor);
+  background:var(--chip-cor); color:var(--surface2); font:700 14px/1 var(--mono); cursor:pointer;
+}
+.mm-chip.off { border-style:dashed; background:transparent; }
+.mm-chip.off.h-med, .mm-chip.off.h-ven, .mm-chip.off.h-dif, .mm-chip.off.h-carga,
+.mm-chip.off.h-prev, .mm-chip.off.h-pre, .mm-chip.off.h-ped {
+  background:transparent !important; border-style:dashed !important;
+}
+.mm-chip.off button { background:transparent; color:inherit; }
+.mm-chip button:focus-visible { outline:2px solid var(--brand-gold, currentColor); outline-offset:2px; }
+
+/* Esconder um grupo = esconder toda th/td marcada com o data-grupo dele.
+   Puramente CSS: a tabela não é remontada, então valor digitado não se perde. */
+.spreadsheet-frame.oculta-venda     [data-grupo="venda"],
+.spreadsheet-frame.oculta-diferenca [data-grupo="diferenca"],
+.spreadsheet-frame.oculta-carga     [data-grupo="carga"],
+.spreadsheet-frame.oculta-previsao  [data-grupo="previsao"],
+.spreadsheet-frame.oculta-prePedido [data-grupo="prePedido"],
+.spreadsheet-frame.oculta-pedido    [data-grupo="pedido"] { display:none; }
