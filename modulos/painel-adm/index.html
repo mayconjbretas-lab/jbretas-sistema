@@ -17,6 +17,9 @@
 <link rel="stylesheet" href="painel-adm.css?v=202609101613">
 <link rel="stylesheet" href="medicao.css?v=202609101613">
 <link rel="stylesheet" href="kpi.css?v=202609101613">
+<!-- Movimentação do dia (aba Relatórios). No shared porque os dois módulos a
+     usam e não compartilham folha: ver o cabeçalho do próprio mov-mes.css. -->
+<link rel="stylesheet" href="../../shared/css/mov-mes.css?v=202609101613">
 <script>
   // Pre-paint: aplica o tema salvo antes de renderizar (evita flash).
   (function(){
@@ -188,13 +191,15 @@
            acima das 4 sub-abas que o próprio DRE já monta. -->
       <!-- Seletor de relatorios. Botoes do sistema (.fueltab, o mesmo das
            sub-abas do DRE e dos chips dos relatorios) — nao um card. Hoje so
-           o DRE; Movimentacao do dia e Mercado entram como irmaos aqui, e o
+           o DRE e a Movimentacao do dia; o Mercado entra como irmao aqui, e o
            .fueltab-row ja quebra linha sozinho quando nao couberem. -->
       <div class="fueltab-row" id="rel-seletor">
-        <button class="fueltab" type="button" id="rel-btn-dre" onclick="relToggleDre()">DRE</button>
+        <button class="fueltab" type="button" id="rel-btn-dre" onclick="relAbrir('dre')">DRE</button>
+        <button class="fueltab" type="button" id="rel-btn-mov" onclick="relAbrir('mov')">Movimentação do dia</button>
       </div>
       <div id="s-relat-lista"></div>
       <section class="scr" id="s-dre"></section>
+      <section class="scr" id="s-movmes"></section>
     </section>
     <section class="scr" id="s-custo"></section>
     <section class="scr" id="s-forn"></section>
@@ -252,6 +257,7 @@
 <script src="relatorios.js?v=202609101613"></script>
 <!-- DRE — GET /dre (ADM ou LOGISTICA); expõe renderDre em window -->
 <script src="dre.js?v=202609101613"></script>
+<script src="movimentacao-mes.js?v=202609101613"></script>
 <script src="solicitacoes-adm.js?v=202609101613"></script>
 <script src="../../shared/js/push-inscricao.js?v=202609101613"></script>
 <!-- Custo & Margem — mesmo JS da Logística (renderCustoMargem em window), sem fork; ADM = só leitura -->

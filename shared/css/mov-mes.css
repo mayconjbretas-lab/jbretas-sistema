@@ -1,0 +1,246 @@
+/* ================================================================
+   JBRETAS — shared/css/mov-mes.css
+   Tela "Movimentação do dia" da aba Relatórios (painel-adm + admin).
+
+   MORA NO SHARED porque os DOIS módulos a usam e eles não compartilham
+   folha nenhuma: o modulos/admin NÃO carrega o base.css (tem paleta
+   própria, aprovada pela diretoria), e o painel-adm não carrega o
+   admin.css. Duplicar este arquivo nos dois faria as duas telas
+   divergirem no primeiro ajuste feito em um só.
+
+   POR ISSO SÓ OS TOKENS CURTOS: --sf2 --sf3 --bd --bd2 --tx --tx2 --tx3
+   --ac --acd --ok --dg --r --rl --mono --sans. Esses existem NOS DOIS —
+   nativos no admin.css, e no painel-adm.css como alias dos tokens do
+   base.css. Usar --surface2 ou --accent aqui funcionaria só no desktop e
+   sairia SEM COR no celular, calado.
+
+   ESTILO: blocos grandes, número por extenso, variação em palavra. É uma
+   tela para ler de relance, não uma planilha.
+   ================================================================ */
+
+/* #s-movmes é .scr, e no painel-adm .scr.active é display:flex — com os
+   filhos empilhados isso os poria lado a lado. Mesmo motivo da regra
+   gêmea do #s-relat. No admin o .scr.active já é block. */
+#s-movmes.active { display: block; }
+
+/* ── Filtros ───────────────────────────────────────────────────── */
+.mm-filtros {
+  display: flex; flex-wrap: wrap; gap: 10px 14px;
+  justify-content: center; align-items: flex-end;
+  margin: 0 0 1.1rem;
+}
+.mm-f { display: flex; flex-direction: column; gap: 4px; }
+.mm-f > span {
+  font-family: var(--mono); font-size: .64rem; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--tx3);
+  padding-left: 2px;
+}
+.mm-f select {
+  background: var(--sf2); color: var(--tx);
+  border: 1px solid var(--bd); border-radius: var(--r);
+  padding: 8px 12px; font-size: .82rem; font-family: var(--sans);
+  min-width: 148px; cursor: pointer;
+}
+.mm-f select:focus { outline: none; border-color: var(--ac); }
+
+/* ── Contexto e avisos ─────────────────────────────────────────── */
+.mm-contexto {
+  text-align: center; color: var(--tx2); font-size: .8rem;
+  margin: 0 0 1rem; font-family: var(--mono);
+}
+.mm-contexto b { color: var(--tx); }
+
+.mm-aviso-caixa {
+  background: var(--sf2); border: 1px solid var(--bd);
+  border-radius: var(--r); padding: 14px 16px;
+  color: var(--tx2); font-size: .84rem; line-height: 1.5;
+  margin: 0 auto 1.3rem; max-width: 720px; text-align: center;
+}
+.mm-aviso-caixa b { color: var(--tx); }
+.mm-aviso-caixa.erro { border-color: var(--dg); color: var(--dg); }
+.mm-btn-conserto {
+  display: inline-block; margin: 10px auto 0;
+  background: var(--acd); border: 1px solid var(--ac); color: var(--ac);
+  border-radius: 20px; padding: 6px 16px; cursor: pointer;
+  font-family: var(--mono); font-size: .74rem; font-weight: 600;
+}
+
+.mm-titulo {
+  font-size: .72rem; font-family: var(--mono); font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--tx3);
+  margin: 1.8rem 0 .8rem; text-align: center;
+}
+
+/* ── Blocos ────────────────────────────────────────────────────── */
+/* auto-fit + minmax, e não um número fixo de colunas: com 9 combustíveis
+   dá 3 por linha no desktop e 1 no celular sem media query nenhuma, e a
+   linha final não fica com um bloco esticado sozinho. */
+.mm-blocos { display: grid; gap: 12px; }
+.mm-2 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.mm-3 { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+
+.mm-bloco {
+  background: var(--sf2); border: 1px solid var(--bd);
+  border-radius: var(--rl); padding: 18px 16px;
+  display: flex; flex-direction: column; gap: 6px;
+  text-align: center; width: 100%;
+  font-family: var(--sans); color: var(--tx);
+}
+.mm-nome {
+  font-family: var(--mono); font-size: .7rem; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--tx3);
+}
+/* O NÚMERO É O BLOCO. tabular-nums para os dígitos não dançarem de largura
+   entre um bloco e outro. */
+.mm-num {
+  font-family: var(--mono); font-size: 2rem; font-weight: 700;
+  line-height: 1.1; color: var(--tx); font-variant-numeric: tabular-nums;
+}
+.mm-sub { font-family: var(--mono); font-size: .82rem; color: var(--tx2); }
+
+/* ── A variação, em palavra e em cor ───────────────────────────── */
+/* A PALAVRA carrega o sentido e a cor confirma — nunca a cor sozinha:
+   8% dos homens não distinguem verde de vermelho, e a tela é para ler de
+   relance. A seta é aria-hidden porque "▲ subiu 4%" lido em voz alta
+   viraria "triângulo apontando para cima subiu quatro por cento". */
+.mm-var {
+  font-family: var(--mono); font-size: .88rem; font-weight: 600;
+}
+.mm-var.sobe { color: var(--ok); }
+.mm-var.cai { color: var(--dg); }
+.mm-var.igual { color: var(--tx2); }
+.mm-var.nada { color: var(--tx3); font-weight: 400; font-size: .78rem; }
+.mm-seta { font-size: .8em; }
+.mm-var-mini { font-size: .76rem; }
+
+/* ── Detalhe (litros) ──────────────────────────────────────────── */
+/* NO DESKTOP SEMPRE VISÍVEL, em fonte menor. No celular vira toque. */
+.mm-det {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--bd);
+}
+.mm-det-num { font-family: var(--mono); font-size: .9rem; color: var(--tx2); }
+
+.mm-tocavel {
+  cursor: pointer; font: inherit; text-align: center;
+  appearance: none; -webkit-appearance: none;
+}
+.mm-tocavel:hover { border-color: var(--bd2); }
+.mm-tocavel:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
+
+/* SINAIS OPOSTOS — o litro subiu e o R$ caiu, ou o contrário. É a leitura
+   que o DRE não dá, então o bloco acende e o detalhe já vem aberto. */
+.mm-oposto { border-color: var(--ac); background: var(--acd); }
+.mm-aviso {
+  font-family: var(--mono); font-size: .68rem; color: var(--ac);
+  line-height: 1.35;
+}
+
+.mm-vazio .mm-num { color: var(--tx3); }
+
+/* TOTAL: bloco de largura cheia, número maior. Fecha a seção somando o
+   que os blocos de cima mostram separados. */
+.mm-total {
+  margin-top: 12px; border-color: var(--bd2);
+  background: var(--sf3, var(--sf2));
+}
+.mm-total .mm-num { font-size: 2.5rem; }
+.mm-total .mm-det { border-top-style: solid; }
+
+/* ── Gráfico ───────────────────────────────────────────────────── */
+.mm-graf-topo { display: flex; justify-content: center; }
+.mm-metrica { margin-bottom: .9rem; justify-content: center; }
+
+.mm-graf-legenda {
+  display: flex; gap: 18px; justify-content: center;
+  margin-bottom: .7rem; font-family: var(--mono); font-size: .74rem;
+  color: var(--tx2);
+}
+.mm-leg { display: inline-flex; align-items: center; gap: 6px; }
+.mm-leg i { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
+.mm-leg.base i { background: var(--ac); height: 4px; }
+.mm-leg.cmp i { background: var(--tx3); }
+
+.mm-graf-caixa { display: flex; gap: 8px; align-items: stretch; }
+/* padding-bottom = altura dos rotulos do X + a margem deles: e o que faz o
+   "0" do eixo Y cair na mesma linha que o pe do grafico. */
+.mm-graf-y {
+  display: flex; flex-direction: column; justify-content: space-between;
+  font-family: var(--mono); font-size: .64rem; color: var(--tx3);
+  text-align: right; min-width: 52px; padding-bottom: 22px;
+}
+.mm-graf-area { flex: 1; }
+/* O PLOT E A CAIXA DE REFERENCIA, e o SVG a preenche por inteiro. Os pontos
+   sao position:absolute em % DESTA caixa, entao ponto e linha usam o mesmo
+   sistema de coordenadas e nao podem sair de registro. Duas alturas (SVG de
+   220px numa area de 240px) faziam o ponto derivar ate 20px da linha no pe
+   do grafico — corrigir por margem so acertava no meio. */
+.mm-graf-plot { position: relative; height: 220px; }
+.mm-graf { width: 100%; height: 100%; display: block; overflow: visible; }
+.mm-grade { stroke: var(--bd); stroke-width: 1; opacity: .5; }
+.mm-lin-cmp { fill: none; stroke: var(--tx3); stroke-width: 2; opacity: .6; }
+.mm-lin-base { fill: none; stroke: var(--ac); stroke-width: 3.5; stroke-linejoin: round; stroke-linecap: round; }
+
+/* Ponto em SPAN, não <circle>: o viewBox é esticado com
+   preserveAspectRatio="none" e um círculo do SVG viraria ovo. O span em %
+   é redondo em qualquer largura. */
+.mm-pt {
+  position: absolute; border-radius: 50%;
+  transform: translate(-50%, -50%); pointer-events: none;
+}
+/* Sem margem de correcao: o translate(-50%,-50%) acima ja centra o ponto na
+   coordenada, e a coordenada e a mesma do SVG. */
+.mm-pt.base { width: 9px; height: 9px; background: var(--ac); }
+.mm-pt.cmp { width: 6px; height: 6px; background: var(--tx3); opacity: .7; }
+
+/* Os rotulos sao IRMAOS do plot, nao filhos: dentro dele entrariam na mesma
+   caixa dos pontos e roubariam altura do desenho. */
+.mm-graf-x { position: relative; height: 18px; margin-top: 4px; }
+.mm-rx {
+  position: absolute; transform: translateX(-50%);
+  font-family: var(--mono); font-size: .64rem; color: var(--tx3);
+}
+.mm-sem {
+  text-align: center; color: var(--tx3); font-size: .82rem;
+  padding: 2rem 0; font-family: var(--mono);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   CELULAR — abaixo de 700px, o mesmo corte do DRE mobile.
+   Blocos empilhados, número MAIOR, e o detalhe de litros vira toque.
+   ══════════════════════════════════════════════════════════════ */
+@media (max-width: 700px) {
+  .mm-2, .mm-3 { grid-template-columns: 1fr; }
+  .mm-bloco { padding: 20px 16px; }
+  .mm-num { font-size: 2.6rem; }
+  .mm-total .mm-num { font-size: 2.9rem; }
+  .mm-var { font-size: .95rem; }
+
+  /* O DETALHE FECHA e só o toque abre. `display:none` e não altura zero:
+     leitor de tela não deve anunciar litros que ninguém pediu. O
+     aria-expanded do botão diz que há mais. */
+  .mm-tocavel .mm-det { display: none; }
+  .mm-tocavel.aberto .mm-det { display: flex; }
+  /* A dica só enquanto está fechado — depois de aberto ela mente. */
+  .mm-tocavel:not(.aberto)::after {
+    content: 'toque para ver os litros';
+    font-family: var(--mono); font-size: .64rem; color: var(--tx3);
+    margin-top: 4px;
+  }
+
+  .mm-f select { min-width: 0; width: 100%; }
+  .mm-f { flex: 1 1 140px; }
+
+  .mm-graf-plot { height: 180px; }
+  .mm-graf-y { min-width: 44px; font-size: .6rem; }
+  .mm-pt.base { width: 11px; height: 11px; }
+  .mm-pt.cmp { width: 7px; height: 7px; }
+}
+
+/* 375px é o piso real (iPhone SE). Só o que precisa encolher mais. */
+@media (max-width: 400px) {
+  .mm-num { font-size: 2.3rem; }
+  .mm-total .mm-num { font-size: 2.5rem; }
+  .mm-filtros { gap: 8px; }
+  .mm-graf-y { min-width: 40px; }
+}

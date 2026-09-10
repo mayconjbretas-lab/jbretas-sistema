@@ -1,0 +1,595 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Movimentação do dia (Relatórios) — blocos, palavra e gráfico</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<!-- Alias dos tokens curtos: o painel-adm.css faz isso em produção, e o
+     mov-mes.css SÓ usa os curtos (é o vocabulário que existe também no
+     admin.css do celular). Sem esta ponte o harness renderiza sem cor e as
+     afirmações de verde/vermelho passariam por engano. -->
+<style>
+  :root {
+    --ac: var(--accent); --ac2: var(--accent2); --acd: var(--accent-dim);
+    --dg: var(--danger); --wn: var(--warning); --inf: var(--info);
+    --tx: var(--text); --tx2: var(--text2); --tx3: var(--text3);
+    --sf: var(--surface); --sf2: var(--surface2); --sf3: var(--surface3);
+    --bd: var(--border); --bd2: var(--border2);
+    --r: var(--radius); --rl: var(--radius-lg);
+  }
+  /* .fueltab, copiado identico do painel-adm.css E do admin.css (os dois tem
+     a mesma regra). Fica aqui porque o harness nao carrega nenhuma das duas,
+     e sem isto os botoes de metrica saem com o visual cru do navegador — o
+     teste passaria mas a inspecao visual mentiria. */
+  .fueltab-row { display:flex; gap:6px; margin-bottom:.7rem; flex-wrap:wrap; }
+  .fueltab { background:var(--sf2); border:1px solid var(--bd); border-radius:20px;
+             padding:6px 14px; font-size:.76rem; font-family:var(--mono);
+             font-weight:600; color:var(--tx2); cursor:pointer; }
+  .fueltab.active { background:var(--acd); border-color:var(--ac); color:var(--ac); }
+</style>
+<link rel="stylesheet" href="/shared/css/mov-mes.css">
+<style>
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+  .barra { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; }
+  .barra button { background:var(--surface2); border:1px solid var(--border); color:var(--text2);
+                  font-family:var(--mono); font-size:11px; padding:5px 9px; border-radius:6px; cursor:pointer; }
+  .barra button:hover { border-color:var(--accent); color:var(--accent); }
+</style>
+
+<div id="res">rodando…</div>
+
+<!-- Trocar o cenario a mao para inspecionar o visual em 375 / 430 / 1280. -->
+<div class="barra" id="barra"></div>
+
+<!-- PALCO: a mesma marcacao do index.html de producao — a section .scr com o
+     id que o CSS espera. Copia literal de proposito: `#s-movmes.active` e uma
+     regra de id, e um palco com outro id passaria sem provar nada. -->
+<div id="palco">
+  <section class="scr active" id="s-movmes"></section>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// A tela le `comparavel` da ROTA e nao recalcula a regua. Entao aqui se prova
+// o lado da TELA: dado um `comparavel`, sai a palavra certa, na cor certa, e
+// quando ele barra NAO sai porcentagem nenhuma. A regua em si (9 dias x 11
+// dias => dias_diferentes) e provada no lado da API, contra o banco de
+// verdade, pelo sondar-fatmes.js.
+//
+// FIXTURES ESCOLHIDAS PARA A CONTA SER CONFERIVEL DE CABECA:
+//   GC  10,0 mi <- 9,0 mi  = +11,1%   e 1,60 mi L <- 1,50 mi L = +6,7%   (mesmo sinal)
+//   ET   5,0 mi <- 4,5 mi  = +11,1%   e 1,20 mi L <- 1,30 mi L = -7,7%   (OPOSTOS)
+//   S10  3,0 mi <- 3,0 mi  =    0%    e 0,50 mi L <- 0,50 mi L =    0%   (quase igual)
+//
+// NAO USA A URL SEM .html POR ACIDENTE: ver testes/README.md — o `serve`
+// redireciona /x.html para /x e DESCARTA a query string. Este teste nao le
+// query nenhuma, entao os dois caminhos servem.
+// ════════════════════════════════════════════════════════════════
+const out = [];
+let falhas = 0, total = 0;
+function H(t) { out.push('\n<h3>' + t + '</h3>'); }
+function chk(cond, msg, extra) {
+  total++;
+  if (!cond) falhas++;
+  out.push((cond ? '<span class="ok">  ok  </span>' : '<span class="bad">FALHA </span>') +
+    msg + (extra ? '   <span style="color:var(--text3)">[' + extra + ']</span>' : ''));
+}
+function EQ(a, b, msg) {
+  const sa = JSON.stringify(a), sb = JSON.stringify(b);
+  chk(sa === sb, msg, sa === sb ? '' : sa + ' != ' + sb);
+}
+const pintarRes = () => { document.getElementById('res').innerHTML = out.join('\n'); };
+
+// ── Fixtures ────────────────────────────────────────────────────
+// A SERIE VARIA POR DIA, e nao e capricho: uma serie constante desenha uma
+// RETA, e reta esconde erro de escala — foi o que deixou passar o
+// desalinhamento entre ponto e linha ate a inspecao visual. A rampa e
+// simetrica em torno do dia 5, entao a soma dos 9 dias da exatamente 9x o
+// valor central e continua batendo com o total do mes.
+const serie = (mes, dias, fatDia, litDia) => dias.map(d => ({
+  data: mes + '-' + String(d).padStart(2, '0'), dia: d,
+  faturamento: fatDia + (d - 5) * (fatDia * 0.1),
+  litros: litDia + (d - 5) * (litDia * 0.08),
+}));
+
+const COMB_BASE = [
+  { codigo: 'GC', rotulo: 'Gasolina comum', faturamento: 10000000, litros: 1600000 },
+  { codigo: 'ET', rotulo: 'Etanol', faturamento: 5000000, litros: 1200000 },
+  { codigo: 'S10', rotulo: 'Diesel S10', faturamento: 3000000, litros: 500000 },
+];
+const COMB_CMP = [
+  { codigo: 'GC', rotulo: 'Gasolina comum', faturamento: 9000000, litros: 1500000 },
+  { codigo: 'ET', rotulo: 'Etanol', faturamento: 4500000, litros: 1300000 },
+  { codigo: 'S10', rotulo: 'Diesel S10', faturamento: 3000000, litros: 500000 },
+];
+
+function ladoBase(opts) {
+  const o = opts || {};
+  const dias = o.dias || [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  return {
+    tem_dado: true, de: '2026-09-01', ate: '2026-09-30',
+    dias_com_dado: dias.length, primeiro: '2026-09-01',
+    ultimo: '2026-09-' + String(dias[dias.length - 1]).padStart(2, '0'),
+    faturamento: 18000000, litros: 3300000,
+    por_combustivel: COMB_BASE,
+    por_canal: o.canal || [
+      { chave: 'NORMAL', rotulo: 'Pista (sem app)', faturamento: 12600000, litros: 2400000 },
+      { chave: 'SOUTAG', rotulo: 'Soutag', faturamento: 4000000, litros: 700000 },
+      { chave: '99', rotulo: 'App 99', faturamento: 1400000, litros: 200000 },
+    ],
+    serie: serie('2026-09', dias, 2000000, 366666.7),
+  };
+}
+function ladoCmp(opts) {
+  const o = opts || {};
+  const dias = o.dias || [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  return {
+    tem_dado: true, de: '2026-08-01', ate: '2026-08-31',
+    dias_com_dado: dias.length, primeiro: '2026-08-01', ultimo: '2026-08-31',
+    faturamento: 16500000, litros: 3300000,
+    por_combustivel: COMB_CMP,
+    por_canal: [
+      { chave: 'NORMAL', rotulo: 'Pista (sem app)', faturamento: 11500000, litros: 2400000 },
+      { chave: 'SOUTAG', rotulo: 'Soutag', faturamento: 3500000, litros: 700000 },
+      { chave: '99', rotulo: 'App 99', faturamento: 1500000, litros: 200000 },
+    ],
+    serie: serie('2026-08', dias, 1833333.3, 366666.7),
+  };
+}
+
+const CENARIOS = {
+  comparavel: () => ({
+    success: true,
+    consulta: { posto_id: null, posto_nome: null, rede_toda: true, mes: '2026-09', cmp: '2026-08', ate_dia: 9, alcance: 'ate_dia' },
+    comparavel: { ok: true, dias: 9 },
+    base: ladoBase(), comparacao: ladoCmp(),
+  }),
+  dias_diferentes: () => ({
+    success: true,
+    consulta: { posto_id: null, posto_nome: null, rede_toda: true, mes: '2026-09', cmp: '2026-08', ate_dia: null, alcance: 'mes' },
+    comparavel: { ok: false, motivo: 'dias_diferentes', dias_base: 9, dias_cmp: 30 },
+    base: ladoBase(),
+    comparacao: ladoCmp({ dias: Array.from({ length: 30 }, (_, i) => i + 1) }),
+  }),
+  sem_dado: () => ({
+    success: true,
+    consulta: { posto_id: null, posto_nome: null, rede_toda: true, mes: '2026-09', cmp: '2026-07', ate_dia: null, alcance: 'mes' },
+    comparavel: { ok: false, motivo: 'sem_dado' },
+    base: ladoBase(),
+    comparacao: { tem_dado: false, de: '2026-07-01', ate: '2026-07-31', dias_com_dado: 0 },
+  }),
+  buraco: () => ({
+    success: true,
+    consulta: { posto_id: null, posto_nome: null, rede_toda: true, mes: '2026-09', cmp: '2026-08', ate_dia: null, alcance: 'mes' },
+    comparavel: { ok: true, dias: 8 },
+    // Dia 5 AUSENTE da serie: e o buraco que a linha tem de quebrar.
+    base: ladoBase({ dias: [1, 2, 3, 4, 6, 7, 8, 9] }),
+    comparacao: ladoCmp({ dias: [1, 2, 3, 4, 6, 7, 8, 9] }),
+  }),
+  sem_99: () => ({
+    success: true,
+    consulta: { posto_id: 'p1', posto_nome: 'P. ESPAÇO REAL', rede_toda: false, mes: '2026-09', cmp: '2026-08', ate_dia: 9, alcance: 'ate_dia' },
+    comparavel: { ok: true, dias: 9 },
+    base: ladoBase({ canal: [
+      { chave: 'NORMAL', rotulo: 'Pista (sem app)', faturamento: 14000000, litros: 2600000 },
+      { chave: 'SOUTAG', rotulo: 'Soutag', faturamento: 4000000, litros: 700000 },
+    ] }),
+    comparacao: ladoCmp(),
+  }),
+  base_vazia: () => ({
+    success: true,
+    consulta: { posto_id: null, posto_nome: null, rede_toda: true, mes: '2026-09', cmp: '2026-08', ate_dia: null, alcance: 'mes' },
+    comparavel: { ok: false, motivo: 'sem_dado_base' },
+    base: { tem_dado: false, de: '2026-09-01', ate: '2026-09-30', dias_com_dado: 0 },
+    comparacao: ladoCmp(),
+  }),
+};
+
+let _cenario = 'comparavel';
+let _ultimaUrl = '';
+window.apiFetch = async function (url) {
+  _ultimaUrl = url;
+  if (url.indexOf('/postos') === 0) {
+    return { postos: [{ id: 'p1', nome: 'P. ESPAÇO REAL' }, { id: 'p2', nome: 'P. AVIVA' }] };
+  }
+  if (url.indexOf('/tecnox/faturamento-mes') === 0) return CENARIOS[_cenario]();
+  throw new Error('rota inesperada no teste: ' + url);
+};
+
+// Barra manual, para inspecionar o visual em cada largura.
+document.getElementById('barra').innerHTML = Object.keys(CENARIOS)
+  .map(k => '<button onclick="__ir(\'' + k + '\')">' + k + '</button>').join('');
+window.__ir = async function (k) { _cenario = k; await pintar(k); };
+
+const sec = document.getElementById('s-movmes');
+const esperar = (ms) => new Promise(r => setTimeout(r, ms));
+async function pintar(cen) {
+  _cenario = cen;
+  window.renderMovMes(sec);
+  // renderMovMes dispara um await; dois turnos de microtask + folga bastam.
+  for (let i = 0; i < 40; i++) {
+    await esperar(10);
+    if (sec.querySelector('.mm-contexto, .mm-aviso-caixa:not(:empty)')) break;
+  }
+}
+const txt = (sel, raiz) => { const e = (raiz || sec).querySelector(sel); return e ? e.textContent.replace(/\s+/g, ' ').trim() : null; };
+const cor = (el) => el ? getComputedStyle(el).color : null;
+const blocos = (sel) => [...sec.querySelectorAll(sel)];
+</script>
+
+<script src="/modulos/painel-adm/movimentacao-mes.js"></script>
+
+<script>
+(async () => {
+  // ══════════════════════════════════════════════════════════════
+  H('1 · a tela monta: filtros centralizados e a consulta certa');
+  await pintar('comparavel');
+
+  chk(!!sec.querySelector('#mm-filtros'), 'os filtros existem');
+  const filtros = sec.querySelector('#mm-filtros');
+  chk(getComputedStyle(filtros).justifyContent === 'center',
+      'e ficam CENTRALIZADOS', getComputedStyle(filtros).justifyContent);
+  EQ([...sec.querySelectorAll('#mm-filtros select')].map(s => s.id),
+     ['mm-posto', 'mm-mes', 'mm-cmp', 'mm-alcance'],
+     'os QUATRO filtros pedidos, nesta ordem');
+  chk(sec.querySelector('#mm-posto option').value === '' &&
+      sec.querySelector('#mm-posto option').textContent === 'Rede toda',
+      'o default do posto e REDE TODA');
+  const hj = new Date();
+  const mesAtual = hj.getFullYear() + '-' + String(hj.getMonth() + 1).padStart(2, '0');
+  chk(sec.querySelector('#mm-mes').value === mesAtual,
+      'o mes base abre no MES ATUAL', sec.querySelector('#mm-mes').value);
+  chk(_ultimaUrl.indexOf('mes=' + mesAtual) > 0 && _ultimaUrl.indexOf('cmp=') > 0,
+      'e a consulta sai com mes e cmp', _ultimaUrl);
+  chk(_ultimaUrl.indexOf('posto_id') < 0,
+      'sem posto_id quando e a rede toda (a rota trata vazio como rede)');
+
+  // ══════════════════════════════════════════════════════════════
+  H('2 · CONVENIO: dois blocos, valor grande, palavra com cor');
+  const conv = blocos('.mm-2 .mm-bloco');
+  chk(conv.length === 2, 'exatamente DOIS blocos de convenio', conv.length + '');
+  EQ(conv.map(b => txt('.mm-nome', b)), ['Soutag', 'App 99'],
+     'Soutag e 99 — e a Pista NAO vira bloco (nao e convenio)');
+  chk(txt('.mm-num', conv[0]) === 'R$ 4,0 mi',
+      'o valor sai ABREVIADO e por extenso', txt('.mm-num', conv[0]));
+  chk((conv[0].querySelector('.mm-num').getAttribute('title') || '').indexOf('4.000.000,00') > 0,
+      'e o cheio fica no title, para quem quiser conferir',
+      conv[0].querySelector('.mm-num').getAttribute('title'));
+  // Soutag 4,0 <- 3,5 = +14,3% ; 99 1,4 <- 1,5 = -6,7%
+  chk(/subiu 14%/.test(txt('.mm-var', conv[0])),
+      'Soutag: a variacao vem em PALAVRA', txt('.mm-var', conv[0]));
+  chk(/caiu 6,7%/.test(txt('.mm-var', conv[1])),
+      '99: caiu, com uma casa por ser menor que 10%', txt('.mm-var', conv[1]));
+  chk(txt('.mm-var', conv[0]).indexOf('▲') === 0 && txt('.mm-var', conv[1]).indexOf('▼') === 0,
+      'com a seta certa em cada uma');
+  chk(conv[0].querySelector('.mm-seta').getAttribute('aria-hidden') === 'true',
+      'e a seta e aria-hidden (o leitor de tela le so a palavra)');
+
+  const corSobe = cor(conv[0].querySelector('.mm-var'));
+  const corCai = cor(conv[1].querySelector('.mm-var'));
+  chk(corSobe !== corCai, 'subiu e caiu tem cores DIFERENTES', corSobe + ' / ' + corCai);
+  chk(corSobe !== cor(conv[0].querySelector('.mm-num')),
+      'e nenhuma delas e a cor normal do texto (a cor foi mesmo aplicada)', corSobe);
+  chk(txt('.mm-sub', conv[0]) === '700 mil L', 'o litro do convenio aparece', txt('.mm-sub', conv[0]));
+
+  // ══════════════════════════════════════════════════════════════
+  H('3 · POR COMBUSTIVEL: um bloco cada, litro no detalhe, TOTAL no fim');
+  const comb = blocos('.mm-3 .mm-bloco');
+  chk(comb.length === 3, 'um bloco por combustivel', comb.length + '');
+  EQ(comb.map(b => txt('.mm-nome', b)), ['Gasolina comum', 'Etanol', 'Diesel S10'],
+     'na ordem que a rota mandou (maior faturamento primeiro)');
+  chk(comb.every(b => b.tagName === 'BUTTON'),
+      'os blocos sao <button> de verdade (foco por teclado, nao div clicavel)');
+  chk(/subiu 11%/.test(txt('.mm-var', comb[0])), 'GC: +11,1% sai como "subiu 11%"', txt('.mm-var', comb[0]));
+  // A REGRA DE CASAS: uma casa abaixo de 10%, inteiro acima. Numa tela de ler
+  // de relance, "subiu 11,1%" nao diz mais que "subiu 11%" — mas abaixo de 10%
+  // a casa decide ("subiu 6,7%" x "subiu 7%"). Afirmado porque a regra nao e
+  // obvia e passou despercebida na primeira leitura do proprio teste.
+  chk(/subiu 6,7%/.test(txt('.mm-det .mm-var', comb[0])) && /subiu 11%/.test(txt('.mm-var', comb[0])),
+      'a casa decimal aparece abaixo de 10% e some acima',
+      txt('.mm-var', comb[0]) + ' | ' + txt('.mm-det .mm-var', comb[0]));
+  chk(txt('.mm-det-num', comb[0]) === '1,6 mi L', 'e o litro fica no detalhe', txt('.mm-det-num', comb[0]));
+  chk(/subiu 6,7%/.test(txt('.mm-det .mm-var', comb[0])),
+      'com a variacao DE LITRO propria', txt('.mm-det .mm-var', comb[0]));
+
+  // S10 nao mudou em nada: 0% viraria "subiu 0%", que gasta a palavra a toa.
+  chk(txt('.mm-var', comb[2]) === 'quase igual',
+      'variacao menor que meio por cento vira "quase igual"', txt('.mm-var', comb[2]));
+
+  const totalB = sec.querySelector('.mm-total');
+  chk(!!totalB, 'existe o bloco de TOTAL');
+  chk(txt('.mm-num', totalB) === 'R$ 18,0 mi', 'somado: 10 + 5 + 3', txt('.mm-num', totalB));
+  chk(/subiu 9,1%/.test(txt('.mm-var', totalB)), 'com a propria variacao', txt('.mm-var', totalB));
+  chk(txt('.mm-det-num', totalB) === '3,3 mi L', 'e o litro total', txt('.mm-det-num', totalB));
+  chk(totalB.compareDocumentPosition(comb[2]) & Node.DOCUMENT_POSITION_PRECEDING,
+      'e ele vem DEPOIS dos blocos, fechando a secao');
+
+  // ══════════════════════════════════════════════════════════════
+  H('4 · SINAIS OPOSTOS: o Etanol acende (R$ sobe, litro cai)');
+  const et = comb[1];
+  chk(et.classList.contains('mm-oposto'),
+      'o bloco do Etanol ganha a marca de sinais opostos');
+  chk(!comb[0].classList.contains('mm-oposto') && !comb[2].classList.contains('mm-oposto'),
+      'e SO ele — GC (os dois sobem) e S10 (nenhum muda) ficam normais');
+  chk(et.classList.contains('aberto') && et.getAttribute('aria-expanded') === 'true',
+      'ele ja vem ABERTO, senao a informacao ficaria escondida no celular');
+  chk(!!txt('.mm-aviso', et) && /lados opostos/.test(txt('.mm-aviso', et)),
+      'com a frase dizendo o que houve', txt('.mm-aviso', et));
+  chk(/subiu 11%/.test(txt('.mm-var', et)) && /caiu 7,7%/.test(txt('.mm-det .mm-var', et)),
+      'e as DUAS variacoes visiveis: R$ +11,1% e litro -7,7%',
+      txt('.mm-var', et) + ' | ' + txt('.mm-det .mm-var', et));
+  chk(cor(et.querySelector('.mm-var')) !== cor(et.querySelector('.mm-det .mm-var')),
+      'em cores opostas — verde no R$, vermelho no litro');
+  chk(getComputedStyle(et).borderColor !== getComputedStyle(comb[0]).borderColor,
+      'e a borda do bloco muda, para achar de relance');
+
+  // ══════════════════════════════════════════════════════════════
+  H('5 · o toque abre e fecha o detalhe');
+  const gc = comb[0];
+  chk(gc.getAttribute('aria-expanded') === 'false', 'GC comeca fechado');
+  gc.click();
+  chk(gc.classList.contains('aberto') && gc.getAttribute('aria-expanded') === 'true',
+      'o toque abre e anuncia');
+  gc.click();
+  chk(!gc.classList.contains('aberto') && gc.getAttribute('aria-expanded') === 'false',
+      'o segundo toque fecha e desanuncia');
+  gc.click(); comb[2].click();
+  chk(gc.classList.contains('aberto') && comb[2].classList.contains('aberto'),
+      'cada bloco abre sozinho (abrir um nao fecha o outro)');
+  gc.click(); comb[2].click();
+
+  // ══════════════════════════════════════════════════════════════
+  H('6 · GRAFICO: duas linhas, a do mes base por cima e mais grossa');
+  const svg = sec.querySelector('svg.mm-graf');
+  chk(!!svg, 'o SVG do grafico existe');
+  const lb = sec.querySelectorAll('polyline.mm-lin-base');
+  const lc = sec.querySelectorAll('polyline.mm-lin-cmp');
+  chk(lb.length === 1 && lc.length === 1, 'uma polilinha por mes, sem buraco no cenario',
+      lb.length + ' base / ' + lc.length + ' cmp');
+  chk([...svg.children].indexOf(lc[0]) < [...svg.children].indexOf(lb[0]),
+      'a do mes de COMPARACAO vem antes, entao a do mes base fica POR CIMA');
+  const wBase = parseFloat(getComputedStyle(lb[0]).strokeWidth);
+  const wCmp = parseFloat(getComputedStyle(lc[0]).strokeWidth);
+  chk(wBase > wCmp, 'e a do mes base e mais GROSSA', wBase + 'px vs ' + wCmp + 'px');
+  chk(getComputedStyle(lb[0]).stroke !== getComputedStyle(lc[0]).stroke,
+      'em cores diferentes (forte vs clara)');
+  chk(lb[0].getAttribute('vector-effect') === 'non-scaling-stroke' &&
+      lc[0].getAttribute('vector-effect') === 'non-scaling-stroke',
+      'as duas com non-scaling-stroke (o viewBox e esticado; sem isso a espessura sai torta)');
+  chk(svg.getAttribute('preserveAspectRatio') === 'none',
+      'o viewBox estica mesmo — e o motivo do ponto ser HTML');
+
+  const ptsBase = sec.querySelectorAll('.mm-pt.base');
+  const ptsCmp = sec.querySelectorAll('.mm-pt.cmp');
+  chk(ptsBase.length === 9 && ptsCmp.length === 9, 'um ponto por dia, nos dois meses',
+      ptsBase.length + ' / ' + ptsCmp.length);
+  chk(ptsBase[0].tagName === 'SPAN', 'o ponto e SPAN, nao <circle> (redondo em qualquer largura)');
+  const cx = getComputedStyle(ptsBase[0]);
+  chk(parseFloat(cx.width) === parseFloat(cx.height) && parseFloat(cx.width) >= 8,
+      'e ele e quadrado-no-CSS => redondo, e GRANDE', cx.width + ' x ' + cx.height);
+  chk(parseFloat(getComputedStyle(ptsBase[0]).width) > parseFloat(getComputedStyle(ptsCmp[0]).width),
+      'o ponto do mes base e maior que o do mes de comparacao');
+
+  // ── O PONTO CAI EM CIMA DA LINHA ──
+  // A afirmacao que faltava e que teria pego o bug: o SVG media 220px dentro
+  // de uma area de 240px, mas os pontos eram posicionados em % da AREA. Eles
+  // derivavam ate 20px da linha no pe do grafico. A fixture constante da 1a
+  // versao punha tudo no topo, onde a deriva e zero — por isso so a inspecao
+  // visual pegou, e por isso a serie agora e uma rampa.
+  const plot = sec.querySelector('.mm-graf-plot');
+  chk(!!plot, 'o plot e uma caixa propria (a mesma do SVG e dos pontos)');
+  const coords = lb[0].getAttribute('points').trim().split(' ').map(par => par.split(',').map(Number));
+  chk(coords.length === 9, 'a polilinha tem um vertice por dia', coords.length + '');
+  // getScreenCTM E O PONTO DA MEDIDA, e nao uma conta a partir da altura do
+  // plot: a matriz diz onde o vertice foi DESENHADO na tela, ja com o
+  // preserveAspectRatio aplicado. A 1a versao deste teste calculava o y
+  // esperado de novo (coords[i][1]/240*altura) e por isso comparava o ponto
+  // com a INTENCAO, nao com a linha — sabotando o SVG para 140px ela seguia
+  // passando. Com a matriz, o mesmo sabote da 24px de desvio.
+  const medirDesvio = () => {
+    const svgEl = sec.querySelector('svg.mm-graf'), ctm = svgEl.getScreenCTM();
+    return [...sec.querySelectorAll('.mm-pt.base')].map((sp, i) => {
+      const p = svgEl.createSVGPoint(); p.x = coords[i][0]; p.y = coords[i][1];
+      const naTela = p.matrixTransform(ctm);
+      const r = sp.getBoundingClientRect();
+      return Math.hypot(r.left + r.width / 2 - naTela.x, r.top + r.height / 2 - naTela.y);
+    });
+  };
+  const pior = Math.max(...medirDesvio());
+  chk(pior <= 1.5, 'e cada ponto cai EM CIMA do seu vertice, do topo ao pe',
+      'pior desvio ' + pior.toFixed(2) + 'px');
+
+  // A PROVA DE QUE A PROVA FUNCIONA. Sem isto, "0,04px de desvio" poderia ser
+  // um teste cego devolvendo zero — foi exatamente o caso na 1a versao.
+  const sabot = document.createElement('style');
+  sabot.textContent = 'svg.mm-graf{height:140px !important}';
+  document.head.appendChild(sabot);
+  await esperar(150);
+  const piorSabotado = Math.max(...medirDesvio());
+  sabot.remove();
+  await esperar(150);
+  chk(piorSabotado > 5, 'e a medida SABE FALHAR: encolher so o SVG desalinha e ela acusa',
+      'desvio sabotado ' + piorSabotado.toFixed(2) + 'px vs ' + pior.toFixed(2) + 'px normal');
+  chk(Math.max(...medirDesvio()) <= 1.5, 'e volta ao normal quando a sabotagem sai');
+  // A rampa e o que torna a afirmacao acima capaz de falhar: com serie
+  // constante todos os pontos ficariam na mesma altura e o desvio seria igual
+  // em todos, inclusive zero.
+  const alturas = [...sec.querySelectorAll('.mm-pt.base')].map(p2 => Math.round(parseFloat(p2.style.top)));
+  chk(new Set(alturas).size >= 7,
+      'a serie de teste VARIA de verdade (senao esta prova nao provaria nada)',
+      new Set(alturas).size + ' alturas distintas em 9 pontos');
+  chk(Math.max(...alturas) - Math.min(...alturas) > 40,
+      'e varre boa parte da altura do grafico',
+      (Math.max(...alturas) - Math.min(...alturas)).toFixed(0) + '% de amplitude');
+
+  const rx = [...sec.querySelectorAll('.mm-rx')].map(e => e.textContent);
+  chk(rx.length <= 8, 'POUCOS rotulos no eixo X — nao os 30 dias', rx.length + ': ' + rx.join(','));
+  chk(rx[0] === '1' && rx[rx.length - 1] === '30', 'do dia 1 ao ultimo do mes', rx.join(','));
+  EQ([...sec.querySelectorAll('.mm-leg')].map(e => e.textContent.trim()), ['set/26', 'ago/26'],
+     'a legenda diz qual linha e qual mes');
+
+  // ══════════════════════════════════════════════════════════════
+  H('7 · o botao troca a metrica sem ir a rede');
+  const antes = _ultimaUrl;
+  const yBaseFat = sec.querySelector('.mm-pt.base').style.top;
+  // O eixo Y e da serie DIARIA (2,0 mi/dia x 1,08 de folga), nao do total do
+  // mes — sao grandezas diferentes e confundi-las foi o erro da 1a versao.
+  chk(/^R\$ /.test(txt('.mm-graf-y span')), 'o eixo Y esta em R$', txt('.mm-graf-y span'));
+  chk(txt('.mm-graf-y span:last-child') === '0',
+      'e comeca no ZERO — cortar a base faria 3% parecer o dobro',
+      txt('.mm-graf-y span:last-child'));
+  window.__mmMetrica('litros');
+  await esperar(20);
+  chk(_ultimaUrl === antes, 'trocar a metrica NAO refaz a consulta (a serie ja veio inteira)');
+  chk(/ L$/.test(txt('.mm-graf-y span')), 'o eixo Y passa a litros', txt('.mm-graf-y span'));
+  chk(sec.querySelectorAll('.mm-pt.base').length === 9, 'e continua com os 9 pontos');
+  const botoes = [...sec.querySelectorAll('.mm-metrica .fueltab')];
+  EQ(botoes.map(b => b.textContent), ['Faturamento', 'Litros'], 'os dois botoes de metrica');
+  chk(botoes[1].classList.contains('active') && !botoes[0].classList.contains('active'),
+      'e o aceso e o de Litros');
+  window.__mmMetrica('faturamento');
+  await esperar(20);
+  chk(sec.querySelector('.mm-pt.base').style.top === yBaseFat,
+      'voltar a Faturamento redesenha igual ao que era', sec.querySelector('.mm-pt.base').style.top);
+
+  // ══════════════════════════════════════════════════════════════
+  H('8 · BURACO no meio: a linha QUEBRA, nao atravessa');
+  await pintar('buraco');
+  const seg = sec.querySelectorAll('polyline.mm-lin-base');
+  chk(seg.length === 2, 'o dia 5 ausente parte a linha em DOIS segmentos', seg.length + '');
+  chk(sec.querySelectorAll('.mm-pt.base').length === 8, 'e sao 8 pontos, nao 9');
+  // Interpolar por cima do buraco inventaria um faturamento que nao houve.
+  const todosX = [...sec.querySelectorAll('.mm-pt.base')].map(p => parseFloat(p.style.left));
+  chk(todosX.length === new Set(todosX).size, 'nenhum ponto repetido');
+
+  // ══════════════════════════════════════════════════════════════
+  H('9 · a linha do mes base PARA onde o dado para');
+  await pintar('dias_diferentes');
+  const ptsB = [...sec.querySelectorAll('.mm-pt.base')];
+  const ptsC = [...sec.querySelectorAll('.mm-pt.cmp')];
+  chk(ptsB.length === 9 && ptsC.length === 30, 'base com 9 dias, comparacao com 30',
+      ptsB.length + ' / ' + ptsC.length);
+  const ultB = Math.max(...ptsB.map(p => parseFloat(p.style.left)));
+  const ultC = Math.max(...ptsC.map(p => parseFloat(p.style.left)));
+  chk(ultB < ultC - 10, 'a linha do mes base termina bem antes do fim do eixo',
+      ultB.toFixed(1) + '% vs ' + ultC.toFixed(1) + '%');
+  // O ponto mais baixo do grafico e o topo=100%. Se a linha descesse a zero no
+  // dia 10, existiria um ponto la embaixo — e nao existe.
+  const maisBaixo = Math.max(...ptsB.map(p => parseFloat(p.style.top)));
+  chk(maisBaixo < 99, 'e NAO desce a zero: nenhum ponto no chao do grafico',
+      'ponto mais baixo em ' + maisBaixo.toFixed(1) + '%');
+
+  // ══════════════════════════════════════════════════════════════
+  H('10 · dias diferentes: SEM porcentagem, e com o conserto num clique');
+  const avisoTxt = txt('.mm-aviso-caixa');
+  chk(/9 dias com dado e agosto de 2026 tem 30/.test(avisoTxt),
+      'o aviso diz as duas contagens', avisoTxt);
+  chk(/variacao falsa|variação falsa/.test(avisoTxt), 'e diz POR QUE nao compara');
+  // A prova que importa: nenhuma porcentagem em lugar nenhum da tela.
+  const corpoTxt = sec.querySelector('#mm-corpo').textContent;
+  chk(!/subiu|caiu|quase igual/.test(corpoTxt),
+      'NENHUM bloco mostra variacao — nem "quase igual"');
+  chk((corpoTxt.match(/%/g) || []).length === 0,
+      'e nao sobra nenhum sinal de % na tela',
+      (corpoTxt.match(/.{0,12}%/g) || []).join(' | '));
+  chk(sec.querySelectorAll('.mm-var.nada').length >= 4,
+      'no lugar dele, "sem dado para comparar" em cada bloco',
+      sec.querySelectorAll('.mm-var.nada').length + ' blocos');
+  // Mas os NUMEROS continuam: suprimir a variacao nao e esconder o faturamento.
+  chk(txt('.mm-num') === 'R$ 4,0 mi', 'os valores do mes base seguem na tela', txt('.mm-num'));
+  const conserto = sec.querySelector('.mm-btn-conserto');
+  chk(!!conserto, 'e ha o botao "comparar os mesmos dias"');
+  chk(sec.querySelector('#mm-alcance').value === '', 'o alcance esta em "Mes inteiro" antes');
+  conserto.click();
+  await esperar(80);
+  chk(sec.querySelector('#mm-alcance').value === '9',
+      'o clique alinha no ultimo dia com dado do mes base (dia 9)',
+      sec.querySelector('#mm-alcance').value);
+  chk(_ultimaUrl.indexOf('ate_dia=9') > 0, 'e refaz a consulta com ate_dia=9', _ultimaUrl);
+
+  // ══════════════════════════════════════════════════════════════
+  H('11 · mes de comparacao vazio, e mes base vazio');
+  await pintar('sem_dado');
+  chk(/Sem dado para comparar em julho de 2026/.test(txt('.mm-aviso-caixa')),
+      'diz qual mes esta vazio', txt('.mm-aviso-caixa'));
+  chk(!sec.querySelector('.mm-btn-conserto'),
+      'e NAO oferece "mesmos dias" — nao ha dia nenhum para alinhar');
+  chk(sec.querySelectorAll('.mm-bloco').length > 0 && txt('.mm-total .mm-num') === 'R$ 18,0 mi',
+      'o mes base continua inteiro na tela');
+  chk(sec.querySelectorAll('polyline.mm-lin-base').length === 1 &&
+      sec.querySelectorAll('polyline.mm-lin-cmp').length === 0,
+      'e o grafico desenha so a linha do mes base');
+
+  await pintar('base_vazia');
+  chk(/Sem dado para setembro de 2026/.test(txt('.mm-aviso-caixa')),
+      'mes base vazio: "sem dado", e nada mais', txt('.mm-aviso-caixa'));
+  chk(!sec.querySelector('.mm-bloco') && !sec.querySelector('svg'),
+      'sem bloco e sem grafico — nao inventa tela vazia com zeros');
+
+  // ══════════════════════════════════════════════════════════════
+  H('12 · convenio ausente x convenio zerado');
+  await pintar('sem_99');
+  const conv2 = blocos('.mm-2 .mm-bloco');
+  chk(conv2.length === 2, 'os dois blocos continuam existindo');
+  chk(txt('.mm-num', conv2[1]) === '—' && /sem movimento/.test(txt('.mm-var', conv2[1])),
+      'o posto sem 99 mostra "sem movimento no mes", nao R$ 0',
+      txt('.mm-num', conv2[1]) + ' / ' + txt('.mm-var', conv2[1]));
+  chk(conv2[1].classList.contains('mm-vazio'), 'com a marca de vazio');
+  chk(/P\. ESPAÇO REAL/.test(txt('.mm-contexto')),
+      'e o cabecalho diz o posto, nao "Rede toda"', txt('.mm-contexto'));
+
+  // ══════════════════════════════════════════════════════════════
+  H('13 · o filtro de posto vai para a consulta');
+  const selPosto = sec.querySelector('#mm-posto');
+  selPosto.value = 'p2';
+  window.__mmFiltro('posto', 'p2');
+  await esperar(80);
+  chk(_ultimaUrl.indexOf('posto_id=p2') > 0, 'posto_id na URL', _ultimaUrl);
+  window.__mmFiltro('posto', '');
+  await esperar(80);
+  chk(_ultimaUrl.indexOf('posto_id') < 0, 'e some ao voltar para Rede toda', _ultimaUrl);
+  // Escolher o mesmo mes dos dois lados: a rota devolve 400, entao a tela evita.
+  const mesAgora = sec.querySelector('#mm-mes').value;
+  window.__mmFiltro('cmp', mesAgora);
+  await esperar(80);
+  chk(sec.querySelector('#mm-cmp').value !== mesAgora,
+      'comparar um mes com ele mesmo e recusado antes de sair da tela',
+      sec.querySelector('#mm-cmp').value);
+
+  // ══════════════════════════════════════════════════════════════
+  H('14 · o DRE nao foi tocado por nada disto');
+  const r = await fetch('/modulos/painel-adm/dre.js').then(x => x.text());
+  chk(r.indexOf('window.renderDre') > 0, 'o dre.js segue no lugar');
+  chk(r.indexOf('JBGraf') < 0 && r.indexOf('movimentacao-mes') < 0,
+      'e SEM nenhuma referencia a esta tela nem a extracao que nao foi feita');
+  chk(r.indexOf('function svgLinhas') > 0 && r.indexOf('function ligarTooltipGrafico') > 0,
+      'o desenhador e o balao dele continuam dentro do proprio IIFE');
+  const meu = await fetch('/modulos/painel-adm/movimentacao-mes.js').then(x => x.text());
+  // SEM OS COMENTARIOS: o cabecalho deste arquivo CITA svgLinhas para explicar
+  // por que ele nao foi reusado, e um indexOf cru acusava a propria explicacao.
+  const codigo = meu.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^ *\/\/.*$/gm, '');
+  chk(codigo.indexOf('svgLinhas') < 0 && codigo.indexOf('#s-dre') < 0 &&
+      codigo.indexOf('renderDre') < 0,
+      'e esta tela nao chama nada de la — gráfico proprio, como pedido');
+  chk(meu.indexOf('svgLinhas') > 0,
+      '(o nome so aparece no comentario que explica POR QUE nao foi reusado)');
+
+  out.push('\n' + (falhas
+    ? '<span class="bad">FALHAS: ' + falhas + ' de ' + total + '</span>'
+    : '<span class="ok">TUDO OK · ' + total + ' afirmações</span>'));
+  pintarRes();
+  // Deixa o cenario bom na tela para inspecao visual manual.
+  await pintar('comparavel');
+})().catch(e => {
+  out.push('<span class="bad">ERRO: ' + e.message + '</span>\n' + (e.stack || ''));
+  pintarRes();
+});
+</script>

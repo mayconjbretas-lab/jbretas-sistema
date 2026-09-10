@@ -102,33 +102,50 @@ function abrirMais() { document.getElementById('modal-mais').classList.add('open
 // A adaptação para 375px é toda por CSS DENTRO do dre.js, por LARGURA (700px):
 // só Mês e Projeção; KPIs abreviados com o cheio a um toque; a margem por dia
 // vira linha; e 4 das 8 colunas da tabela viram detalhe ao toque.
+// AS VISTAS DA ABA, num MAPA e não num if/else: o terceiro relatório
+// (Mercado) entra como uma linha aqui, e o resto da função não muda.
+// 'relat' (a lista de PDFs) não está no mapa de propósito — ela é o que
+// aparece quando NENHUMA vista está aberta, não uma vista a mais.
+const REL_VISTAS = {
+  dre: { sec: 's-dre', botao: 'rel-btn-dre', render: (el) => renderDre(el) },
+  mov: { sec: 's-movmes', botao: 'rel-btn-mov', render: (el) => renderMovMes(el) },
+};
 let _relatVista = 'relat';
 
 function renderRelatArea() {
   const lista = document.getElementById('s-relat-lista');
-  const dre = document.getElementById('s-dre');
-  const btn = document.getElementById('rel-btn-dre');
-  const mostrarDre = _relatVista === 'dre';
-  if (lista) lista.hidden = mostrarDre;
-  // O #s-dre é .scr: quem manda na visibilidade é a classe `active`
-  // (.scr{display:none} / #s-dre.active{display:block}, esta injetada pelo
-  // próprio dre.js). `hidden` não bastaria — id com classe vence o atributo.
-  if (dre) dre.classList.toggle('active', mostrarDre);
-  // O botão fica ACESO enquanto o DRE está aberto, e é por ele que se volta —
-  // `.active` é o estado que o .fueltab já desenha, o mesmo das sub-abas.
-  if (btn) {
-    btn.classList.toggle('active', mostrarDre);
-    btn.setAttribute('aria-pressed', mostrarDre ? 'true' : 'false');
-  }
-  // Render sob demanda: o DRE faz GET /dre e não deve disparar para quem só
-  // quer os relatórios. Os dois renders são idempotentes.
-  if (mostrarDre) renderDre(dre);
-  else renderRelatorios(lista);
+  const aberta = REL_VISTAS[_relatVista] || null;
+  if (lista) lista.hidden = !!aberta;
+
+  Object.keys(REL_VISTAS).forEach((k) => {
+    const v = REL_VISTAS[k];
+    const sec = document.getElementById(v.sec);
+    const btn = document.getElementById(v.botao);
+    const ativa = (k === _relatVista);
+    // As sections são .scr: quem manda na visibilidade é a classe `active`
+    // (.scr{display:none} / #s-dre.active{display:block}, injetada pelo próprio
+    // dre.js; a gêmea do #s-movmes vem do shared/css/mov-mes.css). `hidden` não
+    // bastaria aqui — o seletor de id com classe vence o atributo.
+    if (sec) sec.classList.toggle('active', ativa);
+    // O botão fica ACESO enquanto o relatório está aberto, e é por ele que se
+    // volta. aria-pressed, e não aria-expanded: é botão de estado numa barra.
+    if (btn) {
+      btn.classList.toggle('active', ativa);
+      btn.setAttribute('aria-pressed', ativa ? 'true' : 'false');
+    }
+    // Render SOB DEMANDA e SÓ da vista visível: cada relatório faz o próprio
+    // GET e não deve disparar para quem abriu o outro. Todos são idempotentes
+    // (guardam o próprio shell), então reentrar não remonta nada.
+    if (ativa && sec) v.render(sec);
+  });
+
+  if (!aberta) renderRelatorios(lista);
 }
 
-// Um botão, dois estados. Não mexe no bnav: continua-se na aba Relatórios.
-function relToggleDre() {
-  _relatVista = (_relatVista === 'dre') ? 'relat' : 'dre';
+// Um botão por relatório, e o MESMO botão fecha. NÃO mexe na .bnav:
+// continua-se na aba Relatórios.
+function relAbrir(vista) {
+  _relatVista = (_relatVista === vista) ? 'relat' : vista;
   renderRelatArea();
 }
 
