@@ -156,11 +156,17 @@ function montarPalco(estrutura) {
     palco.innerHTML =
       '<main class="pa-main">' +
         '<section class="scr active" id="s-relat">' +
-          '<div class="rel-sub" id="rel-sub">' +
-            '<button class="rel-subbtn" type="button" id="rsb-relat">📊 Relatórios</button>' +
-            '<button class="rel-subbtn active" type="button" id="rsb-dre">🧾 DRE</button>' +
+          '<div class="rel-destaque">' +
+            '<button class="rel-cardbig aberto" id="rel-card-dre" type="button">' +
+              '<span class="rel-cb-ic">🧾</span>' +
+              '<span class="rel-cb-txt">' +
+                '<span class="rel-cb-nome">DRE — Produtos e Combustíveis</span>' +
+                '<span class="rel-cb-sub">Venda, custo e lucro por categoria</span>' +
+              '</span>' +
+              '<span class="rel-cb-acao" id="rel-cb-acao">← voltar aos relatórios</span>' +
+            '</button>' +
           '</div>' +
-          '<div id="s-relat-lista" hidden></div>' +
+         '<div id="s-relat-lista" hidden></div>' +
           '<section class="scr active" id="s-dre"></section>' +
         '</section>' +
       '</main>' +
@@ -289,6 +295,18 @@ const SUBABAS = ['dia', 'mes', 'posto', 'projecao'];
 
   H('6 · a .bnav nao tem mais botao de DRE');
   chk(!document.getElementById('nb-dre'), 'nenhum botao DRE na navegacao de baixo');
+  // O card e grande de verdade, nao uma aba de texto: era 80x39px sem fundo
+  // nem borda. Mede-se o que o CSS produz, nao o que a classe promete.
+  const cb = document.getElementById('rel-card-dre');
+  const rcb = cb.getBoundingClientRect();
+  chk(rcb.height >= 70, 'o card tem altura de card (>=70px), nao de aba', Math.round(rcb.height) + 'px');
+  chk(getComputedStyle(cb).backgroundColor !== 'rgba(0, 0, 0, 0)',
+      'e tem fundo — a aba antiga era transparente', getComputedStyle(cb).backgroundColor);
+  chk(getComputedStyle(cb).borderTopWidth !== '0px',
+      'e borda — a aba antiga nao tinha', getComputedStyle(cb).borderTopWidth);
+  chk(!!cb.querySelector('.rel-cb-ic') && !!cb.querySelector('.rel-cb-nome')
+      && !!cb.querySelector('.rel-cb-sub'),
+      'com icone, nome e uma linha do que e');
   chk(!!document.getElementById('nb-relat'), 'Relatorios continua la');
   chk(document.getElementById('nb-relat').classList.contains('active'),
       'e fica ATIVO enquanto se olha o DRE — nao se saiu da aba Relatorios');
@@ -308,7 +326,12 @@ const SUBABAS = ['dia', 'mes', 'posto', 'projecao'];
   chk(getComputedStyle(rw).maxWidth === '1100px',
       'e o CSS `#s-relat .rel-wrap` ainda alcanca no lugar novo',
       rw ? getComputedStyle(rw).maxWidth : '—');
-  chk(!!document.getElementById('rel-sub'), 'o seletor de vista sobreviveu ao innerHTML');
+  chk(!!document.getElementById('rel-card-dre'), 'o card do DRE sobreviveu ao innerHTML');
+  // O card tem de vir ANTES dos relatorios da rede — e o pedido: primeira
+  // coisa que aparece ao entrar em Relatorios.
+  chk(!!(document.getElementById('rel-card-dre').compareDocumentPosition(lista)
+         & Node.DOCUMENT_POSITION_FOLLOWING),
+      'e esta ANTES da lista de relatorios no DOM');
   chk(!!document.getElementById('s-dre'), 'e a section do DRE tambem');
   chk(!!document.getElementById('dre-imp-btn'),
       'o DRE ja montado nao foi apagado por montar Relatorios ao lado');

@@ -146,23 +146,44 @@ html, body { height: 100%; overflow: hidden; }
 .fueltab:hover { border-color: var(--bd2); }
 .fueltab.active { background: var(--acd); border-color: var(--ac); color: var(--ac); }
 
-/* ── Aba RELATÓRIOS: seletor de vista (Relatórios | DRE) ──
-   O DRE deixou de ser aba do topo e virou uma vista aqui dentro.
+/* ── Aba RELATÓRIOS: card de destaque do DRE, no topo ──
+   Substitui a aba de texto que havia aqui (80×39px, sem fundo, sem borda, na
+   cor --tx3 — a mais fraca da paleta). O card tem a largura do conteúdo, a
+   mesma do .rel-wrap dos relatórios logo abaixo, para as duas coisas
+   pertencerem à mesma coluna.
 
-   NÃO reusa .fueltab de propósito: o próprio DRE monta uma fileira de
-   .fueltab logo abaixo (as 4 sub-abas dele), e duas fileiras de pílulas
-   idênticas empilhadas não diriam qual é o nível de cima. Este seletor é
-   maior, quadrado e com barra no ativo — parece o que é, um nível acima. */
-.rel-sub { display: flex; gap: 4px; margin-bottom: 1rem; border-bottom: 1px solid var(--bd); }
-.rel-subbtn {
-  background: none; border: none; border-bottom: 2px solid transparent;
-  margin-bottom: -1px;   /* encosta a barra do ativo na borda da fileira */
-  padding: .6rem 1rem; cursor: pointer;
-  font-family: var(--mono); font-size: .84rem; font-weight: 700;
-  color: var(--tx3); transition: color .15s, border-color .15s;
+   NÃO reusa .card: o .card é superfície de CONTEÚDO (os 3 relatórios da rede
+   são .card). Este é um ATALHO clicável, e um card de conteúdo com cursor de
+   mão ensinaria que os outros três também abrem algo. */
+.rel-destaque { max-width: 1100px; margin: 0 auto 1rem; width: 100%; }
+.rel-cardbig {
+  display: flex; align-items: center; gap: 1rem;
+  width: 100%; text-align: left; cursor: pointer;
+  background: var(--sf2); border: 1px solid var(--bd); border-radius: var(--radius, 12px);
+  padding: 1.1rem 1.2rem;
+  transition: border-color .15s, background .15s;
 }
-.rel-subbtn:hover { color: var(--tx2); }
-.rel-subbtn.active { color: var(--ac); border-bottom-color: var(--ac); }
+.rel-cardbig:hover, .rel-cardbig:focus-visible {
+  border-color: var(--ac); background: var(--acd); outline: none;
+}
+.rel-cb-ic { font-size: 1.9rem; line-height: 1; flex: none; }
+.rel-cb-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+.rel-cb-nome { font-family: var(--mono); font-size: 1rem; font-weight: 700; color: var(--tx); }
+.rel-cb-sub { font-size: .78rem; color: var(--tx3); line-height: 1.45; }
+.rel-cb-acao {
+  font-family: var(--mono); font-size: .74rem; font-weight: 700;
+  color: var(--ac); flex: none; white-space: nowrap;
+}
+/* DRE aberto: o card fica aceso e passa a ser o caminho de volta. */
+.rel-cardbig.aberto { border-color: var(--ac); background: var(--acd); }
+/* Em telas estreitas o "abrir →" cai para baixo do texto em vez de espremer
+   o nome do relatório. (O mobile de verdade é modulos/admin e fica para a
+   tarefa própria — isto aqui é só o desktop sendo reduzido.) */
+@media (max-width: 620px) {
+  .rel-cardbig { flex-wrap: wrap; gap: .7rem; }
+  .rel-cb-txt { flex: 1 1 100%; }
+  .rel-cb-acao { margin-left: auto; }
+}
 
 /* #s-relat é .scr, e .scr.active é display:flex (linha) — com os três filhos
    de agora isso os poria lado a lado. O relatorios.js injeta este mesmo

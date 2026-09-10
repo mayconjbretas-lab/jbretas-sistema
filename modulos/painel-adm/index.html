@@ -10,13 +10,13 @@
 <link rel="apple-touch-icon" href="/shared/icon-192.png">
 <meta name="theme-color" content="#0a0d1c">
 <link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
-<link rel="stylesheet" href="../../shared/css/base.css?v=202609101415">
+<link rel="stylesheet" href="../../shared/css/base.css?v=202609101800">
 <!-- CSS da Coleta (revisão) — compartilhado com o painel mobile, sem fork.
      Usa tokens --sf/--ac/--tx* resolvidos pela camada de alias em painel-adm.css. -->
-<link rel="stylesheet" href="../admin/coleta-revisao/coleta-revisao.css?v=202609101415">
-<link rel="stylesheet" href="painel-adm.css?v=202609101415">
-<link rel="stylesheet" href="medicao.css?v=202609101415">
-<link rel="stylesheet" href="kpi.css?v=202609101415">
+<link rel="stylesheet" href="../admin/coleta-revisao/coleta-revisao.css?v=202609101800">
+<link rel="stylesheet" href="painel-adm.css?v=202609101800">
+<link rel="stylesheet" href="medicao.css?v=202609101800">
+<link rel="stylesheet" href="kpi.css?v=202609101800">
 <script>
   // Pre-paint: aplica o tema salvo antes de renderizar (evita flash).
   (function(){
@@ -179,9 +179,22 @@
          O #s-relat-lista existe porque renderRelatorios faz `sec.innerHTML=…`:
          passar #s-relat direto apagaria o seletor e o DRE junto. -->
     <section class="scr" id="s-relat">
-      <div class="rel-sub" id="rel-sub">
-        <button class="rel-subbtn active" type="button" onclick="setRelatVista(this,'relat')">📊 Relatórios</button>
-        <button class="rel-subbtn" type="button" onclick="setRelatVista(this,'dre')">🧾 DRE</button>
+      <!-- CARD DO DRE, no topo e antes dos relatórios da rede. Era uma aba de
+           texto de 80×39px sem fundo nem borda, na cor mais fraca da paleta —
+           ocupava 17% da linha e passava batido. Agora é o primeiro bloco da
+           aba, com ícone, nome e uma linha do que é.
+           É um BOTÃO com estado, não dois: abre o DRE e volta pelo mesmo
+           lugar, sempre no topo. Um par de abas somaria uma segunda navegação
+           acima das 4 sub-abas que o próprio DRE já monta. -->
+      <div class="rel-destaque">
+        <button class="rel-cardbig" id="rel-card-dre" type="button" onclick="relToggleDre()">
+          <span class="rel-cb-ic">🧾</span>
+          <span class="rel-cb-txt">
+            <span class="rel-cb-nome">DRE — Produtos e Combustíveis</span>
+            <span class="rel-cb-sub">Venda, custo e lucro por categoria · Dia, Mês, Por Posto e Projeção</span>
+          </span>
+          <span class="rel-cb-acao" id="rel-cb-acao">abrir →</span>
+        </button>
       </div>
       <div id="s-relat-lista"></div>
       <section class="scr" id="s-dre"></section>
@@ -227,34 +240,34 @@
   </div>
 </div>
 
-<script src="../../shared/js/config.js?v=202609101415"></script>
-<script src="../../shared/js/api.js?v=202609101415"></script>
-<script src="../../shared/js/auth.js?v=202609101415"></script>
+<script src="../../shared/js/config.js?v=202609101800"></script>
+<script src="../../shared/js/api.js?v=202609101800"></script>
+<script src="../../shared/js/auth.js?v=202609101800"></script>
 <!-- Alternador ADM/TI no cabecalho (so para perfil ADM com ti=true).
      DEPOIS do auth.js: le getUsuarioLogado/caminhoRaiz de la. -->
-<script src="../../shared/js/painel-switch.js?v=202609101415"></script>
-<script src="../../shared/js/postos-mapa.js?v=202609101415"></script>
-<script src="../../shared/js/coletas-service.js?v=202609101415"></script>
+<script src="../../shared/js/painel-switch.js?v=202609101800"></script>
+<script src="../../shared/js/postos-mapa.js?v=202609101800"></script>
+<script src="../../shared/js/coletas-service.js?v=202609101800"></script>
 <!-- Coleta (revisão) — mesmo JS do painel mobile (renderColetaRevisao em window), sem fork -->
-<script src="../admin/coleta-revisao/coleta-revisao.js?v=202609101415"></script>
-<script src="medicao.js?v=202609101415"></script>
-<script src="../../shared/js/clipboard.js?v=202609101415"></script>
-<script src="relatorios.js?v=202609101415"></script>
+<script src="../admin/coleta-revisao/coleta-revisao.js?v=202609101800"></script>
+<script src="medicao.js?v=202609101800"></script>
+<script src="../../shared/js/clipboard.js?v=202609101800"></script>
+<script src="relatorios.js?v=202609101800"></script>
 <!-- DRE — GET /dre (ADM ou LOGISTICA); expõe renderDre em window -->
-<script src="dre.js?v=202609101415"></script>
-<script src="solicitacoes-adm.js?v=202609101415"></script>
-<script src="../../shared/js/push-inscricao.js?v=202609101415"></script>
+<script src="dre.js?v=202609101800"></script>
+<script src="solicitacoes-adm.js?v=202609101800"></script>
+<script src="../../shared/js/push-inscricao.js?v=202609101800"></script>
 <!-- Custo & Margem — mesmo JS da Logística (renderCustoMargem em window), sem fork; ADM = só leitura -->
-<script src="../logistica/custo-margem.js?v=202609101415"></script>
-<script src="../../shared/js/nav-custo.js?v=202609101415"></script>
-<script src="fornecedores.js?v=202609101415"></script>
-<script src="compra.js?v=202609101415"></script>
-<script src="simulador.js?v=202609101415"></script>
+<script src="../logistica/custo-margem.js?v=202609101800"></script>
+<script src="../../shared/js/nav-custo.js?v=202609101800"></script>
+<script src="fornecedores.js?v=202609101800"></script>
+<script src="compra.js?v=202609101800"></script>
+<script src="simulador.js?v=202609101800"></script>
 <!-- Mercado (bandeira branca) — SÓ no painel-adm desktop; o nav-custo esconde o
      botão em viewport estreita e o próprio mercado.js repete o guard.
      SEM Chart.js: o gráfico de linha saiu e os velocímetros são SVG inline. -->
-<script src="mercado.js?v=202609101415"></script>
-<script src="kpi.js?v=202609101415"></script>
-<script src="app.js?v=202609101415"></script>
+<script src="mercado.js?v=202609101800"></script>
+<script src="kpi.js?v=202609101800"></script>
+<script src="app.js?v=202609101800"></script>
 </body>
 </html>
