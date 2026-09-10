@@ -313,6 +313,10 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
 /* Matriz compacta — desktop */
 @media (min-width: 900px) {
   .ss-table { font-size: .78rem; }
+  /* Sem o min-width:100% da regra base a tabela para de esticar pra preencher
+     o frame: com grupos fechados as colunas mantem a largura, em vez de
+     dividirem a sobra entre si. table-layout segue no default (auto). */
+  .ss-table { width: auto; min-width: 0; }
   .ss-table th, .ss-table td { padding: .3rem .4rem; min-width: 56px; }
   .ss-table .sticky-col { min-width: 64px; width: 64px; }
   .mm-thead th { height: 28px; }
