@@ -322,6 +322,24 @@ const SUBABAS = ['dia', 'mes', 'posto', 'projecao'];
       getComputedStyle(bt.parentElement).display);
   chk(getComputedStyle(bt.parentElement).flexWrap === 'wrap',
       'e quebra linha quando nao couberem', getComputedStyle(bt.parentElement).flexWrap);
+  // CENTRADO, e nao no canto. Afirma sobre o estilo computado e sobre a
+  // POSICAO: com um botao so, o centro dele tem de bater com o centro da
+  // fileira — justify-content sozinho passaria mesmo se a fileira nao
+  // ocupasse a largura da coluna.
+  const fileira = bt.parentElement;
+  chk(getComputedStyle(fileira).justifyContent === 'center',
+      'os botoes de relatorio sao centrados', getComputedStyle(fileira).justifyContent);
+  const rf = fileira.getBoundingClientRect(), rbt = bt.getBoundingClientRect();
+  chk(Math.abs((rbt.left + rbt.width / 2) - (rf.left + rf.width / 2)) < 2,
+      'e o botao fica de fato no meio da fileira',
+      'centro botao ' + Math.round(rbt.left + rbt.width/2) +
+      ' / centro fileira ' + Math.round(rf.left + rf.width/2));
+  // E as OUTRAS fileiras de .fueltab seguem a esquerda: centrar a classe
+  // teria mexido nas sub-abas do DRE e nos chips dos relatorios.
+  const subabas = document.getElementById('dre-subabas');
+  chk(!subabas || getComputedStyle(subabas).justifyContent !== 'center',
+      'as sub-abas do DRE continuam a esquerda',
+      subabas && getComputedStyle(subabas).justifyContent);
   chk(!!document.getElementById('nb-relat'), 'Relatorios continua la');
   chk(document.getElementById('nb-relat').classList.contains('active'),
       'e fica ATIVO enquanto se olha o DRE — nao se saiu da aba Relatorios');

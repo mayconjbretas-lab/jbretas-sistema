@@ -343,6 +343,10 @@ html:not([data-theme="light"]) body::before{
    COMPARAR — FUEL TABS, ESTRATÉGIA, CARDS
    ══════════════════════════════════════════════════ */
 .fueltab-row{display:flex;gap:5px;margin-bottom:.65rem;flex-wrap:wrap}
+/* Botoes de relatorio da aba Relatorios: CENTRADOS. Escopado no id, e nao
+   na .fueltab-row — as outras fileiras (sub-abas, chips) ficam a esquerda.
+   Com o flex-wrap que ja vem da classe, a linha que sobra tambem centra. */
+#rel-seletor{justify-content:center}
 .fueltab{background:var(--sf2);border:1px solid var(--bd);border-radius:20px;
   padding:6px 12px;font-size:.74rem;font-family:var(--mono);font-weight:600;
   color:var(--tx2);cursor:pointer;transition:all .15s}

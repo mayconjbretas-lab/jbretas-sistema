@@ -158,6 +158,18 @@ html, body { height: 100%; overflow: hidden; }
    display:block, então lá não falta nada. */
 #s-relat.active { display: block; }
 
+/* Os botões de relatório ficam CENTRADOS na coluna; o relatório escolhido
+   abre abaixo deles, e eles seguem no topo para trocar.
+
+   Escopado no #rel-seletor, e NÃO na .fueltab-row: essa classe é usada em
+   outros seis lugares (sub-abas do DRE, chips dos relatórios, botões de
+   combustível da Comparação) e todos são alinhados à esquerda — centrar a
+   classe mexeria em todos eles.
+
+   O `flex-wrap: wrap` já vem da .fueltab-row: com justify-content: center a
+   linha que sobra no celular fica centrada também, sem regra a mais. */
+#rel-seletor { justify-content: center; }
+
 /* Botões de combustível POR CARD (aba Comparação) — versão compacta do .fueltab */
 .cmp-card-fuels { display: flex; gap: 4px; flex-wrap: wrap; margin: .5rem 0 .6rem; }
 .cmp-cfuel { background: var(--sf2); border: 1px solid var(--bd); border-radius: 14px; padding: 3px 9px; font-size: .64rem; font-family: var(--mono); font-weight: 700; letter-spacing: .02em; color: var(--tx3); cursor: pointer; transition: all .15s; }
