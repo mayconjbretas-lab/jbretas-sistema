@@ -146,6 +146,30 @@ html, body { height: 100%; overflow: hidden; }
 .fueltab:hover { border-color: var(--bd2); }
 .fueltab.active { background: var(--acd); border-color: var(--ac); color: var(--ac); }
 
+/* ── Aba RELATÓRIOS: seletor de vista (Relatórios | DRE) ──
+   O DRE deixou de ser aba do topo e virou uma vista aqui dentro.
+
+   NÃO reusa .fueltab de propósito: o próprio DRE monta uma fileira de
+   .fueltab logo abaixo (as 4 sub-abas dele), e duas fileiras de pílulas
+   idênticas empilhadas não diriam qual é o nível de cima. Este seletor é
+   maior, quadrado e com barra no ativo — parece o que é, um nível acima. */
+.rel-sub { display: flex; gap: 4px; margin-bottom: 1rem; border-bottom: 1px solid var(--bd); }
+.rel-subbtn {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  margin-bottom: -1px;   /* encosta a barra do ativo na borda da fileira */
+  padding: .6rem 1rem; cursor: pointer;
+  font-family: var(--mono); font-size: .84rem; font-weight: 700;
+  color: var(--tx3); transition: color .15s, border-color .15s;
+}
+.rel-subbtn:hover { color: var(--tx2); }
+.rel-subbtn.active { color: var(--ac); border-bottom-color: var(--ac); }
+
+/* #s-relat é .scr, e .scr.active é display:flex (linha) — com os três filhos
+   de agora isso os poria lado a lado. O relatorios.js injeta este mesmo
+   display:block, mas só ao montar o shell dele; aqui a regra vale desde o
+   primeiro quadro, inclusive quando se entra direto na vista DRE. */
+#s-relat.active { display: block; }
+
 /* Botões de combustível POR CARD (aba Comparação) — versão compacta do .fueltab */
 .cmp-card-fuels { display: flex; gap: 4px; flex-wrap: wrap; margin: .5rem 0 .6rem; }
 .cmp-cfuel { background: var(--sf2); border: 1px solid var(--bd); border-radius: 14px; padding: 3px 9px; font-size: .64rem; font-family: var(--mono); font-weight: 700; letter-spacing: .02em; color: var(--tx3); cursor: pointer; transition: all .15s; }

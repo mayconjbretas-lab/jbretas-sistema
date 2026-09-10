@@ -69,15 +69,48 @@ function setTab(btn, tab) {
   if (tab === 'coleta') renderColetaRevisao(document.getElementById('s-coleta'));
   // Medição — ADM define o pré-pedido (medicao.js expõe renderMedicao em window).
   if (tab === 'medicao') renderMedicao(document.getElementById('s-medicao'));
-  // Relatórios — consolidado/mix/produtos da rede (relatorios.js expõe renderRelatorios).
-  if (tab === 'relat') renderRelatorios(document.getElementById('s-relat'));
-  // DRE — venda/custo/lucro por categoria, do .xls da TecnoX (dre.js expõe renderDre).
-  if (tab === 'dre') renderDre(document.getElementById('s-dre'));
+  // Relatórios — hospeda DUAS vistas (relatórios da rede e DRE). Ver
+  // renderRelatArea: o setTab acabou de limpar o `active` de TODAS as .scr,
+  // e o #s-dre é uma delas (está aninhado dentro do #s-relat), então quem
+  // repõe o estado da vista escolhida é ela.
+  if (tab === 'relat') renderRelatArea();
   // Custo & Margem — mesmo JS da Logística; ADM entra em modo só-leitura (sem edição).
   if (tab === 'custo') renderCustoMargem(document.getElementById('s-custo'));
   // Mais+ — aba KPI (sugestão de pedido; kpi.js expõe renderKpi em window).
   if (tab === 'mais') renderKpi(document.getElementById('s-mais'));
   // Demais abas (mapa/histórico) entram nos próximos blocos.
+}
+
+// ── Aba RELATÓRIOS: duas vistas, uma área ────────────────────────
+// O DRE era aba do topo e passou a ser uma vista aqui dentro. NADA do DRE
+// mudou: mesmo dre.js, mesmo renderDre, mesma section #s-dre (com o id
+// preservado, porque os ~210 seletores de CSS dele são `#s-dre .algo`), e o
+// mesmo arquivo continua servindo o admin mobile.
+let _relatVista = 'relat';
+
+function renderRelatArea() {
+  const lista = document.getElementById('s-relat-lista');
+  const dre = document.getElementById('s-dre');
+  const mostrarDre = _relatVista === 'dre';
+  if (lista) lista.hidden = mostrarDre;
+  // O #s-dre é .scr: quem manda na visibilidade dele é a classe `active`
+  // (.scr{display:none} / #s-dre.active{display:block}, esta última injetada
+  // pelo próprio dre.js). Usar `hidden` aqui não bastaria — o seletor de id
+  // com classe vence o atributo.
+  if (dre) dre.classList.toggle('active', mostrarDre);
+  // Render sob demanda, e só da vista visível: o DRE faz GET /dre e não deve
+  // disparar para quem só quer o consolidado. Cada render é idempotente
+  // (ambos guardam o próprio shell), então reentrar não remonta nada.
+  if (mostrarDre) renderDre(dre);
+  else renderRelatorios(lista);
+}
+
+// Trocar de vista NÃO mexe na .bnav: continua-se na aba Relatórios.
+function setRelatVista(btn, vista) {
+  document.querySelectorAll('#rel-sub .rel-subbtn').forEach(x => x.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  _relatVista = vista;
+  renderRelatArea();
 }
 
 // ================================================================
