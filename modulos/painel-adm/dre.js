@@ -424,6 +424,62 @@
     { rot: 'Margem %',      key: 'margem_pct',    fmt: fmtPct, sinal: true },
   ];
 
+  // ── KPI EM TELA ESTREITA: abreviado, com o cheio a um toque ──────
+  // Abaixo de 700px o card tem ~112px úteis e o `.kval` é nowrap: "R$
+  // 10.372.275,28" pede 129px e saía CORTADO — literalmente
+  // "R$ 1.199.899,1", sem o último dígito. Aqui o card passa a mostrar
+  // "R$ 10,4 mi" e guarda o valor cheio ao lado, escondido.
+  //
+  // OS DOIS VALORES VÃO NO DOM DE UMA VEZ, e o toque só troca qual aparece.
+  // Nada é reformatado nem re-buscado no gesto, e o cheio é o MESMO `k.fmt(v)`
+  // que o desktop mostra — não há caminho para um número divergir do outro.
+  //
+  // `fmtRSCurto` já existia (era o formatador de rótulo de eixo) e produz
+  // exatamente este formato. Reusá-lo mantém UMA regra de abreviação no
+  // arquivo: duas divergiriam na primeira mudança de casa decimal.
+  // O curto de um valor, escolhido pelo formatador CHEIO que o acompanha.
+  // `fmtRSCurto` e `fmtLCurto` já existiam (eram os formatadores de rótulo de
+  // eixo dos gráficos) — daí só haver UMA regra de abreviação no arquivo.
+  function valorCurto(fmt, v) {
+    // Percentual não se abrevia: "12,4%" já é curto, e "12 %" não é mais
+    // legível. Devolver null faz o kbox sair sem par curto/cheio.
+    if (fmt === fmtPct) return null;
+    var n = Number(v);
+    if (!Number.isFinite(n)) return null;      // "—" não precisa de versão curta
+    return (fmt === fmtL) ? fmtLCurto(n) : fmtRSCurto(n);
+  }
+  function kpiCurto(k, v) { return valorCurto(k.fmt, v); }
+
+  // kbox com par curto/cheio. Sem `curto`, sai o kbox simples de sempre — é
+  // por isso que Margem % e os cards de "—" não mudam em nada.
+  function kboxValor(rot, cls, cheio, curto) {
+    if (!curto) {
+      return '<div class="kbox">' +
+        '<div class="klbl">' + esc(rot) + '</div>' +
+        '<div class="' + cls + '">' + cheio + '</div>' +
+      '</div>';
+    }
+    // <button> de verdade (e não div com onclick): dá foco por teclado e
+    // Enter/Espaço de graça. O CSS zera a aparência de botão.
+    return '<button type="button" class="kbox kbox-toque" onclick="__dreKpiCheio(this)"' +
+      ' aria-expanded="false" title="toque para ver o número cheio">' +
+      '<div class="klbl">' + esc(rot) + '</div>' +
+      '<div class="' + cls + '">' +
+        '<span class="kv-curto">' + curto + '</span>' +
+        '<span class="kv-cheio">' + cheio + '</span>' +
+      '</div>' +
+    '</button>';
+  }
+
+  // Um card por vez não: cada um alterna sozinho. Quem abriu "Venda bruta"
+  // para conferir o centavo não quer os outros cinco esticando junto.
+  window.__dreKpiCheio = function (el) {
+    if (!el) return;
+    var abriu = !el.classList.contains('cheio');
+    el.classList.toggle('cheio', abriu);
+    el.setAttribute('aria-expanded', abriu ? 'true' : 'false');
+  };
+
   // Colunas que o CELULAR esconde da tabela e mostra na linha de detalhe. As
   // que ficam — Categoria, Venda líquida, Lucro, Margem — são as que respondem
   // "vendeu quanto, sobrou quanto, a que taxa". As 8 colunas não cabem em
@@ -639,6 +695,53 @@
       '@media (max-width: 560px) { #s-dre .kval { font-size: .95rem; white-space: nowrap; } }' +
       '#s-dre .kval.neg { color: var(--dg); }' +
       '#s-dre .kval.pos { color: var(--ok); }' +
+
+      // ══ KPI: par CURTO / CHEIO ══════════════════════════════════
+      // Acima de 700px vale o CHEIO e o curto nem existe — o desktop não
+      // muda em nada. Abaixo, o card mostra o curto e o cheio vem ao toque.
+      //
+      // ISTO TAMBÉM CONSERTA O CORTE: o `nowrap` de 560px acima faz o valor
+      // encolher a fonte, mas em 375px o card tem ~112px úteis e
+      // "R$ 10.372.275,28" pede 129px — saía cortado, sem o último dígito.
+      // Com o curto no lugar, não há o que cortar; e quando o cheio abre ele
+      // PODE quebrar linha (o nowrap é desligado), porque expandido o que
+      // importa é o número inteiro, não caber numa linha.
+      '#s-dre .kv-curto { display: none; }' +
+      '@media (max-width: ' + LARGURA_ESTREITA + 'px) {' +
+        '#s-dre .kv-curto { display: inline; }' +
+        '#s-dre .kv-cheio { display: none; }' +
+        '#s-dre .kbox-toque.cheio .kv-curto { display: none; }' +
+        '#s-dre .kbox-toque.cheio .kv-cheio { display: inline; }' +
+        // Expandido: pode quebrar e encolhe um pouco, para o valor inteiro
+        // caber em 112px sem cortar. Medido em 375px.
+        '#s-dre .kbox-toque.cheio .kval {' +
+          'white-space: normal; overflow-wrap: anywhere; font-size: .82rem; }' +
+        // O kbox é <button> no modo estreito: zera a aparência de botão e
+        // devolve o alinhamento do card. Afordância pelo ⌄, que gira ao abrir
+        // — mesmo idioma das linhas da tabela.
+        '#s-dre .kbox-toque {' +
+          'width: 100%; text-align: left; font: inherit; color: inherit;' +
+          'cursor: pointer; position: relative; }' +
+        '#s-dre .kbox-toque .klbl::after {' +
+          'content: " \\25BE"; color: var(--tx3); font-size: .9em;' +
+          'display: inline-block; transition: transform .15s; }' +
+        '#s-dre .kbox-toque.cheio .klbl::after {' +
+          'color: var(--ac); transform: rotate(180deg); }' +
+      '}' +
+
+      // ══ MARGEM POR DIA: barra no desktop, LINHA no estreito ═════
+      // Os dois SVGs vão no DOM; quem escolhe é a largura. Por CSS e não por
+      // JS de propósito: girar o telefone ou arrastar a borda da janela troca
+      // a forma na hora, sem re-render e sem um GET /dre a mais.
+      '#s-dre .dre-so-mob { display: none; }' +
+      '@media (max-width: ' + LARGURA_ESTREITA + 'px) {' +
+        '#s-dre .dre-so-desk { display: none; }' +
+        '#s-dre .dre-so-mob { display: block; }' +
+        // "Dia" e "Por Posto" saem no celular: Dia é um dia só (a tela de mês
+        // já responde) e Por Posto compara 37 postos, que em 375px viram
+        // rótulo ilegível. O conteúdo delas continua no desktop.
+        '#s-dre .fueltab[data-aba="dia"], #s-dre .fueltab[data-aba="posto"] { display: none; }' +
+      '}' +
       // ── GRÁFICO ─────────────────────────────────────────────────
       // width:100% + viewBox = escala sozinho para o container. É o que faz
       // 31 ou 90 barras caberem em 375px sem rolagem horizontal.
@@ -1346,10 +1449,32 @@
       if (!a.pronta) {
         return '<button class="fueltab" disabled title="em breve">' + esc(a.rotulo) + '</button>';
       }
+      // data-aba: é por ele que o CSS esconde "Dia" e "Por Posto" abaixo de
+      // 700px. A decisão é de LARGURA, não de módulo — ver o bloco
+      // `@media (max-width: 700px)` no css() e o guarda __dreLarguraMudou.
       return '<button class="fueltab' + (_subaba === a.id ? ' active' : '') + '"' +
+        ' data-aba="' + a.id + '"' +
         ' onclick="__dreSubaba(\'' + a.id + '\')" title="' + esc(a.dica || '') + '">' +
         esc(a.rotulo) + '</button>';
     }).join('');
+  }
+
+  // ── CELULAR: só Mês e Projeção ───────────────────────────────────
+  // Quem ESCONDE os botões é o CSS (media query de 700px). Este guarda existe
+  // porque esconder o botão não muda `_subaba`: quem estava em "Por Posto" no
+  // desktop e girou o telefone — ou estreitou a janela — ficaria vendo aquela
+  // sub-aba com o botão dela invisível, sem caminho de volta. Aqui a tela
+  // volta para "Mês", que é onde ela abre.
+  var ABAS_ESTREITO = ['mes', 'projecao'];
+  var LARGURA_ESTREITA = 700;
+  function ehEstreito() {
+    return window.matchMedia('(max-width: ' + LARGURA_ESTREITA + 'px)').matches;
+  }
+  function corrigirSubabaPorLargura() {
+    if (!_shellPronto) return false;
+    if (!ehEstreito() || ABAS_ESTREITO.indexOf(_subaba) >= 0) return false;
+    _subaba = 'mes';
+    return true;
   }
 
   // Faixa de filtros conforme a sub-aba:
@@ -1425,6 +1550,23 @@
     aplicarEscopoSubaba();
     carregar();
   };
+
+  // Ligado UMA vez, no primeiro montarShell. Girar o telefone ou estreitar a
+  // janela é a única forma de a sub-aba visível deixar de existir, e é isso
+  // que este ouvinte cobre. Só re-renderiza quando a correção mudou algo —
+  // resize dispara muito, e recarregar a cada pixel seria um GET /dre por
+  // arrasto de borda.
+  var _ouvindoLargura = false;
+  function ligarGuardaLargura() {
+    if (_ouvindoLargura) return;
+    _ouvindoLargura = true;
+    window.addEventListener('resize', function () {
+      if (!corrigirSubabaPorLargura()) return;
+      renderSubabas();
+      aplicarEscopoSubaba();
+      carregar();
+    });
+  }
 
   // ── Postos para o seletor (cache: uma vez por sessão da aba) ─────
   async function carregarPostos() {
@@ -2170,7 +2312,12 @@
   function ligarTooltipGrafico(linhas, opts) {
     var o = opts || {};
     var svg = document.querySelector('#s-dre ' + (o.svg || '.dre-graf'));
-    var tip = document.querySelector('#s-dre .dre-tip');
+    // `o.tip` existe porque a Margem por dia passou a ter DOIS gráficos no
+    // mesmo card (barra no desktop, linha no celular). Sem poder apontar o
+    // balão, os dois pegariam o primeiro `.dre-tip` do documento — e no
+    // celular esse primeiro está dentro do wrap que o CSS esconde, então o
+    // balão existiria e ninguém veria.
+    var tip = document.querySelector('#s-dre ' + (o.tip || '.dre-tip'));
     if (!svg || !tip) return;
     var titulo = o.titulo || function (l) { return brData(l.data || l.chave); };
     var esconder = function () {
@@ -2439,10 +2586,7 @@
       if (k.destaque) cls += ' ac';
       // Lucro e margem coloridos pelo sinal: prejuízo tem de salta aos olhos.
       if (k.sinal && !vazio(v)) cls += (Number(v) < 0 ? ' neg' : ' pos');
-      return '<div class="kbox">' +
-        '<div class="klbl">' + esc(k.rot) + '</div>' +
-        '<div class="' + cls + '">' + k.fmt(v) + '</div>' +
-      '</div>';
+      return kboxValor(k.rot, cls, k.fmt(v), kpiCurto(k, v));
     }).join('') + '</div>';
 
     // ── Tabela por categoria, AGRUPADA em 4 linhas ──
@@ -2509,6 +2653,19 @@
     // mostra caixa vazia, que é pior que não mostrar nada.
     var linhasDia = (_dadosDia && Array.isArray(_dadosDia.linhas)) ? _dadosDia.linhas : [];
     var svg = svgBarrasVerticais(linhasDia);
+    // MESMO DADO, DUAS FORMAS. Barra no desktop; LINHA abaixo de 700px, onde
+    // 31 dias em barra viram tiras de 3px e a forma da curva — o vale e a
+    // recuperação — se perde. Os dois saem do MESMO `linhasDia`, pela mesma
+    // escala (svgLinhas e svgBarrasVerticais partilham escalaComZero e as
+    // constantes VB_*), então não há como um mostrar número diferente do
+    // outro. Quem escolhe é o CSS (.dre-so-desk / .dre-so-mob), e não JS: a
+    // troca precisa acompanhar rotação e redimensionamento sem re-render.
+    var svgLin = svgLinhas(linhasDia, {
+      series: [{ chave: 'margem_pct', cls: 'mes' }],
+      // O MESMO rotulo do eixo que a barra usa, para os dois graficos
+      // nomearem os dias igual.
+      rotuloX: function (l) { return diaDoISO(l.data || l.chave); },
+    });
     var comMargem = linhasDia.filter(function (l) {
       return l.margem_pct !== null && l.margem_pct !== undefined;
     }).length;
@@ -2519,11 +2676,18 @@
             '<div class="csub">' + comMargem + ' dia(s) com margem' +
               (linhasDia.length > comMargem
                 ? ' · ' + (linhasDia.length - comMargem) + ' sem venda líquida (sem barra)' : '') +
-              ' · passe o mouse ou toque numa coluna</div>' +
+              ' · passe o mouse ou toque num dia</div>' +
           '</div>' +
-          '<div class="cbody"><div class="dre-graf-wrap">' + svg +
-            '<div class="dre-tip" style="display:none"></div>' +
-          '</div></div>' +
+          '<div class="cbody">' +
+            '<div class="dre-graf-wrap dre-so-desk">' + svg +
+              '<div class="dre-tip dre-tip-desk" style="display:none"></div>' +
+            '</div>' +
+            (svgLin
+              ? '<div class="dre-graf-wrap dre-so-mob">' + svgLin +
+                  '<div class="dre-tip dre-tip-mob" style="display:none"></div>' +
+                '</div>'
+              : '') +
+          '</div>' +
         '</div>'
       : '';
 
@@ -2544,7 +2708,31 @@
       '</div>';
 
     // DEPOIS do innerHTML: os alvos de ponteiro só existem agora.
-    if (svg) ligarTooltipGrafico(linhasDia);
+    // Os DOIS gráficos ganham balão, cada um apontando para o próprio — só um
+    // está visível por vez, e ligar apenas o da largura de agora quebraria ao
+    // girar o telefone (o CSS troca o gráfico, mas nada re-renderiza).
+    if (svg) {
+      ligarTooltipGrafico(linhasDia, {
+        svg: '.dre-so-desk .dre-graf', tip: '.dre-tip-desk',
+      });
+      if (svgLin) {
+        ligarTooltipGrafico(linhasDia, {
+          svg: '.dre-so-mob .dre-graf', tip: '.dre-tip-mob',
+          // A linha marca o dia lido acendendo guia e ponto, como faz o
+          // gráfico de comparação da Projeção — os elementos já saem do
+          // svgLinhas escondidos, aqui só se liga a classe.
+          destacar: function (i) {
+            var wrap = document.querySelector('#s-dre .dre-so-mob');
+            if (!wrap) return;
+            var alvos = wrap.querySelectorAll('.dre-guia, .dre-ptx');
+            for (var k = 0; k < alvos.length; k++) {
+              alvos[k].classList.toggle('on',
+                i !== null && String(i) === alvos[k].getAttribute('data-i'));
+            }
+          },
+        });
+      }
+    }
   }
 
 
@@ -3438,6 +3626,11 @@
     var series = o.series || [];
     if (!pontos || !pontos.length || !series.length) return '';
     var rotuloY = o.rotuloY || function (v) { return nf(v, 1) + '%'; };
+    // rotuloX com o MESMO contrato do svgBarrasVerticais. O default e `p.dia`
+    // porque era o que estava fixo aqui — o grafico de comparacao da Projecao
+    // passa pontos com `dia`. A Margem por dia passa linhas do rollup, que tem
+    // `data`, e sem esta opcao o eixo saia 'undefined' em todos os dias.
+    var rotuloX = o.rotuloX || function (p) { return p.dia; };
 
     var num = function (v) { return (v === null || v === undefined || !Number.isFinite(Number(v))) ? null : Number(v); };
     var valores = [];
@@ -3537,7 +3730,7 @@
     var eixoX = pontos.map(function (p, i) {
       if (rotulados.indexOf(i) < 0) return '';
       return '<span class="dre-ex" style="left:' +
-        ((px(i) - M_ESQ) / areaL * 100).toFixed(3) + '%">' + esc(String(p.dia)) + '</span>';
+        ((px(i) - M_ESQ) / areaL * 100).toFixed(3) + '%">' + esc(String(rotuloX(p))) + '</span>';
     }).join('');
 
     // Legenda e balão ficam com o CHAMADOR, como no gráfico de barras: são o
@@ -3662,11 +3855,28 @@
     function cardMetrica(rot, projVal, faixaVal, fmt, realVal, extra, semFaixaNota) {
       var corpo;
       if (proj && projVal !== null && projVal !== undefined) {
-        corpo = '<div class="kval ac">' + fmt(projVal) + '</div>' +
+        // Mesmo par curto/cheio dos KPIs do Mês: em tela estreita aparece
+        // "R$ 1,2 mi" e o cheio vem ao toque. A faixa (± X) acompanha o
+        // estado do card — mostrar a projeção curta ao lado de uma faixa
+        // cheia daria dois formatos de dinheiro no mesmo card.
+        var pCurto = valorCurto(fmt, projVal);
+        var fCurto = valorCurto(fmt, faixaVal);
+        var faixaCheia = (faixaVal === null || faixaVal === undefined)
+          ? (semFaixaNota ? 'sem faixa' : '—')
+          : '± ' + fmt(faixaVal);
+        var faixaCurta = (fCurto === null) ? faixaCheia : '± ' + fCurto;
+        corpo = '<div class="kval ac">' +
+            (pCurto
+              ? '<span class="kv-curto">' + pCurto + '</span>' +
+                '<span class="kv-cheio">' + fmt(projVal) + '</span>'
+              : fmt(projVal)) +
+          '</div>' +
           '<div class="kfaixa"' + (semFaixaNota ? ' title="' + esc(semFaixaNota) + '"' : '') + '>' +
-            (faixaVal === null || faixaVal === undefined
-              ? (semFaixaNota ? 'sem faixa' : '—')
-              : '± ' + fmt(faixaVal)) + '</div>';
+            (pCurto
+              ? '<span class="kv-curto">' + faixaCurta + '</span>' +
+                '<span class="kv-cheio">' + faixaCheia + '</span>'
+              : faixaCheia) +
+          '</div>';
       } else {
         // OMITIDA com o motivo no lugar do número — nunca um número fraco sem
         // aviso. Cobre "menos de 3 dias" e "litro não carregou".
@@ -3678,11 +3888,18 @@
                   : 'nenhum dia importado')
               : 'litragem não disponível') + '</div>';
       }
-      return '<div class="kbox">' +
+      // Vira <button> só quando há par curto/cheio — o card de "—" (sem
+      // projeção) não tem nada a expandir e continua um div.
+      var temPar = corpo.indexOf('kv-curto') >= 0;
+      var abre = temPar
+        ? '<button type="button" class="kbox kbox-toque" onclick="__dreKpiCheio(this)"' +
+          ' aria-expanded="false" title="toque para ver o número cheio">'
+        : '<div class="kbox">';
+      return abre +
         '<div class="klbl">' + esc(rot) + ' · projeção</div>' + corpo +
         '<div class="kmini">realizado ' + fmt(realVal) +
           ' em ' + nDias + ' dia(s) com dado' + (extra || '') + '</div>' +
-      '</div>';
+      (temPar ? '</button>' : '</div>');
     }
 
     var margemReal = doMes ? doMes.margem_pct : null;
@@ -4820,6 +5037,11 @@
       return;
     }
     if (!_shellPronto) montarShell(sec);
+    ligarGuardaLargura();
+    // Entrar numa tela estreita com "Dia"/"Por Posto" pendurado da visita
+    // anterior mostraria uma sub-aba cujo botão o CSS esconde. Corrige ANTES
+    // do carregar(), senão o GET sairia com o escopo da sub-aba errada.
+    if (corrigirSubabaPorLargura()) { renderSubabas(); aplicarEscopoSubaba(); }
     carregarPostos();
     // Recarrega a cada entrada na aba: o período default é o mês corrente, e o
     // arquivo do dia pode ter sido importado entre duas visitas.

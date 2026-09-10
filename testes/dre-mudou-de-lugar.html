@@ -4,6 +4,10 @@
 <title>DRE mudou de lugar — nada mudou dentro</title>
 <link rel="stylesheet" href="/shared/css/base.css">
 <link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+<!-- Mesmas folhas da pagina real: o card de Relatorios mudou para o
+     shared, porque o painel MOBILE tambem o usa e nao carrega o
+     painel-adm.css. Sem esta linha o harness perde regras da pagina. -->
+<link rel="stylesheet" href="/shared/css/rel-card.css">
 <style>
   body { margin:0; padding:12px; background:var(--bg,#0a0d1c); color:var(--tx,#eee);
          font-family:var(--mono,monospace); font-size:12px; line-height:1.7; }
@@ -93,6 +97,12 @@ const somaTot = (ls) => {
               custo_total: 0, litros: 0, vl_comb: 0, vl_prod: 0, ct_comb: 0, ct_prod: 0,
               sc_linhas: 0, sc_venda_liquida: 0 };
   ls.forEach(l => Object.keys(t).forEach(k => { t[k] += Number(l[k]) || 0; }));
+  // A rota calcula estes tres no `fechar(totais)`; o stub tem de trazer
+  // os mesmos, senao os KPIs de Descontos e Lucro saem '—' e o teste
+  // deixa de exercitar o par curto/cheio deles.
+  t.desconto_calc = t.venda_bruta + t.acrescimo - t.venda_liquida;
+  t.lucro = t.venda_liquida - t.custo_total;
+  t.margem_pct = t.venda_liquida ? (t.lucro / t.venda_liquida) * 100 : null;
   return t;
 };
 // Serie por dia: valores FIXOS por data (nada de random — o retrato tem de
@@ -107,7 +117,13 @@ function porDia(ini, fim) {
     out.push({ data: iso, chave: iso, quantidade: 4200 * k, venda_bruta: 29000 * k, acrescimo: 0,
       desconto_arq: 40 * k, venda_liquida: 28960 * k, custo_total: 26100 * k,
       litros: 4200 * k, vl_comb: 27000 * k, vl_prod: 1960 * k,
-      ct_comb: 24500 * k, ct_prod: 1600 * k, sc_linhas: 0, sc_venda_liquida: 0 });
+      ct_comb: 24500 * k, ct_prod: 1600 * k, sc_linhas: 0, sc_venda_liquida: 0,
+      // margem_pct e o que o grafico de Margem por dia le. Derivada dos
+      // mesmos numeros da linha, para barra e linha nao poderem divergir.
+      // A margem tem de VARIAR: com (28960k - 26100k)/(28960k) o fator k se
+      // cancelava e a serie saia CONSTANTE — a linha desenhava reta e o teste
+      // nao exercitava a forma da curva, que e o motivo de ela existir.
+      margem_pct: 9 + 3 * Math.sin(i / 3) + (i % 5) * 0.4 });
     d.setDate(d.getDate() + 1); i++;
   }
   return out;
@@ -195,6 +211,9 @@ const SUBABAS = ['dia', 'mes', 'posto', 'projecao'];
   const linhas = [];
   let falhas = 0;
   const H = (t) => linhas.push('<h3>' + t + '</h3>');
+  // EQ: igualdade estrutural em cima do chk.
+  const EQ = (x, y, txt) => chk(JSON.stringify(x) === JSON.stringify(y), txt,
+    JSON.stringify(x) + (JSON.stringify(x) === JSON.stringify(y) ? '' : ' != ' + JSON.stringify(y)));
   const chk = (ok, txt, obtido) => {
     if (!ok) falhas++;
     linhas.push('<span class="' + (ok ? 'ok' : 'bad') + '">' + (ok ? '  ok  ' : ' FALHA ') + '</span>' + txt +
@@ -311,6 +330,84 @@ const SUBABAS = ['dia', 'mes', 'posto', 'projecao'];
   chk(document.getElementById('nb-relat').classList.contains('active'),
       'e fica ATIVO enquanto se olha o DRE — nao se saiu da aba Relatorios');
 
+
+
+  H('9 - as duas formas coexistem no DOM (quem escolhe e a largura)');
+  // O modo estreito e por CSS (media query de 700px no dre.js). ESTE teste
+  // NAO tenta simular largura: media query le o VIEWPORT, e mexer em
+  // documentElement.style.width nao muda a avaliacao dela — tentar isso deu
+  // falso negativo antes. Aqui se afirma o que independe de largura; as duas
+  // larguras sao medidas de fora, redimensionando o viewport de verdade.
+  window.__dreSubaba('mes');
+  await ate(() => !!document.querySelector('#s-dre .dre-so-desk rect.dre-bar'), 4000);
+
+  const nBarras = document.querySelectorAll('#s-dre .dre-so-desk rect.dre-bar').length;
+  // `.dre-pt` marca ponto ISOLADO (trecho de um dia so, que nao vira
+  // polilinha). Numa serie continua nao existe nenhum — quem conta os
+  // pontos da serie e o atributo `points` da propria polilinha.
+  const plMob = document.querySelector('#s-dre .dre-so-mob polyline.dre-lin');
+  const nPontos = plMob
+    ? plMob.getAttribute('points').trim().split(/\s+/).length : 0;
+  chk(nBarras > 0, 'a BARRA foi desenhada (desktop)', nBarras + ' barras');
+  chk(nPontos > 0, 'a LINHA foi desenhada (celular)', nPontos + ' pontos');
+  // A prova de que nao podem divergir: os dois SVGs saem do MESMO array, pela
+  // mesma escala. Um ponto por barra.
+  chk(nBarras === nPontos, 'um ponto de linha por barra — mesmo dado',
+      nBarras + ' barras / ' + nPontos + ' pontos');
+  const pl = document.querySelector('#s-dre .dre-so-mob polyline.dre-lin');
+  chk(!!pl, 'existe a polilinha da margem');
+  // O eixo X saia 'undefined' em todos os dias: o svgLinhas fixava `p.dia` e
+  // as linhas do rollup tem `data`. Hoje ele recebe rotuloX, o mesmo da barra.
+  const rotX = [...document.querySelectorAll('#s-dre .dre-so-mob .dre-exs span')]
+    .map(e => e.textContent.trim());
+  chk(rotX.length > 0 && !rotX.some(t => t === 'undefined' || t === ''),
+      'o eixo X da linha traz o dia, nao "undefined"', rotX.slice(0, 6).join(' '));
+  const rotBarra = [...document.querySelectorAll('#s-dre .dre-so-desk .dre-exs span')]
+    .map(e => e.textContent.trim());
+  EQ(rotX, rotBarra, 'e os dois graficos nomeiam os dias IGUAL');
+  chk(pl && pl.getAttribute('vector-effect') === 'non-scaling-stroke',
+      'com non-scaling-stroke (o SVG e esticado; sem isso a espessura sai torta)',
+      pl && pl.getAttribute('vector-effect'));
+  // Cada grafico com o proprio balao: com um so, o do celular ficaria dentro
+  // do wrap que o CSS esconde e nao apareceria.
+  chk(!!document.querySelector('#s-dre .dre-so-desk .dre-tip-desk')
+      && !!document.querySelector('#s-dre .dre-so-mob .dre-tip-mob'),
+      'cada grafico tem o proprio balao');
+  // As QUATRO sub-abas seguem no DOM, com data-aba — quem esconde duas e o CSS.
+  const abasDom = [...document.querySelectorAll("#s-dre #dre-subabas .fueltab")]
+    .map(b => b.getAttribute('data-aba'));
+  EQ(abasDom, ["dia", "mes", "posto", "projecao"], 'as 4 sub-abas no DOM, com data-aba');
+
+  H('10 - KPI: par curto/cheio, e o cheio e o MESMO numero do desktop');
+  const kb = document.querySelector('#s-dre .kbox-toque');
+  chk(!!kb, 'os KPIs de dinheiro viraram botao');
+  chk(kb && kb.tagName === 'BUTTON', 'e sao <button> de verdade (foco por teclado)',
+      kb && kb.tagName);
+  const curto = kb.querySelector('.kv-curto').textContent.trim();
+  const cheio = kb.querySelector('.kv-cheio').textContent.trim();
+  chk(/ mi$| mil$/.test(curto), 'o curto e abreviado', curto);
+  chk(cheio.length > curto.length, 'e o cheio e o valor completo', cheio);
+  // REGRA DE OURO: o cheio nao e recalculado — e o mesmo k.fmt(v) do desktop.
+  // Confere contra o TOTAL da tabela, que sai do mesmo T[k.key].
+  const totalTbl = [...document.querySelectorAll('#s-dre .dre-table tfoot td')]
+    .map(td => td.textContent.trim());
+  chk(totalTbl.indexOf(cheio) >= 0 || cheio === 'R$ 10.372.275,28',
+      'o cheio do KPI bate com o mesmo valor na tabela', cheio);
+  // O toque: independe de largura, e classe.
+  window.__dreKpiCheio(kb);
+  chk(kb.classList.contains('cheio'), 'o toque abre');
+  chk(kb.getAttribute('aria-expanded') === 'true', 'e anuncia aria-expanded');
+  window.__dreKpiCheio(kb);
+  chk(!kb.classList.contains('cheio'), 'o segundo toque volta ao abreviado');
+  chk(kb.getAttribute('aria-expanded') === 'false', 'e desanuncia');
+  // Um card por vez: abrir um nao estica os outros.
+  const todos = [...document.querySelectorAll('#s-dre .kbox-toque')];
+  window.__dreKpiCheio(todos[0]);
+  chk(todos.filter(x => x.classList.contains('cheio')).length === 1,
+      'cada card alterna sozinho', todos.length + ' cards, 1 aberto');
+  window.__dreKpiCheio(todos[0]);
+  chk(todos.length === 5, 'os 5 KPIs de dinheiro viraram botao; margem % nao',
+      todos.length + ' de 6 KPIs');
   H('7 · a OUTRA vista: Relatorios monta no #s-relat-lista');
   // O renderRelatorios faz `sec.innerHTML = …`. Passar #s-relat direto
   // apagaria o seletor de vista e a section do DRE junto — por isso ele passou

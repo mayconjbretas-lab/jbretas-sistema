@@ -83,24 +83,67 @@ function setTab(btn, tab) {
   // rolagem da .main enquanto ela está ativa e devolve ao sair.
   document.getElementById('main').classList.toggle('main-sem-rolagem', tab === 'medicao');
   if (tab === 'medicao') renderMedicaoMobile(document.getElementById('s-medicao'));
-  // Relatórios — mesmo JS do painel-adm desktop (renderRelatorios em window), sem fork.
-  if (tab === 'relat') renderRelatorios(document.getElementById('s-relat'));
+  // Relatórios — hospeda DUAS vistas (relatórios da rede e DRE), igual ao
+  // painel-adm desktop. Ver renderRelatArea: o setTab acabou de limpar o
+  // `active` de TODAS as .scr, e o #s-dre é uma delas (aninhado no #s-relat),
+  // então quem repõe o estado da vista escolhida é ela.
+  if (tab === 'relat') renderRelatArea();
   // Fornecedores — dashboard (fornecedores.js expõe renderFornecedores), agora aba do rodapé.
   if (tab === 'forn') renderFornecedores(document.getElementById('s-forn'));
 }
 
 function abrirMais() { document.getElementById('modal-mais').classList.add('open'); }
 
-// DRE — MESMO dre.js do painel-adm desktop (renderDre em window), sem fork.
-// A adaptação para 375px é toda por CSS dentro do próprio dre.js: KPIs em 2
-// colunas, 4 das 8 colunas da tabela viram linha de detalhe ao toque, e os
-// filtros de período empilham. Espelha o abrirCustoMobile logo abaixo.
+// ── Aba RELATÓRIOS: duas vistas, uma área ────────────────────────
+// Espelha o painel-adm desktop, de propósito: é o MESMO dre.js e o MESMO
+// relatorios.js, e duas navegações diferentes para as mesmas duas telas
+// custariam mais do que a linha economizada.
+//
+// A adaptação para 375px é toda por CSS DENTRO do dre.js, por LARGURA (700px):
+// só Mês e Projeção; KPIs abreviados com o cheio a um toque; a margem por dia
+// vira linha; e 4 das 8 colunas da tabela viram detalhe ao toque.
+let _relatVista = 'relat';
+
+function renderRelatArea() {
+  const lista = document.getElementById('s-relat-lista');
+  const dre = document.getElementById('s-dre');
+  const card = document.getElementById('rel-card-dre');
+  const acao = document.getElementById('rel-cb-acao');
+  const mostrarDre = _relatVista === 'dre';
+  if (lista) lista.hidden = mostrarDre;
+  // O #s-dre é .scr: quem manda na visibilidade é a classe `active`
+  // (.scr{display:none} / #s-dre.active{display:block}, esta injetada pelo
+  // próprio dre.js). `hidden` não bastaria — id com classe vence o atributo.
+  if (dre) dre.classList.toggle('active', mostrarDre);
+  // O card NÃO some ao abrir: continua no topo e vira o caminho de volta.
+  if (card) {
+    card.classList.toggle('aberto', mostrarDre);
+    card.setAttribute('aria-expanded', mostrarDre ? 'true' : 'false');
+  }
+  if (acao) acao.textContent = mostrarDre ? '← voltar aos relatórios' : 'abrir →';
+  // Render sob demanda: o DRE faz GET /dre e não deve disparar para quem só
+  // quer os relatórios. Os dois renders são idempotentes.
+  if (mostrarDre) renderDre(dre);
+  else renderRelatorios(lista);
+}
+
+// Um botão, dois estados. Não mexe no bnav: continua-se na aba Relatórios.
+function relToggleDre() {
+  _relatVista = (_relatVista === 'dre') ? 'relat' : 'dre';
+  renderRelatArea();
+}
+
+// DRE pelo Mais+ — o atalho CONTINUA existindo, mas agora leva ao MESMO
+// lugar: a aba Relatórios com a vista do DRE aberta. Antes ele ativava uma
+// section própria; manter aquele caminho significaria duas telas de DRE com
+// navegações diferentes, e alguém acabaria dizendo que "o DRE do Mais+ está
+// diferente do de Relatórios" sendo o mesmo dre.js.
 function abrirDreMobile() {
   document.getElementById('modal-mais').classList.remove('open');
-  document.querySelectorAll('.scr').forEach(x => x.classList.remove('active'));
-  document.querySelectorAll('.nbtn').forEach(x => x.classList.remove('active'));
-  document.getElementById('s-dre').classList.add('active');
-  renderDre(document.getElementById('s-dre'));
+  _relatVista = 'dre';
+  const btn = document.querySelector('.nbtn[onclick*="\'relat\'"]');
+  if (btn) setTab(btn, 'relat');
+  else renderRelatArea();
 }
 
 // Custo & Margem (mesmo JS da Logística, sem fork) — aberto pelo item do Mais+.

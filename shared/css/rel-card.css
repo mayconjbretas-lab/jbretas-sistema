@@ -1,0 +1,57 @@
+/* ================================================================
+   Card de destaque da aba RELATÓRIOS — atalho para o DRE.
+
+   COMPARTILHADO pelos DOIS painéis: painel-adm (desktop) e admin (mobile).
+   Vive aqui, e não em painel-adm.css, porque o mobile deliberadamente NÃO
+   carrega o painel-adm.css — ele tem o próprio admin.css. Duplicar as regras
+   nos dois faria o card divergir no primeiro ajuste.
+
+   USA SÓ OS TOKENS CURTOS (--sf2/--bd/--ac/--acd/--tx/--tx3/--radius), que é
+   a interseção dos dois: o admin.css os define de origem e o painel-adm.css
+   os resolve na camada de alias. Nenhum token longo (--surface2/--accent)
+   entra aqui — eles não existem no mobile.
+   ================================================================ */
+
+/* A largura acompanha a do conteúdo dos relatórios logo abaixo (o .rel-wrap
+   do relatorios.js é max-width:1100px), para as duas coisas pertencerem à
+   mesma coluna. No mobile o 1100 nunca é alcançado e o card ocupa a largura
+   disponível. */
+.rel-destaque { max-width: 1100px; margin: 0 auto 1rem; width: 100%; }
+
+/* NÃO reusa .card: o .card é superfície de CONTEÚDO (os relatórios da rede
+   são .card). Este é um ATALHO clicável, e um card de conteúdo com cursor de
+   mão ensinaria que os outros também abrem algo. */
+.rel-cardbig {
+  display: flex; align-items: center; gap: 1rem;
+  width: 100%; text-align: left; cursor: pointer;
+  background: var(--sf2); border: 1px solid var(--bd); border-radius: var(--radius, 12px);
+  padding: 1.1rem 1.2rem;
+  transition: border-color .15s, background .15s;
+}
+.rel-cardbig:hover, .rel-cardbig:focus-visible {
+  border-color: var(--ac); background: var(--acd); outline: none;
+}
+.rel-cb-ic { font-size: 1.9rem; line-height: 1; flex: none; }
+.rel-cb-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+.rel-cb-nome { font-family: var(--mono); font-size: 1rem; font-weight: 700; color: var(--tx); }
+.rel-cb-sub { font-size: .78rem; color: var(--tx3); line-height: 1.45; }
+.rel-cb-acao {
+  font-family: var(--mono); font-size: .74rem; font-weight: 700;
+  color: var(--ac); flex: none; white-space: nowrap;
+}
+/* DRE aberto: o card fica aceso e passa a ser o caminho de volta. Ele NÃO
+   some ao abrir — sumir deixaria a pessoa dentro do DRE sem saída visível. */
+.rel-cardbig.aberto { border-color: var(--ac); background: var(--acd); }
+
+/* Estreito: o "abrir →" cai para baixo do texto em vez de espremer o nome. */
+@media (max-width: 620px) {
+  .rel-cardbig { flex-wrap: wrap; gap: .7rem; }
+  .rel-cb-txt { flex: 1 1 100%; }
+  .rel-cb-acao { margin-left: auto; }
+}
+
+/* #s-relat é .scr, e .scr.active é display:flex (linha) — com os três filhos
+   (card, lista, seção do DRE) isso os poria lado a lado. O relatorios.js
+   injeta este mesmo display:block, mas só ao montar o shell dele; aqui a
+   regra vale desde o primeiro quadro, inclusive ao entrar direto no DRE. */
+#s-relat.active { display: block; }
