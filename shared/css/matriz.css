@@ -317,12 +317,12 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
      o frame: com grupos fechados as colunas mantem a largura, em vez de
      dividirem a sobra entre si. table-layout segue no default (auto). */
   .ss-table { width: auto; min-width: 0; }
-  .ss-table th, .ss-table td { padding: .3rem .4rem; min-width: 56px; }
+  .ss-table th, .ss-table td { padding: .3rem .4rem; min-width: calc(var(--mm-ch, 6) * 1ch + .9rem); }
   .ss-table .sticky-col { min-width: 64px; width: 64px; }
   .mm-thead th { height: 28px; }
   .mm-thead tr:first-child th { font-size: .62rem; letter-spacing: .2px; }
   .mm-thead tr:last-child th { font-size: .64rem; }
-  .cell-in { width: 52px; padding: 1px 2px; font-size: .78rem; }
+  .cell-in { width: calc(var(--mm-ch, 6) * 1ch + 6px); padding: 1px 2px; font-size: .78rem; }
   .cell-val { font-size: .78rem; }
   .mm-cap { font-size: .58rem; }
   /* A faixa entre grupos é feita com border-right (16px, ver .grp-end acima);

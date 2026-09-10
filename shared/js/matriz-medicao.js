@@ -91,6 +91,27 @@
       b.setAttribute('aria-label', (f ? 'Mostrar ' : 'Esconder ') + chip.dataset.grupo);
     });
   }
+  // Largura das colunas pelo MAIOR valor em tela (em ch), teto de 9. O CSS
+  // compacto lê --mm-ch no min-width da td e no width do input; assim a coluna
+  // acompanha o dado em vez de viver num 56px fixo que ora sobra ora corta.
+  function ajustarLarguraColunas() {
+    if (!_frameMatriz) return;
+    let max = 5;
+    _frameMatriz.querySelectorAll('.cell-in').forEach(el => { max = Math.max(max, el.value.length); });
+    _frameMatriz.querySelectorAll('.cell-val').forEach(el => { max = Math.max(max, el.textContent.trim().length); });
+    _frameMatriz.style.setProperty('--mm-ch', Math.min(max, 9));
+  }
+
+  // Versao barata pra usar por TECLA: olha um input so e nunca diminui. Evita
+  // a varredura de ~930 nos do ajustarLarguraColunas a cada digito; encolher
+  // (quando o maior valor da tela sai) fica pro blur, que chama a completa.
+  function crescerLarguraSePrecisar(input) {
+    if (!_frameMatriz || !input) return;
+    const atual = parseInt(_frameMatriz.style.getPropertyValue('--mm-ch')) || 5;
+    const n = Math.min(Math.max(input.value.length, atual), 9);
+    if (n !== atual) _frameMatriz.style.setProperty('--mm-ch', n);
+  }
+
   function montarChipsGrupos() {
     if (!_frameMatriz) return;
     const wrap = _frameMatriz.parentNode.querySelector('.mm-grupos');
@@ -461,6 +482,7 @@
       '<tr><td style="padding:1.5rem;color:var(--text3);">Sem dados.</td></tr>';
     // Calcula Previsão + Diferença de todos os dias e colore a Carga vs Pedido.
     dados.dias.forEach((_, diaIdx) => { recalcularPrevisaoEDiff(diaIdx); _recolorirCarga(diaIdx); });
+    ajustarLarguraColunas();
   }
 
   // "Tem valor" para as fórmulas: null/undefined/'' contam como vazio.
@@ -634,6 +656,7 @@
     // Só interpreta o valor e salva; a normalização visual acontece no blur.
     const num = parseLitros(input.value);
     _salvarCelula(input, (num && num > 0) ? num : null);
+    crescerLarguraSePrecisar(input);
   }
 
   function onCelulaTecla(e, input) {
@@ -691,6 +714,7 @@
       atualizarBotaoUndo();
     }
     _valorAoFocar = null;
+    ajustarLarguraColunas();
   }
 
   // Grava a edição no estado + EDICOES_PENDENTES e recalcula os dias afetados.
