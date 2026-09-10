@@ -302,9 +302,26 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
 
 /* Esconder um grupo = esconder toda th/td marcada com o data-grupo dele.
    Puramente CSS: a tabela não é remontada, então valor digitado não se perde. */
+.spreadsheet-frame.oculta-medicao   [data-grupo="medicao"],
 .spreadsheet-frame.oculta-venda     [data-grupo="venda"],
 .spreadsheet-frame.oculta-diferenca [data-grupo="diferenca"],
 .spreadsheet-frame.oculta-carga     [data-grupo="carga"],
 .spreadsheet-frame.oculta-previsao  [data-grupo="previsao"],
 .spreadsheet-frame.oculta-prePedido [data-grupo="prePedido"],
 .spreadsheet-frame.oculta-pedido    [data-grupo="pedido"] { display:none; }
+
+/* Matriz compacta — desktop */
+@media (min-width: 900px) {
+  .ss-table { font-size: .78rem; }
+  .ss-table th, .ss-table td { padding: .3rem .4rem; min-width: 56px; }
+  .ss-table .sticky-col { min-width: 64px; width: 64px; }
+  .mm-thead th { height: 28px; }
+  .mm-thead tr:first-child th { font-size: .62rem; letter-spacing: .2px; }
+  .mm-thead tr:last-child th { font-size: .64rem; }
+  .cell-in { width: 52px; padding: 1px 2px; font-size: .78rem; }
+  .cell-val { font-size: .78rem; }
+  .mm-cap { font-size: .58rem; }
+  /* A faixa entre grupos é feita com border-right (16px, ver .grp-end acima);
+     na compacta vai à metade pra não comer o espaço que as colunas ganharam. */
+  .ss-table td.grp-end, .ss-table th.grp-end { border-right-width: 8px; }
+}

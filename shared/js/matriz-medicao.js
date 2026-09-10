@@ -60,6 +60,7 @@
   // ── Chips de grupos (mostrar/esconder colunas) ──────────────────
   const CHAVE_GRUPOS_FECHADOS = 'jb_matriz_grupos_fechados';
   const ROTULO_CHIP = {
+    medicao: 'MEDIÇÃO',
     venda: 'VENDA', diferenca: 'Δ DIF.', carga: 'CARGA',
     previsao: 'PREVISÃO', prePedido: 'PRÉ-PEDIDO', pedido: 'PEDIDO'
   };
@@ -95,7 +96,6 @@
     const wrap = _frameMatriz.parentNode.querySelector('.mm-grupos');
     if (!wrap) return;
     wrap.innerHTML = categoriasVisiveis()
-      .filter(cat => cat.chave !== 'medicao')
       .map(cat =>
         '<span class="mm-chip ' + cat.classe + '" data-grupo="' + cat.chave + '">' +
           (ROTULO_CHIP[cat.chave] || cat.chave) +
