@@ -160,21 +160,51 @@ window.exigirSessao = exigirSessao;
     if (document.getElementById('faixa-visao-ti')) return;
 
     // CSS: faixa fixa acima da topbar (z-index 9999 > topbar 100). Empurra o
-    // body com padding-top e reposiciona a topbar sticky (top:0 → top:FAIXA_H)
-    // pra a faixa não cobri-la ao rolar. Tudo aqui; base.css intacto.
+    // body com padding-top, ENCOLHE o #screen-app e reposiciona a topbar
+    // sticky (top:0 → top:FAIXA_H). Tudo aqui; base.css intacto.
+    //
+    // O #screen-app É O CONSERTO PRINCIPAL. A logistica e o painel-adm o
+    // definem com `height:100vh`, e 100vh é a viewport INTEIRA — ele ignora o
+    // padding-top do body. Nos dois o body é um bloco comum (base.css), então
+    // o #screen-app fica 40px mais alto que o espaço disponível; e com
+    // `html,body{overflow:hidden}` esses 40px NÃO viravam scroll: eram
+    // CORTADOS, e o rodapé da tela (última linha da matriz, paginação, botão
+    // de ação) ficava fora de alcance enquanto a faixa estivesse ligada.
+    //
+    // O ADMIN JÁ CABIA, e não por causa do `height:100%` dele: é porque o
+    // admin.css põe `body{display:flex;flex-direction:column}` (linha 81), o
+    // que faz do #screen-app um ITEM FLEX — e o flex-shrink padrão o encolhe
+    // para o content box do body, seja qual for a altura declarada. Medido:
+    // forçando `height:100vh !important` lá, a altura USADA continua saindo
+    // 378px numa janela de 418. Para ele esta regra é redundante e inofensiva
+    // (dá o mesmo 378px); quem ela conserta são os outros dois.
+    //
+    // AS CORES SÃO FIXAS, e não var(--warning), por dois motivos medidos:
+    // o token vale #f9c74f no base.css e #f0a444 no admin.css (que não carrega
+    // o base.css), então a faixa mudava de amarelo conforme o módulo; e no
+    // tema claro ele vira #d97706, um laranja escuro que com o texto #1a1200
+    // deixava o aviso difícil de ler. A faixa é um aviso de estado perigoso —
+    // tem de ser o mesmo amarelo em toda tela e nos dois temas.
     const st = document.createElement('style');
     st.id = 'faixa-visao-ti-style';
     st.textContent =
       '#faixa-visao-ti{position:fixed;top:0;left:0;right:0;height:' + FAIXA_H + 'px;z-index:9999;' +
-        'background:var(--warning);color:#1a1200;display:flex;align-items:center;justify-content:center;' +
-        'gap:12px;font-family:var(--mono),monospace;font-size:.76rem;font-weight:700;letter-spacing:.02em;' +
-        'padding:0 12px;box-shadow:0 2px 10px rgba(0,0,0,.35)}' +
+        'background:#f9c74f;color:#1a1200;display:flex;align-items:center;justify-content:center;' +
+        'gap:12px;font-family:var(--mono, \'JetBrains Mono\'),monospace;font-size:.76rem;font-weight:700;' +
+        'letter-spacing:.02em;padding:0 12px;box-shadow:0 2px 10px rgba(0,0,0,.35)}' +
+      // O .fvt-txt sobrevive: o span continua ganhando essa classe logo abaixo,
+      // e sem a regra um nome longo empurraria o botão para fora da faixa.
       '#faixa-visao-ti .fvt-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-      '#faixa-visao-ti button{background:#1a1200;color:var(--warning);border:none;border-radius:6px;' +
-        'font-family:var(--mono),monospace;font-size:.7rem;font-weight:700;padding:5px 12px;cursor:pointer;' +
-        'flex-shrink:0;letter-spacing:.04em}' +
+      '#faixa-visao-ti button{background:#1a1200;color:#f9c74f;border:none;border-radius:6px;' +
+        'font-family:var(--mono, \'JetBrains Mono\'),monospace;font-size:.7rem;font-weight:700;' +
+        'padding:5px 12px;cursor:pointer;flex-shrink:0;letter-spacing:.04em}' +
       '#faixa-visao-ti button:hover{opacity:.88}' +
       'body{padding-top:' + FAIXA_H + 'px}' +
+      // FAIXA_H interpolado, e não "40px" escrito à mão: a constante existe só
+      // para este CSS, e fixar o número aqui a deixaria morta e livre para
+      // divergir das quatro regras que dependem dela.
+      '#screen-app{height:calc(100vh - ' + FAIXA_H + 'px) !important;' +
+        'max-height:calc(100vh - ' + FAIXA_H + 'px)}' +
       '.topbar{top:' + FAIXA_H + 'px !important}';
     document.head.appendChild(st);
 

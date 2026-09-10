@@ -1,0 +1,282 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Faixa "Vendo como" — não pode cortar o rodapé</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
+  #palco figure { margin:0; }
+  #palco figcaption { font-size:10px; color:var(--text3); padding:3px 0; }
+  iframe { width:420px; height:420px; border:1px dashed var(--border); background:#000; }
+</style>
+
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// A faixa "Vendo como" é injetada por shared/js/auth.js com um <style> montado
+// em JS. Ela empurra o body em 40px — e a logística e o painel-adm definem
+// `#screen-app{height:100vh}`, que é a viewport INTEIRA e ignora esse padding.
+// Com `html,body{overflow:hidden}` nos dois, os 40px que sobravam embaixo NÃO
+// viravam scroll: eram cortados, e o rodapé da tela ficava fora de alcance
+// enquanto a impersonação estivesse ligada.
+//
+// O CSS TESTADO É O DO auth.js, cortado do arquivo em tempo de execução e
+// avaliado com FAIXA_H = 40. Uma cópia colada aqui provaria a cópia — e no dia
+// em que o auth.js mudasse, este teste seguiria verde sobre a versão antiga.
+//
+// CADA MÓDULO NUM IFRAME, porque os três CSS colidem entre si (o admin tem
+// paleta própria e nem carrega o base.css). O iframe é a viewport de verdade
+// que o `100vh` e o `calc(100vh - 40px)` precisam para significar algo.
+// ════════════════════════════════════════════════════════════════
+const out = [];
+let falhas = 0, total = 0;
+function H(t) { out.push('\n<h3>' + t + '</h3>'); }
+function chk(cond, msg, extra) {
+  total++;
+  if (!cond) falhas++;
+  out.push((cond ? '<span class="ok">  ok  </span>' : '<span class="bad">FALHA </span>') +
+    msg + (extra ? '   <span style="color:var(--text3)">[' + extra + ']</span>' : ''));
+}
+const pintar = () => { document.getElementById('res').innerHTML = out.join('\n'); };
+
+// ── O CSS REAL, cortado do auth.js ──────────────────────────────
+async function cssDaFaixa() {
+  const src = await fetch('/shared/js/auth.js').then(r => r.text());
+  const i = src.indexOf('st.textContent =');
+  const marca = "'.topbar{top:'";
+  const j = src.indexOf(marca, i);
+  if (i < 0 || j < 0) throw new Error('não achei o bloco de estilo no auth.js');
+  const fim = src.indexOf(';', j);
+  const expr = src.slice(i + 'st.textContent ='.length, fim);
+  const FAIXA_H = 40;
+  // eval do MESMO trecho que roda em produção, com a mesma constante.
+  return eval(expr);
+}
+
+const BANNER = '<div id="faixa-visao-ti">' +
+  '<span class="fvt-txt">👁️ Vendo como Fulano de Tal da Silva Sauro (P. AVIVA)</span>' +
+  '<button type="button">↩ Voltar ao TI</button></div>';
+
+// Esqueletos copiados da marcação real de cada módulo. O que importa em cada
+// um é a cadeia que define altura: #screen-app > .topbar + o container flex.
+const MODULOS = {
+  logistica: {
+    css: ['/shared/css/base.css', '/shared/css/medicao-alteracoes.css', '/modulos/logistica/logistica.css'],
+    corpo:
+      '<div id="screen-app">' +
+        '<div class="topbar"><div class="topbar-brand">JBRETAS</div></div>' +
+        '<div class="logi-layout">' +
+          '<aside class="logi-sidebar"><div class="sb-block">filtros</div></aside>' +
+          '<div class="view-panel active" style="flex:1;display:flex;flex-direction:column">' +
+            '<div class="malt-faixa"><span class="malt-faixa-txt">✏️ 7 alterações de medição hoje</span>' +
+              '<button type="button" class="malt-faixa-btn" id="malt-ver">Ver</button></div>' +
+            '<div style="flex:1;overflow:auto">conteúdo</div>' +
+            '<div id="rodape" style="flex-shrink:0;height:36px;background:#c33;color:#fff;' +
+              'display:flex;align-items:center;justify-content:center">RODAPÉ DA MATRIZ</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>',
+  },
+  'painel-adm': {
+    css: ['/shared/css/base.css', '/modulos/painel-adm/painel-adm.css'],
+    corpo:
+      '<div id="screen-app" style="display:flex">' +
+        '<div class="topbar"><div class="topbar-brand">JBRETAS</div></div>' +
+        '<div style="flex:1;min-height:0;display:flex;flex-direction:column">' +
+          '<div style="flex:1;overflow:auto">conteúdo da aba</div>' +
+          '<div id="rodape" style="flex-shrink:0;height:36px;background:#c33;color:#fff;' +
+            'display:flex;align-items:center;justify-content:center">RODAPÉ DA ABA</div>' +
+        '</div>' +
+      '</div>',
+  },
+  admin: {
+    // O admin NÃO carrega o base.css: paleta própria.
+    css: ['/modulos/admin/admin.css'],
+    corpo:
+      '<div id="screen-app">' +
+        '<div class="topbar"><div class="tbbrand">JBRETAS</div></div>' +
+        '<div style="flex:1;min-height:0;display:flex;flex-direction:column">' +
+          '<div style="flex:1;overflow:auto">conteúdo</div>' +
+          '<div id="rodape" style="flex-shrink:0;height:36px;background:#c33;color:#fff;' +
+            'display:flex;align-items:center;justify-content:center">RODAPÉ</div>' +
+        '</div>' +
+      '</div>',
+  },
+};
+
+function montar(mod, css, opts) {
+  opts = opts || {};
+  const m = MODULOS[mod];
+  const links = m.css.map(h => '<link rel="stylesheet" href="' + h + '">').join('');
+  // `sabotar` devolve o #screen-app ao 100vh de antes do conserto: é assim
+  // que se prova que a medição abaixo SABE FALHAR.
+  const sabot = opts.sabotar ? '<style>#screen-app{height:100vh !important;max-height:none}</style>' : '';
+  const doc = '<!doctype html><html data-theme="' + (opts.tema || 'dark') + '">' +
+    '<head><meta charset="utf-8">' + links + '<style>' + css + '</style>' + sabot + '</head>' +
+    '<body>' + m.corpo + (opts.semFaixa ? '' : BANNER) + '</body></html>';
+  const fig = document.createElement('figure');
+  const cap = document.createElement('figcaption');
+  cap.textContent = mod + (opts.tema === 'light' ? ' · claro' : '') +
+    (opts.sabotar ? ' · SABOTADO (100vh)' : '') + (opts.semFaixa ? ' · sem faixa' : '');
+  const f = document.createElement('iframe');
+  f.srcdoc = doc;
+  fig.appendChild(cap); fig.appendChild(f);
+  document.getElementById('palco').appendChild(fig);
+  return new Promise(r => { f.onload = () => setTimeout(() => r(f), 120); });
+}
+
+const medir = (f) => {
+  const d = f.contentDocument, w = f.contentWindow;
+  const app = d.getElementById('screen-app');
+  const rod = d.getElementById('rodape');
+  const faixa = d.getElementById('faixa-visao-ti');
+  const alt = d.querySelector('.malt-faixa');
+  const vh = w.innerHeight;
+  const rApp = app.getBoundingClientRect();
+  const rRod = rod.getBoundingClientRect();
+  return {
+    vh,
+    appTopo: Math.round(rApp.top), appPe: Math.round(rApp.bottom), appAlt: Math.round(rApp.height),
+    rodapePe: Math.round(rRod.bottom), rodapeTopo: Math.round(rRod.top),
+    // Quanto do rodapé está ABAIXO da borda de baixo da janela = cortado.
+    cortado: Math.max(0, Math.round(rRod.bottom - vh)),
+    faixaAlt: faixa ? Math.round(faixa.getBoundingClientRect().height) : 0,
+    faixaFundo: faixa ? w.getComputedStyle(faixa).backgroundColor : null,
+    faixaCor: faixa ? w.getComputedStyle(faixa).color : null,
+    btnFundo: faixa ? w.getComputedStyle(faixa.querySelector('button')).backgroundColor : null,
+    btnCor: faixa ? w.getComputedStyle(faixa.querySelector('button')).color : null,
+    // A faixa de alterações não pode ficar debaixo da faixa amarela.
+    altTopo: alt ? Math.round(alt.getBoundingClientRect().top) : null,
+    altVisivel: alt ? (alt.getBoundingClientRect().top >= 40) : null,
+  };
+};
+
+// Contraste WCAG, para o botão amarelo sobre preto nos dois temas.
+const lum = (c) => {
+  const [r, g, b] = c.match(/\d+/g).map(Number).map(v => {
+    v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contraste = (a, b) => {
+  const l1 = lum(a), l2 = lum(b);
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+};
+
+(async () => {
+  const css = await cssDaFaixa();
+
+  H('0 · o CSS testado é o do auth.js, não uma cópia');
+  chk(/#screen-app\{height:calc\(100vh - 40px\) !important/.test(css),
+      'a regra do #screen-app está no arquivo', css.match(/#screen-app\{[^}]*\}/) || '(ausente)');
+  chk(/background:#f9c74f/.test(css) && !/background:var\(--warning\)/.test(css),
+      'e o amarelo é fixo, não var(--warning)');
+  chk(/body\{padding-top:40px\}/.test(css), 'o padding do body continua');
+  chk(/\.topbar\{top:40px !important\}/.test(css), 'e o reposicionamento da topbar também');
+  chk(/\.fvt-txt\{overflow:hidden/.test(css),
+      'o .fvt-txt sobreviveu — o span ainda ganha essa classe, e sem a regra um nome longo empurraria o botão para fora');
+
+  // ══════════════════════════════════════════════════════════════
+  for (const mod of ['logistica', 'painel-adm', 'admin']) {
+    H(mod.toUpperCase() + ' · o rodapé cabe na tela com a faixa ligada');
+    const f = await montar(mod, css);
+    const m = medir(f);
+    chk(m.faixaAlt === 40, 'a faixa mede 40px', m.faixaAlt + 'px');
+    chk(m.appTopo === 40, 'e o app começa logo abaixo dela (o body foi empurrado)', m.appTopo + 'px');
+    chk(m.appAlt === m.vh - 40, 'o #screen-app mede a janela MENOS a faixa',
+        m.appAlt + 'px de ' + m.vh + 'px');
+    chk(m.appPe <= m.vh + 0.5, 'o pé dele não passa da borda de baixo',
+        'pé em ' + m.appPe + ', janela ' + m.vh);
+    // O QUE IMPORTA: o rodapé inteiro dentro da janela.
+    chk(m.cortado === 0, 'e o RODAPÉ aparece inteiro — nada cortado embaixo',
+        m.cortado ? m.cortado + 'px cortados' : 'rodapé termina em ' + m.rodapePe);
+
+    // Sem a faixa nada muda: o conserto não pode custar nada a quem não está
+    // impersonando (o <style> nem chega a ser injetado nesse caso).
+    const fs = await montar(mod, '', { semFaixa: true });
+    const ms = medir(fs);
+    chk(ms.appAlt === ms.vh, 'sem a faixa, o app volta a ocupar a janela inteira',
+        ms.appAlt + 'px de ' + ms.vh + 'px');
+    chk(ms.cortado === 0, 'e o rodapé segue inteiro');
+
+    // A PROVA DE QUE A MEDIDA SABE FALHAR: devolve o 100vh de antes.
+    const fb = await montar(mod, css, { sabotar: true });
+    const mb = medir(fb);
+    if (mod === 'admin') {
+      // O ADMIN É IMUNE, e a primeira versão deste teste errou o motivo. Não é
+      // o `height:100%` dele: é o `body{display:flex;flex-direction:column}` do
+      // admin.css, que faz do #screen-app um ITEM FLEX. O flex-shrink padrão o
+      // encolhe para o content box do body seja qual for a altura declarada —
+      // por isso nem sabotando com 100vh o rodapé é cortado ali.
+      chk(mb.cortado === 0, 'o admin resiste até ao 100vh: o body dele é flex e o item encolhe',
+          'altura usada ' + mb.appAlt + 'px numa janela de ' + mb.vh + 'px');
+      chk(mb.appAlt === mb.vh - 40,
+          'e a altura USADA continua sendo janela menos faixa, apesar do height:100vh !important',
+          mb.appAlt + 'px');
+    } else {
+      chk(mb.cortado === 40, 'sabotado com 100vh, o rodapé volta a ser cortado em 40px',
+          mb.cortado + 'px cortados — era exatamente este o defeito');
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  H('LOGÍSTICA · a faixa de alterações não fica debaixo da amarela');
+  const fl = await montar('logistica', css);
+  const ml = medir(fl);
+  chk(ml.altVisivel === true,
+      '"7 alterações de medição hoje" começa abaixo dos 40px da faixa',
+      'topo em ' + ml.altTopo + 'px');
+
+  // ══════════════════════════════════════════════════════════════
+  H('CORES · o mesmo amarelo em todo módulo e nos dois temas');
+  const cores = {};
+  for (const mod of ['logistica', 'painel-adm', 'admin']) {
+    for (const tema of ['dark', 'light']) {
+      const f = await montar(mod, css, { tema });
+      cores[mod + '/' + tema] = medir(f);
+    }
+  }
+  const todas = Object.values(cores);
+  const fundos = [...new Set(todas.map(m => m.faixaFundo))];
+  chk(fundos.length === 1, 'a faixa tem UM fundo só nas seis combinações', fundos.join(' | '));
+  chk(fundos[0] === 'rgb(249, 199, 79)', 'e ele é #f9c74f', fundos[0]);
+  // Antes: var(--warning) valia #f9c74f no base.css, #f0a444 no admin.css e
+  // #d97706 nos dois no tema claro — a faixa mudava de cor conforme a tela.
+  chk(cores['admin/dark'].faixaFundo === cores['logistica/dark'].faixaFundo,
+      'o admin (paleta própria, sem base.css) mostra o MESMO amarelo da logística');
+  chk(cores['logistica/light'].faixaFundo === cores['logistica/dark'].faixaFundo,
+      'e o tema claro não vira laranja', cores['logistica/light'].faixaFundo);
+
+  const textos = [...new Set(todas.map(m => m.faixaCor))];
+  chk(textos.length === 1 && textos[0] === 'rgb(26, 18, 0)', 'o texto é #1a1200 em todas', textos.join(' | '));
+
+  H('BOTÃO "Voltar ao TI" · amarelo sobre preto, legível nos dois temas');
+  const bf = [...new Set(todas.map(m => m.btnFundo))];
+  const bc = [...new Set(todas.map(m => m.btnCor))];
+  chk(bf.length === 1 && bf[0] === 'rgb(26, 18, 0)', 'fundo #1a1200 em todas', bf.join(' | '));
+  chk(bc.length === 1 && bc[0] === 'rgb(249, 199, 79)', 'texto #f9c74f em todas', bc.join(' | '));
+  const cBtn = contraste(bc[0], bf[0]);
+  chk(cBtn >= 4.5, 'e passa o contraste mínimo do WCAG AA', cBtn.toFixed(2) + ':1');
+  const cFaixa = contraste(textos[0], fundos[0]);
+  chk(cFaixa >= 4.5, 'a faixa também', cFaixa.toFixed(2) + ':1');
+
+  out.push('\n' + (falhas
+    ? '<span class="bad">FALHAS: ' + falhas + ' de ' + total + '</span>'
+    : '<span class="ok">TUDO OK · ' + total + ' afirmações</span>'));
+  pintar();
+})().catch(e => {
+  out.push('<span class="bad">ERRO: ' + e.message + '</span>\n' + (e.stack || ''));
+  pintar();
+});
+</script>
