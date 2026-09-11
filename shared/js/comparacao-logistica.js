@@ -10,11 +10,12 @@
 // abaixo/acima/só-quem-mudou). A Logística não tem barra de filtros; se um dia
 // tiver, é só trocar CMP_OPCOES por estado.
 //
-// O LÁPIS DA MATRIZ FICA ESCONDIDO aqui (regra #sl-comparacao .cmpm-pen no
-// comparacao.css): editar inline chamaria cmpEditarVoce, que não existe nesta
-// página. A edição acontece pelo formulário do rodapé do card, que chama as
-// mesmas duas funções que o cmpConfirmarVoce do admin chama, na mesma ordem e
-// com os mesmos argumentos.
+// DOIS CAMINHOS PARA EDITAR, o mesmo desfecho. O lápis da célula "Você" é o
+// cmpEditarVoce/cmpConfirmarVoce do shared (ganhou vida aqui quando a regra
+// que o escondia saiu do comparacao.css); o formulário do rodapé do card é
+// desta tela, e existe porque mostra erro inline em vez de alert e
+// pré-preenche com o Sugerido. Os dois terminam no mesmo
+// window.cmpAposSalvarPreco, definido no fim deste arquivo.
 //
 // PRÓPRIO × CONCORRENTE SÓ PELA ESTRUTURA. dado.proprio é a coleta do nosso
 // posto e dado.concorrentes são as dos vizinhos — quem separou foi o campo
@@ -138,7 +139,7 @@
     const matriz = cmpCardMatriz(posto, dado, null, CMP_OPCOES);
     return '<div class="cl-card" data-posto="' + esc(posto.k) + '">' +
       matriz +
-      fotosHtml(posto, dado) +
+      cmpFotosHtml(posto, dado) +
       '<div class="cl-rodape">' +
         '<button type="button" class="cl-btn-sol" data-solicitar="' + esc(posto.k) + '">Solicitar alteração</button>' +
       '</div>' +
@@ -146,35 +147,10 @@
     '</div>';
   }
 
-  // Faixa de fotos: a nossa primeiro (🏠, moldura azul), depois uma por
-  // concorrente que tenha foto. Sem foto → sem miniatura, e não um buraco.
-  function fotosHtml(posto, dado) {
-    const itens = [];
-    const fotoPropria = dado.proprio && dado.proprio.foto;
-    if (fotoPropria && fotoPropria !== '-') {
-      itens.push(miniatura(fotoPropria, '🏠 ' + posto.ap, posto.ap, dado.proprio.hora, true));
-    }
-    (dado.concorrentes || []).forEach(c => {
-      const f = c.registro && c.registro.foto;
-      if (!f || f === '-') return;
-      itens.push(miniatura(f, c.nome, c.nome, c.registro.hora, false));
-    });
-    if (!itens.length) {
-      const msg = dado.proprio ? 'Sem fotos nesta coleta' : 'Sem coleta hoje';
-      return '<div class="cl-fotos cl-fotos-vazia">' + esc(msg) + '</div>';
-    }
-    return '<div class="cl-fotos">' + itens.join('') + '</div>';
-  }
-
-  function miniatura(url, etiqueta, nome, hora, ehMeu) {
-    return '<figure class="' + (ehMeu ? 'meu' : 'conc') + '">' +
-      '<img loading="lazy" src="' + esc(url) + '" alt="' + esc(etiqueta) + '"' +
-        ' data-zoom="' + esc(url) + '"' +
-        ' data-nome="' + esc(nome) + '"' +
-        ' data-hora="' + esc(hora || '') + '">' +
-      '<figcaption>' + esc(etiqueta) + '</figcaption>' +
-    '</figure>';
-  }
+  // A FAIXA DE FOTOS E O LIGHTBOX MORAM NO shared/js/comparacao-card.js.
+  // Nasceram aqui; subiram quando o ADM passou a mostrar as mesmas
+  // miniaturas embaixo da matriz. O onclick da miniatura já chama o
+  // cmpAbrirFoto — esta tela não liga listener de foto nenhum.
 
   // ── Formulário de solicitação ───────────────────────────────────
   // Só os combustíveis em que o posto TEM preço próprio: pedir alteração de um
@@ -289,12 +265,13 @@
 
     fecharForm(card);
     piscar(card.querySelector('[data-solicitar]'), '✓ Enviado ao gerente');
-    // A lista de pendentes é de outro módulo; se ele estiver na página, atualiza
-    // junto para o card novo aparecer sem esperar o polling de 20s.
-    if (typeof window.__slRefresh === 'function') {
-      try { window.__slRefresh(); } catch (e) { /* a lista se vira no próximo poll */ }
-    }
-    carregar();
+    // MESMO desfecho do lápis, pelo MESMO hook: recarregar a seção e dar um
+    // poll na lista de pendentes. Antes este bloco repetia à mão o que o
+    // cmpAposSalvarPreco já faz, e as duas metades iam divergir na primeira
+    // vez que alguém mexesse numa só.
+    await window.cmpAposSalvarPreco({
+      k, fuel: f, posto, dado, novo, orig, salvou: true, flashFuels: [],
+    });
   }
 
   function piscar(btn, txt) {
@@ -305,42 +282,10 @@
     setTimeout(() => { btn.textContent = orig; btn.classList.remove('ok'); }, 2200);
   }
 
-  // ── Lightbox ────────────────────────────────────────────────────
-  function abrirZoom(src, nome, hora) {
-    fecharZoom();
-    const cx = document.createElement('div');
-    cx.className = 'cl-lightbox';
-    const legenda = nome + (hora && hora !== '-' ? ' · coletado ' + hora : '');
-    cx.innerHTML =
-      '<button type="button" class="cl-lb-x" aria-label="Fechar">✕</button>' +
-      '<figure class="cl-lb-fig">' +
-        '<img src="' + esc(src) + '" alt="' + esc(nome) + '">' +
-        '<figcaption>' + esc(legenda) + '</figcaption>' +
-      '</figure>';
-    // Fecha no fundo e no ✕, NUNCA ao tocar a imagem — mesma regra da tela de
-    // revisão de coleta, onde fechar sem querer custava reabrir o posto todo.
-    cx.addEventListener('click', (e) => {
-      if (e.target === cx || e.target.closest('.cl-lb-x')) fecharZoom();
-    });
-    document.body.appendChild(cx);
-    document.addEventListener('keydown', escFecha);
-  }
-  function fecharZoom() {
-    const el = document.querySelector('.cl-lightbox');
-    if (el) el.remove();
-    document.removeEventListener('keydown', escFecha);
-  }
-  function escFecha(e) { if (e.key === 'Escape') fecharZoom(); }
-
   // ── Eventos (delegação: o innerHTML troca os filhos, não o host) ──
   function ligar(el) {
     if (el._clLigado) return;
     el.addEventListener('click', (e) => {
-      const img = e.target.closest && e.target.closest('[data-zoom]');
-      if (img) {
-        abrirZoom(img.getAttribute('data-zoom'), img.getAttribute('data-nome'), img.getAttribute('data-hora'));
-        return;
-      }
       if (e.target.closest('[data-recarregar]')) { carregar(); return; }
       const card = e.target.closest('.cl-card');
       if (!card) return;

@@ -673,7 +673,14 @@ function renderComparar() {
       // Filtro desligado: comportamento atual, intacto.
       if (!cmpPostoPassaFiltros(dado)) return;
       posOrd += 1;
-      cardsHtml += cmpCardMatriz(posto, dado, ordAtivo ? posOrd : null, cmpOpcoes());
+      // Matriz + faixa de fotos, dentro do MESMO .region-card. O
+      // cmpCardMatriz devolve o card já fechado, então a faixa entra antes
+      // do último </div> — concatenar depois a deixaria solta entre cards.
+      const cardHtml = cmpCardMatriz(posto, dado, ordAtivo ? posOrd : null, cmpOpcoes());
+      const corte = cardHtml.lastIndexOf('</div>');
+      cardsHtml += (corte < 0)
+        ? cardHtml + cmpFotosHtml(posto, dado)
+        : cardHtml.slice(0, corte) + cmpFotosHtml(posto, dado) + cardHtml.slice(corte);
     }
   });
 

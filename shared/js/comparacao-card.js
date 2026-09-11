@@ -432,6 +432,83 @@ function cmpFlashCheck(k, f) {
   setTimeout(() => { if (chk.parentNode) chk.parentNode.removeChild(chk); }, 1200);
 }
 
+
+  // ── Faixa de fotos da placa ───────────────────────────────────
+  // Nasceu na Logística e subiu para cá quando o ADM passou a querer as
+  // mesmas miniaturas embaixo da matriz. Devolve string, não DOM: quem
+  // chama concatena no HTML do card, do mesmo jeito que faz com a matriz.
+  //
+  // PRÓPRIO × CONCORRENTE SÓ PELA ESTRUTURA. dado.proprio é a coleta do
+  // nosso posto, dado.concorrentes a dos vizinhos — quem separou foi o
+  // campo `tipo` do GET /coletas, lá no coletas-service. Aqui não se
+  // compara nome de posto: foi a comparação por nome que quebrou a
+  // Beatriz uma vez.
+  //
+  // Sem foto → SEM miniatura, e não um quadro cinza: o operador precisa
+  // saber que aquela coleta veio sem prova, não ver um buraco decorado.
+  function cmpFotosHtml(posto, dado) {
+    const itens = [];
+    const fotoPropria = dado && dado.proprio && dado.proprio.foto;
+    if (fotoPropria && fotoPropria !== '-') {
+      itens.push(mini(fotoPropria, '🏠 ' + posto.ap, posto.ap, dado.proprio.hora, true));
+    }
+    ((dado && dado.concorrentes) || []).forEach(c => {
+      const f = c.registro && c.registro.foto;
+      if (!f || f === '-') return;
+      itens.push(mini(f, c.nome, c.nome, c.registro.hora, false));
+    });
+    if (!itens.length) {
+      return '<div class="cmpf-fotos cmpf-vazia">Sem fotos nesta coleta</div>';
+    }
+    return '<div class="cmpf-fotos">' + itens.join('') + '</div>';
+  }
+
+  // Escapa para atributo HTML. A legenda e o nome vêm do banco.
+  const at = (s) => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+  // onclick INLINE, e não delegação: é o mesmo padrão do lápis, e poupa
+  // cada tela de ligar um listener no container certo. A aspa simples na
+  // URL vira %27 antes de entrar no atributo (mesma defesa do csZoom).
+  function mini(url, etiqueta, nome, hora, ehMeu) {
+    const legenda = nome + (hora && hora !== '-' ? ' · coletado ' + hora : '');
+    const u = String(url).replace(/'/g, '%27');
+    return '<figure class="' + (ehMeu ? 'meu' : 'conc') + '">' +
+      '<img loading="lazy" src="' + at(url) + '" alt="' + at(etiqueta) + '"' +
+        ' onclick="cmpAbrirFoto(&#39;' + at(u) + '&#39;,&#39;' + at(legenda) + '&#39;)">' +
+      '<figcaption>' + at(etiqueta) + '</figcaption>' +
+    '</figure>';
+  }
+
+  // ── Lightbox ──────────────────────────────────────────────────
+  // Fecha no fundo, no ✕ e no Esc — NUNCA ao tocar a imagem. Fechar sem
+  // querer custa reabrir o posto todo, e foi reclamação real na tela de
+  // revisão de coleta.
+  function cmpAbrirFoto(url, legenda) {
+    cmpFecharFoto();
+    const cx = document.createElement('div');
+    cx.className = 'cmpf-lightbox';
+    cx.innerHTML =
+      '<button type="button" class="cmpf-lb-x" aria-label="Fechar">✕</button>' +
+      '<figure class="cmpf-lb-fig">' +
+        '<img src="' + at(url) + '" alt="' + at(legenda) + '">' +
+        '<figcaption>' + at(legenda) + '</figcaption>' +
+      '</figure>';
+    cx.addEventListener('click', (e) => {
+      if (e.target === cx || (e.target.closest && e.target.closest('.cmpf-lb-x'))) cmpFecharFoto();
+    });
+    document.body.appendChild(cx);
+    document.addEventListener('keydown', escFechaFoto);
+  }
+
+  function cmpFecharFoto() {
+    const el = document.querySelector('.cmpf-lightbox');
+    if (el) el.remove();
+    document.removeEventListener('keydown', escFechaFoto);
+  }
+  function escFechaFoto(e) { if (e.key === 'Escape') cmpFecharFoto(); }
+
   // ── Superfície pública ────────────────────────────────────────
   // As quatro do card, mais os auxiliares que o app.js de cada módulo
   // ainda usa por fora: cmpCardMudancas consome CMP_FUELS_CARD e
@@ -453,4 +530,7 @@ function cmpFlashCheck(k, f) {
   window.cmpConfirmarVoce      = cmpConfirmarVoce;
   window.cmpFlashCheck         = cmpFlashCheck;
   window.cmpParsePreco         = cmpParsePreco;
+  window.cmpFotosHtml          = cmpFotosHtml;
+  window.cmpAbrirFoto          = cmpAbrirFoto;
+  window.cmpFecharFoto         = cmpFecharFoto;
 })();
