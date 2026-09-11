@@ -735,6 +735,9 @@ html:not([data-theme="light"]) body::before{
 .mp-p-linha:hover { background: color-mix(in srgb, var(--ac) 7%, transparent); }
 .mp-p-nome { font-size: .78rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mp-barra { display: flex; height: 13px; border-radius: 4px; overflow: hidden; background: var(--bd); }
+/* O trilho (.mp-barra) ocupa a coluna toda; o preenchimento mede o posto
+   contra o maior da lista, e é dentro dele que os canais se dividem. */
+.mp-barra-fill { display: flex; height: 100%; border-radius: 4px; overflow: hidden; min-width: 2px; }
 .mp-seg { display: block; height: 100%; }
 .mp-seg-so { background: var(--mp-so); }
 .mp-seg-99 { background: var(--mp-99); }

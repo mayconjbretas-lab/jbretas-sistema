@@ -283,24 +283,34 @@
   }
 
   // ── Lista por posto ──────────────────────────────────────────────
-  function htmlBarra(p) {
+  // DUAS proporções encaixadas, e é isso que faz a barra dizer alguma coisa:
+  //   o PREENCHIMENTO mede o posto contra o MAIOR da lista;
+  //   os SEGMENTOS medem cada canal contra o total daquele posto.
+  // Antes só existia a segunda, então toda barra saía cheia e a coluna
+  // inteira virava um bloco da mesma largura — bonita e sem informação.
+  //
+  // A barra continua sendo a venda TOTAL do posto, mesmo com convênio
+  // filtrado: o filtro só apaga os segmentos de fora (opacidade .2). Encolher
+  // a barra mudaria a leitura de "quanto este posto vende" para "quanto ele
+  // vende no convênio", e as duas perguntas convivem na mesma tela.
+  function htmlBarra(p, maior) {
     var ligados = canaisLigados();
-    // A barra é SEMPRE a venda total do posto — é o que dá noção de tamanho
-    // relativo entre postos. O filtro apaga os segmentos de fora (opacidade
-    // .2) em vez de removê-los: a barra encolher mudaria a leitura de
-    // "quanto este posto vende" para "quanto ele vende no convênio", e as
-    // duas perguntas convivem na mesma tela.
-    return '<div class="mp-barra" role="presentation">' + CANAIS.map(function (c) {
+    var cheio = pct(p.litros, maior);
+    if (cheio === null) cheio = 0;
+    var segs = CANAIS.map(function (c) {
       var x = p.por_canal[c] || { litros: 0 };
       var w = pct(x.litros, p.litros);
       if (w === null || w <= 0) return '';
       var apagado = (!modoPista() && ligados.indexOf(c) < 0) ? ' fora' : '';
       return '<span class="mp-seg mp-seg-' + (c === '99' ? '99' : c === 'SOUTAG' ? 'so' : 'pi') + apagado + '"' +
         ' style="width:' + w.toFixed(3) + '%" title="' + esc(ROTULO[c]) + ': ' + litros(x.litros) + '"></span>';
-    }).join('') + '</div>';
+    }).join('');
+    return '<div class="mp-barra" role="presentation">' +
+      '<span class="mp-barra-fill" style="width:' + cheio.toFixed(3) + '%">' + segs + '</span>' +
+    '</div>';
   }
 
-  function htmlPosto(p) {
+  function htmlPosto(p, maior) {
     var v = valorDe(p);
     var total = valorRede();
     var aberto = _postoAberto === p.posto_id;
@@ -320,7 +330,7 @@
       '<button type="button" class="mp-p-linha" aria-expanded="' + (aberto ? 'true' : 'false') + '"' +
         ' onclick="__mpPosto(\'' + esc(p.posto_id) + '\')">' +
         '<span class="mp-p-nome">' + esc(p.posto_nome || '—') + '</span>' +
-        htmlBarra(p) +
+        htmlBarra(p, maior) +
         numero +
         '<span class="mp-p-pct">' + pctTxt(v, total) + '</span>' +
       '</button>' + det +
@@ -333,7 +343,11 @@
     // com o menor número da coluna.
     var lista = _dados.postos.slice().sort(function (a, b) { return valorDe(b) - valorDe(a); });
     if (!lista.length) return '<div class="mp-vazio">Sem venda no período.</div>';
-    return '<div class="mp-lista">' + lista.map(htmlPosto).join('') + '</div>';
+    // Régua da barra = maior TOTAL da lista, e não o maior valor da coluna:
+    // com Soutag ligado a lista vira o ranking de Soutag, mas a barra continua
+    // medindo venda total, então as duas têm de usar a mesma referência.
+    var maior = lista.reduce(function (m, p) { return Math.max(m, p.litros || 0); }, 0);
+    return '<div class="mp-lista">' + lista.map(function (p) { return htmlPosto(p, maior); }).join('') + '</div>';
   }
 
   // ── Pintura ──────────────────────────────────────────────────────
