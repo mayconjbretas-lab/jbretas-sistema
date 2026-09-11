@@ -857,6 +857,11 @@
   }
 
   // ── Entrada ──────────────────────────────────────────────────────
+  // Formatadores emprestados ao movimentacao-postos.js. SÓ estes três: o
+  // fmtLCurto e o fmtRSCurto abreviam para "mil"/"mi", e a vista Por posto
+  // é de conferência — lá os litros saem inteiros.
+  window.mmFmt = { nf: nf, esc: esc, brData: brData, brDataCurta: brDataCurta };
+
   window.renderMovMes = function (sec) {
     if (!sec) return;
     if (!_pronto || _sec !== sec) montarShell(sec);

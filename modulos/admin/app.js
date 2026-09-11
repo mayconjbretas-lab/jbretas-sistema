@@ -109,6 +109,7 @@ function abrirMais() { document.getElementById('modal-mais').classList.add('open
 const REL_VISTAS = {
   dre: { sec: 's-dre', botao: 'rel-btn-dre', render: (el) => renderDre(el) },
   mov: { sec: 's-movmes', botao: 'rel-btn-mov', render: (el) => renderMovMes(el) },
+  postos: { sec: 's-movpostos', botao: 'rel-btn-postos', render: (el) => renderMovPostos(el) },
   mercado: { sec: 's-mercado', botao: 'rel-btn-mercado', render: (el) => renderMercado(el) },
 };
 let _relatVista = 'relat';

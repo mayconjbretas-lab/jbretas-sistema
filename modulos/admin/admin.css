@@ -678,3 +678,85 @@ html:not([data-theme="light"]) body::before{
    HISTÓRICO
    ══════════════════════════════════════════════════ */
 /* (herda dos cards e listas gerais acima) */
+
+
+/* ════════════════════════════════════════════════════════════════
+   RELATÓRIOS — vista "Por posto" (movimentacao-postos.js).
+   Tokens CURTOS, os mesmos da Movimentação: --tx, --tx2, --tx3, --bd,
+   --sf2, --ac. As cores de canal não existiam em lugar nenhum (a
+   Movimentação nunca pintou Soutag/99/pista), então nascem aqui.
+   ════════════════════════════════════════════════════════════════ */
+.mp-wrap { --mp-so: #58a6e8; --mp-99: #a78bfa; --mp-pi: var(--ac); }
+
+.mp-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: .8rem; }
+.mp-chips { display: flex; gap: .4rem; }
+.mp-chip { background: transparent; border: 1px solid var(--bd); border-radius: 999px;
+  color: var(--tx2); font-family: var(--mono); font-size: .7rem; font-weight: 700;
+  padding: 5px 13px; cursor: pointer; }
+.mp-chip-so.on { background: color-mix(in srgb, var(--mp-so) 18%, transparent); border-color: var(--mp-so); color: var(--mp-so); }
+.mp-chip-99.on { background: color-mix(in srgb, var(--mp-99) 18%, transparent); border-color: var(--mp-99); color: var(--mp-99); }
+.mp-datas { display: flex; gap: .5rem; align-items: center; }
+.mp-datas label { font-family: var(--mono); font-size: .66rem; color: var(--tx3); display: flex; align-items: center; gap: .3rem; }
+.mp-data { background: var(--sf2); border: 1px solid var(--bd); border-radius: 6px; color: var(--tx);
+  font-family: var(--mono); font-size: .7rem; padding: 4px 7px; }
+.mp-atalhos { display: flex; gap: .4rem; margin-left: auto; }
+.mp-atalho { background: var(--sf2); border: 1px solid var(--bd); border-radius: 7px; color: var(--tx2);
+  font-family: var(--mono); font-size: .68rem; font-weight: 700; padding: 5px 11px; cursor: pointer; }
+.mp-atalho:hover { border-color: var(--ac); color: var(--ac); }
+
+.mp-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; }
+.mp-card { background: var(--sf2); border: 1px solid var(--bd); border-radius: var(--rl, 12px);
+  padding: .7rem .8rem; text-align: left; cursor: pointer; font: inherit; color: var(--tx); }
+.mp-card.aberto { border-color: var(--ac); }
+.mp-card-so.on { border-color: var(--mp-so); }
+.mp-card-99.on { border-color: var(--mp-99); }
+.mp-rot { font-family: var(--mono); font-size: .58rem; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--tx3); }
+.mp-num { font-family: var(--mono); font-size: 1.25rem; font-weight: 700; color: var(--tx); margin-top: 3px;
+  display: inline-block; }
+.mp-ao-lado { display: inline-block; font-family: var(--mono); font-size: .72rem; color: var(--tx2); margin-left: .45rem; }
+.mp-card-so .mp-num { color: var(--mp-so); }
+.mp-card-99 .mp-num { color: var(--mp-99); }
+.mp-sub { font-family: var(--mono); font-size: .64rem; color: var(--tx3); margin-top: 2px; }
+
+.mp-detalhe, .mp-p-det { background: var(--sf2); border: 1px solid var(--bd); border-radius: 10px;
+  padding: .6rem .8rem; margin-top: .5rem; }
+.mp-det-linha { display: flex; justify-content: space-between; gap: .8rem; padding: 3px 0;
+  font-family: var(--mono); font-size: .7rem; color: var(--tx2); }
+.mp-det-linha b { color: var(--tx); font-weight: 700; }
+.mp-det-sep { font-family: var(--mono); font-size: .6rem; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--tx3); margin: .5rem 0 .2rem; border-top: 1px solid var(--bd); padding-top: .4rem; }
+
+.mp-lista { margin-top: .9rem; display: flex; flex-direction: column; gap: 2px; }
+.mp-posto { border-bottom: 1px solid var(--bd); }
+.mp-p-linha { display: grid; grid-template-columns: 150px 1fr 190px 64px; align-items: center; gap: .7rem;
+  width: 100%; background: transparent; border: 0; padding: 7px 2px; cursor: pointer; font: inherit;
+  color: var(--tx); text-align: left; }
+.mp-p-linha:hover { background: color-mix(in srgb, var(--ac) 7%, transparent); }
+.mp-p-nome { font-size: .78rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-barra { display: flex; height: 13px; border-radius: 4px; overflow: hidden; background: var(--bd); }
+.mp-seg { display: block; height: 100%; }
+.mp-seg-so { background: var(--mp-so); }
+.mp-seg-99 { background: var(--mp-99); }
+.mp-seg-pi { background: var(--mp-pi); }
+.mp-seg.fora { opacity: .2; }
+.mp-p-litros { font-family: var(--mono); font-size: .74rem; font-weight: 700; text-align: right; }
+.mp-p-de { color: var(--tx3); font-weight: 400; }
+.mp-p-pct { font-family: var(--mono); font-size: .74rem; font-weight: 700; color: var(--ac); text-align: right; }
+
+.mp-estado, .mp-vazio { font-family: var(--mono); font-size: .74rem; color: var(--tx3); padding: 1.2rem 0; }
+.mp-erro { font-family: var(--mono); font-size: .74rem; color: var(--dg); padding: 1.2rem 0; }
+
+/* Mobile: cards 2×2 e a linha do posto em DUAS linhas — nome+% em cima,
+   barra+litros embaixo. Em 390px as quatro colunas do desktop espremem o
+   nome do posto a três letras. */
+@media (max-width: 699px) {
+  .mp-cards { grid-template-columns: repeat(2, 1fr); }
+  .mp-num { font-size: 1.05rem; }
+  .mp-atalhos { margin-left: 0; }
+  .mp-p-linha { grid-template-columns: 1fr auto; grid-template-areas: "nome pct" "barra litros"; row-gap: 4px; }
+  .mp-p-nome { grid-area: nome; }
+  .mp-p-pct { grid-area: pct; }
+  .mp-barra { grid-area: barra; }
+  .mp-p-litros { grid-area: litros; }
+}

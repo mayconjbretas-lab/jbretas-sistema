@@ -249,11 +249,13 @@
       <div class="fueltab-row" id="rel-seletor">
         <button class="fueltab" type="button" id="rel-btn-dre" onclick="relAbrir('dre')">DRE</button>
         <button class="fueltab" type="button" id="rel-btn-mov" onclick="relAbrir('mov')">Movimentação do dia</button>
+        <button class="fueltab" type="button" id="rel-btn-postos" onclick="relAbrir('postos')">Por posto</button>
         <button class="fueltab" type="button" id="rel-btn-mercado" onclick="relAbrir('mercado')">Mercado</button>
       </div>
       <div id="s-relat-lista"></div>
       <section class="scr" id="s-dre"></section>
       <section class="scr" id="s-movmes"></section>
+      <section class="scr" id="s-movpostos"></section>
       <!-- Mercado — custo de compra. MESMO mercado.js dos dois módulos, sem
            fork; ele escolhe o shell pela largura (completo >= 800px, só-painel
            abaixo). Aninhado aqui, e não solto na main, pelo mesmo motivo do
@@ -387,6 +389,7 @@
 <!-- DRE — mesmo JS do painel-adm (renderDre em window), sem fork -->
 <script src="../painel-adm/dre.js?v=202609111835"></script>
 <script src="../painel-adm/movimentacao-mes.js?v=202609111835"></script>
+<script src="../painel-adm/movimentacao-postos.js?v=202609111835"></script>
 <script src="../painel-adm/solicitacoes-adm.js?v=202609111835"></script>
 <script src="../../shared/js/push-inscricao.js?v=202609111835"></script>
 <script src="../logistica/custo-margem.js?v=202609111835"></script>
