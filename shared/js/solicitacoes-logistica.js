@@ -462,6 +462,10 @@
   }
 
   window.solicitacoesLogistica = { refresh, abrir, montarEm };
+  // Atalho curto para quem só precisa forçar um poll: o comparacao-logistica.js
+  // chama isto logo após criar uma solicitação, para o card novo aparecer sem
+  // esperar os 20s do polling.
+  window.__slRefresh = refresh;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

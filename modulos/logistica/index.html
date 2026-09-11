@@ -12,6 +12,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
 <link rel="stylesheet" href="../../shared/css/base.css?v=202609111613">
 <link rel="stylesheet" href="../../shared/css/matriz.css?v=202609111613">
+<link rel="stylesheet" href="../../shared/css/comparacao.css?v=202609111613">
 <link rel="stylesheet" href="logistica.css?v=202609111613">
 <!-- KPI (Sugestão de Pedido) — componente compartilhado do painel-adm, sem fork.
      Tokens longos resolvidos pelo base.css que a Logística já carrega. -->
@@ -146,6 +147,10 @@
       </section>
 
       <section id="tab-precos" class="view-panel">
+        <!-- Comparação de preços do dia (shared/js/comparacao-logistica.js).
+             Fica ACIMA da lista de solicitações: primeiro se olha o mercado,
+             depois se aprova o que já foi pedido. -->
+        <div id="sl-comparacao"></div>
         <div id="sl-pagina"></div>
       </section>
 
@@ -157,6 +162,10 @@
 <script src="../../shared/js/config.js?v=202609111613"></script>
 <script src="../../shared/js/api.js?v=202609111613"></script>
 <script src="../../shared/js/auth.js?v=202609111613"></script>
+<script src="../../shared/js/postos-mapa.js?v=202609111613"></script>
+<script src="../../shared/js/coletas-service.js?v=202609111613"></script>
+<script src="../../shared/js/comparacao-card.js?v=202609111613"></script>
+<script src="../../shared/js/comparacao-logistica.js?v=202609111613"></script>
 <script src="../../shared/js/solicitacoes-logistica.js?v=202609111613"></script>
 <script src="../../shared/js/push-inscricao.js?v=202609111613"></script>
 <script src="custo-margem.js?v=202609111613"></script>
