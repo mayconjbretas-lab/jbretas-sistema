@@ -343,6 +343,95 @@ async function cmpCriarSolicitacao(postoNome, combustivel, precoAntigo, precoNov
   }
 }
 
+
+  // ── Lápis inline ──────────────────────────────────────────────
+  // Editar o preço próprio direto na célula "Você". Ligado por onclick
+  // inline que o cmpCardMatriz emite, e é isso que força os dois ganchos
+  // abaixo: atributo HTML só carrega string, então nem o objeto do posto
+  // nem a função de re-render podem chegar por parâmetro.
+  //
+  //   window.cmpDadoDoPosto(k)    -> devolve o `dado` daquele posto
+  //   window.cmpAposSalvarPreco(ctx) -> o que a TELA faz depois de salvar
+  //
+  // ctx = { k, fuel, posto, dado, novo, orig, salvou, flashFuels }.
+  // Sem os ganchos definidos o lápis vira no-op silencioso em vez de
+  // estourar ReferenceError numa tela que só quer ver a matriz.
+  const dadoDoPosto = (k) =>
+    (typeof window.cmpDadoDoPosto === 'function') ? window.cmpDadoDoPosto(k) : null;
+  const aposSalvar = async (ctx) => {
+    if (typeof window.cmpAposSalvarPreco === 'function') await window.cmpAposSalvarPreco(ctx);
+  };
+
+function cmpEditarVoce(k, f) {
+  const cell = document.getElementById(`cmpm-voce-${idSafe(k)}-${f}`);
+  if (!cell) return;
+  const dado = dadoDoPosto(k);
+  const orig = (dado && dado.proprio && dado.proprio[f] !== null && dado.proprio[f] !== undefined) ? Number(dado.proprio[f]) : null;
+  const val = orig !== null ? orig.toFixed(2).replace('.', ',') : '';
+  const kSafe = String(k).replace(/'/g, "\\'");
+  cell.innerHTML = `<input class="cmpm-input" id="cmpm-inp-${idSafe(k)}-${f}" type="text" inputmode="decimal"
+    value="${val}"
+    onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
+    onblur="cmpConfirmarVoce('${kSafe}','${f}')">`;
+  const inp = document.getElementById(`cmpm-inp-${idSafe(k)}-${f}`);
+  if (inp) { inp.focus(); inp.select(); }
+}
+
+  // "619" → 6.19 (só dígitos = centavos); "6,19"/"6.19" → 6.19 (decimal direto).
+function cmpParsePreco(str) {
+  const s = String(str || '').trim();
+  if (!s) return NaN;
+  if (/[.,]/.test(s)) return parseFloat(s.replace(',', '.'));
+  const digits = s.replace(/\D/g, '');
+  return digits ? parseInt(digits, 10) / 100 : NaN;
+}
+
+async function cmpConfirmarVoce(k, f) {
+  const inp = document.getElementById(`cmpm-inp-${idSafe(k)}-${f}`);
+  if (!inp || inp.dataset.saving === '1') return;
+  const dado = dadoDoPosto(k);
+  const posto = MAP_POSTOS.find(p => p.k === k);
+  if (!dado || !posto) { await aposSalvar({ k, fuel: f, posto: null, dado: null, novo: null, orig: null, salvou: false, flashFuels: [] }); return; }
+
+  const novo = cmpParsePreco(inp.value);
+  const orig = (dado.proprio && dado.proprio[f] !== null && dado.proprio[f] !== undefined) ? Number(dado.proprio[f]) : null;
+
+  // inválido/vazio ou sem mudança → cancela sem salvar
+  if (isNaN(novo) || novo <= 0) { await aposSalvar({ k, fuel: f, posto, dado, novo, orig, salvou: false, flashFuels: [] }); return; }
+  if (orig !== null && Math.abs(novo - orig) < 0.005) { await aposSalvar({ k, fuel: f, posto, dado, novo, orig, salvou: false, flashFuels: [] }); return; }
+
+  inp.dataset.saving = '1';
+  const flashFuels = []; // fuels que geraram solicitação (feedback ✓)
+  const ok = await cmpSalvarPrecoProprio(posto.ap, f, novo, orig);
+  if (ok) {
+    if (!dado.proprio) dado.proprio = {};
+    dado.proprio[f] = novo; // overlay local (reflete na hora + persiste no reload via cmpAplicarRevisoes)
+    // Solicitação SEMPRE que o preço mudou (posto.ap, NÃO .nome). O guard de
+    // "sem mudança" acima já retornou, mas reconfere por segurança.
+    if ((orig === null || Math.abs(novo - orig) >= 0.005)
+        && await cmpCriarSolicitacao(posto.ap, f, orig, novo)) flashFuels.push(f);
+  }
+
+  // Daqui para baixo é da TELA, não do card: recarregar, re-renderizar, o
+  // convite do GA. Cada painel define o seu em window.cmpAposSalvarPreco.
+  await aposSalvar({ k, fuel: f, posto, dado, novo, orig, salvou: ok, flashFuels });
+}
+
+  // Feedback leve: ✓ dourado rápido na célula "Você" do combustível editado
+  // (após o re-render da tela já ter recriado a célula).
+function cmpFlashCheck(k, f) {
+  const cell = document.getElementById(`cmpm-voce-${idSafe(k)}-${f}`);
+  if (!cell) return;
+  const chk = document.createElement('span');
+  chk.textContent = ' ✓';
+  chk.style.color = 'var(--ac)';
+  chk.style.fontWeight = '700';
+  chk.style.transition = 'opacity .6s';
+  cell.appendChild(chk);
+  setTimeout(() => { chk.style.opacity = '0'; }, 500);
+  setTimeout(() => { if (chk.parentNode) chk.parentNode.removeChild(chk); }, 1200);
+}
+
   // ── Superfície pública ────────────────────────────────────────
   // As quatro do card, mais os auxiliares que o app.js de cada módulo
   // ainda usa por fora: cmpCardMudancas consome CMP_FUELS_CARD e
@@ -360,4 +449,8 @@ async function cmpCriarSolicitacao(postoNome, combustivel, precoAntigo, precoNov
   window.cmpSalvarPrecoProprio = cmpSalvarPrecoProprio;
   window.cmpCriarSolicitacao   = cmpCriarSolicitacao;
   window.cmpHojeISO            = cmpHojeISO;
+  window.cmpEditarVoce         = cmpEditarVoce;
+  window.cmpConfirmarVoce      = cmpConfirmarVoce;
+  window.cmpFlashCheck         = cmpFlashCheck;
+  window.cmpParsePreco         = cmpParsePreco;
 })();

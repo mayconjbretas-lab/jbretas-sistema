@@ -640,91 +640,39 @@ function cmpSetFaixaPreco(btn, faixa) {
 // escopo global); cmpOpcoes(), lá em cima junto dos let, é quem os empacota.
 // ════════════════════════════════════════════════════════════════
 
-// ── Edição inline do "Você" na matriz (mesma rota da aba Coleta) ──
-function cmpEditarVoce(k, f) {
-  const cell = document.getElementById(`cmpm-voce-${idSafe(k)}-${f}`);
-  if (!cell) return;
-  const dado = G_COMPARACAO[k];
-  const orig = (dado && dado.proprio && dado.proprio[f] !== null && dado.proprio[f] !== undefined) ? Number(dado.proprio[f]) : null;
-  const val = orig !== null ? orig.toFixed(2).replace('.', ',') : '';
-  const kSafe = String(k).replace(/'/g, "\\'");
-  cell.innerHTML = `<input class="cmpm-input" id="cmpm-inp-${idSafe(k)}-${f}" type="text" inputmode="decimal"
-    value="${val}"
-    onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
-    onblur="cmpConfirmarVoce('${kSafe}','${f}')">`;
-  const inp = document.getElementById(`cmpm-inp-${idSafe(k)}-${f}`);
-  if (inp) { inp.focus(); inp.select(); }
-}
+// ── Ganchos do lápis (shared/js/comparacao-card.js) ──────────────
+// O cmpEditarVoce/cmpConfirmarVoce vivem no módulo compartilhado, e o que
+// eles não podem saber é (a) onde esta tela guarda a comparação e (b) o que
+// esta tela faz depois de salvar. As duas coisas entram por aqui.
+//
+// O corpo do cmpAposSalvarPreco é a CAUDA ORIGINAL do cmpConfirmarVoce,
+// movida sem alterar: o convite do GA, o re-render e o ✓ por combustível.
+// Nos caminhos de desistência (preço inválido, preço igual) ele é chamado
+// com salvou:false e flashFuels vazio, o que executa só o renderComparar()
+// — exatamente o que aquelas linhas faziam antes.
+window.cmpDadoDoPosto = (k) => G_COMPARACAO[k];
 
-// "619" → 6.19 (só dígitos = centavos); "6,19"/"6.19" → 6.19 (decimal direto).
-function cmpParsePreco(str) {
-  const s = String(str || '').trim();
-  if (!s) return NaN;
-  if (/[.,]/.test(s)) return parseFloat(s.replace(',', '.'));
-  const digits = s.replace(/\D/g, '');
-  return digits ? parseInt(digits, 10) / 100 : NaN;
-}
-
-async function cmpConfirmarVoce(k, f) {
-  const inp = document.getElementById(`cmpm-inp-${idSafe(k)}-${f}`);
-  if (!inp || inp.dataset.saving === '1') return;
-  const dado = G_COMPARACAO[k];
-  const posto = MAP_POSTOS.find(p => p.k === k);
-  if (!dado || !posto) { renderComparar(); return; }
-
-  const novo = cmpParsePreco(inp.value);
-  const orig = (dado.proprio && dado.proprio[f] !== null && dado.proprio[f] !== undefined) ? Number(dado.proprio[f]) : null;
-
-  // inválido/vazio ou sem mudança → cancela sem salvar
-  if (isNaN(novo) || novo <= 0) { renderComparar(); return; }
-  if (orig !== null && Math.abs(novo - orig) < 0.005) { renderComparar(); return; }
-
-  inp.dataset.saving = '1';
-  const flashFuels = []; // fuels que geraram solicitação (feedback ✓)
-  const ok = await cmpSalvarPrecoProprio(posto.ap, f, novo, orig);
-  if (ok) {
-    if (!dado.proprio) dado.proprio = {};
-    dado.proprio[f] = novo; // overlay local (reflete na hora + persiste no reload via cmpAplicarRevisoes)
-    // Solicitação SEMPRE que o preço mudou (posto.ap, NÃO .nome). O guard de
-    // "sem mudança" acima já retornou, mas reconfere por segurança.
-    if ((orig === null || Math.abs(novo - orig) >= 0.005)
-        && await cmpCriarSolicitacao(posto.ap, f, orig, novo)) flashFuels.push(f);
-  }
-
+window.cmpAposSalvarPreco = async (ctx) => {
   // Regra do GA — NUNCA automático: ao salvar GC, oferece GA = GC + diferencial
   // do posto (dado.diferencial_ga, padrão 0,30).
-  if (ok && f === 'GC') {
+  if (ctx.salvou && ctx.fuel === 'GC') {
+    const dado = ctx.dado;
     const difGa = (dado && dado.diferencial_ga != null) ? Number(dado.diferencial_ga) : 0.30;
-    const alvoGA = novo + difGa;
+    const alvoGA = ctx.novo + difGa;
     if (window.confirm(`Aplicar também GA (aditivada) = GC + ${difGa.toFixed(2).replace('.', ',')} = R$ ${alvoGA.toFixed(2).replace('.', ',')}?`)) {
       const origGA = (dado.proprio && dado.proprio['GA'] !== null && dado.proprio['GA'] !== undefined) ? Number(dado.proprio['GA']) : null;
-      const okGA = await cmpSalvarPrecoProprio(posto.ap, 'GA', alvoGA, origGA);
+      const okGA = await cmpSalvarPrecoProprio(ctx.posto.ap, 'GA', alvoGA, origGA);
       if (okGA) {
         dado.proprio['GA'] = alvoGA;
         // GA também SEMPRE gera solicitação — só pula se o valor não mudou.
         if ((origGA === null || Math.abs(alvoGA - origGA) >= 0.005)
-            && await cmpCriarSolicitacao(posto.ap, 'GA', origGA, alvoGA)) flashFuels.push('GA');
+            && await cmpCriarSolicitacao(ctx.posto.ap, 'GA', origGA, alvoGA)) ctx.flashFuels.push('GA');
       }
     }
   }
   renderComparar();
-  flashFuels.forEach(ff => cmpFlashCheck(k, ff));
-}
-
-// Feedback leve: ✓ dourado rápido na célula "Você" do combustível editado
-// (após o renderComparar já ter recriado a célula).
-function cmpFlashCheck(k, f) {
-  const cell = document.getElementById(`cmpm-voce-${idSafe(k)}-${f}`);
-  if (!cell) return;
-  const chk = document.createElement('span');
-  chk.textContent = ' ✓';
-  chk.style.color = 'var(--ac)';
-  chk.style.fontWeight = '700';
-  chk.style.transition = 'opacity .6s';
-  cell.appendChild(chk);
-  setTimeout(() => { chk.style.opacity = '0'; }, 500);
-  setTimeout(() => { if (chk.parentNode) chk.parentNode.removeChild(chk); }, 1200);
-}
+  ctx.flashFuels.forEach(ff => cmpFlashCheck(ctx.k, ff));
+};
 
 // O overlay de revisões (cmpAplicarRevisoes) e as duas chamadas do lápis
 // (cmpSalvarPrecoProprio / cmpCriarSolicitacao) também moraram aqui e hoje

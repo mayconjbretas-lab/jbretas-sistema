@@ -361,6 +361,24 @@
     _timer = setInterval(carregar, INTERVALO_MS);
   }
 
+  // ── Ganchos do lápis (shared/js/comparacao-card.js) ─────────────
+  // Com eles definidos, o lápis da célula "Você" funciona aqui igual ao do
+  // admin — é por isso que a regra que o escondia saiu do comparacao.css.
+  //
+  // O cmpAposSalvarPreco daqui NÃO traz o convite do GA. No admin ele é um
+  // window.confirm no meio do fluxo; aqui o operador já escolhe o combustível
+  // no select do formulário, e um modal brigaria com isso. Quem quiser mexer
+  // no GA pela Logística escolhe GA na lista.
+  //
+  // Fora do init() de propósito: os ganchos só precisam existir, e deixá-los
+  // atrás do teste de perfil os faria faltar caso o init saísse antes.
+  window.cmpDadoDoPosto = (k) => (_comp ? _comp[k] : null);
+
+  window.cmpAposSalvarPreco = () => {
+    carregar();                 // redesenha a seção com o preço novo
+    window.__slRefresh?.();     // e força um poll da lista de pendentes
+  };
+
   window.comparacaoLogistica = { recarregar: carregar };
 
   if (document.readyState === 'loading') {
