@@ -292,11 +292,35 @@
       '</div>';
   }
 
+  // Quem abriu a solicitação, do criado_por_perfil que o POST grava como
+  // SNAPSHOT. Linha antiga (antes da coluna existir) vem null e não recebe
+  // selo nenhum — melhor a ausência do que chutar um autor.
+  //
+  // Reaproveita a .sl-hd-estado, a MESMA classe do status: ela é só
+  // tipografia (mono, .62rem, bold, uppercase), e a cor vem por herança do
+  // .sl-hd-pend/ok/aguard/canc do cabeçalho — o selo sai na cor do estado do
+  // card, sem uma regra de CSS nova. O margin-left:auto inline é o que
+  // mantém os dois JUNTOS à direita: o .sl-card-hd é space-between, e um
+  // terceiro filho sem isso ficaria centralizado, longe do status.
+  //
+  // O card agrupa por POSTO, então em teoria pode ter itens de autores
+  // diferentes. Nesse caso lista os dois em vez de escolher um.
+  const PERFIL_LABEL = { LOGISTICA: 'Logística', ADM: 'ADM', GERENTE: 'Gerente' };
+  function seloPerfilHtml(itens) {
+    const perfis = [...new Set((itens || [])
+      .map(i => i && i.criado_por_perfil)
+      .filter(p => p && PERFIL_LABEL[p]))];
+    if (!perfis.length) return '';
+    const txt = perfis.map(p => PERFIL_LABEL[p]).join(' · ');
+    return '<span class="sl-hd-estado" style="margin-left:auto">' + escapeHtml(txt) + '</span>';
+  }
+
   function cardPendenteHtml(g) {
     const n = g.itens.length;
     return '<div class="sl-card">' +
         '<div class="sl-card-hd sl-hd-pend">' +
           '<span class="sl-hd-posto">' + escapeHtml(g.posto_nome) + '</span>' +
+          seloPerfilHtml(g.itens) +
           '<span class="sl-hd-estado">Pendente de aprovação</span></div>' +
         '<div class="sl-card-body">' +
           '<div class="sl-linhas">' + g.itens.map(s => lineHtml(s, false)).join('') + '</div>' +
@@ -318,6 +342,7 @@
     return '<div class="sl-card">' +
         '<div class="sl-card-hd ' + est.cls + '">' +
           '<span class="sl-hd-posto">' + escapeHtml(g.posto_nome) + '</span>' +
+          seloPerfilHtml(g.itens) +
           '<span class="sl-hd-estado">' + est.txt + '</span></div>' +
         '<div class="sl-card-body"><div class="sl-linhas">' +
           g.itens.map(s => lineHtml(s, true)).join('') + '</div></div>' +
