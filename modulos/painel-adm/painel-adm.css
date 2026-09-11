@@ -201,8 +201,6 @@ html, body { height: 100%; overflow: hidden; }
 /* Monitor de postos: grade multi-coluna (o grande ganho do desktop) */
 #cmp-regions { display: grid; grid-template-columns: repeat(2, 1fr); gap: .7rem; align-content: start; }
 
-/* Posição interna da linha no ranking do card (dourado, discreto). */
-.cmpm-posint { font-family: var(--mono); font-size: .6rem; font-weight: 700; color: var(--ac); opacity: .85; }
 
 .region-card { background: var(--sf); border: 1px solid var(--bd); border-radius: var(--rl); padding: .9rem 1rem; }
 .region-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: .55rem; gap: .45rem; }
@@ -215,33 +213,9 @@ html, body { height: 100%; overflow: hidden; }
 .complist-preco { font-family: var(--mono); font-weight: 700; color: var(--tx); white-space: nowrap; flex-shrink: 0; }
 .complist-diff { font-size: .68rem; margin-left: 5px; font-weight: 600; }
 
-/* ── MATRIZ da Comparação (colunas = fuels; linhas = Você/concorrentes/Sugerido) ── */
-.cmpm-wrap { overflow-x: auto; }
-.cmpm-table { width: 100%; min-width: 580px; max-width: 640px; margin: 0 auto; table-layout: fixed; border-collapse: collapse; font-size: .74rem; }
-.cmpm-table th, .cmpm-table td { padding: 4px 6px; text-align: left; white-space: nowrap; }
-.cmpm-table thead th { color: var(--tx3); font-family: var(--mono); font-weight: 700; font-size: .64rem; border-bottom: 1px solid var(--bd); }
-.cmpm-rowlbl { text-align: left !important; color: var(--tx2); font-weight: 600; width: 122px; overflow: hidden; text-overflow: ellipsis; }
-.cmpm-conc { font-weight: 500; color: var(--tx3); }
-.cmpm-preco { display: inline-block; width: 52px; text-align: right; font-family: var(--mono); font-weight: 700; color: var(--tx); }
-.cmpm-colh { display: inline-block; width: 52px; text-align: right; }
-.cmpm-diff { font-size: .62rem; font-weight: 600; margin-left: 4px; }
-.cmpm-na { color: var(--tx3); opacity: .5; }
-/* Destaques de filtro na matriz (só na coluna do combustível ativo).
-   mudou = anel âmbar; abaixo = fundo vermelho suave (concorrente mais
-   barato = perigo); acima = fundo verde suave. Combináveis. */
-.cmpm-hl-abaixo { background: color-mix(in srgb, var(--dg) 16%, transparent); border-radius: 5px; }
-.cmpm-hl-acima  { background: color-mix(in srgb, var(--ok) 16%, transparent); border-radius: 5px; }
-.cmpm-pen { cursor: pointer; font-size: .72rem; opacity: .65; }
-.cmpm-pen:hover { opacity: 1; }
-.cmpm-input { width: 60px; background: var(--sf2); border: 1px solid var(--ac); border-radius: 6px; padding: 2px 5px; color: var(--tx); font-family: var(--mono); font-size: .72rem; text-align: right; outline: none; }
-.cmpm-row-voce th, .cmpm-row-voce td { border-bottom: 1px solid var(--bd); }
-.cmpm-row-voce { background: rgba(75,176,234,.10); }
-.cmpm-row-voce .cmpm-rowlbl { color: var(--brand-blue); }
-.cmpm-row-voce .cmpm-preco { color: var(--brand-blue); }
-.cmpm-row-sug th, .cmpm-row-sug td { border-top: 1px solid var(--bd); }
-.cmpm-sug .cmpm-preco { color: var(--ac); }
-.cmpm-hint { font-size: .56rem; color: var(--tx3); }
-.cmpm-vazio { text-align: center !important; color: var(--tx3); font-size: .72rem; padding: 6px 0; }
+/* Único ponto em que a matriz do desktop difere do shared: centralizada
+   no card, que aqui é mais largo que a tabela. */
+.cmpm-table { margin: 0 auto; }
 .sugerido-row { margin-top: .65rem; padding-top: .6rem; border-top: 1px solid var(--bd); display: flex; justify-content: space-between; align-items: center; }
 .sugerido-lbl { font-size: .68rem; color: var(--tx2); font-family: var(--mono); text-transform: uppercase; letter-spacing: .05em; }
 .sugerido-val { font-family: var(--mono); font-size: 1rem; font-weight: 700; color: var(--tx); }
