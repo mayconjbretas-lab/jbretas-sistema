@@ -681,6 +681,12 @@
     // jbCopiar mostra "✓ Copiado!" mesmo para texto vazio (writeText('') resolve).
     // Sem esta guarda o usuário cola nada e acha que copiou.
     if (!texto || !texto.trim()) { piscarBotao(btn, '⚠️ Sem dados'); return; }
+    // GUARDA, e não chamada direta: este arquivo é compartilhado com o
+    // modulos/admin/, que por um tempo NÃO carregava o clipboard.js — o
+    // TypeError subia daqui sem try/catch e o botão não fazia nada, nem
+    // copiava nem avisava. Falha silenciosa é o pior desfecho possível para
+    // um botão de copiar.
+    if (typeof window.jbCopiar !== 'function') { piscarBotao(btn, '⚠️ Copiar indisponível'); return; }
     window.jbCopiar(texto, btn);   // helper compartilhado (shared/js/clipboard.js)
   };
 
