@@ -213,9 +213,16 @@ html, body { height: 100%; overflow: hidden; }
 .complist-preco { font-family: var(--mono); font-weight: 700; color: var(--tx); white-space: nowrap; flex-shrink: 0; }
 .complist-diff { font-size: .68rem; margin-left: 5px; font-weight: 600; }
 
-/* Único ponto em que a matriz do desktop difere do shared: centralizada
-   no card, que aqui é mais largo que a tabela. */
+/* Onde a matriz do desktop difere do shared: centralizada no card, que aqui
+   é mais largo que a tabela — e a FAIXA DE FOTOS acompanha, senão ela começa
+   na borda do card e a matriz no meio, desalinhadas por dezenas de pixels.
+
+   O 640px é o max-width da .cmpm-table (shared/css/comparacao.css:22).
+   Mudar lá sem mudar aqui volta a desalinhar — não há como derivar um do
+   outro em CSS puro. */
 .cmpm-table { margin: 0 auto; }
+.region-card .cmpf-fotos { max-width: 640px; margin: 10px auto 0; }
+.region-card .cmpf-vazia { max-width: 640px; margin: 10px auto 0; text-align: center; }
 .sugerido-row { margin-top: .65rem; padding-top: .6rem; border-top: 1px solid var(--bd); display: flex; justify-content: space-between; align-items: center; }
 .sugerido-lbl { font-size: .68rem; color: var(--tx2); font-family: var(--mono); text-transform: uppercase; letter-spacing: .05em; }
 .sugerido-val { font-family: var(--mono); font-size: 1rem; font-weight: 700; color: var(--tx); }
