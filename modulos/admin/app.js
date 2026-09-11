@@ -388,7 +388,7 @@ async function carregarDadosComparar() {
   document.getElementById('upd-txt').textContent = 'Buscando dados...';
   try {
     G_COMPARACAO = await buscarComparacaoDoDia({ dias: 15 });
-    await cmpAplicarRevisoes(); // sobrepõe os preços editados de hoje no "Você"
+    await cmpAplicarRevisoes(G_COMPARACAO); // sobrepõe os preços editados de hoje no "Você"
     comparaCarregado = true;
     if (!document.getElementById('cmp-posto').dataset.populado) popularFiltrosComparar();
     processarKPIsComparar();
@@ -626,12 +626,6 @@ function cmpSetFaixaPreco(btn, faixa) {
   renderComparar();
 }
 
-// Data de hoje YYYY-MM-DD a partir do horário LOCAL (evita drift de UTC).
-function cmpHojeISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 // ════════════════════════════════════════════════════════════════
 // O CARD DA COMPARAÇÃO MUDOU DE CASA: shared/js/comparacao-card.js.
 // De lá vêm cmpCardMatriz, cmpCalcCard, cmpStatsFuel, cmpSugeridoMatriz
@@ -717,46 +711,6 @@ async function cmpConfirmarVoce(k, f) {
   flashFuels.forEach(ff => cmpFlashCheck(k, ff));
 }
 
-async function cmpSalvarPrecoProprio(postoNome, combustivel, precoEditado, precoOriginal) {
-  try {
-    await apiFetch('/coleta-revisao', {
-      method: 'POST',
-      body: JSON.stringify({
-        posto_nome: postoNome,
-        data: cmpHojeISO(),
-        combustivel,
-        preco_editado: precoEditado,
-        preco_original: precoOriginal,
-      }),
-    });
-    return true;
-  } catch (err) {
-    alert('Erro ao salvar preço: ' + (err && err.message ? err.message : 'tente de novo'));
-    return false;
-  }
-}
-
-// Cria a solicitação de preço pro gerente confirmar na bomba. O preço já foi
-// salvo (revisão) antes desta chamada — se aqui falhar, o preço fica, mas
-// avisamos que a notificação do gerente não saiu.
-async function cmpCriarSolicitacao(postoNome, combustivel, precoAntigo, precoNovo) {
-  try {
-    await apiFetch('/solicitacoes-preco', {
-      method: 'POST',
-      body: JSON.stringify({
-        posto_nome:   postoNome,
-        combustivel,
-        preco_antigo: (precoAntigo === null || precoAntigo === undefined) ? null : precoAntigo,
-        preco_novo:   precoNovo,
-      }),
-    });
-    return true;
-  } catch (err) {
-    alert('Preço salvo, mas falhou ao solicitar confirmação do gerente: ' + (err && err.message ? err.message : 'tente de novo'));
-    return false;
-  }
-}
-
 // Feedback leve: ✓ dourado rápido na célula "Você" do combustível editado
 // (após o renderComparar já ter recriado a célula).
 function cmpFlashCheck(k, f) {
@@ -772,24 +726,11 @@ function cmpFlashCheck(k, f) {
   setTimeout(() => { if (chk.parentNode) chk.parentNode.removeChild(chk); }, 1200);
 }
 
-// Sobrepõe os preços editados de hoje (coleta_revisao) no proprio de cada
-// posto — mesma fonte da aba Coleta, pra o "Você" bater e não sumir ao
-// recarregar. Silencioso se a rota falhar (a matriz funciona sem overlay).
-async function cmpAplicarRevisoes() {
-  try {
-    const resp = await apiFetch('/coleta-revisao?data=' + cmpHojeISO());
-    (resp.linhas || []).forEach(l => {
-      if (l.preco_editado === null || l.preco_editado === undefined) return;
-      const chave = normalizarNomePosto(l.posto_nome || '');
-      const dado = G_COMPARACAO[chave];
-      if (!dado) return;
-      if (!dado.proprio) dado.proprio = {};
-      dado.proprio[l.combustivel] = Number(l.preco_editado);
-    });
-  } catch (err) {
-    console.warn('Não foi possível aplicar revisões na matriz:', err && err.message);
-  }
-}
+// O overlay de revisões (cmpAplicarRevisoes) e as duas chamadas do lápis
+// (cmpSalvarPrecoProprio / cmpCriarSolicitacao) também moraram aqui e hoje
+// vêm do shared/js/comparacao-card.js, junto do cmpHojeISO que as três
+// usam. O que ficou neste arquivo é só a parte que mexe em DOM e em estado
+// desta tela: cmpEditarVoce, cmpConfirmarVoce e cmpFlashCheck.
 
 // Concorrente `c` mudou de preço no combustível `f` entre ontem e hoje?
 // Fonte de ontem = c.registroOntem (mesma origem que o filtro antigo usava).

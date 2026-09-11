@@ -256,6 +256,93 @@ function cmpCardMatriz(posto, dado, pos, opcoes) {
   </div>`;
 }
 
+
+  // ── Ida e volta com a API ─────────────────────────────────────
+  // As três abaixo são as ÚNICAS do card que falam com o servidor. Vieram
+  // depois do resto (o card puro foi extraído primeiro) porque elas eram a
+  // parte que parecia presa ao painel — e não era: só liam a data de hoje e
+  // o G_COMPARACAO, que agora entra por parâmetro.
+  //
+  // apiFetch e normalizarNomePosto NÃO foram arrastados: já são globais de
+  // shared/js/api.js e shared/js/coletas-service.js, carregados nas duas
+  // telas. cmpHojeISO veio junto por ser local ao app.js e não ter mais
+  // nenhum outro chamador lá.
+
+  // Data de hoje YYYY-MM-DD a partir do horário LOCAL (evita drift de UTC).
+  // Mesma convenção do hojeISO() da aba Coleta — é a data usada no POST/GET
+  // de coleta-revisao.
+function cmpHojeISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+  // Sobrepõe no "Você" os preços já revisados HOJE. Recebe o mapa da
+  // comparação, MUTA e devolve — antes lia o G_COMPARACAO do app.js por
+  // escopo global, o que prendia o módulo a um nome que só existe em dois
+  // arquivos.
+  //
+  // Falha em silêncio de propósito (console.warn, sem throw): sem o overlay
+  // a matriz ainda serve, mostrando o preço coletado cru. Foi assim que o
+  // 403 da LOGISTICA passou despercebido até alguém comparar os números.
+async function cmpAplicarRevisoes(comparacao) {
+  try {
+    const resp = await apiFetch('/coleta-revisao?data=' + cmpHojeISO());
+    (resp.linhas || []).forEach(l => {
+      if (l.preco_editado === null || l.preco_editado === undefined) return;
+      const chave = normalizarNomePosto(l.posto_nome || '');
+      const dado = comparacao[chave];
+      if (!dado) return;
+      if (!dado.proprio) dado.proprio = {};
+      dado.proprio[l.combustivel] = Number(l.preco_editado);
+    });
+  } catch (err) {
+    console.warn('Não foi possível aplicar revisões na matriz:', err && err.message);
+  }
+  return comparacao;
+}
+
+  // Grava a revisão do preço próprio. Devolve true/false; o alert fica aqui
+  // porque as duas telas reagem igual ao erro.
+async function cmpSalvarPrecoProprio(postoNome, combustivel, precoEditado, precoOriginal) {
+  try {
+    await apiFetch('/coleta-revisao', {
+      method: 'POST',
+      body: JSON.stringify({
+        posto_nome: postoNome,
+        data: cmpHojeISO(),
+        combustivel,
+        preco_editado: precoEditado,
+        preco_original: precoOriginal,
+      }),
+    });
+    return true;
+  } catch (err) {
+    alert('Erro ao salvar preço: ' + (err && err.message ? err.message : 'tente de novo'));
+    return false;
+  }
+}
+
+  // Abre a solicitação para o gerente confirmar na bomba. Chamada DEPOIS do
+  // cmpSalvarPrecoProprio: se esta falhar, o preço já está salvo e o aviso
+  // diz exatamente isso.
+async function cmpCriarSolicitacao(postoNome, combustivel, precoAntigo, precoNovo) {
+  try {
+    await apiFetch('/solicitacoes-preco', {
+      method: 'POST',
+      body: JSON.stringify({
+        posto_nome:   postoNome,
+        combustivel,
+        preco_antigo: (precoAntigo === null || precoAntigo === undefined) ? null : precoAntigo,
+        preco_novo:   precoNovo,
+      }),
+    });
+    return true;
+  } catch (err) {
+    alert('Preço salvo, mas falhou ao solicitar confirmação do gerente: ' + (err && err.message ? err.message : 'tente de novo'));
+    return false;
+  }
+}
+
   // ── Superfície pública ────────────────────────────────────────
   // As quatro do card, mais os auxiliares que o app.js de cada módulo
   // ainda usa por fora: cmpCardMudancas consome CMP_FUELS_CARD e
@@ -269,4 +356,8 @@ function cmpCardMatriz(posto, dado, pos, opcoes) {
   window.fmtPrecoBRL         = fmtPrecoBRL;
   window.seloDesatualizado   = seloDesatualizado;
   window.idSafe              = idSafe;
+  window.cmpAplicarRevisoes    = cmpAplicarRevisoes;
+  window.cmpSalvarPrecoProprio = cmpSalvarPrecoProprio;
+  window.cmpCriarSolicitacao   = cmpCriarSolicitacao;
+  window.cmpHojeISO            = cmpHojeISO;
 })();
