@@ -25,22 +25,24 @@
 // O QUE ESTE TESTE PROVA
 //
 // A faixa "Vendo como" é injetada por shared/js/auth.js com um <style> montado
-// em JS. Ela empurra o body em 40px — e a logística e o painel-adm definem
-// `#screen-app{height:100vh}`, que é a viewport INTEIRA e ignora esse padding.
-// Com `html,body{overflow:hidden}` nos dois, os 40px que sobravam embaixo NÃO
-// viravam scroll: eram cortados, e o rodapé da tela ficava fora de alcance
-// enquanto a impersonação estivesse ligada.
+// em JS. Ela empurra o body em FAIXA_H px — e a logística e o painel-adm
+// definem `#screen-app{height:100vh}`, que é a viewport INTEIRA e ignora esse
+// padding. Com `html,body{overflow:hidden}` nos dois, os px que sobravam
+// embaixo NÃO viravam scroll: eram cortados, e o rodapé da tela ficava fora de
+// alcance enquanto a impersonação estivesse ligada.
 //
-// O CSS TESTADO É O DO auth.js, cortado do arquivo em tempo de execução e
-// avaliado com FAIXA_H = 40. Uma cópia colada aqui provaria a cópia — e no dia
-// em que o auth.js mudasse, este teste seguiria verde sobre a versão antiga.
+// O CSS TESTADO É O DO auth.js, cortado do arquivo em tempo de execução, e o
+// FAIXA_H é LIDO DE LÁ TAMBÉM. Uma cópia colada aqui provaria a cópia — e no
+// dia em que o auth.js mudasse, este teste seguiria verde sobre a versão
+// antiga (foi o que quase aconteceu quando 40 virou 28).
 //
 // CADA MÓDULO NUM IFRAME, porque os três CSS colidem entre si (o admin tem
 // paleta própria e nem carrega o base.css). O iframe é a viewport de verdade
-// que o `100vh` e o `calc(100vh - 40px)` precisam para significar algo.
+// que o `100vh` e o `calc(100vh - FAIXA_H px)` precisam para significar algo.
 // ════════════════════════════════════════════════════════════════
 const out = [];
 let falhas = 0, total = 0;
+let FAIXA_H = null;   // vem do auth.js; o cssDaFaixa() preenche
 function H(t) { out.push('\n<h3>' + t + '</h3>'); }
 function chk(cond, msg, extra) {
   total++;
@@ -54,14 +56,21 @@ const pintar = () => { document.getElementById('res').innerHTML = out.join('\n')
 async function cssDaFaixa() {
   const src = await fetch('/shared/js/auth.js').then(r => r.text());
   const i = src.indexOf('st.textContent =');
-  const marca = "'.topbar{top:'";
-  const j = src.indexOf(marca, i);
-  if (i < 0 || j < 0) throw new Error('não achei o bloco de estilo no auth.js');
-  const fim = src.indexOf(';', j);
+  // Fim do bloco pelo appendChild, e não por uma regra CSS específica: o
+  // marcador anterior era "'.topbar{top:'", e no dia em que essa regra saiu
+  // do auth.js o teste inteiro morreu com 'não achei o bloco'. O appendChild
+  // é o que fecha a atribuição, seja qual for a última regra.
+  const ap = src.indexOf('document.head.appendChild(st)', i);
+  if (i < 0 || ap < 0) throw new Error('não achei o bloco de estilo no auth.js');
+  const fim = src.lastIndexOf(';', ap);
   const expr = src.slice(i + 'st.textContent ='.length, fim);
-  const FAIXA_H = 40;
+  // A CONSTANTE TAMBÉM VEM DO ARQUIVO. Fixá-la aqui deixaria o teste verde
+  // sobre um FAIXA_H que mudou lá — foi o que aconteceu quando 40 virou 28.
+  const mH = src.match(/const FAIXA_H = (\d+)/);
+  if (!mH) throw new Error('não achei o FAIXA_H no auth.js');
+  const FAIXA_H = Number(mH[1]);
   // eval do MESMO trecho que roda em produção, com a mesma constante.
-  return eval(expr);
+  return { css: eval(expr), FAIXA_H };
 }
 
 const BANNER = '<div id="faixa-visao-ti">' +
@@ -156,9 +165,20 @@ const medir = (f) => {
     faixaCor: faixa ? w.getComputedStyle(faixa).color : null,
     btnFundo: faixa ? w.getComputedStyle(faixa.querySelector('button')).backgroundColor : null,
     btnCor: faixa ? w.getComputedStyle(faixa.querySelector('button')).color : null,
+    // O --warning COMO ESTE DOCUMENTO O RESOLVE. Uma sonda, e não
+    // getPropertyValue: o token é declarado em hex e a faixa é medida em rgb();
+    // comparar string com string daria falso negativo.
+    tokenWarning: (() => {
+      const sonda = d.createElement('span');
+      sonda.style.cssText = 'position:absolute;left:-9999px;background:var(--warning)';
+      d.body.appendChild(sonda);
+      const v = w.getComputedStyle(sonda).backgroundColor;
+      sonda.remove();
+      return v;   // rgba(0, 0, 0, 0) quando o módulo não declara o token
+    })(),
     // A faixa de alterações não pode ficar debaixo da faixa amarela.
     altTopo: alt ? Math.round(alt.getBoundingClientRect().top) : null,
-    altVisivel: alt ? (alt.getBoundingClientRect().top >= 40) : null,
+    altVisivel: alt ? (alt.getBoundingClientRect().top >= FAIXA_H) : null,
   };
 };
 
@@ -175,15 +195,19 @@ const contraste = (a, b) => {
 };
 
 (async () => {
-  const css = await cssDaFaixa();
+  const r = await cssDaFaixa();
+  const css = r.css;
+  FAIXA_H = r.FAIXA_H;
 
   H('0 · o CSS testado é o do auth.js, não uma cópia');
-  chk(/#screen-app\{height:calc\(100vh - 40px\) !important/.test(css),
+  chk(css.includes('#screen-app{height:calc(100vh - ' + FAIXA_H + 'px) !important'),
       'a regra do #screen-app está no arquivo', css.match(/#screen-app\{[^}]*\}/) || '(ausente)');
-  chk(/background:#f9c74f/.test(css) && !/background:var\(--warning\)/.test(css),
-      'e o amarelo é fixo, não var(--warning)');
-  chk(/body\{padding-top:40px\}/.test(css), 'o padding do body continua');
-  chk(/\.topbar\{top:40px !important\}/.test(css), 'e o reposicionamento da topbar também');
+  chk(/background:var\(--warning, #d97706\)/.test(css),
+      'o fundo vem do token --warning, com #d97706 de fallback');
+  chk(css.includes('body{padding-top:' + FAIXA_H + 'px}'), 'o padding do body continua');
+  chk(!/\.topbar\{top:/.test(css),
+      'e a topbar NÃO é mais reposicionada — a regra .topbar{top:} saiu do auth.js',
+      (css.match(/\.topbar\{[^}]*\}/) || ['(ausente, como esperado)'])[0]);
   chk(/\.fvt-txt\{overflow:hidden/.test(css),
       'o .fvt-txt sobreviveu — o span ainda ganha essa classe, e sem a regra um nome longo empurraria o botão para fora');
 
@@ -192,9 +216,9 @@ const contraste = (a, b) => {
     H(mod.toUpperCase() + ' · o rodapé cabe na tela com a faixa ligada');
     const f = await montar(mod, css);
     const m = medir(f);
-    chk(m.faixaAlt === 40, 'a faixa mede 40px', m.faixaAlt + 'px');
-    chk(m.appTopo === 40, 'e o app começa logo abaixo dela (o body foi empurrado)', m.appTopo + 'px');
-    chk(m.appAlt === m.vh - 40, 'o #screen-app mede a janela MENOS a faixa',
+    chk(m.faixaAlt === FAIXA_H, 'a faixa mede ' + FAIXA_H + 'px', m.faixaAlt + 'px');
+    chk(m.appTopo === FAIXA_H, 'e o app começa logo abaixo dela (o body foi empurrado)', m.appTopo + 'px');
+    chk(m.appAlt === m.vh - FAIXA_H, 'o #screen-app mede a janela MENOS a faixa',
         m.appAlt + 'px de ' + m.vh + 'px');
     chk(m.appPe <= m.vh + 0.5, 'o pé dele não passa da borda de baixo',
         'pé em ' + m.appPe + ', janela ' + m.vh);
@@ -221,11 +245,11 @@ const contraste = (a, b) => {
       // por isso nem sabotando com 100vh o rodapé é cortado ali.
       chk(mb.cortado === 0, 'o admin resiste até ao 100vh: o body dele é flex e o item encolhe',
           'altura usada ' + mb.appAlt + 'px numa janela de ' + mb.vh + 'px');
-      chk(mb.appAlt === mb.vh - 40,
+      chk(mb.appAlt === mb.vh - FAIXA_H,
           'e a altura USADA continua sendo janela menos faixa, apesar do height:100vh !important',
           mb.appAlt + 'px');
     } else {
-      chk(mb.cortado === 40, 'sabotado com 100vh, o rodapé volta a ser cortado em 40px',
+      chk(mb.cortado === FAIXA_H, 'sabotado com 100vh, o rodapé volta a ser cortado em ' + FAIXA_H + 'px',
           mb.cortado + 'px cortados — era exatamente este o defeito');
     }
   }
@@ -235,11 +259,17 @@ const contraste = (a, b) => {
   const fl = await montar('logistica', css);
   const ml = medir(fl);
   chk(ml.altVisivel === true,
-      '"7 alterações de medição hoje" começa abaixo dos 40px da faixa',
+      '"7 alterações de medição hoje" começa abaixo dos ' + FAIXA_H + 'px da faixa',
       'topo em ' + ml.altTopo + 'px');
 
   // ══════════════════════════════════════════════════════════════
-  H('CORES · o mesmo amarelo em todo módulo e nos dois temas');
+  // A FAIXA DEIXOU DE TER COR FIXA. Ela pinta var(--warning, #d97706), então
+  // segue o token de cada módulo e de cada tema: #f9c74f no base.css escuro,
+  // #f0a444 no admin escuro, #d97706 nos dois no claro. Não dá mais para
+  // exigir um amarelo só — o que ainda se exige é que a faixa seja SEMPRE o
+  // --warning daquele documento (e não o fallback por engano), e que o texto
+  // #1a1200 continue legível sobre qualquer um dos três.
+  H('CORES · a faixa segue o --warning de cada módulo, e continua legível');
   const cores = {};
   for (const mod of ['logistica', 'painel-adm', 'admin']) {
     for (const tema of ['dark', 'light']) {
@@ -248,28 +278,146 @@ const contraste = (a, b) => {
     }
   }
   const todas = Object.values(cores);
-  const fundos = [...new Set(todas.map(m => m.faixaFundo))];
-  chk(fundos.length === 1, 'a faixa tem UM fundo só nas seis combinações', fundos.join(' | '));
-  chk(fundos[0] === 'rgb(249, 199, 79)', 'e ele é #f9c74f', fundos[0]);
-  // Antes: var(--warning) valia #f9c74f no base.css, #f0a444 no admin.css e
-  // #d97706 nos dois no tema claro — a faixa mudava de cor conforme a tela.
-  chk(cores['admin/dark'].faixaFundo === cores['logistica/dark'].faixaFundo,
-      'o admin (paleta própria, sem base.css) mostra o MESMO amarelo da logística');
-  chk(cores['logistica/light'].faixaFundo === cores['logistica/dark'].faixaFundo,
-      'e o tema claro não vira laranja', cores['logistica/light'].faixaFundo);
+  // O ADMIN NÃO ENTRA NESSA REGRA, e foi a medição que mostrou. Ele só
+  // declara --warning DENTRO do #s-kpi (admin.css:72, '--warning:var(--wn)');
+  // no :root ele tem --wn e nunca --warning. Como a faixa é filha do <body>,
+  // o token não a alcança e ela cai no fallback #d97706 — nos DOIS temas.
+  // Consequência visível: no admin escuro a faixa sai laranja-escura, e não o
+  // #f0a444 que o resto do módulo usa para 'warning'.
+  const SEM_TOKEN = 'rgba(0, 0, 0, 0)';
+  for (const [nome, m] of Object.entries(cores)) {
+    const admin = nome.startsWith('admin/');
+    if (admin) {
+      chk(m.tokenWarning === SEM_TOKEN && m.faixaFundo === 'rgb(217, 119, 6)',
+          nome + ': sem --warning no :root, a faixa usa o fallback #d97706',
+          'faixa ' + m.faixaFundo + ' · token ' + m.tokenWarning);
+    } else {
+      chk(m.tokenWarning !== SEM_TOKEN && m.faixaFundo === m.tokenWarning,
+          nome + ': a faixa é o --warning do documento, não o fallback',
+          'faixa ' + m.faixaFundo + ' · token ' + m.tokenWarning);
+    }
+  }
+  chk(cores['logistica/dark'].faixaFundo === 'rgb(249, 199, 79)',
+      'logistica/dark é o #f9c74f do base.css', cores['logistica/dark'].faixaFundo);
+  chk(cores['logistica/light'].faixaFundo === 'rgb(217, 119, 6)',
+      'e o tema claro escurece para #d97706', cores['logistica/light'].faixaFundo);
+  chk(cores['admin/dark'].faixaFundo !== 'rgb(240, 164, 68)',
+      'no admin escuro a faixa NÃO é o #f0a444 do módulo — o token não a alcança',
+      cores['admin/dark'].faixaFundo + ' (o --wn dele vale #f0a444)');
 
   const textos = [...new Set(todas.map(m => m.faixaCor))];
   chk(textos.length === 1 && textos[0] === 'rgb(26, 18, 0)', 'o texto é #1a1200 em todas', textos.join(' | '));
+  for (const [nome, m] of Object.entries(cores)) {
+    const c = contraste(m.faixaCor, m.faixaFundo);
+    chk(c >= 4.5, nome + ': o texto passa o contraste mínimo do WCAG AA sobre esse fundo',
+        c.toFixed(2) + ':1');
+  }
 
-  H('BOTÃO "Voltar ao TI" · amarelo sobre preto, legível nos dois temas');
+  H('BOTÃO "Voltar ao TI" · branco sobre preto, fixo em todo módulo');
+  // O botão NÃO segue o token: fundo #1a1200 e texto #fff em toda combinação.
+  // É o único elemento da faixa cujo contraste não depende do tema.
   const bf = [...new Set(todas.map(m => m.btnFundo))];
   const bc = [...new Set(todas.map(m => m.btnCor))];
   chk(bf.length === 1 && bf[0] === 'rgb(26, 18, 0)', 'fundo #1a1200 em todas', bf.join(' | '));
-  chk(bc.length === 1 && bc[0] === 'rgb(249, 199, 79)', 'texto #f9c74f em todas', bc.join(' | '));
+  chk(bc.length === 1 && bc[0] === 'rgb(255, 255, 255)', 'texto #fff em todas', bc.join(' | '));
   const cBtn = contraste(bc[0], bf[0]);
   chk(cBtn >= 4.5, 'e passa o contraste mínimo do WCAG AA', cBtn.toFixed(2) + ':1');
-  const cFaixa = contraste(textos[0], fundos[0]);
-  chk(cFaixa >= 4.5, 'a faixa também', cFaixa.toFixed(2) + ':1');
+
+  // ══════════════════════════════════════════════════════════════
+  // GEOMETRIA · faixa × topbar × barra de alterações, na Logística.
+  //
+  // Duas perguntas que o resto do teste não faz: sobra BANDA VAZIA entre o pé
+  // da faixa e o topo da topbar (era o efeito do .topbar{top:FAIXA_H} que
+  // saiu do auth.js), e a topbar SOBREPÕE a barra "alterações de medição"?
+  // Os números crus vão para a tela — não só o ok/FALHA.
+  const geo = (f) => {
+    const d = f.contentDocument, w = f.contentWindow;
+    const nome = (el) => el.id ? '#' + el.id
+      : (el.getAttribute && el.getAttribute('class')
+          ? '.' + el.getAttribute('class').trim().split(/\s+/).join('.')
+          : el.tagName.toLowerCase());
+    const r = (sel) => {
+      const el = d.querySelector(sel);
+      if (!el) return null;
+      const b = el.getBoundingClientRect();
+      const n2 = (v) => Math.round(v * 10) / 10;
+      return { top: n2(b.top), bottom: n2(b.bottom), h: n2(b.height) };
+    };
+    // Scrollport do sticky da topbar: o ancestral mais próximo cujo overflow
+    // não é visible. É a caixa contra a qual o top: dela é medido.
+    const tb = d.querySelector('.topbar');
+    let sp = tb && tb.parentElement, scrollport = '(viewport)';
+    while (sp && sp !== d.documentElement) {
+      if (w.getComputedStyle(sp).overflowY !== 'visible') { scrollport = nome(sp); break; }
+      sp = sp.parentElement;
+    }
+    // Quem de fato rola: varredura do documento inteiro, porque na Logística
+    // o contêiner de scroll é IRMÃO da barra de alterações, não ancestral.
+    const roladores = [...d.querySelectorAll('*')].map(el => {
+      const ov = w.getComputedStyle(el).overflowY;
+      return { el, ov };
+    }).filter(x => x.ov === 'auto' || x.ov === 'scroll').map(x => ({
+      alvo: nome(x.el),
+      overflowY: x.ov,
+      scrollTop: x.el.scrollTop,
+      rolaAgora: x.el.scrollHeight > x.el.clientHeight,
+      scrollHeight: x.el.scrollHeight,
+      clientHeight: x.el.clientHeight,
+    }));
+    return {
+      faixa: r('#faixa-visao-ti'), topbar: r('.topbar'), alt: r('.malt-faixa'),
+      scrollportDoSticky: scrollport,
+      topbarPosition: tb ? w.getComputedStyle(tb).position : null,
+      topbarTop: tb ? w.getComputedStyle(tb).top : null,
+      roladores,
+      janelaScrollY: w.scrollY,
+      docScrollTop: d.documentElement.scrollTop,
+      bodyScrollTop: d.body.scrollTop,
+      bodyPaddingTop: w.getComputedStyle(d.body).paddingTop,
+    };
+  };
+  const linha = (t) => out.push('<span style="color:var(--text3)">' + t + '</span>');
+
+  H('GEOMETRIA · Logística, com e sem a faixa');
+  const gCom = geo(await montar('logistica', css));
+  const gSem = geo(await montar('logistica', '', { semFaixa: true }));
+
+  for (const [rotulo, g] of [['COM a faixa', gCom], ['SEM a faixa', gSem]]) {
+    linha('\n── ' + rotulo + ' ──');
+    const mostra = (k, v) => linha('   ' + k.padEnd(22) +
+      (v ? ('top ' + String(v.top).padStart(7) + '   bottom ' + String(v.bottom).padStart(7) +
+            '   altura ' + String(v.h).padStart(6)) : '(ausente)'));
+    mostra('#faixa-visao-ti', g.faixa);
+    mostra('.topbar', g.topbar);
+    mostra('.malt-faixa', g.alt);
+    const banda = g.faixa ? Math.round((g.topbar.top - g.faixa.bottom) * 10) / 10 : null;
+    linha('   banda vazia faixa→topbar: ' + (banda === null ? 'n/a (sem faixa)' : banda + 'px'));
+    linha('   topbar sobrepõe a barra?  ' + (g.topbar.bottom > g.alt.top
+      ? 'SIM — ' + (Math.round((g.topbar.bottom - g.alt.top) * 10) / 10) + 'px de sobreposição'
+      : 'não — folga de ' + (Math.round((g.alt.top - g.topbar.bottom) * 10) / 10) + 'px'));
+    linha('   .topbar: position ' + g.topbarPosition + ', top ' + g.topbarTop +
+          ' · scrollport do sticky: ' + g.scrollportDoSticky);
+    linha('   body padding-top: ' + g.bodyPaddingTop +
+          ' · scrollY ' + g.janelaScrollY + ' · html.scrollTop ' + g.docScrollTop +
+          ' · body.scrollTop ' + g.bodyScrollTop);
+    linha('   contêineres de scroll (overflow auto/scroll):');
+    if (!g.roladores.length) linha('      (nenhum)');
+    for (const rr of g.roladores) {
+      linha('      ' + rr.alvo + '  overflow-y:' + rr.overflowY +
+            '  scrollTop ' + rr.scrollTop +
+            '  ' + (rr.rolaAgora ? 'ROLA' : 'não rola') +
+            ' (' + rr.scrollHeight + '/' + rr.clientHeight + ')');
+    }
+  }
+  out.push('');
+  const bandaCom = Math.round((gCom.topbar.top - gCom.faixa.bottom) * 10) / 10;
+  chk(bandaCom === 0, 'com a faixa, a topbar encosta nela — nenhuma banda vazia',
+      bandaCom + 'px entre o pé da faixa (' + gCom.faixa.bottom + ') e o topo da topbar (' + gCom.topbar.top + ')');
+  chk(gCom.topbar.bottom <= gCom.alt.top,
+      'e a topbar não cobre a barra "alterações de medição"',
+      'topbar termina em ' + gCom.topbar.bottom + ', a barra começa em ' + gCom.alt.top);
+  chk(gSem.topbar.top === 0, 'sem a faixa, a topbar volta a encostar no topo da janela',
+      gSem.topbar.top + 'px');
 
   out.push('\n' + (falhas
     ? '<span class="bad">FALHAS: ' + falhas + ' de ' + total + '</span>'

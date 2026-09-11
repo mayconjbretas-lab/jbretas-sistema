@@ -126,7 +126,7 @@ window.exigirSessao = exigirSessao;
 // (sem tocar no base.css nem no HTML de nenhum módulo).
 // ================================================================
 (function () {
-  const FAIXA_H = 40; // px
+  const FAIXA_H = 28; // px
 
   function lerVisao() {
     try {
@@ -160,14 +160,20 @@ window.exigirSessao = exigirSessao;
     if (document.getElementById('faixa-visao-ti')) return;
 
     // CSS: faixa fixa acima da topbar (z-index 9999 > topbar 100). Empurra o
-    // body com padding-top, ENCOLHE o #screen-app e reposiciona a topbar
-    // sticky (top:0 → top:FAIXA_H). Tudo aqui; base.css intacto.
+    // body com padding-top e ENCOLHE o #screen-app. Tudo aqui; base.css
+    // intacto.
+    //
+    // A TOPBAR NÃO É MAIS REPOSICIONADA. A regra `.topbar{top:FAIXA_H}` saiu:
+    // a topbar é sticky DENTRO do #screen-app, não do viewport, então o
+    // top:0 dela já é o topo do #screen-app — que o padding-top do body e a
+    // altura recalculada abaixo já empurraram para baixo da faixa. Somar
+    // FAIXA_H de novo abria uma banda vazia entre a faixa e a topbar.
     //
     // O #screen-app É O CONSERTO PRINCIPAL. A logistica e o painel-adm o
     // definem com `height:100vh`, e 100vh é a viewport INTEIRA — ele ignora o
     // padding-top do body. Nos dois o body é um bloco comum (base.css), então
-    // o #screen-app fica 40px mais alto que o espaço disponível; e com
-    // `html,body{overflow:hidden}` esses 40px NÃO viravam scroll: eram
+    // o #screen-app fica FAIXA_H px mais alto que o espaço disponível; e com
+    // `html,body{overflow:hidden}` esses px NÃO viravam scroll: eram
     // CORTADOS, e o rodapé da tela (última linha da matriz, paginação, botão
     // de ação) ficava fora de alcance enquanto a faixa estivesse ligada.
     //
@@ -179,33 +185,31 @@ window.exigirSessao = exigirSessao;
     // 378px numa janela de 418. Para ele esta regra é redundante e inofensiva
     // (dá o mesmo 378px); quem ela conserta são os outros dois.
     //
-    // AS CORES SÃO FIXAS, e não var(--warning), por dois motivos medidos:
-    // o token vale #f9c74f no base.css e #f0a444 no admin.css (que não carrega
-    // o base.css), então a faixa mudava de amarelo conforme o módulo; e no
-    // tema claro ele vira #d97706, um laranja escuro que com o texto #1a1200
-    // deixava o aviso difícil de ler. A faixa é um aviso de estado perigoso —
-    // tem de ser o mesmo amarelo em toda tela e nos dois temas.
+    // A COR VEM DE var(--warning) com #d97706 de fallback. Cuidado medido: o
+    // token vale #f9c74f no base.css e #f0a444 no admin.css (que não carrega
+    // o base.css), então o amarelo da faixa MUDA conforme o módulo, e no tema
+    // claro ele escurece para #d97706. O texto continua #1a1200 nos três
+    // casos — se o contraste ficar ruim em algum tema, é aqui que se olha.
     const st = document.createElement('style');
     st.id = 'faixa-visao-ti-style';
     st.textContent =
       '#faixa-visao-ti{position:fixed;top:0;left:0;right:0;height:' + FAIXA_H + 'px;z-index:9999;' +
-        'background:#f9c74f;color:#1a1200;display:flex;align-items:center;justify-content:center;' +
-        'gap:12px;font-family:var(--mono, \'JetBrains Mono\'),monospace;font-size:.76rem;font-weight:700;' +
+        'background:var(--warning, #d97706);color:#1a1200;display:flex;align-items:center;justify-content:center;' +
+        'gap:12px;font-family:var(--mono, \'JetBrains Mono\'),monospace;font-size:.72rem;font-weight:700;' +
         'letter-spacing:.02em;padding:0 12px;box-shadow:0 2px 10px rgba(0,0,0,.35)}' +
       // O .fvt-txt sobrevive: o span continua ganhando essa classe logo abaixo,
       // e sem a regra um nome longo empurraria o botão para fora da faixa.
       '#faixa-visao-ti .fvt-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-      '#faixa-visao-ti button{background:#1a1200;color:#f9c74f;border:none;border-radius:6px;' +
-        'font-family:var(--mono, \'JetBrains Mono\'),monospace;font-size:.7rem;font-weight:700;' +
-        'padding:5px 12px;cursor:pointer;flex-shrink:0;letter-spacing:.04em}' +
+      '#faixa-visao-ti button{background:#1a1200;color:#fff;border:none;border-radius:6px;' +
+        'font-family:var(--mono, \'JetBrains Mono\'),monospace;font-size:.66rem;font-weight:700;' +
+        'padding:3px 10px;cursor:pointer;flex-shrink:0;letter-spacing:.04em}' +
       '#faixa-visao-ti button:hover{opacity:.88}' +
       'body{padding-top:' + FAIXA_H + 'px}' +
-      // FAIXA_H interpolado, e não "40px" escrito à mão: a constante existe só
+      // FAIXA_H interpolado, e não "28px" escrito à mão: a constante existe só
       // para este CSS, e fixar o número aqui a deixaria morta e livre para
-      // divergir das quatro regras que dependem dela.
+      // divergir das três regras que dependem dela.
       '#screen-app{height:calc(100vh - ' + FAIXA_H + 'px) !important;' +
-        'max-height:calc(100vh - ' + FAIXA_H + 'px)}' +
-      '.topbar{top:' + FAIXA_H + 'px !important}';
+        'max-height:calc(100vh - ' + FAIXA_H + 'px)}';
     document.head.appendChild(st);
 
     const alvo = visao.posto || visao.perfil || '';
