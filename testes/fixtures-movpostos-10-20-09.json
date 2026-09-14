@@ -1,0 +1,4391 @@
+{
+ "success": true,
+ "consulta": {
+  "inicio": "2026-09-10",
+  "fim": "2026-09-20",
+  "dias": 11
+ },
+ "rede": {
+  "litros": 1806478.979,
+  "faturamento": 9980140.27,
+  "abastecimentos": 92336,
+  "por_canal": {
+   "99": {
+    "litros": 132868.417,
+    "faturamento": 598525.1,
+    "abastecimentos": 6681
+   },
+   "SOUTAG": {
+    "litros": 352068.116,
+    "faturamento": 1812781.28,
+    "abastecimentos": 13108
+   },
+   "NORMAL": {
+    "litros": 1321542.446,
+    "faturamento": 7568833.89,
+    "abastecimentos": 72547
+   }
+  },
+  "produto": {
+   "faturamento": 106504.46
+  },
+  "gasolina": {
+   "litros_total": 816413.462,
+   "litros_aditivada": 78653.886
+  },
+  "dre": {
+   "venda_bruta": 11226225,
+   "desconto": 56716.38,
+   "venda_liquida": 11169508.62,
+   "custo_total": 9482558.97,
+   "lucro": 1686680.85,
+   "margem_pct": 15.1,
+   "quantidade_comb": 1998487.823,
+   "dias_com_dado": 5,
+   "dias_periodo": 11,
+   "ultimo_dia": "2026-09-14"
+  },
+  "por_combustivel": [
+   {
+    "codigo": "GC",
+    "rotulo": "Gasolina comum",
+    "litros": 737759.576
+   },
+   {
+    "codigo": "ET",
+    "rotulo": "Etanol",
+    "litros": 630745.49
+   },
+   {
+    "codigo": "S10",
+    "rotulo": "Diesel S10",
+    "litros": 219899.049
+   },
+   {
+    "codigo": "S500",
+    "rotulo": "Diesel S500",
+    "litros": 121755.197
+   },
+   {
+    "codigo": "GA",
+    "rotulo": "Gasolina aditivada",
+    "litros": 75186.52
+   },
+   {
+    "codigo": "GAS NATURAL VEICULAR",
+    "rotulo": "GNV",
+    "litros": 9189.714
+   },
+   {
+    "codigo": "ETAD",
+    "rotulo": "Etanol aditivado",
+    "litros": 8476.067
+   },
+   {
+    "codigo": "POD",
+    "rotulo": "Podium",
+    "litros": 2038.613
+   },
+   {
+    "codigo": "OCT",
+    "rotulo": "Octapro",
+    "litros": 1428.753
+   }
+  ]
+ },
+ "postos": [
+  {
+   "posto_id": "b55eacd7-f0d5-4f72-821a-12136fe02cd0",
+   "posto_nome": "P. BERNARDO",
+   "litros": 103352.199,
+   "faturamento": 625581.03,
+   "abastecimentos": 2223,
+   "por_canal": {
+    "99": {
+     "litros": 0,
+     "faturamento": 0,
+     "abastecimentos": 0
+    },
+    "SOUTAG": {
+     "litros": 19334.909,
+     "faturamento": 115848.33,
+     "abastecimentos": 110
+    },
+    "NORMAL": {
+     "litros": 84017.29,
+     "faturamento": 509732.7,
+     "abastecimentos": 2113
+    }
+   },
+   "produto": {
+    "faturamento": 12543.63
+   },
+   "gasolina": {
+    "litros_total": 17781.194,
+    "litros_aditivada": 0
+   },
+   "dre": {
+    "venda_bruta": 713394.86,
+    "desconto": 33.08,
+    "venda_liquida": 713361.78,
+    "custo_total": 652017.58,
+    "lucro": 61344.2,
+    "margem_pct": 8.6,
+    "quantidade_comb": 115788.503,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 29380.406,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 7380.006,
+       "abastecimentos": 38
+      },
+      "NORMAL": {
+       "litros": 22000.4,
+       "abastecimentos": 500
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 31379.99,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 5741.318,
+       "abastecimentos": 37
+      },
+      "NORMAL": {
+       "litros": 25638.672,
+       "abastecimentos": 589
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 23250.45,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 3110.38,
+       "abastecimentos": 21
+      },
+      "NORMAL": {
+       "litros": 20140.07,
+       "abastecimentos": 536
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 19341.353,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 3103.205,
+       "abastecimentos": 14
+      },
+      "NORMAL": {
+       "litros": 16238.148,
+       "abastecimentos": 488
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "b68a1d67-cf61-483c-aef4-beba1ee05957",
+   "posto_nome": "P. ESPAÇO REAL",
+   "litros": 94647.187,
+   "faturamento": 582081.77,
+   "abastecimentos": 3366,
+   "por_canal": {
+    "99": {
+     "litros": 0,
+     "faturamento": 0,
+     "abastecimentos": 0
+    },
+    "SOUTAG": {
+     "litros": 20009.772,
+     "faturamento": 121318.3,
+     "abastecimentos": 281
+    },
+    "NORMAL": {
+     "litros": 74637.415,
+     "faturamento": 460763.47,
+     "abastecimentos": 3085
+    }
+   },
+   "produto": {
+    "faturamento": 4541.33
+   },
+   "gasolina": {
+    "litros_total": 45851.884,
+    "litros_aditivada": 3346.722
+   },
+   "dre": {
+    "venda_bruta": 651161.3,
+    "desconto": 281.1,
+    "venda_liquida": 650880.2,
+    "custo_total": 552471.56,
+    "lucro": 98408.64,
+    "margem_pct": 15.12,
+    "quantidade_comb": 105071.033,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 24537.822,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 6202.456,
+       "abastecimentos": 83
+      },
+      "NORMAL": {
+       "litros": 18335.366,
+       "abastecimentos": 727
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 26079.97,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 5892.139,
+       "abastecimentos": 88
+      },
+      "NORMAL": {
+       "litros": 20187.831,
+       "abastecimentos": 789
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 22792.836,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 4533.534,
+       "abastecimentos": 53
+      },
+      "NORMAL": {
+       "litros": 18259.302,
+       "abastecimentos": 853
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 21236.559,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 3381.643,
+       "abastecimentos": 57
+      },
+      "NORMAL": {
+       "litros": 17854.916,
+       "abastecimentos": 716
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "313ce861-36c0-4ea4-afb8-9553a9fe63c6",
+   "posto_nome": "P. BRUNA",
+   "litros": 92953.672,
+   "faturamento": 544733.28,
+   "abastecimentos": 2991,
+   "por_canal": {
+    "99": {
+     "litros": 1012.369,
+     "faturamento": 4783.69,
+     "abastecimentos": 59
+    },
+    "SOUTAG": {
+     "litros": 13873.397,
+     "faturamento": 78981.3,
+     "abastecimentos": 301
+    },
+    "NORMAL": {
+     "litros": 78067.906,
+     "faturamento": 460968.29,
+     "abastecimentos": 2631
+    }
+   },
+   "produto": {
+    "faturamento": 3977.64
+   },
+   "gasolina": {
+    "litros_total": 22130.858,
+    "litros_aditivada": 3409.496
+   },
+   "dre": {
+    "venda_bruta": 636771.19,
+    "desconto": 478.62,
+    "venda_liquida": 636292.57,
+    "custo_total": 566048.14,
+    "lucro": 70244.43,
+    "margem_pct": 11.04,
+    "quantidade_comb": 107675.796,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 27773.519,
+     "por_canal": {
+      "99": {
+       "litros": 147.481,
+       "abastecimentos": 12
+      },
+      "SOUTAG": {
+       "litros": 4516.478,
+       "abastecimentos": 80
+      },
+      "NORMAL": {
+       "litros": 23109.56,
+       "abastecimentos": 698
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 31278.93,
+     "por_canal": {
+      "99": {
+       "litros": 235.459,
+       "abastecimentos": 12
+      },
+      "SOUTAG": {
+       "litros": 5286.058,
+       "abastecimentos": 113
+      },
+      "NORMAL": {
+       "litros": 25757.413,
+       "abastecimentos": 805
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 20195.96,
+     "por_canal": {
+      "99": {
+       "litros": 340.541,
+       "abastecimentos": 19
+      },
+      "SOUTAG": {
+       "litros": 2314.324,
+       "abastecimentos": 60
+      },
+      "NORMAL": {
+       "litros": 17541.095,
+       "abastecimentos": 662
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 13705.263,
+     "por_canal": {
+      "99": {
+       "litros": 288.888,
+       "abastecimentos": 16
+      },
+      "SOUTAG": {
+       "litros": 1756.537,
+       "abastecimentos": 48
+      },
+      "NORMAL": {
+       "litros": 11659.838,
+       "abastecimentos": 466
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "2e6497a5-228e-43e9-8361-3cdbaa45987a",
+   "posto_nome": "P. SERENA COLIBRI",
+   "litros": 87480.922,
+   "faturamento": 466077.32,
+   "abastecimentos": 4384,
+   "por_canal": {
+    "99": {
+     "litros": 4881.821,
+     "faturamento": 22077.12,
+     "abastecimentos": 251
+    },
+    "SOUTAG": {
+     "litros": 19430.518,
+     "faturamento": 97766.29,
+     "abastecimentos": 813
+    },
+    "NORMAL": {
+     "litros": 63168.583,
+     "faturamento": 346233.91,
+     "abastecimentos": 3320
+    }
+   },
+   "produto": {
+    "faturamento": 6105.9
+   },
+   "gasolina": {
+    "litros_total": 42471.065,
+    "litros_aditivada": 3769.546
+   },
+   "dre": {
+    "venda_bruta": 532226.26,
+    "desconto": 1977.07,
+    "venda_liquida": 530249.19,
+    "custo_total": 439959.46,
+    "lucro": 90289.73,
+    "margem_pct": 17.03,
+    "quantidade_comb": 98077.348,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 21951.805,
+     "por_canal": {
+      "99": {
+       "litros": 1327.281,
+       "abastecimentos": 56
+      },
+      "SOUTAG": {
+       "litros": 4072.763,
+       "abastecimentos": 175
+      },
+      "NORMAL": {
+       "litros": 16551.761,
+       "abastecimentos": 814
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 23765.252,
+     "por_canal": {
+      "99": {
+       "litros": 1156.659,
+       "abastecimentos": 66
+      },
+      "SOUTAG": {
+       "litros": 5547.96,
+       "abastecimentos": 245
+      },
+      "NORMAL": {
+       "litros": 17060.633,
+       "abastecimentos": 923
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 22558.857,
+     "por_canal": {
+      "99": {
+       "litros": 1263.6,
+       "abastecimentos": 69
+      },
+      "SOUTAG": {
+       "litros": 4742.459,
+       "abastecimentos": 186
+      },
+      "NORMAL": {
+       "litros": 16552.798,
+       "abastecimentos": 892
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 19205.008,
+     "por_canal": {
+      "99": {
+       "litros": 1134.281,
+       "abastecimentos": 60
+      },
+      "SOUTAG": {
+       "litros": 5067.336,
+       "abastecimentos": 207
+      },
+      "NORMAL": {
+       "litros": 13003.391,
+       "abastecimentos": 691
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "634d3cb4-d6dc-4d6b-8c72-ec0a09b6d281",
+   "posto_nome": "P. ITAPOA",
+   "litros": 78063.824,
+   "faturamento": 424670.76,
+   "abastecimentos": 3846,
+   "por_canal": {
+    "99": {
+     "litros": 5176.618,
+     "faturamento": 23940.69,
+     "abastecimentos": 251
+    },
+    "SOUTAG": {
+     "litros": 14916.368,
+     "faturamento": 72778.06,
+     "abastecimentos": 677
+    },
+    "NORMAL": {
+     "litros": 57970.838,
+     "faturamento": 327952.01,
+     "abastecimentos": 2918
+    }
+   },
+   "produto": {
+    "faturamento": 2762.1
+   },
+   "gasolina": {
+    "litros_total": 41418.157,
+    "litros_aditivada": 4692.027
+   },
+   "dre": {
+    "venda_bruta": 474065.45,
+    "desconto": 2049.29,
+    "venda_liquida": 472016.16,
+    "custo_total": 395503.33,
+    "lucro": 76512.83,
+    "margem_pct": 16.21,
+    "quantidade_comb": 86144.191,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 22707.083,
+     "por_canal": {
+      "99": {
+       "litros": 1389.849,
+       "abastecimentos": 71
+      },
+      "SOUTAG": {
+       "litros": 4829.114,
+       "abastecimentos": 214
+      },
+      "NORMAL": {
+       "litros": 16488.12,
+       "abastecimentos": 780
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 23651.461,
+     "por_canal": {
+      "99": {
+       "litros": 1417.675,
+       "abastecimentos": 68
+      },
+      "SOUTAG": {
+       "litros": 4228.135,
+       "abastecimentos": 202
+      },
+      "NORMAL": {
+       "litros": 18005.651,
+       "abastecimentos": 883
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 17972.045,
+     "por_canal": {
+      "99": {
+       "litros": 1352.431,
+       "abastecimentos": 64
+      },
+      "SOUTAG": {
+       "litros": 3341.501,
+       "abastecimentos": 147
+      },
+      "NORMAL": {
+       "litros": 13278.113,
+       "abastecimentos": 710
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 13733.235,
+     "por_canal": {
+      "99": {
+       "litros": 1016.663,
+       "abastecimentos": 48
+      },
+      "SOUTAG": {
+       "litros": 2517.618,
+       "abastecimentos": 114
+      },
+      "NORMAL": {
+       "litros": 10198.954,
+       "abastecimentos": 545
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "eb06b557-8611-48f4-a959-cb3e9dafb032",
+   "posto_nome": "P. AVIVA",
+   "litros": 73017.457,
+   "faturamento": 387787.43,
+   "abastecimentos": 4672,
+   "por_canal": {
+    "99": {
+     "litros": 7446.527,
+     "faturamento": 33742.37,
+     "abastecimentos": 390
+    },
+    "SOUTAG": {
+     "litros": 17485.704,
+     "faturamento": 86205.77,
+     "abastecimentos": 784
+    },
+    "NORMAL": {
+     "litros": 48085.226,
+     "faturamento": 267839.29,
+     "abastecimentos": 3498
+    }
+   },
+   "produto": {
+    "faturamento": 4083.1
+   },
+   "gasolina": {
+    "litros_total": 32239.687,
+    "litros_aditivada": 3799.285
+   },
+   "dre": {
+    "venda_bruta": 442718.11,
+    "desconto": 2920.96,
+    "venda_liquida": 439797.15,
+    "custo_total": 371788.3,
+    "lucro": 68008.85,
+    "margem_pct": 15.46,
+    "quantidade_comb": 81482.559,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 17784.954,
+     "por_canal": {
+      "99": {
+       "litros": 2004.948,
+       "abastecimentos": 109
+      },
+      "SOUTAG": {
+       "litros": 4115.341,
+       "abastecimentos": 188
+      },
+      "NORMAL": {
+       "litros": 11664.665,
+       "abastecimentos": 825
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 21003.072,
+     "por_canal": {
+      "99": {
+       "litros": 1840.123,
+       "abastecimentos": 95
+      },
+      "SOUTAG": {
+       "litros": 5637.962,
+       "abastecimentos": 209
+      },
+      "NORMAL": {
+       "litros": 13524.987,
+       "abastecimentos": 902
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 18962.121,
+     "por_canal": {
+      "99": {
+       "litros": 1872.287,
+       "abastecimentos": 95
+      },
+      "SOUTAG": {
+       "litros": 4095.38,
+       "abastecimentos": 211
+      },
+      "NORMAL": {
+       "litros": 12994.454,
+       "abastecimentos": 963
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 15267.31,
+     "por_canal": {
+      "99": {
+       "litros": 1729.169,
+       "abastecimentos": 91
+      },
+      "SOUTAG": {
+       "litros": 3637.021,
+       "abastecimentos": 176
+      },
+      "NORMAL": {
+       "litros": 9901.12,
+       "abastecimentos": 808
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "f5092f8d-e54d-4fbd-8146-e4161949717b",
+   "posto_nome": "P. PLANALTO",
+   "litros": 67339.015,
+   "faturamento": 358422.07,
+   "abastecimentos": 3820,
+   "por_canal": {
+    "99": {
+     "litros": 9059.57,
+     "faturamento": 39259.34,
+     "abastecimentos": 446
+    },
+    "SOUTAG": {
+     "litros": 11284.026,
+     "faturamento": 55680.94,
+     "abastecimentos": 494
+    },
+    "NORMAL": {
+     "litros": 46995.419,
+     "faturamento": 263481.79,
+     "abastecimentos": 2880
+    }
+   },
+   "produto": {
+    "faturamento": 4791.3
+   },
+   "gasolina": {
+    "litros_total": 33692.081,
+    "litros_aditivada": 2722.682
+   },
+   "dre": {
+    "venda_bruta": 407463.11,
+    "desconto": 3548.82,
+    "venda_liquida": 403914.29,
+    "custo_total": 338950.75,
+    "lucro": 64963.54,
+    "margem_pct": 16.08,
+    "quantidade_comb": 74917.11,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 18406.736,
+     "por_canal": {
+      "99": {
+       "litros": 2542.005,
+       "abastecimentos": 132
+      },
+      "SOUTAG": {
+       "litros": 2966.723,
+       "abastecimentos": 123
+      },
+      "NORMAL": {
+       "litros": 12898.008,
+       "abastecimentos": 773
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 17990.272,
+     "por_canal": {
+      "99": {
+       "litros": 1644.76,
+       "abastecimentos": 81
+      },
+      "SOUTAG": {
+       "litros": 1949.478,
+       "abastecimentos": 91
+      },
+      "NORMAL": {
+       "litros": 14396.034,
+       "abastecimentos": 737
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 17426.093,
+     "por_canal": {
+      "99": {
+       "litros": 2545.175,
+       "abastecimentos": 121
+      },
+      "SOUTAG": {
+       "litros": 3121.431,
+       "abastecimentos": 137
+      },
+      "NORMAL": {
+       "litros": 11759.487,
+       "abastecimentos": 798
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 13515.914,
+     "por_canal": {
+      "99": {
+       "litros": 2327.63,
+       "abastecimentos": 112
+      },
+      "SOUTAG": {
+       "litros": 3246.394,
+       "abastecimentos": 143
+      },
+      "NORMAL": {
+       "litros": 7941.89,
+       "abastecimentos": 572
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "100a8539-1f94-4fbc-8935-76855f1bad5d",
+   "posto_nome": "P. LOURA EMPREENDIMENTOS",
+   "litros": 67003.543,
+   "faturamento": 365232.76,
+   "abastecimentos": 3782,
+   "por_canal": {
+    "99": {
+     "litros": 4823.635,
+     "faturamento": 22051.9,
+     "abastecimentos": 228
+    },
+    "SOUTAG": {
+     "litros": 12134.28,
+     "faturamento": 61572.38,
+     "abastecimentos": 518
+    },
+    "NORMAL": {
+     "litros": 50045.628,
+     "faturamento": 281608.48,
+     "abastecimentos": 3036
+    }
+   },
+   "produto": {
+    "faturamento": 5140
+   },
+   "gasolina": {
+    "litros_total": 34959.919,
+    "litros_aditivada": 2237.739
+   },
+   "dre": {
+    "venda_bruta": 415222.6,
+    "desconto": 1954.17,
+    "venda_liquida": 413268.43,
+    "custo_total": 349315.61,
+    "lucro": 63952.82,
+    "margem_pct": 15.47,
+    "quantidade_comb": 74696.824,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 18138.413,
+     "por_canal": {
+      "99": {
+       "litros": 1409.621,
+       "abastecimentos": 65
+      },
+      "SOUTAG": {
+       "litros": 4549.759,
+       "abastecimentos": 185
+      },
+      "NORMAL": {
+       "litros": 12179.033,
+       "abastecimentos": 740
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 18391.645,
+     "por_canal": {
+      "99": {
+       "litros": 1209.534,
+       "abastecimentos": 53
+      },
+      "SOUTAG": {
+       "litros": 2479.395,
+       "abastecimentos": 113
+      },
+      "NORMAL": {
+       "litros": 14702.716,
+       "abastecimentos": 860
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 16180.481,
+     "por_canal": {
+      "99": {
+       "litros": 1171.329,
+       "abastecimentos": 59
+      },
+      "SOUTAG": {
+       "litros": 2412.779,
+       "abastecimentos": 108
+      },
+      "NORMAL": {
+       "litros": 12596.373,
+       "abastecimentos": 762
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 14293.004,
+     "por_canal": {
+      "99": {
+       "litros": 1033.151,
+       "abastecimentos": 51
+      },
+      "SOUTAG": {
+       "litros": 2692.347,
+       "abastecimentos": 112
+      },
+      "NORMAL": {
+       "litros": 10567.506,
+       "abastecimentos": 674
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "58b3f267-8207-4298-b51c-b46da29ed563",
+   "posto_nome": "P. SANTA INES MINAS",
+   "litros": 60642.891,
+   "faturamento": 320256.31,
+   "abastecimentos": 3998,
+   "por_canal": {
+    "99": {
+     "litros": 8095.055,
+     "faturamento": 36374.2,
+     "abastecimentos": 415
+    },
+    "SOUTAG": {
+     "litros": 9188.346,
+     "faturamento": 43193.44,
+     "abastecimentos": 449
+    },
+    "NORMAL": {
+     "litros": 43359.49,
+     "faturamento": 240688.67,
+     "abastecimentos": 3134
+    }
+   },
+   "produto": {
+    "faturamento": 2144.7
+   },
+   "gasolina": {
+    "litros_total": 32657.494,
+    "litros_aditivada": 5310.449
+   },
+   "dre": {
+    "venda_bruta": 361549.2,
+    "desconto": 3297.42,
+    "venda_liquida": 358251.78,
+    "custo_total": 297692.27,
+    "lucro": 60559.51,
+    "margem_pct": 16.9,
+    "quantidade_comb": 67343.741,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 14501.083,
+     "por_canal": {
+      "99": {
+       "litros": 2062.533,
+       "abastecimentos": 111
+      },
+      "SOUTAG": {
+       "litros": 2323.64,
+       "abastecimentos": 127
+      },
+      "NORMAL": {
+       "litros": 10114.91,
+       "abastecimentos": 746
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 18377.509,
+     "por_canal": {
+      "99": {
+       "litros": 2317.558,
+       "abastecimentos": 117
+      },
+      "SOUTAG": {
+       "litros": 2561.417,
+       "abastecimentos": 110
+      },
+      "NORMAL": {
+       "litros": 13498.534,
+       "abastecimentos": 893
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 15023.695,
+     "por_canal": {
+      "99": {
+       "litros": 2091.037,
+       "abastecimentos": 107
+      },
+      "SOUTAG": {
+       "litros": 2351.073,
+       "abastecimentos": 109
+      },
+      "NORMAL": {
+       "litros": 10581.585,
+       "abastecimentos": 814
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 12740.604,
+     "por_canal": {
+      "99": {
+       "litros": 1623.927,
+       "abastecimentos": 80
+      },
+      "SOUTAG": {
+       "litros": 1952.216,
+       "abastecimentos": 103
+      },
+      "NORMAL": {
+       "litros": 9164.461,
+       "abastecimentos": 681
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "c99631fa-a08c-433c-861e-6d15812ad921",
+   "posto_nome": "P. SANTA MARIA",
+   "litros": 57344.056,
+   "faturamento": 304391.15,
+   "abastecimentos": 3288,
+   "por_canal": {
+    "99": {
+     "litros": 6995.213,
+     "faturamento": 30145.12,
+     "abastecimentos": 340
+    },
+    "SOUTAG": {
+     "litros": 9246.137,
+     "faturamento": 44570.23,
+     "abastecimentos": 431
+    },
+    "NORMAL": {
+     "litros": 41102.706,
+     "faturamento": 229675.8,
+     "abastecimentos": 2517
+    }
+   },
+   "produto": {
+    "faturamento": 5525.8
+   },
+   "gasolina": {
+    "litros_total": 28346.342,
+    "litros_aditivada": 2224.063
+   },
+   "dre": {
+    "venda_bruta": 340725.52,
+    "desconto": 2918.22,
+    "venda_liquida": 337807.3,
+    "custo_total": 281226.43,
+    "lucro": 56580.87,
+    "margem_pct": 16.75,
+    "quantidade_comb": 62521.14,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 13836.578,
+     "por_canal": {
+      "99": {
+       "litros": 1816.139,
+       "abastecimentos": 92
+      },
+      "SOUTAG": {
+       "litros": 1911.041,
+       "abastecimentos": 90
+      },
+      "NORMAL": {
+       "litros": 10109.398,
+       "abastecimentos": 651
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 17176.202,
+     "por_canal": {
+      "99": {
+       "litros": 1637.142,
+       "abastecimentos": 79
+      },
+      "SOUTAG": {
+       "litros": 2733.708,
+       "abastecimentos": 129
+      },
+      "NORMAL": {
+       "litros": 12805.352,
+       "abastecimentos": 695
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 14760.855,
+     "por_canal": {
+      "99": {
+       "litros": 2104.374,
+       "abastecimentos": 99
+      },
+      "SOUTAG": {
+       "litros": 2677.317,
+       "abastecimentos": 124
+      },
+      "NORMAL": {
+       "litros": 9979.164,
+       "abastecimentos": 648
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 11570.421,
+     "por_canal": {
+      "99": {
+       "litros": 1437.558,
+       "abastecimentos": 70
+      },
+      "SOUTAG": {
+       "litros": 1924.071,
+       "abastecimentos": 88
+      },
+      "NORMAL": {
+       "litros": 8208.792,
+       "abastecimentos": 523
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "bb45b857-8a43-47f6-95e0-d47cedf2f676",
+   "posto_nome": "P. SANTA INES - JOAQUIM",
+   "litros": 56822.794,
+   "faturamento": 319646.41,
+   "abastecimentos": 2494,
+   "por_canal": {
+    "99": {
+     "litros": 3765.702,
+     "faturamento": 16662.67,
+     "abastecimentos": 186
+    },
+    "SOUTAG": {
+     "litros": 8976.746,
+     "faturamento": 46033.8,
+     "abastecimentos": 287
+    },
+    "NORMAL": {
+     "litros": 44080.346,
+     "faturamento": 256949.94,
+     "abastecimentos": 2021
+    }
+   },
+   "produto": {
+    "faturamento": 2083.99
+   },
+   "gasolina": {
+    "litros_total": 21230.133,
+    "litros_aditivada": 2207.454
+   },
+   "dre": {
+    "venda_bruta": 357437.35,
+    "desconto": 1469.54,
+    "venda_liquida": 355967.81,
+    "custo_total": 309713.18,
+    "lucro": 46254.63,
+    "margem_pct": 12.99,
+    "quantidade_comb": 62709.493,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 18071.42,
+     "por_canal": {
+      "99": {
+       "litros": 768.182,
+       "abastecimentos": 38
+      },
+      "SOUTAG": {
+       "litros": 3029.225,
+       "abastecimentos": 85
+      },
+      "NORMAL": {
+       "litros": 14274.013,
+       "abastecimentos": 567
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 18453.597,
+     "por_canal": {
+      "99": {
+       "litros": 891.887,
+       "abastecimentos": 49
+      },
+      "SOUTAG": {
+       "litros": 2452.618,
+       "abastecimentos": 76
+      },
+      "NORMAL": {
+       "litros": 15109.092,
+       "abastecimentos": 631
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 12935.074,
+     "por_canal": {
+      "99": {
+       "litros": 1101.323,
+       "abastecimentos": 51
+      },
+      "SOUTAG": {
+       "litros": 2254.004,
+       "abastecimentos": 75
+      },
+      "NORMAL": {
+       "litros": 9579.747,
+       "abastecimentos": 521
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 7362.703,
+     "por_canal": {
+      "99": {
+       "litros": 1004.31,
+       "abastecimentos": 48
+      },
+      "SOUTAG": {
+       "litros": 1240.899,
+       "abastecimentos": 51
+      },
+      "NORMAL": {
+       "litros": 5117.494,
+       "abastecimentos": 302
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "6d1f9416-ae4d-4385-9bd6-38f8c17ea94e",
+   "posto_nome": "P. DIFERENCIAL",
+   "litros": 56321.726,
+   "faturamento": 301589.39,
+   "abastecimentos": 2714,
+   "por_canal": {
+    "99": {
+     "litros": 2987.373,
+     "faturamento": 14071.63,
+     "abastecimentos": 149
+    },
+    "SOUTAG": {
+     "litros": 9503.201,
+     "faturamento": 46400.23,
+     "abastecimentos": 393
+    },
+    "NORMAL": {
+     "litros": 43831.152,
+     "faturamento": 241117.53,
+     "abastecimentos": 2172
+    }
+   },
+   "produto": {
+    "faturamento": 3036.99
+   },
+   "gasolina": {
+    "litros_total": 29826.279,
+    "litros_aditivada": 3281.818
+   },
+   "dre": {
+    "venda_bruta": 331681.97,
+    "desconto": 1250.83,
+    "venda_liquida": 330431.14,
+    "custo_total": 277108.11,
+    "lucro": 53323.03,
+    "margem_pct": 16.14,
+    "quantidade_comb": 61164.193,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 15343.832,
+     "por_canal": {
+      "99": {
+       "litros": 1202.984,
+       "abastecimentos": 65
+      },
+      "SOUTAG": {
+       "litros": 3115.468,
+       "abastecimentos": 127
+      },
+      "NORMAL": {
+       "litros": 11025.38,
+       "abastecimentos": 553
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 16760.993,
+     "por_canal": {
+      "99": {
+       "litros": 655.65,
+       "abastecimentos": 28
+      },
+      "SOUTAG": {
+       "litros": 3094.626,
+       "abastecimentos": 127
+      },
+      "NORMAL": {
+       "litros": 13010.717,
+       "abastecimentos": 660
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 14078.418,
+     "por_canal": {
+      "99": {
+       "litros": 709.623,
+       "abastecimentos": 33
+      },
+      "SOUTAG": {
+       "litros": 2391.58,
+       "abastecimentos": 99
+      },
+      "NORMAL": {
+       "litros": 10977.215,
+       "abastecimentos": 495
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 10138.483,
+     "por_canal": {
+      "99": {
+       "litros": 419.116,
+       "abastecimentos": 23
+      },
+      "SOUTAG": {
+       "litros": 901.527,
+       "abastecimentos": 40
+      },
+      "NORMAL": {
+       "litros": 8817.84,
+       "abastecimentos": 464
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "1a3b8dc8-874b-4931-a8a5-cb41e058e55d",
+   "posto_nome": "P. JA",
+   "litros": 54435.652,
+   "faturamento": 322875.67,
+   "abastecimentos": 2597,
+   "por_canal": {
+    "99": {
+     "litros": 5241.315,
+     "faturamento": 25098.03,
+     "abastecimentos": 245
+    },
+    "SOUTAG": {
+     "litros": 7666.486,
+     "faturamento": 37647.87,
+     "abastecimentos": 338
+    },
+    "NORMAL": {
+     "litros": 41527.851,
+     "faturamento": 260129.77,
+     "abastecimentos": 2014
+    }
+   },
+   "produto": {
+    "faturamento": 2347.1
+   },
+   "gasolina": {
+    "litros_total": 32048.056,
+    "litros_aditivada": 7547.08
+   },
+   "dre": {
+    "venda_bruta": 370762.11,
+    "desconto": 3751.66,
+    "venda_liquida": 367010.45,
+    "custo_total": 297091.3,
+    "lucro": 69919.15,
+    "margem_pct": 19.05,
+    "quantidade_comb": 61199.801,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 15891.921,
+     "por_canal": {
+      "99": {
+       "litros": 1135.077,
+       "abastecimentos": 61
+      },
+      "SOUTAG": {
+       "litros": 1988.066,
+       "abastecimentos": 97
+      },
+      "NORMAL": {
+       "litros": 12768.778,
+       "abastecimentos": 598
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 18315.647,
+     "por_canal": {
+      "99": {
+       "litros": 1914.637,
+       "abastecimentos": 84
+      },
+      "SOUTAG": {
+       "litros": 2078.967,
+       "abastecimentos": 85
+      },
+      "NORMAL": {
+       "litros": 14322.043,
+       "abastecimentos": 681
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 11691.22,
+     "por_canal": {
+      "99": {
+       "litros": 1046.238,
+       "abastecimentos": 50
+      },
+      "SOUTAG": {
+       "litros": 1578.643,
+       "abastecimentos": 78
+      },
+      "NORMAL": {
+       "litros": 9066.339,
+       "abastecimentos": 440
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 8536.864,
+     "por_canal": {
+      "99": {
+       "litros": 1145.363,
+       "abastecimentos": 50
+      },
+      "SOUTAG": {
+       "litros": 2020.81,
+       "abastecimentos": 78
+      },
+      "NORMAL": {
+       "litros": 5370.691,
+       "abastecimentos": 295
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "c09961e1-7c86-42fd-8109-9e6693d2aa47",
+   "posto_nome": "P. TOPAZIO",
+   "litros": 54260.975,
+   "faturamento": 280249.3,
+   "abastecimentos": 3353,
+   "por_canal": {
+    "99": {
+     "litros": 9218.173,
+     "faturamento": 41105.3,
+     "abastecimentos": 504
+    },
+    "SOUTAG": {
+     "litros": 13991.364,
+     "faturamento": 68165.4,
+     "abastecimentos": 608
+    },
+    "NORMAL": {
+     "litros": 31051.438,
+     "faturamento": 170978.6,
+     "abastecimentos": 2241
+    }
+   },
+   "produto": {
+    "faturamento": 2210.5
+   },
+   "gasolina": {
+    "litros_total": 24740.206,
+    "litros_aditivada": 2429.251
+   },
+   "dre": {
+    "venda_bruta": 312976.59,
+    "desconto": 3592.75,
+    "venda_liquida": 309383.84,
+    "custo_total": 261551.07,
+    "lucro": 47832.77,
+    "margem_pct": 15.46,
+    "quantidade_comb": 59377.706,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 13575.5,
+     "por_canal": {
+      "99": {
+       "litros": 1820.386,
+       "abastecimentos": 113
+      },
+      "SOUTAG": {
+       "litros": 3876.063,
+       "abastecimentos": 156
+      },
+      "NORMAL": {
+       "litros": 7879.051,
+       "abastecimentos": 556
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 14528.333,
+     "por_canal": {
+      "99": {
+       "litros": 2133.414,
+       "abastecimentos": 120
+      },
+      "SOUTAG": {
+       "litros": 3560.024,
+       "abastecimentos": 158
+      },
+      "NORMAL": {
+       "litros": 8834.895,
+       "abastecimentos": 626
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 13969.449,
+     "por_canal": {
+      "99": {
+       "litros": 2834.728,
+       "abastecimentos": 143
+      },
+      "SOUTAG": {
+       "litros": 4073.36,
+       "abastecimentos": 177
+      },
+      "NORMAL": {
+       "litros": 7061.361,
+       "abastecimentos": 524
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 12187.693,
+     "por_canal": {
+      "99": {
+       "litros": 2429.645,
+       "abastecimentos": 128
+      },
+      "SOUTAG": {
+       "litros": 2481.917,
+       "abastecimentos": 117
+      },
+      "NORMAL": {
+       "litros": 7276.131,
+       "abastecimentos": 535
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "80365714-4cd9-4183-9dcf-5fc863a7207a",
+   "posto_nome": "P. QUATRO RODAS",
+   "litros": 53079.6,
+   "faturamento": 285889.98,
+   "abastecimentos": 2688,
+   "por_canal": {
+    "99": {
+     "litros": 4492.079,
+     "faturamento": 19540.65,
+     "abastecimentos": 213
+    },
+    "SOUTAG": {
+     "litros": 7133.002,
+     "faturamento": 34599.56,
+     "abastecimentos": 303
+    },
+    "NORMAL": {
+     "litros": 41454.519,
+     "faturamento": 231749.77,
+     "abastecimentos": 2172
+    }
+   },
+   "produto": {
+    "faturamento": 1816
+   },
+   "gasolina": {
+    "litros_total": 24374.013,
+    "litros_aditivada": 2056.541
+   },
+   "dre": {
+    "venda_bruta": 322787.98,
+    "desconto": 1720.33,
+    "venda_liquida": 321067.65,
+    "custo_total": 270369.96,
+    "lucro": 50697.69,
+    "margem_pct": 15.79,
+    "quantidade_comb": 59072.55,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 15089.484,
+     "por_canal": {
+      "99": {
+       "litros": 1082.208,
+       "abastecimentos": 56
+      },
+      "SOUTAG": {
+       "litros": 3246.807,
+       "abastecimentos": 137
+      },
+      "NORMAL": {
+       "litros": 10760.469,
+       "abastecimentos": 508
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 15518.067,
+     "por_canal": {
+      "99": {
+       "litros": 1085.353,
+       "abastecimentos": 49
+      },
+      "SOUTAG": {
+       "litros": 2256.27,
+       "abastecimentos": 94
+      },
+      "NORMAL": {
+       "litros": 12176.444,
+       "abastecimentos": 635
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 12473.481,
+     "por_canal": {
+      "99": {
+       "litros": 1237.401,
+       "abastecimentos": 60
+      },
+      "SOUTAG": {
+       "litros": 414.488,
+       "abastecimentos": 15
+      },
+      "NORMAL": {
+       "litros": 10821.592,
+       "abastecimentos": 600
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 9998.568,
+     "por_canal": {
+      "99": {
+       "litros": 1087.117,
+       "abastecimentos": 48
+      },
+      "SOUTAG": {
+       "litros": 1215.437,
+       "abastecimentos": 57
+      },
+      "NORMAL": {
+       "litros": 7696.014,
+       "abastecimentos": 429
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "4a22963b-edaf-4f95-a060-32ebfd55fc0b",
+   "posto_nome": "P. URBANO FERRAZ",
+   "litros": 52289.781,
+   "faturamento": 279091.04,
+   "abastecimentos": 2815,
+   "por_canal": {
+    "99": {
+     "litros": 6371.1,
+     "faturamento": 28039.95,
+     "abastecimentos": 335
+    },
+    "SOUTAG": {
+     "litros": 17117.761,
+     "faturamento": 81540.68,
+     "abastecimentos": 773
+    },
+    "NORMAL": {
+     "litros": 28800.92,
+     "faturamento": 169510.41,
+     "abastecimentos": 1707
+    }
+   },
+   "produto": {
+    "faturamento": 2872.8
+   },
+   "gasolina": {
+    "litros_total": 23994.067,
+    "litros_aditivada": 3605.573
+   },
+   "dre": {
+    "venda_bruta": 314025.73,
+    "desconto": 3021.6,
+    "venda_liquida": 311004.13,
+    "custo_total": 257096.35,
+    "lucro": 53907.78,
+    "margem_pct": 17.33,
+    "quantidade_comb": 57956.265,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 16090.748,
+     "por_canal": {
+      "99": {
+       "litros": 1705.593,
+       "abastecimentos": 91
+      },
+      "SOUTAG": {
+       "litros": 6166.132,
+       "abastecimentos": 269
+      },
+      "NORMAL": {
+       "litros": 8219.023,
+       "abastecimentos": 463
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 15727.187,
+     "por_canal": {
+      "99": {
+       "litros": 1739.12,
+       "abastecimentos": 96
+      },
+      "SOUTAG": {
+       "litros": 4725.353,
+       "abastecimentos": 211
+      },
+      "NORMAL": {
+       "litros": 9262.714,
+       "abastecimentos": 537
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 12193.813,
+     "por_canal": {
+      "99": {
+       "litros": 2007.551,
+       "abastecimentos": 100
+      },
+      "SOUTAG": {
+       "litros": 3702.225,
+       "abastecimentos": 166
+      },
+      "NORMAL": {
+       "litros": 6484.037,
+       "abastecimentos": 409
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 8278.033,
+     "por_canal": {
+      "99": {
+       "litros": 918.836,
+       "abastecimentos": 48
+      },
+      "SOUTAG": {
+       "litros": 2524.051,
+       "abastecimentos": 127
+      },
+      "NORMAL": {
+       "litros": 4835.146,
+       "abastecimentos": 298
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "08f892ef-2534-40a1-966e-d2ec2e2ac515",
+   "posto_nome": "P. BEATRIZ",
+   "litros": 51435.716,
+   "faturamento": 315557.55,
+   "abastecimentos": 1609,
+   "por_canal": {
+    "99": {
+     "litros": 0,
+     "faturamento": 0,
+     "abastecimentos": 0
+    },
+    "SOUTAG": {
+     "litros": 12660.956,
+     "faturamento": 76782.17,
+     "abastecimentos": 331
+    },
+    "NORMAL": {
+     "litros": 38774.76,
+     "faturamento": 238775.38,
+     "abastecimentos": 1278
+    }
+   },
+   "produto": {
+    "faturamento": 3951.17
+   },
+   "gasolina": {
+    "litros_total": 15630.855,
+    "litros_aditivada": 1948.076
+   },
+   "dre": {
+    "venda_bruta": 352864.81,
+    "desconto": 339.27,
+    "venda_liquida": 352525.54,
+    "custo_total": 307670.45,
+    "lucro": 44855.09,
+    "margem_pct": 12.72,
+    "quantidade_comb": 56691.999,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 12865.607,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 2531.182,
+       "abastecimentos": 67
+      },
+      "NORMAL": {
+       "litros": 10334.425,
+       "abastecimentos": 316
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 14427.678,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 4218.386,
+       "abastecimentos": 126
+      },
+      "NORMAL": {
+       "litros": 10209.292,
+       "abastecimentos": 328
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 13969.095,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 4531.332,
+       "abastecimentos": 105
+      },
+      "NORMAL": {
+       "litros": 9437.763,
+       "abastecimentos": 311
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 10173.336,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 1380.056,
+       "abastecimentos": 33
+      },
+      "NORMAL": {
+       "litros": 8793.28,
+       "abastecimentos": 323
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "cb65b058-6ee1-4db8-a0ca-693ac248612b",
+   "posto_nome": "P. TUNEL",
+   "litros": 48111.957,
+   "faturamento": 254107.53,
+   "abastecimentos": 2807,
+   "por_canal": {
+    "99": {
+     "litros": 1378.338,
+     "faturamento": 6171.54,
+     "abastecimentos": 70
+    },
+    "SOUTAG": {
+     "litros": 9638.175,
+     "faturamento": 44788.34,
+     "abastecimentos": 426
+    },
+    "NORMAL": {
+     "litros": 37095.444,
+     "faturamento": 203147.65,
+     "abastecimentos": 2311
+    }
+   },
+   "produto": {
+    "faturamento": 2654.6
+   },
+   "gasolina": {
+    "litros_total": 26108.286,
+    "litros_aditivada": 2389.034
+   },
+   "dre": {
+    "venda_bruta": 283828,
+    "desconto": 554.49,
+    "venda_liquida": 283273.51,
+    "custo_total": 236447.97,
+    "lucro": 46825.54,
+    "margem_pct": 16.53,
+    "quantidade_comb": 52994.67,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 12686.387,
+     "por_canal": {
+      "99": {
+       "litros": 448.982,
+       "abastecimentos": 23
+      },
+      "SOUTAG": {
+       "litros": 3045.601,
+       "abastecimentos": 134
+      },
+      "NORMAL": {
+       "litros": 9191.804,
+       "abastecimentos": 593
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 13506.89,
+     "por_canal": {
+      "99": {
+       "litros": 321.569,
+       "abastecimentos": 18
+      },
+      "SOUTAG": {
+       "litros": 3019.331,
+       "abastecimentos": 128
+      },
+      "NORMAL": {
+       "litros": 10165.99,
+       "abastecimentos": 679
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 12713.764,
+     "por_canal": {
+      "99": {
+       "litros": 412.444,
+       "abastecimentos": 17
+      },
+      "SOUTAG": {
+       "litros": 2696.283,
+       "abastecimentos": 125
+      },
+      "NORMAL": {
+       "litros": 9605.037,
+       "abastecimentos": 574
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 9204.916,
+     "por_canal": {
+      "99": {
+       "litros": 195.343,
+       "abastecimentos": 12
+      },
+      "SOUTAG": {
+       "litros": 876.96,
+       "abastecimentos": 39
+      },
+      "NORMAL": {
+       "litros": 8132.613,
+       "abastecimentos": 465
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "3488cdf8-1d87-4ba3-902e-baffa854e1d1",
+   "posto_nome": "P. ANA LUCIA",
+   "litros": 46320.754,
+   "faturamento": 243234.82,
+   "abastecimentos": 2945,
+   "por_canal": {
+    "99": {
+     "litros": 4502.151,
+     "faturamento": 19557.01,
+     "abastecimentos": 230
+    },
+    "SOUTAG": {
+     "litros": 8362.387,
+     "faturamento": 39608.1,
+     "abastecimentos": 428
+    },
+    "NORMAL": {
+     "litros": 33456.216,
+     "faturamento": 184069.71,
+     "abastecimentos": 2287
+    }
+   },
+   "produto": {
+    "faturamento": 1041.9
+   },
+   "gasolina": {
+    "litros_total": 22875.566,
+    "litros_aditivada": 0
+   },
+   "dre": {
+    "venda_bruta": 268909.07,
+    "desconto": 1733.99,
+    "venda_liquida": 267175.08,
+    "custo_total": 224591.77,
+    "lucro": 42583.31,
+    "margem_pct": 15.94,
+    "quantidade_comb": 50631.976,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 12066.11,
+     "por_canal": {
+      "99": {
+       "litros": 1167.428,
+       "abastecimentos": 64
+      },
+      "SOUTAG": {
+       "litros": 2598.528,
+       "abastecimentos": 138
+      },
+      "NORMAL": {
+       "litros": 8300.154,
+       "abastecimentos": 552
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 12503.05,
+     "por_canal": {
+      "99": {
+       "litros": 1145.997,
+       "abastecimentos": 62
+      },
+      "SOUTAG": {
+       "litros": 1888.883,
+       "abastecimentos": 95
+      },
+      "NORMAL": {
+       "litros": 9468.17,
+       "abastecimentos": 637
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 11678.88,
+     "por_canal": {
+      "99": {
+       "litros": 1235.633,
+       "abastecimentos": 60
+      },
+      "SOUTAG": {
+       "litros": 2104.178,
+       "abastecimentos": 115
+      },
+      "NORMAL": {
+       "litros": 8339.069,
+       "abastecimentos": 595
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 10072.714,
+     "por_canal": {
+      "99": {
+       "litros": 953.093,
+       "abastecimentos": 44
+      },
+      "SOUTAG": {
+       "litros": 1770.798,
+       "abastecimentos": 80
+      },
+      "NORMAL": {
+       "litros": 7348.823,
+       "abastecimentos": 503
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "9c664170-5d77-4b44-b2d1-fa3a95ca0f05",
+   "posto_nome": "P. RODRIGO",
+   "litros": 45990.814,
+   "faturamento": 251778.19,
+   "abastecimentos": 2207,
+   "por_canal": {
+    "99": {
+     "litros": 3307.229,
+     "faturamento": 14482.69,
+     "abastecimentos": 163
+    },
+    "SOUTAG": {
+     "litros": 11804.909,
+     "faturamento": 62398.05,
+     "abastecimentos": 371
+    },
+    "NORMAL": {
+     "litros": 30878.676,
+     "faturamento": 174897.45,
+     "abastecimentos": 1673
+    }
+   },
+   "produto": {
+    "faturamento": 4511.69
+   },
+   "gasolina": {
+    "litros_total": 17869.892,
+    "litros_aditivada": 1346.151
+   },
+   "dre": {
+    "venda_bruta": 278758.22,
+    "desconto": 1267.46,
+    "venda_liquida": 277490.76,
+    "custo_total": 236554.48,
+    "lucro": 40936.28,
+    "margem_pct": 14.75,
+    "quantidade_comb": 49671.365,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 13746.705,
+     "por_canal": {
+      "99": {
+       "litros": 1059.919,
+       "abastecimentos": 49
+      },
+      "SOUTAG": {
+       "litros": 4142.565,
+       "abastecimentos": 127
+      },
+      "NORMAL": {
+       "litros": 8544.221,
+       "abastecimentos": 434
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 13572.382,
+     "por_canal": {
+      "99": {
+       "litros": 902.967,
+       "abastecimentos": 43
+      },
+      "SOUTAG": {
+       "litros": 4379.719,
+       "abastecimentos": 127
+      },
+      "NORMAL": {
+       "litros": 8289.696,
+       "abastecimentos": 447
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 11287.347,
+     "por_canal": {
+      "99": {
+       "litros": 838.121,
+       "abastecimentos": 42
+      },
+      "SOUTAG": {
+       "litros": 1934.289,
+       "abastecimentos": 62
+      },
+      "NORMAL": {
+       "litros": 8514.937,
+       "abastecimentos": 463
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 7384.38,
+     "por_canal": {
+      "99": {
+       "litros": 506.222,
+       "abastecimentos": 29
+      },
+      "SOUTAG": {
+       "litros": 1348.336,
+       "abastecimentos": 55
+      },
+      "NORMAL": {
+       "litros": 5529.822,
+       "abastecimentos": 329
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "b411fa91-85bb-481a-9dfe-9c4531b03823",
+   "posto_nome": "P. FELIPAO",
+   "litros": 44624.552,
+   "faturamento": 268432.95,
+   "abastecimentos": 1977,
+   "por_canal": {
+    "99": {
+     "litros": 0,
+     "faturamento": 0,
+     "abastecimentos": 0
+    },
+    "SOUTAG": {
+     "litros": 9576.292,
+     "faturamento": 57335.31,
+     "abastecimentos": 200
+    },
+    "NORMAL": {
+     "litros": 35048.26,
+     "faturamento": 211097.64,
+     "abastecimentos": 1777
+    }
+   },
+   "produto": {
+    "faturamento": 4247.18
+   },
+   "gasolina": {
+    "litros_total": 24315.4,
+    "litros_aditivada": 0
+   },
+   "dre": {
+    "venda_bruta": 291751.54,
+    "desconto": 0,
+    "venda_liquida": 291751.54,
+    "custo_total": 245137.32,
+    "lucro": 46614.22,
+    "margem_pct": 15.98,
+    "quantidade_comb": 47698.689,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 9638.59,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 2204.918,
+       "abastecimentos": 60
+      },
+      "NORMAL": {
+       "litros": 7433.672,
+       "abastecimentos": 343
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 10911.953,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 2683.494,
+       "abastecimentos": 60
+      },
+      "NORMAL": {
+       "litros": 8228.459,
+       "abastecimentos": 422
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 10858.346,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 2837.082,
+       "abastecimentos": 61
+      },
+      "NORMAL": {
+       "litros": 8021.264,
+       "abastecimentos": 443
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 13215.663,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 1850.798,
+       "abastecimentos": 19
+      },
+      "NORMAL": {
+       "litros": 11364.865,
+       "abastecimentos": 569
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "eaf5f137-3f91-4d55-8409-21dff2d9623e",
+   "posto_nome": "P. JOCA",
+   "litros": 42874.98,
+   "faturamento": 219028.3,
+   "abastecimentos": 2663,
+   "por_canal": {
+    "99": {
+     "litros": 7142.553,
+     "faturamento": 31782.51,
+     "abastecimentos": 353
+    },
+    "SOUTAG": {
+     "litros": 8633.066,
+     "faturamento": 40624.22,
+     "abastecimentos": 382
+    },
+    "NORMAL": {
+     "litros": 27099.361,
+     "faturamento": 146621.57,
+     "abastecimentos": 1928
+    }
+   },
+   "produto": {
+    "faturamento": 1199
+   },
+   "gasolina": {
+    "litros_total": 18688.009,
+    "litros_aditivada": 0
+   },
+   "dre": {
+    "venda_bruta": 245562.92,
+    "desconto": 2703.92,
+    "venda_liquida": 242859,
+    "custo_total": 202099.77,
+    "lucro": 40759.23,
+    "margem_pct": 16.78,
+    "quantidade_comb": 47166.945,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 10566.771,
+     "por_canal": {
+      "99": {
+       "litros": 1452.312,
+       "abastecimentos": 77
+      },
+      "SOUTAG": {
+       "litros": 1992.291,
+       "abastecimentos": 82
+      },
+      "NORMAL": {
+       "litros": 7122.168,
+       "abastecimentos": 529
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 11460.612,
+     "por_canal": {
+      "99": {
+       "litros": 1955.549,
+       "abastecimentos": 100
+      },
+      "SOUTAG": {
+       "litros": 2586.119,
+       "abastecimentos": 122
+      },
+      "NORMAL": {
+       "litros": 6918.944,
+       "abastecimentos": 518
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 12284.829,
+     "por_canal": {
+      "99": {
+       "litros": 2433.537,
+       "abastecimentos": 109
+      },
+      "SOUTAG": {
+       "litros": 2167.587,
+       "abastecimentos": 100
+      },
+      "NORMAL": {
+       "litros": 7683.705,
+       "abastecimentos": 506
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 8562.768,
+     "por_canal": {
+      "99": {
+       "litros": 1301.155,
+       "abastecimentos": 67
+      },
+      "SOUTAG": {
+       "litros": 1887.069,
+       "abastecimentos": 78
+      },
+      "NORMAL": {
+       "litros": 5374.544,
+       "abastecimentos": 375
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "c9f661a6-9b23-4247-854e-b911bc7326d5",
+   "posto_nome": "P. SAO BERNARDO",
+   "litros": 40318.857,
+   "faturamento": 209694.8,
+   "abastecimentos": 2634,
+   "por_canal": {
+    "99": {
+     "litros": 6520.794,
+     "faturamento": 28915.68,
+     "abastecimentos": 312
+    },
+    "SOUTAG": {
+     "litros": 6400.605,
+     "faturamento": 31185.49,
+     "abastecimentos": 313
+    },
+    "NORMAL": {
+     "litros": 27397.458,
+     "faturamento": 149593.63,
+     "abastecimentos": 2009
+    }
+   },
+   "produto": {
+    "faturamento": 2659.8
+   },
+   "gasolina": {
+    "litros_total": 20854.25,
+    "litros_aditivada": 2357.221
+   },
+   "dre": {
+    "venda_bruta": 241011.22,
+    "desconto": 2667.09,
+    "venda_liquida": 238344.13,
+    "custo_total": 201480.19,
+    "lucro": 36809.04,
+    "margem_pct": 15.44,
+    "quantidade_comb": 45301.211,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 9755.107,
+     "por_canal": {
+      "99": {
+       "litros": 1711.147,
+       "abastecimentos": 84
+      },
+      "SOUTAG": {
+       "litros": 1539.133,
+       "abastecimentos": 76
+      },
+      "NORMAL": {
+       "litros": 6504.827,
+       "abastecimentos": 523
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 10693.358,
+     "por_canal": {
+      "99": {
+       "litros": 1823.11,
+       "abastecimentos": 83
+      },
+      "SOUTAG": {
+       "litros": 1686.621,
+       "abastecimentos": 87
+      },
+      "NORMAL": {
+       "litros": 7183.627,
+       "abastecimentos": 512
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 10620.99,
+     "por_canal": {
+      "99": {
+       "litros": 1509.327,
+       "abastecimentos": 75
+      },
+      "SOUTAG": {
+       "litros": 1782.886,
+       "abastecimentos": 84
+      },
+      "NORMAL": {
+       "litros": 7328.777,
+       "abastecimentos": 531
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 9249.402,
+     "por_canal": {
+      "99": {
+       "litros": 1477.21,
+       "abastecimentos": 70
+      },
+      "SOUTAG": {
+       "litros": 1391.965,
+       "abastecimentos": 66
+      },
+      "NORMAL": {
+       "litros": 6380.227,
+       "abastecimentos": 443
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "76592d18-79ca-45a4-be6d-13e7ad5f1f12",
+   "posto_nome": "P. TRANCOSO",
+   "litros": 36544.336,
+   "faturamento": 198954.5,
+   "abastecimentos": 2071,
+   "por_canal": {
+    "99": {
+     "litros": 2262.391,
+     "faturamento": 10129.18,
+     "abastecimentos": 106
+    },
+    "SOUTAG": {
+     "litros": 8624.187,
+     "faturamento": 45662.32,
+     "abastecimentos": 350
+    },
+    "NORMAL": {
+     "litros": 25657.758,
+     "faturamento": 143163,
+     "abastecimentos": 1615
+    }
+   },
+   "produto": {
+    "faturamento": 618.3
+   },
+   "gasolina": {
+    "litros_total": 16883.642,
+    "litros_aditivada": 1146.678
+   },
+   "dre": {
+    "venda_bruta": 221937.81,
+    "desconto": 921.49,
+    "venda_liquida": 221016.32,
+    "custo_total": 188219.2,
+    "lucro": 32797.12,
+    "margem_pct": 14.84,
+    "quantidade_comb": 40484.034,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 10229.069,
+     "por_canal": {
+      "99": {
+       "litros": 556.905,
+       "abastecimentos": 26
+      },
+      "SOUTAG": {
+       "litros": 3148.392,
+       "abastecimentos": 130
+      },
+      "NORMAL": {
+       "litros": 6523.772,
+       "abastecimentos": 407
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 11117.901,
+     "por_canal": {
+      "99": {
+       "litros": 693.557,
+       "abastecimentos": 31
+      },
+      "SOUTAG": {
+       "litros": 2313.875,
+       "abastecimentos": 92
+      },
+      "NORMAL": {
+       "litros": 8110.469,
+       "abastecimentos": 468
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 9666.67,
+     "por_canal": {
+      "99": {
+       "litros": 573.109,
+       "abastecimentos": 28
+      },
+      "SOUTAG": {
+       "litros": 2187.523,
+       "abastecimentos": 88
+      },
+      "NORMAL": {
+       "litros": 6906.038,
+       "abastecimentos": 440
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 5530.696,
+     "por_canal": {
+      "99": {
+       "litros": 438.82,
+       "abastecimentos": 21
+      },
+      "SOUTAG": {
+       "litros": 974.397,
+       "abastecimentos": 40
+      },
+      "NORMAL": {
+       "litros": 4117.479,
+       "abastecimentos": 300
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "937bec35-50a5-4707-94d3-bd09be256d26",
+   "posto_nome": "P. ARAPONGA",
+   "litros": 35401.301,
+   "faturamento": 190502.89,
+   "abastecimentos": 1611,
+   "por_canal": {
+    "99": {
+     "litros": 4400.483,
+     "faturamento": 21690.21,
+     "abastecimentos": 176
+    },
+    "SOUTAG": {
+     "litros": 6508.469,
+     "faturamento": 32235.32,
+     "abastecimentos": 290
+    },
+    "NORMAL": {
+     "litros": 24492.349,
+     "faturamento": 136577.36,
+     "abastecimentos": 1145
+    }
+   },
+   "produto": {
+    "faturamento": 1654.8
+   },
+   "gasolina": {
+    "litros_total": 19516.209,
+    "litros_aditivada": 2439.086
+   },
+   "dre": {
+    "venda_bruta": 178756.88,
+    "desconto": 1295.9,
+    "venda_liquida": 177460.98,
+    "custo_total": 148314.1,
+    "lucro": 29146.88,
+    "margem_pct": 16.42,
+    "quantidade_comb": 32538.258,
+    "dias_com_dado": 4,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 2836.327,
+     "por_canal": {
+      "99": {
+       "litros": 79.65,
+       "abastecimentos": 7
+      },
+      "SOUTAG": {
+       "litros": 679.502,
+       "abastecimentos": 27
+      },
+      "NORMAL": {
+       "litros": 2077.175,
+       "abastecimentos": 82
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 14994.097,
+     "por_canal": {
+      "99": {
+       "litros": 1979.689,
+       "abastecimentos": 75
+      },
+      "SOUTAG": {
+       "litros": 2177.86,
+       "abastecimentos": 107
+      },
+      "NORMAL": {
+       "litros": 10836.548,
+       "abastecimentos": 519
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 10057.955,
+     "por_canal": {
+      "99": {
+       "litros": 1291.649,
+       "abastecimentos": 57
+      },
+      "SOUTAG": {
+       "litros": 2624.396,
+       "abastecimentos": 107
+      },
+      "NORMAL": {
+       "litros": 6141.91,
+       "abastecimentos": 283
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 7512.922,
+     "por_canal": {
+      "99": {
+       "litros": 1049.495,
+       "abastecimentos": 37
+      },
+      "SOUTAG": {
+       "litros": 1026.711,
+       "abastecimentos": 49
+      },
+      "NORMAL": {
+       "litros": 5436.716,
+       "abastecimentos": 261
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "7021e917-66d7-473c-989a-cfe5815e5086",
+   "posto_nome": "P. BIANCA",
+   "litros": 32663.44,
+   "faturamento": 180358.43,
+   "abastecimentos": 2224,
+   "por_canal": {
+    "99": {
+     "litros": 0,
+     "faturamento": 0,
+     "abastecimentos": 0
+    },
+    "SOUTAG": {
+     "litros": 13445.497,
+     "faturamento": 67752.61,
+     "abastecimentos": 539
+    },
+    "NORMAL": {
+     "litros": 19217.943,
+     "faturamento": 112605.82,
+     "abastecimentos": 1685
+    }
+   },
+   "produto": {
+    "faturamento": 1491.5
+   },
+   "gasolina": {
+    "litros_total": 14281.585,
+    "litros_aditivada": 649.068
+   },
+   "dre": {
+    "venda_bruta": 202485.1,
+    "desconto": 170.26,
+    "venda_liquida": 202314.84,
+    "custo_total": 172457.69,
+    "lucro": 29857.15,
+    "margem_pct": 14.76,
+    "quantidade_comb": 36196.217,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 9319.246,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 4886.588,
+       "abastecimentos": 193
+      },
+      "NORMAL": {
+       "litros": 4432.658,
+       "abastecimentos": 360
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 9531.259,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 3627.948,
+       "abastecimentos": 137
+      },
+      "NORMAL": {
+       "litros": 5903.311,
+       "abastecimentos": 499
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 8071.555,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 2728.668,
+       "abastecimentos": 112
+      },
+      "NORMAL": {
+       "litros": 5342.887,
+       "abastecimentos": 486
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 5741.38,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 2202.293,
+       "abastecimentos": 97
+      },
+      "NORMAL": {
+       "litros": 3539.087,
+       "abastecimentos": 340
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "2c984381-2097-41bc-bdf8-4ac7f2904d4f",
+   "posto_nome": "P. BOMBOM FILIAL",
+   "litros": 31374.16,
+   "faturamento": 169654.34,
+   "abastecimentos": 2369,
+   "por_canal": {
+    "99": {
+     "litros": 3934.759,
+     "faturamento": 17657.51,
+     "abastecimentos": 210
+    },
+    "SOUTAG": {
+     "litros": 3376.483,
+     "faturamento": 16333.94,
+     "abastecimentos": 155
+    },
+    "NORMAL": {
+     "litros": 24062.918,
+     "faturamento": 135662.89,
+     "abastecimentos": 2004
+    }
+   },
+   "produto": {
+    "faturamento": 3991.7
+   },
+   "gasolina": {
+    "litros_total": 17668.67,
+    "litros_aditivada": 2039.023
+   },
+   "dre": {
+    "venda_bruta": 189472.4,
+    "desconto": 1574.8,
+    "venda_liquida": 187897.6,
+    "custo_total": 157943.91,
+    "lucro": 29739.79,
+    "margem_pct": 15.83,
+    "quantidade_comb": 33993.528,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 7907.504,
+     "por_canal": {
+      "99": {
+       "litros": 887.474,
+       "abastecimentos": 48
+      },
+      "SOUTAG": {
+       "litros": 880.336,
+       "abastecimentos": 33
+      },
+      "NORMAL": {
+       "litros": 6139.694,
+       "abastecimentos": 511
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 8609.64,
+     "por_canal": {
+      "99": {
+       "litros": 982.427,
+       "abastecimentos": 58
+      },
+      "SOUTAG": {
+       "litros": 670.069,
+       "abastecimentos": 36
+      },
+      "NORMAL": {
+       "litros": 6957.144,
+       "abastecimentos": 562
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 8129.021,
+     "por_canal": {
+      "99": {
+       "litros": 1059.31,
+       "abastecimentos": 52
+      },
+      "SOUTAG": {
+       "litros": 1019.535,
+       "abastecimentos": 45
+      },
+      "NORMAL": {
+       "litros": 6050.176,
+       "abastecimentos": 524
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 6727.995,
+     "por_canal": {
+      "99": {
+       "litros": 1005.548,
+       "abastecimentos": 52
+      },
+      "SOUTAG": {
+       "litros": 806.543,
+       "abastecimentos": 41
+      },
+      "NORMAL": {
+       "litros": 4915.904,
+       "abastecimentos": 407
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "62155149-2f31-4b67-b73e-0b96a8ab5722",
+   "posto_nome": "P. MANGABEIRAS",
+   "litros": 31357.069,
+   "faturamento": 179541.4,
+   "abastecimentos": 1399,
+   "por_canal": {
+    "99": {
+     "litros": 3152.149,
+     "faturamento": 15354.39,
+     "abastecimentos": 139
+    },
+    "SOUTAG": {
+     "litros": 9275.987,
+     "faturamento": 47974.13,
+     "abastecimentos": 406
+    },
+    "NORMAL": {
+     "litros": 18928.933,
+     "faturamento": 116212.88,
+     "abastecimentos": 854
+    }
+   },
+   "produto": {
+    "faturamento": 2384.7
+   },
+   "gasolina": {
+    "litros_total": 18019.913,
+    "litros_aditivada": 2052.754
+   },
+   "dre": {
+    "venda_bruta": 202702.72,
+    "desconto": 2227.87,
+    "venda_liquida": 200474.85,
+    "custo_total": 162989.66,
+    "lucro": 37485.19,
+    "margem_pct": 18.7,
+    "quantidade_comb": 34635.311,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 9439.482,
+     "por_canal": {
+      "99": {
+       "litros": 916.294,
+       "abastecimentos": 44
+      },
+      "SOUTAG": {
+       "litros": 3180.777,
+       "abastecimentos": 140
+      },
+      "NORMAL": {
+       "litros": 5342.411,
+       "abastecimentos": 252
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 9471.883,
+     "por_canal": {
+      "99": {
+       "litros": 1045.186,
+       "abastecimentos": 45
+      },
+      "SOUTAG": {
+       "litros": 3022.427,
+       "abastecimentos": 138
+      },
+      "NORMAL": {
+       "litros": 5404.27,
+       "abastecimentos": 241
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 7009.075,
+     "por_canal": {
+      "99": {
+       "litros": 567.914,
+       "abastecimentos": 22
+      },
+      "SOUTAG": {
+       "litros": 1413.877,
+       "abastecimentos": 57
+      },
+      "NORMAL": {
+       "litros": 5027.284,
+       "abastecimentos": 222
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 5436.629,
+     "por_canal": {
+      "99": {
+       "litros": 622.755,
+       "abastecimentos": 28
+      },
+      "SOUTAG": {
+       "litros": 1658.906,
+       "abastecimentos": 71
+      },
+      "NORMAL": {
+       "litros": 3154.968,
+       "abastecimentos": 139
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "ba9d5886-bad8-4be9-b51c-1254f3fdb5bd",
+   "posto_nome": "P. OURO BRANCO",
+   "litros": 30379.136,
+   "faturamento": 163497.97,
+   "abastecimentos": 2301,
+   "por_canal": {
+    "99": {
+     "litros": 2394.328,
+     "faturamento": 10529.56,
+     "abastecimentos": 145
+    },
+    "SOUTAG": {
+     "litros": 1391.319,
+     "faturamento": 6508.82,
+     "abastecimentos": 68
+    },
+    "NORMAL": {
+     "litros": 26593.489,
+     "faturamento": 146459.59,
+     "abastecimentos": 2088
+    }
+   },
+   "produto": {
+    "faturamento": 563.8
+   },
+   "gasolina": {
+    "litros_total": 15067.009,
+    "litros_aditivada": 836.386
+   },
+   "dre": {
+    "venda_bruta": 189487.19,
+    "desconto": 964.75,
+    "venda_liquida": 188522.44,
+    "custo_total": 157980.16,
+    "lucro": 30542.28,
+    "margem_pct": 16.2,
+    "quantidade_comb": 34882.624,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 7541.847,
+     "por_canal": {
+      "99": {
+       "litros": 545.921,
+       "abastecimentos": 32
+      },
+      "SOUTAG": {
+       "litros": 304.229,
+       "abastecimentos": 13
+      },
+      "NORMAL": {
+       "litros": 6691.697,
+       "abastecimentos": 518
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 8465.82,
+     "por_canal": {
+      "99": {
+       "litros": 713.048,
+       "abastecimentos": 47
+      },
+      "SOUTAG": {
+       "litros": 323.824,
+       "abastecimentos": 15
+      },
+      "NORMAL": {
+       "litros": 7428.948,
+       "abastecimentos": 608
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 8623.144,
+     "por_canal": {
+      "99": {
+       "litros": 653.058,
+       "abastecimentos": 39
+      },
+      "SOUTAG": {
+       "litros": 515.72,
+       "abastecimentos": 27
+      },
+      "NORMAL": {
+       "litros": 7454.366,
+       "abastecimentos": 550
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 5748.325,
+     "por_canal": {
+      "99": {
+       "litros": 482.301,
+       "abastecimentos": 27
+      },
+      "SOUTAG": {
+       "litros": 247.546,
+       "abastecimentos": 13
+      },
+      "NORMAL": {
+       "litros": 5018.478,
+       "abastecimentos": 412
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "3ff49ecb-08ee-4982-bb5b-ad2ff9330171",
+   "posto_nome": "P. DUDU",
+   "litros": 30240.248,
+   "faturamento": 165983.4,
+   "abastecimentos": 1782,
+   "por_canal": {
+    "99": {
+     "litros": 1394.067,
+     "faturamento": 6277.84,
+     "abastecimentos": 77
+    },
+    "SOUTAG": {
+     "litros": 3165.282,
+     "faturamento": 15346.48,
+     "abastecimentos": 115
+    },
+    "NORMAL": {
+     "litros": 25680.899,
+     "faturamento": 144359.08,
+     "abastecimentos": 1590
+    }
+   },
+   "produto": {
+    "faturamento": 2366.24
+   },
+   "gasolina": {
+    "litros_total": 12341.3,
+    "litros_aditivada": 0
+   },
+   "dre": {
+    "venda_bruta": 192376.92,
+    "desconto": 584.18,
+    "venda_liquida": 191792.74,
+    "custo_total": 162832.46,
+    "lucro": 28960.28,
+    "margem_pct": 15.1,
+    "quantidade_comb": 34371.327,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 9586.152,
+     "por_canal": {
+      "99": {
+       "litros": 187.675,
+       "abastecimentos": 12
+      },
+      "SOUTAG": {
+       "litros": 950.773,
+       "abastecimentos": 31
+      },
+      "NORMAL": {
+       "litros": 8447.704,
+       "abastecimentos": 490
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 8863.422,
+     "por_canal": {
+      "99": {
+       "litros": 510.109,
+       "abastecimentos": 30
+      },
+      "SOUTAG": {
+       "litros": 743.488,
+       "abastecimentos": 24
+      },
+      "NORMAL": {
+       "litros": 7609.825,
+       "abastecimentos": 491
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 7608.507,
+     "por_canal": {
+      "99": {
+       "litros": 459.298,
+       "abastecimentos": 22
+      },
+      "SOUTAG": {
+       "litros": 1054.536,
+       "abastecimentos": 37
+      },
+      "NORMAL": {
+       "litros": 6094.673,
+       "abastecimentos": 373
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 4182.167,
+     "por_canal": {
+      "99": {
+       "litros": 236.985,
+       "abastecimentos": 13
+      },
+      "SOUTAG": {
+       "litros": 416.485,
+       "abastecimentos": 23
+      },
+      "NORMAL": {
+       "litros": 3528.697,
+       "abastecimentos": 236
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "f24b7fcc-3e17-43a6-956e-f69468603c49",
+   "posto_nome": "P. ALEX",
+   "litros": 30204.852,
+   "faturamento": 155068.65,
+   "abastecimentos": 1817,
+   "por_canal": {
+    "99": {
+     "litros": 0,
+     "faturamento": 0,
+     "abastecimentos": 0
+    },
+    "SOUTAG": {
+     "litros": 6888.672,
+     "faturamento": 31630.3,
+     "abastecimentos": 308
+    },
+    "NORMAL": {
+     "litros": 23316.18,
+     "faturamento": 123438.35,
+     "abastecimentos": 1509
+    }
+   },
+   "produto": {
+    "faturamento": 1607.4
+   },
+   "gasolina": {
+    "litros_total": 13435.277,
+    "litros_aditivada": 924.192
+   },
+   "dre": {
+    "venda_bruta": 171603.01,
+    "desconto": 0,
+    "venda_liquida": 171603.01,
+    "custo_total": 143830.79,
+    "lucro": 27772.22,
+    "margem_pct": 16.18,
+    "quantidade_comb": 33101.867,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 8711.664,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 2072.01,
+       "abastecimentos": 90
+      },
+      "NORMAL": {
+       "litros": 6639.654,
+       "abastecimentos": 416
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 10064.379,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 2178.131,
+       "abastecimentos": 98
+      },
+      "NORMAL": {
+       "litros": 7886.248,
+       "abastecimentos": 506
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 6562.614,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 1772.68,
+       "abastecimentos": 76
+      },
+      "NORMAL": {
+       "litros": 4789.934,
+       "abastecimentos": 316
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 4866.195,
+     "por_canal": {
+      "99": {
+       "litros": 0,
+       "abastecimentos": 0
+      },
+      "SOUTAG": {
+       "litros": 865.851,
+       "abastecimentos": 44
+      },
+      "NORMAL": {
+       "litros": 4000.344,
+       "abastecimentos": 271
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "e9d62aa1-3919-4bd0-a059-b20cf6303cfb",
+   "posto_nome": "P. MIRAGEM JBRETAS",
+   "litros": 29691.187,
+   "faturamento": 166360.6,
+   "abastecimentos": 1286,
+   "por_canal": {
+    "99": {
+     "litros": 2005.121,
+     "faturamento": 8649.97,
+     "abastecimentos": 101
+    },
+    "SOUTAG": {
+     "litros": 3155.834,
+     "faturamento": 15771.32,
+     "abastecimentos": 122
+    },
+    "NORMAL": {
+     "litros": 24530.232,
+     "faturamento": 141939.31,
+     "abastecimentos": 1063
+    }
+   },
+   "produto": {
+    "faturamento": 1605.5
+   },
+   "gasolina": {
+    "litros_total": 13291.996,
+    "litros_aditivada": 4238.679
+   },
+   "dre": {
+    "venda_bruta": 184881.14,
+    "desconto": 810.97,
+    "venda_liquida": 184070.17,
+    "custo_total": 154207.58,
+    "lucro": 29862.59,
+    "margem_pct": 16.22,
+    "quantidade_comb": 32675.892,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 9670.586,
+     "por_canal": {
+      "99": {
+       "litros": 554.131,
+       "abastecimentos": 28
+      },
+      "SOUTAG": {
+       "litros": 907.844,
+       "abastecimentos": 38
+      },
+      "NORMAL": {
+       "litros": 8208.611,
+       "abastecimentos": 355
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 11347.463,
+     "por_canal": {
+      "99": {
+       "litros": 679.798,
+       "abastecimentos": 32
+      },
+      "SOUTAG": {
+       "litros": 1351,
+       "abastecimentos": 48
+      },
+      "NORMAL": {
+       "litros": 9316.665,
+       "abastecimentos": 369
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 5534.502,
+     "por_canal": {
+      "99": {
+       "litros": 406.724,
+       "abastecimentos": 23
+      },
+      "SOUTAG": {
+       "litros": 656.774,
+       "abastecimentos": 26
+      },
+      "NORMAL": {
+       "litros": 4471.004,
+       "abastecimentos": 216
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 3138.636,
+     "por_canal": {
+      "99": {
+       "litros": 364.468,
+       "abastecimentos": 18
+      },
+      "SOUTAG": {
+       "litros": 240.216,
+       "abastecimentos": 10
+      },
+      "NORMAL": {
+       "litros": 2533.952,
+       "abastecimentos": 123
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "c9c4c58a-6d2d-4f8b-9d64-9fca7dd06dba",
+   "posto_nome": "P. GLORIA",
+   "litros": 24184.474,
+   "faturamento": 122526.69,
+   "abastecimentos": 1589,
+   "por_canal": {
+    "99": {
+     "litros": 5516.889,
+     "faturamento": 25033.73,
+     "abastecimentos": 297
+    },
+    "SOUTAG": {
+     "litros": 7593.92,
+     "faturamento": 37379.67,
+     "abastecimentos": 311
+    },
+    "NORMAL": {
+     "litros": 11073.665,
+     "faturamento": 60113.29,
+     "abastecimentos": 981
+    }
+   },
+   "produto": {
+    "faturamento": 708.4
+   },
+   "gasolina": {
+    "litros_total": 9516.376,
+    "litros_aditivada": 0
+   },
+   "dre": {
+    "venda_bruta": 139781.63,
+    "desconto": 2341.14,
+    "venda_liquida": 137440.49,
+    "custo_total": 119637.75,
+    "lucro": 17802.74,
+    "margem_pct": 12.95,
+    "quantidade_comb": 26937.277,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 7062.586,
+     "por_canal": {
+      "99": {
+       "litros": 1352.016,
+       "abastecimentos": 73
+      },
+      "SOUTAG": {
+       "litros": 2847.633,
+       "abastecimentos": 110
+      },
+      "NORMAL": {
+       "litros": 2862.937,
+       "abastecimentos": 244
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 6744.267,
+     "por_canal": {
+      "99": {
+       "litros": 1547.197,
+       "abastecimentos": 83
+      },
+      "SOUTAG": {
+       "litros": 2186.217,
+       "abastecimentos": 96
+      },
+      "NORMAL": {
+       "litros": 3010.853,
+       "abastecimentos": 291
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 6091.767,
+     "por_canal": {
+      "99": {
+       "litros": 1275.68,
+       "abastecimentos": 71
+      },
+      "SOUTAG": {
+       "litros": 1671.6,
+       "abastecimentos": 69
+      },
+      "NORMAL": {
+       "litros": 3144.487,
+       "abastecimentos": 255
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 4285.854,
+     "por_canal": {
+      "99": {
+       "litros": 1341.996,
+       "abastecimentos": 70
+      },
+      "SOUTAG": {
+       "litros": 888.47,
+       "abastecimentos": 36
+      },
+      "NORMAL": {
+       "litros": 2055.388,
+       "abastecimentos": 191
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "0e9e9f48-b108-4f38-b7db-49f55fdb44a0",
+   "posto_nome": "P. LEANDRO",
+   "litros": 21137.283,
+   "faturamento": 115059.03,
+   "abastecimentos": 1360,
+   "por_canal": {
+    "99": {
+     "litros": 1695.766,
+     "faturamento": 8426.09,
+     "abastecimentos": 105
+    },
+    "SOUTAG": {
+     "litros": 4881.477,
+     "faturamento": 24389.61,
+     "abastecimentos": 219
+    },
+    "NORMAL": {
+     "litros": 14560.04,
+     "faturamento": 82243.33,
+     "abastecimentos": 1036
+    }
+   },
+   "produto": {
+    "faturamento": 840.4
+   },
+   "gasolina": {
+    "litros_total": 9841.028,
+    "litros_aditivada": 1968.456
+   },
+   "dre": {
+    "venda_bruta": 128219.9,
+    "desconto": 858.09,
+    "venda_liquida": 127361.81,
+    "custo_total": 108087.13,
+    "lucro": 19274.68,
+    "margem_pct": 15.13,
+    "quantidade_comb": 23227.765,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 6089.04,
+     "por_canal": {
+      "99": {
+       "litros": 462.124,
+       "abastecimentos": 29
+      },
+      "SOUTAG": {
+       "litros": 1880.297,
+       "abastecimentos": 82
+      },
+      "NORMAL": {
+       "litros": 3746.619,
+       "abastecimentos": 238
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 6929.381,
+     "por_canal": {
+      "99": {
+       "litros": 445.725,
+       "abastecimentos": 31
+      },
+      "SOUTAG": {
+       "litros": 1327.698,
+       "abastecimentos": 62
+      },
+      "NORMAL": {
+       "litros": 5155.958,
+       "abastecimentos": 342
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 4305.195,
+     "por_canal": {
+      "99": {
+       "litros": 402.419,
+       "abastecimentos": 25
+      },
+      "SOUTAG": {
+       "litros": 677.938,
+       "abastecimentos": 35
+      },
+      "NORMAL": {
+       "litros": 3224.838,
+       "abastecimentos": 267
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 3813.667,
+     "por_canal": {
+      "99": {
+       "litros": 385.498,
+       "abastecimentos": 20
+      },
+      "SOUTAG": {
+       "litros": 995.544,
+       "abastecimentos": 40
+      },
+      "NORMAL": {
+       "litros": 2432.625,
+       "abastecimentos": 189
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "bf9c866f-8264-4ea7-8d7d-833d723dc3d6",
+   "posto_nome": "P. SAO LUIZ RL",
+   "litros": 18777.034,
+   "faturamento": 103207.54,
+   "abastecimentos": 1238,
+   "por_canal": {
+    "99": {
+     "litros": 1546.307,
+     "faturamento": 7075.15,
+     "abastecimentos": 92
+    },
+    "SOUTAG": {
+     "litros": 2313.437,
+     "faturamento": 12133.95,
+     "abastecimentos": 89
+    },
+    "NORMAL": {
+     "litros": 14917.29,
+     "faturamento": 83998.44,
+     "abastecimentos": 1057
+    }
+   },
+   "produto": {
+    "faturamento": 762.9
+   },
+   "gasolina": {
+    "litros_total": 7170.017,
+    "litros_aditivada": 0
+   },
+   "dre": {
+    "venda_bruta": 118566.75,
+    "desconto": 587.56,
+    "venda_liquida": 117979.19,
+    "custo_total": 102062.8,
+    "lucro": 15916.39,
+    "margem_pct": 13.49,
+    "quantidade_comb": 21343.072,
+    "dias_com_dado": 5,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 5568.624,
+     "por_canal": {
+      "99": {
+       "litros": 293.303,
+       "abastecimentos": 19
+      },
+      "SOUTAG": {
+       "litros": 1068.813,
+       "abastecimentos": 34
+      },
+      "NORMAL": {
+       "litros": 4206.508,
+       "abastecimentos": 288
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 5570.843,
+     "por_canal": {
+      "99": {
+       "litros": 331.6,
+       "abastecimentos": 22
+      },
+      "SOUTAG": {
+       "litros": 756.641,
+       "abastecimentos": 28
+      },
+      "NORMAL": {
+       "litros": 4482.602,
+       "abastecimentos": 316
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 4657.865,
+     "por_canal": {
+      "99": {
+       "litros": 433.542,
+       "abastecimentos": 21
+      },
+      "SOUTAG": {
+       "litros": 309.213,
+       "abastecimentos": 18
+      },
+      "NORMAL": {
+       "litros": 3915.11,
+       "abastecimentos": 281
+      }
+     }
+    },
+    {
+     "data": "2026-09-13",
+     "litros": 2979.702,
+     "por_canal": {
+      "99": {
+       "litros": 487.862,
+       "abastecimentos": 30
+      },
+      "SOUTAG": {
+       "litros": 178.77,
+       "abastecimentos": 9
+      },
+      "NORMAL": {
+       "litros": 2313.07,
+       "abastecimentos": 172
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "ca05768f-37eb-48a5-928f-68e6a82a6abe",
+   "posto_nome": "P. BOMBOM MATRIZ",
+   "litros": 12960.049,
+   "faturamento": 68019.15,
+   "abastecimentos": 694,
+   "por_canal": {
+    "99": {
+     "litros": 1658.467,
+     "faturamento": 7841.03,
+     "abastecimentos": 67
+    },
+    "SOUTAG": {
+     "litros": 2042.633,
+     "faturamento": 9757.05,
+     "abastecimentos": 83
+    },
+    "NORMAL": {
+     "litros": 9258.949,
+     "faturamento": 50421.07,
+     "abastecimentos": 544
+    }
+   },
+   "produto": {
+    "faturamento": 426.7
+   },
+   "gasolina": {
+    "litros_total": 6968.518,
+    "litros_aditivada": 639.696
+   },
+   "dre": {
+    "venda_bruta": 76432.94,
+    "desconto": 679.86,
+    "venda_liquida": 75753.08,
+    "custo_total": 63993.71,
+    "lucro": 11759.37,
+    "margem_pct": 15.52,
+    "quantidade_comb": 14336.596,
+    "dias_com_dado": 4,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 5093.786,
+     "por_canal": {
+      "99": {
+       "litros": 624.843,
+       "abastecimentos": 22
+      },
+      "SOUTAG": {
+       "litros": 1001.885,
+       "abastecimentos": 42
+      },
+      "NORMAL": {
+       "litros": 3467.058,
+       "abastecimentos": 195
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 4982.321,
+     "por_canal": {
+      "99": {
+       "litros": 618.988,
+       "abastecimentos": 29
+      },
+      "SOUTAG": {
+       "litros": 807.409,
+       "abastecimentos": 32
+      },
+      "NORMAL": {
+       "litros": 3555.924,
+       "abastecimentos": 206
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 2883.942,
+     "por_canal": {
+      "99": {
+       "litros": 414.636,
+       "abastecimentos": 16
+      },
+      "SOUTAG": {
+       "litros": 233.339,
+       "abastecimentos": 9
+      },
+      "NORMAL": {
+       "litros": 2235.967,
+       "abastecimentos": 143
+      }
+     }
+    }
+   ]
+  },
+  {
+   "posto_id": "94e2284e-cdb8-443a-a4ae-220b06696be8",
+   "posto_nome": "P. BAHAMAS",
+   "litros": 12831.486,
+   "faturamento": 70995.87,
+   "abastecimentos": 722,
+   "por_canal": {
+    "99": {
+     "litros": 490.075,
+     "faturamento": 2058.35,
+     "abastecimentos": 26
+    },
+    "SOUTAG": {
+     "litros": 1036.512,
+     "faturamento": 4881.5,
+     "abastecimentos": 42
+    },
+    "NORMAL": {
+     "litros": 11304.899,
+     "faturamento": 64056.02,
+     "abastecimentos": 654
+    }
+   },
+   "produto": {
+    "faturamento": 1233.9
+   },
+   "gasolina": {
+    "litros_total": 8308.229,
+    "litros_aditivada": 1039.66
+   },
+   "dre": {
+    "venda_bruta": 81865.5,
+    "desconto": 167.83,
+    "venda_liquida": 81697.67,
+    "custo_total": 68116.67,
+    "lucro": 13581,
+    "margem_pct": 16.62,
+    "quantidade_comb": 14408.947,
+    "dias_com_dado": 4,
+    "dias_periodo": 11,
+    "ultimo_dia": "2026-09-14"
+   },
+   "por_dia": [
+    {
+     "data": "2026-09-10",
+     "litros": 4103.715,
+     "por_canal": {
+      "99": {
+       "litros": 118.623,
+       "abastecimentos": 8
+      },
+      "SOUTAG": {
+       "litros": 456.431,
+       "abastecimentos": 20
+      },
+      "NORMAL": {
+       "litros": 3528.661,
+       "abastecimentos": 197
+      }
+     }
+    },
+    {
+     "data": "2026-09-11",
+     "litros": 5150.603,
+     "por_canal": {
+      "99": {
+       "litros": 189.093,
+       "abastecimentos": 8
+      },
+      "SOUTAG": {
+       "litros": 282.964,
+       "abastecimentos": 11
+      },
+      "NORMAL": {
+       "litros": 4678.546,
+       "abastecimentos": 255
+      }
+     }
+    },
+    {
+     "data": "2026-09-12",
+     "litros": 3577.168,
+     "por_canal": {
+      "99": {
+       "litros": 182.359,
+       "abastecimentos": 10
+      },
+      "SOUTAG": {
+       "litros": 297.117,
+       "abastecimentos": 11
+      },
+      "NORMAL": {
+       "litros": 3097.692,
+       "abastecimentos": 202
+      }
+     }
+    }
+   ]
+  }
+ ]
+}

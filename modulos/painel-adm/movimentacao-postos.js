@@ -90,6 +90,12 @@
   // Margem com DUAS casas, como o relatório TecnoX imprime. O pctTxt tem
   // uma só porque mede litro; aqui o número precisa bater dígito a dígito
   // com a coluna Lucro % do arquivo — 16,02%, não 16,0%.
+  // dd/mm, sem o ano. A frase vive dentro de um período que o usuário
+  // acabou de escolher no filtro; repetir o ano ali não informa nada.
+  function diaMes(iso) {
+    if (!iso || String(iso).length < 10) return '';
+    return String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7);
+  }
   function pctDec(v) {
     return Number.isFinite(Number(v)) ? nf(Number(v), 2) + '%' : '—';
   }
@@ -448,13 +454,22 @@
           linha('Por litro', u.quantidade_comb > 0
             ? reais(u.lucro / u.quantidade_comb) + ' / L  ·  ' + litros(u.quantidade_comb) + ' de combustível' : '—');
         // COBERTURA. Sem isto, um lucro de 1 dia apareceria do lado de uma
-        // litragem de 7 como se fossem a mesma janela. A data do último dia
-        // com dado não é dita porque a rota não a devolve — e deduzi-la do
-        // contador seria chute: o buraco nem sempre está no fim (11/09 o
-        // P. ARAPONGA ficou sem linha no meio do período).
-        if (u.dias_com_dado < u.dias_periodo) {
-          corpo += linha('Cobertura', 'dados do arquivo TecnoX em ' + u.dias_com_dado +
-            ' de ' + u.dias_periodo + ' dias do período');
+        // litragem de 7 como se fossem a mesma janela.
+        //
+        // A data vem da rota (`ultimo_dia`) e NÃO é deduzida do contador: o
+        // buraco nem sempre está no fim. Medido em 01–13/09/2026, os três
+        // postos com cobertura incompleta, e o que a dedução diria:
+        //   P. ARAPONGA       12/13 dias   até 13/09   dedução diria 12/09
+        //   P. BOMBOM MATRIZ  11/13 dias   até 12/09   dedução diria 11/09
+        //   P. BAHAMAS        11/13 dias   até 12/09   dedução diria 11/09
+        // Errada nos três. O P. ARAPONGA é o caso claro: falta o 11/09, no
+        // meio, e o posto tem arquivo até o último dia do período.
+        //
+        // SOME quando a cobertura é completa: uma linha dizendo "até o último
+        // dia do período" em toda tela normal treina o olho a ignorá-la, e aí
+        // ela não avisa nada no dia em que importa.
+        if (u.dias_com_dado < u.dias_periodo && u.ultimo_dia) {
+          corpo += linha('Cobertura', 'dados do arquivo TecnoX até ' + diaMes(u.ultimo_dia));
         }
         corpo += linha('Fonte', 'tecnox_categoria_dia — a mesma conta do DRE');
       }

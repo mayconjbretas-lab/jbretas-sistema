@@ -95,7 +95,11 @@ function numBR(t) {
   return Number.isFinite(n) ? n : null;
 }
 
-var FIX_MOV = null, FIX_DRE = null;
+// FIX_MOV é o que o stub devolve AGORA — os testes o trocam para encenar
+// outro período. FIX_LONGO tem a rede incompleta (pede até 20/09, e o
+// arquivo acaba em 14/09); FIX_MEIO tem a rede completa e três postos com
+// buraco no meio. Os três são respostas reais da rota.
+var FIX_MOV = null, FIX_LONGO = null, FIX_MEIO = null, FIX_DRE = null;
 var PEDIDOS = [];           // toda URL que o front pediu, para o relatório
 var SERVIDO_EXATO = {};     // quais vieram de fixture exata
 
@@ -138,6 +142,8 @@ function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); 
 async function rodar() {
   var r1 = await fetch('/testes/fixtures-movpostos-13-09.json');
   FIX_MOV = await r1.json();
+  FIX_LONGO = await (await fetch('/testes/fixtures-movpostos-10-20-09.json')).json();
+  FIX_MEIO = await (await fetch('/testes/fixtures-movpostos-01-13-09.json')).json();
   var r2 = await fetch('/testes/fixtures-dre-13-09.json');
   FIX_DRE = await r2.json();
 
@@ -183,6 +189,64 @@ async function rodar() {
   eh(tdet.indexOf('16,02%') >= 0, 'margem');
   eh(/planilha|custo_avista|defasad/i.test(tdet) === false,
      'nenhuma palavra de planilha / custo_avista / defasado');
+  // 13/09 é um dia só e tem arquivo: cobertura completa, a linha não existe.
+  eh(tdet.indexOf('Cobertura') < 0, 'sem linha de cobertura quando ela é completa',
+     '1 de 1 dia — ' + (tdet.indexOf('Cobertura') < 0 ? 'ausente' : 'presente'), 'ausente');
+
+  h3('2b. Cobertura incompleta — 10 a 20/09, período que passa do fim do arquivo');
+  // MESMA tela, outro período. A categoria_dia vai até 14/09, então pedir
+  // até 20/09 deixa a REDE com 5 de 11 dias — é aí que a linha aparece.
+  var FIX13 = FIX_MOV;
+  FIX_MOV = FIX_LONGO;
+  window.__mpPeriodo('fim', '2026-09-20');
+  window.__mpPeriodo('inicio', '2026-09-10');
+  await esperar(150);
+  var dL = FIX_LONGO.rede.dre;
+  nota('rede: ' + dL.dias_com_dado + '/' + dL.dias_periodo + ' dias  ·  ultimo_dia ' + dL.ultimo_dia);
+  window.__mpCard('lucro');
+  await esperar(60);
+  var tdet2 = txt(secMov.querySelector('.mp-detalhe'));
+  eh(tdet2.indexOf('dados do arquivo TecnoX até 14/09') >= 0,
+     'a linha aparece com a data que a ROTA mandou',
+     tdet2.indexOf('Cobertura') >= 0 ? tdet2.slice(tdet2.indexOf('Cobertura'), tdet2.indexOf('Cobertura') + 46) : '(ausente)',
+     'Cobertura dados do arquivo TecnoX até 14/09');
+  eh(tdet2.indexOf('2026') < 0, 'dd/mm, sem o ano', tdet2.indexOf('2026') < 0 ? 'sem ano' : 'com ano', 'sem ano');
+
+  h3('2c. Rede completa mas postos furados — 01 a 13/09');
+  // A rede tem 13/13 e três postos têm buraco NO MEIO. A conta do card fala
+  // da rede, então a linha continua ausente — e é exatamente aqui que a
+  // dedução pelo contador se quebraria, se alguém a tivesse escrito.
+  FIX_MOV = FIX_MEIO;
+  window.__mpPeriodo('fim', '2026-09-13');
+  window.__mpPeriodo('inicio', '2026-09-01');
+  await esperar(150);
+  window.__mpCard('lucro');
+  await esperar(60);
+  var tdet3 = txt(secMov.querySelector('.mp-detalhe'));
+  var inc = FIX_MEIO.postos.filter(function (p) { return p.dre.dias_com_dado < p.dre.dias_periodo; });
+  nota('rede ' + FIX_MEIO.rede.dre.dias_com_dado + '/' + FIX_MEIO.rede.dre.dias_periodo +
+       '  ·  postos furados: ' + inc.map(function (p) {
+         return p.posto_nome + ' ' + p.dre.dias_com_dado + '/' + p.dre.dias_periodo + ' até ' + p.dre.ultimo_dia;
+       }).join(' · '));
+  eh(tdet3.indexOf('Cobertura') < 0, 'rede completa → sem linha, mesmo com 3 postos furados',
+     tdet3.indexOf('Cobertura') < 0 ? 'ausente' : 'presente', 'ausente');
+  var erradas = 0;
+  inc.forEach(function (p) {
+    var faltam = p.dre.dias_periodo - p.dre.dias_com_dado;
+    var dt = new Date('2026-09-13T00:00:00Z');
+    dt.setUTCDate(dt.getUTCDate() - faltam);
+    if (dt.toISOString().slice(0, 10) !== p.dre.ultimo_dia) erradas++;
+  });
+  eh(erradas === inc.length && inc.length === 3,
+     'deduzir a data do contador erraria nos TRÊS — é por isso que o campo existe',
+     erradas + ' de ' + inc.length + ' erradas', '3 de 3');
+
+  // volta para 13/09, que é o cenário dos testes seguintes
+  FIX_MOV = FIX13;
+  window.__mpPeriodo('inicio', '2026-09-13');
+  await esperar(150);
+  window.__mpCard('lucro');
+  await esperar(60);
 
   h3('3. Coluna LUCRO — P. SAO BERNARDO (Total Empresa do arquivo)');
   var alvo = null;
@@ -285,19 +349,36 @@ async function rodar() {
   eh(larg(cardVivo) === 150 && alt(cardVivo) === 96, 'o card do lucro tem a MESMA caixa',
      larg(cardVivo) + '×' + alt(cardVivo), '150×96');
 
-  var ESPERADAS = [['.mp-p-nome', 150], ['.mp-barra-cab', 130], ['.mp-p-litros', 90],
-                   ['.mp-p-comb', 100], ['.mp-p-pct', 70], ['.mp-p-mix', 90],
-                   ['.mp-p-prod', 110], ['.mp-p-lucro', 70]];
+  // ABAIXO DE 700px o CSS esconde cabeçalho e REDE (é o modo celular, em que
+  // a linha vira cartão e as colunas não existem). Medir ali devolveria 0 em
+  // tudo — e um harness que reprova por causa da largura da janela treina
+  // quem o lê a ignorar a falha. Então o estado é DITO, não fingido.
   var cab = secMov.querySelector('.mp-cab');
-  for (var e2 = 0; e2 < ESPERADAS.length; e2++) {
-    var sel = ESPERADAS[e2][0], esp = ESPERADAS[e2][1];
-    var no = cab.querySelector(sel);
-    eh(larg(no) === esp, 'coluna ' + sel, larg(no) + 'px', esp + 'px');
+  if (window.innerWidth < 700) {
+    linhas.push('<span class="bad">PULADO</span> a janela tem ' + window.innerWidth +
+      'px: abaixo de 700 o CSS esconde as colunas (modo celular).');
+    linhas.push('     Abra com pelo menos 700px de largura para medir a grade.');
+    falhas++;
+  } else {
+    var ESPERADAS = [['.mp-p-nome', 150], ['.mp-barra-cab', 130], ['.mp-p-litros', 90],
+                     ['.mp-p-comb', 100], ['.mp-p-pct', 70], ['.mp-p-mix', 90],
+                     ['.mp-p-prod', 110], ['.mp-p-lucro', 70]];
+    for (var e2 = 0; e2 < ESPERADAS.length; e2++) {
+      var sel = ESPERADAS[e2][0], esp = ESPERADAS[e2][1];
+      var no = cab.querySelector(sel);
+      eh(larg(no) === esp, 'coluna ' + sel, larg(no) + 'px', esp + 'px');
+    }
+    // A célula da linha tem de cair na MESMA coluna do cabeçalho — medir só o
+    // cabeçalho deixaria passar uma linha desalinhada dele.
+    var l0 = secMov.querySelector('.mp-posto .mp-p-lucro');
+    eh(larg(l0) === 70, 'a célula LUCRO da linha também tem 70px', larg(l0) + 'px', '70px');
+    // A REDE ganhou a sublinha de margem e passou a ter DUAS linhas, como as
+    // de posto. É a única altura que mudou nesta tela, e por isso está aqui.
+    var rede2 = secMov.querySelector('.mp-rede');
+    var lin2 = secMov.querySelector('.mp-posto .mp-p-linha');
+    eh(Math.abs(alt(rede2) - alt(lin2)) <= 2, 'a linha REDE tem a mesma altura das de posto',
+       alt(rede2) + 'px vs ' + alt(lin2) + 'px', 'diferença ≤ 2px');
   }
-  // A célula da linha tem de cair na MESMA coluna do cabeçalho — medir só o
-  // cabeçalho deixaria passar uma linha desalinhada dele.
-  var l0 = secMov.querySelector('.mp-posto .mp-p-lucro');
-  eh(larg(l0) === 70, 'a célula LUCRO da linha também tem 70px', larg(l0) + 'px', '70px');
 
   // ── 2. DRE ──────────────────────────────────────────────────────
   h3('9. Tela do DRE, dia 13/09');

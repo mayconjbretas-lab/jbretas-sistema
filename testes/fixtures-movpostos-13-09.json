@@ -42,7 +42,8 @@
    "margem_pct": 16.02,
    "quantidade_comb": 338972.672,
    "dias_com_dado": 1,
-   "dias_periodo": 1
+   "dias_periodo": 1,
+   "ultimo_dia": "2026-09-13"
   },
   "por_combustivel": [
    {
@@ -132,7 +133,8 @@
     "margem_pct": 16.45,
     "quantidade_comb": 21236.559,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -194,7 +196,8 @@
     "margem_pct": 9.32,
     "quantidade_comb": 19341.353,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -256,7 +259,8 @@
     "margem_pct": 17.6,
     "quantidade_comb": 19205.008,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -318,7 +322,8 @@
     "margem_pct": 16.84,
     "quantidade_comb": 15267.31,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -380,7 +385,8 @@
     "margem_pct": 16.6,
     "quantidade_comb": 14293.004,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -442,7 +448,8 @@
     "margem_pct": 17.18,
     "quantidade_comb": 13733.235,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -504,7 +511,8 @@
     "margem_pct": 12.36,
     "quantidade_comb": 13705.263,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -566,7 +574,8 @@
     "margem_pct": 16.8,
     "quantidade_comb": 13515.914,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -628,7 +637,8 @@
     "margem_pct": 16.4,
     "quantidade_comb": 13215.663,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -690,7 +700,8 @@
     "margem_pct": 17.33,
     "quantidade_comb": 12740.604,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -752,7 +763,8 @@
     "margem_pct": 16,
     "quantidade_comb": 12187.693,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -814,7 +826,8 @@
     "margem_pct": 18.26,
     "quantidade_comb": 11570.421,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -876,7 +889,8 @@
     "margem_pct": 13.09,
     "quantidade_comb": 10173.336,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -938,7 +952,8 @@
     "margem_pct": 16.44,
     "quantidade_comb": 10138.483,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1000,7 +1015,8 @@
     "margem_pct": 16.07,
     "quantidade_comb": 10072.714,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1062,7 +1078,8 @@
     "margem_pct": 17.12,
     "quantidade_comb": 9998.568,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1124,7 +1141,8 @@
     "margem_pct": 15.78,
     "quantidade_comb": 9249.402,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1186,7 +1204,8 @@
     "margem_pct": 18.16,
     "quantidade_comb": 9204.916,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1248,7 +1267,8 @@
     "margem_pct": 16.99,
     "quantidade_comb": 8562.768,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1310,7 +1330,8 @@
     "margem_pct": 19.38,
     "quantidade_comb": 8556.854,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1372,7 +1393,8 @@
     "margem_pct": 17.15,
     "quantidade_comb": 8278.033,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1434,7 +1456,8 @@
     "margem_pct": 16.44,
     "quantidade_comb": 7512.922,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1496,7 +1519,8 @@
     "margem_pct": 15.89,
     "quantidade_comb": 7384.38,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1558,7 +1582,8 @@
     "margem_pct": 14.74,
     "quantidade_comb": 7362.703,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1620,7 +1645,8 @@
     "margem_pct": 16.63,
     "quantidade_comb": 6727.995,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1682,7 +1708,8 @@
     "margem_pct": 16.9,
     "quantidade_comb": 5748.325,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1744,7 +1771,8 @@
     "margem_pct": 16.37,
     "quantidade_comb": 5741.38,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1806,7 +1834,8 @@
     "margem_pct": 16.47,
     "quantidade_comb": 5530.696,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1868,7 +1897,8 @@
     "margem_pct": 18.68,
     "quantidade_comb": 5436.629,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1930,7 +1960,8 @@
     "margem_pct": 16.75,
     "quantidade_comb": 4866.195,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -1992,7 +2023,8 @@
     "margem_pct": 14.4,
     "quantidade_comb": 4285.854,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -2054,7 +2086,8 @@
     "margem_pct": 15.89,
     "quantidade_comb": 4196.487,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -2116,7 +2149,8 @@
     "margem_pct": 16.26,
     "quantidade_comb": 3813.667,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -2178,7 +2212,8 @@
     "margem_pct": 17.23,
     "quantidade_comb": 3138.636,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
@@ -2240,7 +2275,8 @@
     "margem_pct": 15.01,
     "quantidade_comb": 2979.702,
     "dias_com_dado": 1,
-    "dias_periodo": 1
+    "dias_periodo": 1,
+    "ultimo_dia": "2026-09-13"
    },
    "por_dia": [
     {
