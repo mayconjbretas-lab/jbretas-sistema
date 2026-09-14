@@ -40,7 +40,11 @@
        diferente do que está no ar. O #s-relat é INJETADO do index.html real
        (ver montarPalco): markup copiado à mão sairia do compasso na primeira
        vez que alguém mexesse lá. -->
-  <nav class="bnav"><button class="nbtn" id="nbtn-relat" type="button">Relatórios</button></nav>
+  <!-- A .bnav REAL é injetada aqui do index.html (ver montarPalco). Precisa
+       ser a de verdade: o botaoDaAba acha o botão pelo texto do onclick, e um
+       botão inventado pelo harness não teria onclick nenhum — o teste
+       passaria sem provar que os nomes de aba casam com os botões que existem. -->
+  <div id="nav-palco"></div>
   <!-- DOIS nomes no mesmo elemento porque os dois setTab o procuram
        diferente: o do desktop varre `.pa-main .scr`, o do celular varre
        `.scr` e ainda faz getElementById('main').classList.toggle(...) sem
@@ -144,6 +148,9 @@ async function montarPalco() {
   var sec = doc.getElementById('s-relat');
   if (!sec) throw new Error('nao achei #s-relat no index.html');
   document.getElementById('main').appendChild(document.importNode(sec, true));
+  var nav = doc.querySelector('.bnav');
+  if (!nav) throw new Error('nao achei a .bnav no index.html');
+  document.getElementById('nav-palco').appendChild(document.importNode(nav, true));
   return sec;
 }
 
@@ -196,7 +203,7 @@ async function rodar() {
 
   h3('2. Entrar na aba abre a Movimentação do dia');
   CHAMOU = {};
-  setTab(document.getElementById('nbtn-relat'), 'relat');
+  setTab(botaoDaAba('relat'), 'relat');
   await esperar(60);
   eh(JSON.stringify(qualVisivel()) === JSON.stringify(['postos']),
      'só a Movimentação visível', qualVisivel().join(',') || '(nenhuma)', 'postos');
@@ -265,10 +272,10 @@ async function rodar() {
   h3('7. A memória sobrevive à troca de aba');
   relAbrir('lista');
   await esperar(300);
-  setTab(document.getElementById('nbtn-relat'), 'mapa');    // sai para uma aba sem render
+  setTab(botaoDaAba('relat'), 'mapa');    // sai para uma aba sem render
   await esperar(40);
   CHAMOU = {};
-  setTab(document.getElementById('nbtn-relat'), 'relat');    // volta
+  setTab(botaoDaAba('relat'), 'relat');    // volta
   await esperar(300);
   eh(JSON.stringify(qualVisivel()) === JSON.stringify(['lista']),
      'voltou no Consolidado, a última aberta', qualVisivel().join(',') || '(nenhuma)', 'lista');
@@ -282,6 +289,106 @@ async function rodar() {
   eh(soltas.length <= 1, 'no máximo uma', soltas.join(', ') || 'nenhuma', '<= 1');
   eh(!visivel(document.getElementById('s-movmes')),
      'o mês × mês continua sem entrada visível');
+
+  // ── 9. A ABA NA URL ─────────────────────────────────────────────
+  h3('9. Aba e sub-vista no hash da URL');
+  var hashInicial = location.hash;
+
+  // Trocar de aba escreve o hash. A aba 'comp' existe nos dois módulos.
+  setTab(botaoDaAba('comp'), 'comp');
+  await esperar(50);
+  eh(location.hash === '#comp', 'trocar de aba escreve o hash', location.hash || '(vazio)', '#comp');
+
+  // Em Relatórios o hash leva a sub-vista, porque é ela que diz o que está
+  // na tela — '#relat' sozinho não distingue quatro telas diferentes.
+  relAbrir('postos');
+  await esperar(50);
+  eh(location.hash === '#relat/postos', 'relAbrir escreve aba + vista', location.hash, '#relat/postos');
+  relAbrir('lista');
+  await esperar(300);
+  eh(location.hash === '#relat/lista', 'e acompanha a troca de vista', location.hash, '#relat/lista');
+  // Entrar na aba por fora também carrega a vista no hash.
+  setTab(botaoDaAba('relat'), 'relat');
+  await esperar(300);
+  eh(location.hash === '#relat/lista', 'setTab(relat) leva a vista corrente', location.hash, '#relat/lista');
+
+  h3('10. Abrir com hash — o que o F5 faz');
+  // aplicarHash() é EXATAMENTE o que a inicialização chama; rodá-la com um
+  // hash posto à mão é o mesmo caminho de um F5 ou de um link colado.
+  history.replaceState(null, '', '#relat/postos');
+  eh(aplicarHash() === true, 'aplicarHash aceita #relat/postos');
+  await esperar(60);
+  eh(JSON.stringify(qualVisivel()) === JSON.stringify(['postos']),
+     '#relat/postos cai na Movimentação', qualVisivel().join(',') || '(nenhuma)', 'postos');
+  eh(JSON.stringify(qualMarcado()) === JSON.stringify(['postos']),
+     'com o botão dela marcado', qualMarcado().join(',') || '(nenhum)', 'postos');
+
+  history.replaceState(null, '', '#relat/lista');
+  aplicarHash();
+  await esperar(300);
+  eh(JSON.stringify(qualVisivel()) === JSON.stringify(['lista']),
+     '#relat/lista cai no Consolidado', qualVisivel().join(',') || '(nenhuma)', 'lista');
+
+  history.replaceState(null, '', '#coleta');
+  eh(aplicarHash() === true, 'aba sem sub-vista também vale (#coleta)');
+  await esperar(50);
+  eh(location.hash === '#coleta', 'e o hash fica como veio', location.hash, '#coleta');
+
+  h3('11. Hash inválido não estraga nada');
+  var CASOS = ['#naoexiste', '#relat/inventada', '#', '#COMP', '#relat/../x', "#a'b"];
+  var recusou = [];
+  for (var c = 0; c < CASOS.length; c++) {
+    history.replaceState(null, '', CASOS[c] || ' ');
+    var r;
+    try { r = aplicarHash(); } catch (e) { r = 'EXCEÇÃO: ' + e.message; }
+    recusou.push(CASOS[c] + ' -> ' + r);
+  }
+  nota(recusou.join('\n     '));
+  // '#relat/inventada' é o único que ABRE: a aba existe, e a sub-vista
+  // inválida é ignorada em favor da última válida. Os outros cinco devolvem
+  // false, e nenhum estoura — nem o que tem apóstrofo, que entraria num
+  // seletor CSS se o guard do nome não existisse.
+  eh(recusou.filter(function (x) { return x.indexOf('EXCEÇÃO') >= 0; }).length === 0,
+     'nenhum hash inválido levanta exceção',
+     recusou.filter(function (x) { return x.indexOf('EXCEÇÃO') >= 0; }).join(' | ') || 'nenhuma', 'nenhuma');
+  eh(recusou[0].indexOf('false') > 0, 'aba inexistente é recusada', recusou[0]);
+  eh(recusou[1].indexOf('true') > 0, '#relat/inventada abre a aba na última vista válida', recusou[1]);
+  eh(recusou[3].indexOf('false') > 0, 'maiúscula não casa (o guard é /^[a-z]+$/)', recusou[3]);
+  eh(recusou[5].indexOf('false') > 0, 'apóstrofo no hash é recusado antes do querySelector', recusou[5]);
+
+  h3('12. hashchange troca de aba');
+  history.replaceState(null, '', '#relat/postos');
+  aplicarHash();
+  await esperar(60);
+  // O evento é o que o navegador dispara ao mexer no hash por fora. O
+  // replaceState do nosso código NÃO o dispara — é por isso que não há laço.
+  history.replaceState(null, '', '#coleta');
+  window.dispatchEvent(new HashChangeEvent('hashchange'));
+  await esperar(60);
+  eh(!visivel(document.getElementById('s-movpostos')),
+     'o evento tirou a Movimentação da tela', visivel(document.getElementById('s-movpostos')) ? 'ainda visível' : 'saiu', 'saiu');
+  eh(document.querySelector('.nbtn[onclick*="\'coleta\'"]').classList.contains('active'),
+     'e acendeu o botão de Coleta');
+
+  h3('13. A inicialização de verdade chama o aplicarHash');
+  // O init não roda neste palco (o DOMContentLoaded já passou quando o
+  // app.js é injetado), então a ligação é conferida NA FONTE — sem isto o
+  // teste provaria a função e não o F5.
+  var fonte = await (await fetch('/modulos/' + MOD + '/app.js')).text();
+  var init = MOD === 'painel-adm'
+    ? fonte.slice(fonte.indexOf('function abrirPainelDesktop'))
+    : fonte.slice(fonte.indexOf('DOMContentLoaded'));
+  init = init.slice(0, init.indexOf('iniciarAutoRefresh'));
+  eh(init.indexOf('aplicarHash()') >= 0, 'o init do módulo chama aplicarHash()',
+     init.indexOf('aplicarHash()') >= 0 ? 'chama' : 'NÃO chama');
+  eh(init.indexOf("gravarHash('comp')") >= 0,
+     'e grava o hash do padrão quando não veio nada',
+     init.indexOf("gravarHash('comp')") >= 0 ? 'grava' : 'NÃO grava');
+  // A Comparação não deve ser puxada quando o hash aponta para outra aba.
+  eh(init.indexOf('if (!veioDoHash) {') >= 0,
+     'e não puxa /coletas quando o hash aponta para outra aba');
+
+  history.replaceState(null, '', hashInicial || location.pathname + location.search);
 
   h3(falhas === 0 ? '<span class="ok">TUDO PASSOU</span>'
                   : '<span class="bad">' + falhas + ' FALHA(S)</span>');

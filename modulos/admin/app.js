@@ -29,10 +29,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   aplicarTema(temaSalvo);
 
   await carregarColetas();
-  // Compara é a aba default agora → carrega o conteúdo dela no load. O Mapa saiu
-  // do bnav: o Leaflet é criado sob demanda em abrirMapaMobile (com a section
-  // visível), não mais aqui — evita criar o mapa oculto com tamanho zero.
-  carregarDadosComparar();
+  // A URL MANDA, quando ela diz algo: F5 e link colado voltam para onde a
+  // pessoa estava. Sem hash, ou com hash que não casa com aba nenhuma,
+  // segue o padrão do HTML (Compara, já marcada lá).
+  const veioDoHash = aplicarHash();
+  // Compara é a aba default → carrega o conteúdo dela no load. Com o hash
+  // apontando para OUTRA aba, não carrega: o setTab dela faz a carga quando
+  // alguém entrar (guarda `!comparaCarregado`), e puxar /coletas para uma
+  // tela que não está à vista é a leitura mais cara daqui, sem ninguém
+  // pedir. O Mapa saiu do bnav: o Leaflet é criado sob demanda em
+  // abrirMapaMobile (com a section visível), não mais aqui — evita criar o
+  // mapa oculto com tamanho zero.
+  if (!veioDoHash) { gravarHash('comp'); carregarDadosComparar(); }
   iniciarAutoRefresh();
 });
 
@@ -90,6 +98,8 @@ function setTab(btn, tab) {
   if (tab === 'relat') renderRelatArea();
   // Fornecedores — dashboard (fornecedores.js expõe renderFornecedores), agora aba do rodapé.
   if (tab === 'forn') renderFornecedores(document.getElementById('s-forn'));
+  // Por último: a URL guarda onde a pessoa está. Ver o bloco do hash.
+  gravarHash(tab);
 }
 
 function abrirMais() { document.getElementById('modal-mais').classList.add('open'); }
@@ -175,7 +185,56 @@ function relAbrir(vista) {
   if (!REL_VISTAS[vista]) return;
   _relatVista = vista;
   renderRelatArea();
+  gravarHash('relat');
 }
+
+// ── A ABA MORA NA URL ───────────────────────────────────────────
+// A aba e a sub-vista viram '#relat/postos' na barra de endereço. Sem isto,
+// F5 devolvia a Comparação: quem estava conferindo a Movimentação do dia
+// perdia o lugar a cada recarga, e link nenhum apontava para uma tela.
+//
+// replaceState, e NÃO pushState: trocar de aba não é navegar. Com pushState,
+// sair da página depois de passear por cinco abas exigiria cinco toques no
+// botão de voltar, e sair da página é o que aquele botão quer dizer aqui.
+//
+// CONSEQUÊNCIA DECLARADA: o voltar/avançar NÃO percorre as abas visitadas —
+// não existe entrada de histórico para percorrer, e é essa a troca que o
+// replaceState faz. O listener de hashchange abaixo cobre o que sobra: hash
+// editado à mão, link colado na mesma página, e qualquer entrada de
+// histórico que venha de fora deste código.
+//
+// O BOTÃO É ACHADO PELO onclick porque é o único vínculo entre nome de aba
+// e botão que existe hoje — o mesmo seletor que o abrirDreMobile já usava.
+// Um data-tab seria mais limpo e pediria mexer nos dois index.html.
+function botaoDaAba(tab) {
+  // A regra do nome NÃO é decoração: o valor vem do hash, que é do usuário,
+  // e entra num seletor CSS. Sem ela, um hash com apóstrofo quebraria o
+  // querySelector — ou casaria um botão que ninguém pediu.
+  if (!tab || !/^[a-z]+$/.test(tab)) return null;
+  return document.querySelector('.nbtn[onclick*="\'' + tab + '\'"]');
+}
+function hashDaAba(tab) {
+  return '#' + tab + (tab === 'relat' ? '/' + _relatVista : '');
+}
+function gravarHash(tab) {
+  const novo = hashDaAba(tab);
+  // Reescrever o mesmo hash não muda nada e ainda assim mexe na URL.
+  if (location.hash !== novo) history.replaceState(null, '', novo);
+}
+// Abre o que o hash pedir. Devolve false quando ele não corresponde a aba
+// nenhuma: hash inválido não é erro, é ausência de instrução — e aí o padrão
+// do HTML fica como está, sem mensagem e sem tela em branco.
+function aplicarHash() {
+  const partes = String(location.hash || '').replace(/^#/, '').split('/');
+  const btn = botaoDaAba(partes[0]);
+  if (!btn) return false;
+  // A sub-vista só é aceita se existir no mapa. "#relat/inventada" abre a
+  // aba na última vista válida, em vez de abrir uma aba vazia.
+  if (partes[0] === 'relat' && partes[1] && REL_VISTAS[partes[1]]) _relatVista = partes[1];
+  setTab(btn, partes[0]);
+  return true;
+}
+window.addEventListener('hashchange', aplicarHash);
 
 // DRE pelo Mais+ — o atalho CONTINUA existindo, mas agora leva ao MESMO
 // lugar: a aba Relatórios com a vista do DRE aberta. Antes ele ativava uma
