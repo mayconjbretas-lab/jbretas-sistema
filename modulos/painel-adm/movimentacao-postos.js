@@ -115,14 +115,6 @@
       return s + ((p.por_canal[c] && p.por_canal[c].litros) || 0);
     }, 0);
   }
-  function valorRede() {
-    if (!_dados) return 0;
-    if (modoPista()) return _dados.rede.litros;
-    return canaisLigados().reduce(function (s, c) {
-      var x = _dados.rede.por_canal[c];
-      return s + ((x && x.litros) || 0);
-    }, 0);
-  }
 
   // ── Carga ────────────────────────────────────────────────────────
   async function carregar() {
@@ -310,13 +302,38 @@
     '</div>';
   }
 
+  // ════════ O % DA LINHA É SEMPRE SOBRE O PRÓPRIO POSTO ════════
+  // Um percentual por APLICATIVO, dividido pelo total daquele posto — nunca
+  // pela rede. A pergunta da linha é "quanto da venda DESTE posto passou pelo
+  // convênio?", e essa resposta não depende de quanto os outros 36 venderam.
+  //
+  // A versão anterior dividia pela rede, e as duas leituras se confundiam: um
+  // posto com 22% de Soutag aparecia como "5,2%" porque 5,2% era a fatia dele
+  // no Soutag DA REDE. Dois números úteis, mas só um cabe na linha, e o da
+  // linha tem de ser o do posto. A participação na rede continua nos cards.
+  //
+  // Sem filtro os DOIS aplicativos aparecem (é a leitura de varredura: dá para
+  // achar o posto com 99 zerado correndo o olho); com filtro, só o(s)
+  // marcado(s), para a coluna não repetir o que o chip já disse.
+  function pctApp(p, c) {
+    var x = p.por_canal[c] || { litros: 0 };
+    return '<span class="mp-p-app mp-app-' + (c === '99' ? '99' : 'so') + '">' +
+      esc(c === '99' ? '99' : 'Soutag') + ' ' + pctTxt(x.litros, p.litros) + '</span>';
+  }
+
   function htmlPosto(p, maior) {
     var v = valorDe(p);
-    var total = valorRede();
     var aberto = _postoAberto === p.posto_id;
-    var numero = modoPista()
-      ? '<span class="mp-p-litros">' + litros(p.litros) + '</span>'
-      : '<span class="mp-p-litros">' + litros(v) + '<span class="mp-p-de"> / ' + litros(p.litros) + '</span></span>';
+    var mostrar = modoPista() ? ['SOUTAG', '99'] : canaisLigados().filter(function (c) { return c !== 'NORMAL'; });
+    var apps = mostrar.map(function (c) { return pctApp(p, c); }).join('<span class="mp-p-sep"> · </span>');
+    // A coluna de litros mostra SEMPRE o total do posto. Com convênio ligado,
+    // os litros do convênio vão embaixo, em letra miúda: o total é a régua
+    // (tamanho do posto) e o convênio é o recorte — inverter a hierarquia fazia
+    // o posto grande com pouco convênio parecer pequeno.
+    var numero = '<span class="mp-p-litros">' + litros(p.litros) +
+      (modoPista() ? '' : '<span class="mp-p-conv">' + litros(v) + ' ' +
+        esc(mostrar.map(function (c) { return c === '99' ? '99' : 'Soutag'; }).join('+')) + '</span>') +
+      '</span>';
     var det = '';
     if (aberto) {
       det = '<div class="mp-p-det">' + CANAIS.map(function (c) {
@@ -332,7 +349,7 @@
         '<span class="mp-p-nome">' + esc(p.posto_nome || '—') + '</span>' +
         htmlBarra(p, maior) +
         numero +
-        '<span class="mp-p-pct">' + pctTxt(v, total) + '</span>' +
+        '<span class="mp-p-pct">' + apps + '</span>' +
       '</button>' + det +
     '</div>';
   }

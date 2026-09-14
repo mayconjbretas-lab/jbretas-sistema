@@ -729,7 +729,7 @@ html:not([data-theme="light"]) body::before{
 
 .mp-lista { margin-top: .9rem; display: flex; flex-direction: column; gap: 2px; }
 .mp-posto { border-bottom: 1px solid var(--bd); }
-.mp-p-linha { display: grid; grid-template-columns: 150px 1fr 190px 64px; align-items: center; gap: .7rem;
+.mp-p-linha { display: grid; grid-template-columns: 150px 1fr 130px 196px; align-items: center; gap: .7rem;
   width: 100%; background: transparent; border: 0; padding: 7px 2px; cursor: pointer; font: inherit;
   color: var(--tx); text-align: left; }
 .mp-p-linha:hover { background: color-mix(in srgb, var(--ac) 7%, transparent); }
@@ -745,7 +745,17 @@ html:not([data-theme="light"]) body::before{
 .mp-seg.fora { opacity: .2; }
 .mp-p-litros { font-family: var(--mono); font-size: .74rem; font-weight: 700; text-align: right; }
 .mp-p-de { color: var(--tx3); font-weight: 400; }
-.mp-p-pct { font-family: var(--mono); font-size: .74rem; font-weight: 700; color: var(--ac); text-align: right; }
+/* Litros do convênio embaixo do total, em letra miúda. */
+.mp-p-conv { display: block; font-size: .62rem; font-weight: 400; color: var(--tx3); }
+/* Um % por aplicativo, cada um na cor do canal. A coluna tem largura fixa
+   de 196px para "Soutag 18,3% · 99 12,5%" caber numa linha no desktop —
+   medido com a fonte mono em .72rem. No mobile ela quebra (veja o @media). */
+.mp-p-pct { font-family: var(--mono); font-size: .72rem; font-weight: 700; text-align: right;
+  white-space: nowrap; }
+.mp-p-app { white-space: nowrap; }
+.mp-app-so { color: var(--mp-so); }
+.mp-app-99 { color: var(--mp-99); }
+.mp-p-sep { color: var(--tx3); font-weight: 400; }
 
 .mp-estado, .mp-vazio { font-family: var(--mono); font-size: .74rem; color: var(--tx3); padding: 1.2rem 0; }
 .mp-erro { font-family: var(--mono); font-size: .74rem; color: var(--dg); padding: 1.2rem 0; }
@@ -759,7 +769,8 @@ html:not([data-theme="light"]) body::before{
   .mp-atalhos { margin-left: 0; }
   .mp-p-linha { grid-template-columns: 1fr auto; grid-template-areas: "nome pct" "barra litros"; row-gap: 4px; }
   .mp-p-nome { grid-area: nome; }
-  .mp-p-pct { grid-area: pct; }
+  /* No mobile os dois percentuais podem quebrar em duas linhas. */
+  .mp-p-pct { grid-area: pct; white-space: normal; text-align: right; }
   .mp-barra { grid-area: barra; }
   .mp-p-litros { grid-area: litros; }
 }
