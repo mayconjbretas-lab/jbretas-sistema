@@ -710,21 +710,37 @@ html:not([data-theme="light"]) body::before{
    decide quantos cabem: os oito entram em ~1290px; abaixo disso a linha
    quebra, e no celular sobram dois por linha. Eles NÃO encolhem nem esticam
    — a sobra de tela fica vazia à direita. */
+/* O BLOCO INTEIRO (filtros + cards + lista) CENTRALIZA no desktop: com a
+   lista em ~781px e os cards em ~1256px, tudo colado à esquerda deixava um
+   vazio enorme à direita em monitor largo. fit-content + margin auto centra
+   sem esticar nada. No mobile o @media devolve a largura cheia. */
+@media (min-width: 900px) { #mp-corpo { width: fit-content; margin: 0 auto; } }
+
+/* CARDS DO MESMO TAMANHO, 150x96 fixos. Antes a altura seguia o conteúdo e
+   o card de Mix (subtítulo de três linhas) ficava mais alto que os vizinhos,
+   desalinhando a fila. Grid de três faixas com o valor em 1fr: o rótulo fica
+   em cima, o subtítulo embaixo, e o valor no meio — mesma linha de base em
+   todos, porque rótulo e subtítulo são sempre de UMA linha (nowrap). */
 .mp-cards { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
-.mp-card { flex: 0 0 auto; width: 146px; }
+.mp-card { flex: 0 0 auto; box-sizing: border-box; width: 150px; height: 96px;
+  display: grid; grid-template-rows: auto 1fr auto; align-content: stretch; }
 .mp-card { background: var(--sf2); border: 1px solid var(--bd); border-radius: var(--rl, 12px);
-  padding: .7rem .8rem; text-align: left; cursor: pointer; font: inherit; color: var(--tx); }
+  padding: 8px 9px; text-align: left; cursor: pointer; font: inherit; color: var(--tx); }
 .mp-card.aberto { border-color: var(--ac); }
 .mp-card-so.on { border-color: var(--mp-so); }
 .mp-card-99.on { border-color: var(--mp-99); }
 .mp-rot { font-family: var(--mono); font-size: .58rem; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: var(--tx3); }
-.mp-num { font-family: var(--mono); font-size: 1.25rem; font-weight: 700; color: var(--tx); margin-top: 3px;
-  display: inline-block; }
+  text-transform: uppercase; color: var(--tx3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-num { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--tx);
+  align-self: end; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* R$ menor e colado no número, herdando a cor dele. */
+.mp-rs { font-size: 11px; font-weight: 600; margin-right: 3px; color: inherit; }
 .mp-ao-lado { display: inline-block; font-family: var(--mono); font-size: .72rem; color: var(--tx2); margin-left: .45rem; }
 .mp-card-so .mp-num { color: var(--mp-so); }
 .mp-card-99 .mp-num { color: var(--mp-99); }
-.mp-sub { font-family: var(--mono); font-size: .64rem; color: var(--tx3); margin-top: 2px; }
+.mp-sub { font-family: var(--mono); font-size: .64rem; color: var(--tx3); align-self: end;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .mp-detalhe, .mp-p-det { background: var(--sf2); border: 1px solid var(--bd); border-radius: 10px;
   padding: .6rem .8rem; margin-top: .5rem; }
@@ -791,8 +807,11 @@ html:not([data-theme="light"]) body::before{
 .mp-seta { position: absolute; top: 6px; right: 8px; font-size: .8rem; color: var(--ac); line-height: 1; }
 .mp-card.aberto { outline: 1px solid var(--ac); outline-offset: -1px; }
 /* Ticket: três medidas do mesmo denominador, empilhadas e alinhadas. */
-.mp-tk { display: flex; justify-content: space-between; gap: .4rem; font-family: var(--mono);
-  font-size: .68rem; color: var(--tx3); margin-top: 2px; }
+/* Ticket: três linhas no lugar do valor único, ocupando a faixa do meio. */
+.mp-card-ticket { grid-template-rows: auto 1fr; }
+.mp-card-ticket .mp-tks { display: flex; flex-direction: column; justify-content: flex-end; }
+.mp-tk { display: flex; justify-content: space-between; gap: .3rem; font-family: var(--mono);
+  font-size: 11px; color: var(--tx3); white-space: nowrap; overflow: hidden; }
 .mp-tk b { color: var(--tx); font-weight: 700; }
 .mp-card-prod .mp-num { color: var(--ok); }
 .mp-card-mix .mp-num { color: var(--mp-99); }

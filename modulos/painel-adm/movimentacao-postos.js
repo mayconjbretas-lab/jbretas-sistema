@@ -76,6 +76,14 @@
   // empurrava o valor para a segunda linha e a célula ficava mais alta que as
   // vizinhas. O cabeçalho da coluna já diz LUCRO, e o card e o detalhe
   // continuam com o prefixo, onde há espaço.
+  // R$ MENOR E COLADO, só nos cards de dinheiro. Com o prefixo no mesmo
+  // tamanho do número, "R$ 290.499,01" a 18px não cabia nos 150px do card e
+  // quebrava em duas linhas — e card com duas alturas na mesma fila é o que
+  // faz a fila inteira parecer desalinhada.
+  function reaisCard(v) {
+    if (!Number.isFinite(Number(v))) return '—';
+    return '<span class="mp-rs">R$</span>' + nf(Number(v), 2);
+  }
   function reaisSemPrefixo(v) {
     return Number.isFinite(Number(v)) ? nf(Number(v), 2) : '—';
   }
@@ -278,9 +286,9 @@
     // o chip fez ("quanto do volume passou por aqui?"). Desligado, o card vira
     // informativo e mostra litros, para não competir com o total.
     var grande = ligado
-      ? '<div class="mp-num">' + pctTxt(x.litros, r.litros) + '</div>' +
+      ? '<div class="mp-num mp-card-valor">' + pctTxt(x.litros, r.litros) + '</div>' +
         '<div class="mp-ao-lado">' + litros(x.litros) + '</div>'
-      : '<div class="mp-num">' + litros(x.litros) + '</div>';
+      : '<div class="mp-num mp-card-valor">' + litros(x.litros) + '</div>';
     return '<button type="button" class="mp-card mp-card-' + (c === '99' ? '99' : 'so') +
       (ligado ? ' on' : '') + (_cardAberto === c ? ' aberto' : '') + '"' +
       ' aria-expanded="' + (_cardAberto === c ? 'true' : 'false') + '"' +
@@ -302,7 +310,7 @@
       ' aria-expanded="' + (_cardAberto === 'total' ? 'true' : 'false') + '"' +
       ' onclick="__mpCard(\'total\')">' + setaOrd('total') +
       '<div class="mp-rot">REDE · TOTAL PISTA</div>' +
-      '<div class="mp-num">' + litros(r.litros) + '</div>' +
+      '<div class="mp-num mp-card-valor">' + litros(r.litros) + '</div>' +
       '<div class="mp-sub">' + nf(ab, 0) + ' abast.</div>' +
     '</button>';
 
@@ -311,23 +319,25 @@
       ' aria-expanded="' + (_cardAberto === 'abast' ? 'true' : 'false') + '"' +
       ' onclick="__mpCard(\'abast\')">' +
       '<div class="mp-rot">ABASTECIMENTOS</div>' +
-      '<div class="mp-num">' + nf(ab, 0) + '</div>' +
+      '<div class="mp-num mp-card-valor">' + nf(ab, 0) + '</div>' +
       '<div class="mp-sub">' + porAbast(r.litros, ab) + '</div>' +
     '</button>';
 
     // TICKET: três medidas do MESMO denominador (abastecimentos), empilhadas.
     // Não ordena a lista — ver o comentário do ORDENAVEIS.
     var tk = function (rot, val) {
-      return '<div class="mp-tk"><span>' + esc(rot) + '</span><b>' + val + '</b></div>';
+      return '<div class="mp-tk mp-card-valor"><span>' + esc(rot) + '</span><b>' + val + '</b></div>';
     };
     var cardTicket = '<button type="button" class="mp-card mp-card-ticket' +
       (_cardAberto === 'ticket' ? ' aberto' : '') + '"' +
       ' aria-expanded="' + (_cardAberto === 'ticket' ? 'true' : 'false') + '"' +
       ' onclick="__mpCard(\'ticket\')">' +
-      '<div class="mp-rot">TICKET MÉDIO · POR CARRO</div>' +
-      tk('vol', ab > 0 ? nf(r.litros / ab, 1) + ' L' : '—') +
-      tk('R$', ab > 0 ? nf(r.faturamento / ab, 2) : '—') +
-      tk('produto', ab > 0 ? reais(prod / ab) : '—') +
+      '<div class="mp-rot">TICKET MÉDIO · CARRO</div>' +
+      '<div class="mp-tks">' +
+        tk('vol', ab > 0 ? nf(r.litros / ab, 1) + ' L' : '—') +
+        tk('R$', ab > 0 ? nf(r.faturamento / ab, 2) : '—') +
+        tk('produto', ab > 0 ? reais(prod / ab) : '—') +
+      '</div>' +
     '</button>';
 
     var cardProduto = '<button type="button" class="mp-card mp-card-prod' +
@@ -335,7 +345,7 @@
       ' aria-expanded="' + (_cardAberto === 'produto' ? 'true' : 'false') + '"' +
       ' onclick="__mpCard(\'produto\')">' + setaOrd('produto') +
       '<div class="mp-rot">VENDA DE PRODUTO</div>' +
-      '<div class="mp-num">' + reais(prod) + '</div>' +
+      '<div class="mp-num mp-card-valor">' + reaisCard(prod) + '</div>' +
       '<div class="mp-sub">' + (ab > 0 ? reais(prod / ab) + ' por carro' : '—') + '</div>' +
     '</button>';
 
@@ -346,8 +356,8 @@
       ' aria-expanded="' + (_cardAberto === 'mix' ? 'true' : 'false') + '"' +
       ' onclick="__mpCard(\'mix\')">' + setaOrd('mix') +
       '<div class="mp-rot">MIX G. ADITIVADA</div>' +
-      '<div class="mp-num">' + pctTxt(gas.litros_aditivada, gas.litros_total) + '</div>' +
-      '<div class="mp-sub">' + litros(gas.litros_aditivada) + ' de ' + litros(gas.litros_total) + ' de gasolina</div>' +
+      '<div class="mp-num mp-card-valor">' + pctTxt(gas.litros_aditivada, gas.litros_total) + '</div>' +
+      '<div class="mp-sub">' + litros(gas.litros_aditivada) + ' aditivada</div>' +
     '</button>';
 
     // LUCRO ESTIMADO, e não "lucro bruto": é valor_liquido − litros ×
@@ -361,7 +371,7 @@
       ' aria-expanded="' + (_cardAberto === 'lucro' ? 'true' : 'false') + '"' +
       ' onclick="__mpCard(\'lucro\')">' + setaOrd('lucro') +
       '<div class="mp-rot">LUCRO ESTIMADO</div>' +
-      '<div class="mp-num">' + (lu ? reais(lu.valor) : '—') + '</div>' +
+      '<div class="mp-num mp-card-valor">' + (lu ? reaisCard(lu.valor) : '—') + '</div>' +
       '<div class="mp-sub">' + (lu && lu.margem_litro !== null
         ? reais(lu.margem_litro) + ' por litro' : '—') + '</div>' +
     '</button>';
