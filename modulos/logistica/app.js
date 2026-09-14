@@ -58,7 +58,80 @@ function switchMainTab(tabId, el) {
   }
   // FABs da Medição só aparecem na aba Medição (#tab-matriz).
   if (window.medicaoFabs) window.medicaoFabs.setVisivel(tabId === 'tab-matriz');
+  // Por último: a URL guarda onde a pessoa está. Ver o bloco do hash.
+  gravarHash();
 }
+
+// ── A ABA MORA NA URL ───────────────────────────────────────────
+// Mesma regra do painel-adm. Sem isto, F5 e link colado devolviam sempre
+// a aba Matriz: quem estava no meio de uma conferência perdia o lugar a
+// cada recarga.
+//
+// replaceState, e NÃO pushState: trocar de aba não é navegar. A troca é
+// declarada — o voltar/avançar não percorre as abas visitadas, porque não
+// há entrada de histórico para percorrer. O hashchange abaixo cobre o
+// resto: hash editado à mão e link colado na mesma página.
+//
+// O guard do nome não é decoração: o valor vem do hash, que é do usuário,
+// e entra num seletor CSS. Sem ele, um hash com apóstrofo quebraria o
+// querySelector — ou casaria um elemento que ninguém pediu. Aceita dígito
+// porque há aba que começa com um.
+//
+// AQUI O BOTÃO É ACHADO PELO data-tab, que os .nav-item já têm — não
+// pelo onclick, como nos módulos de bnav. Atributo existindo, é ele.
+//
+// O POSTO TAMBÉM ENTRA NO HASH, e só na aba que o usa: a Matriz sem posto
+// é uma tela vazia com um aviso, então "#matriz" sozinho não devolve
+// ninguém ao lugar onde estava. Vai URL-encoded porque nome de posto tem
+// espaço e acento.
+function itemDaAba(nome) {
+  if (!nome || !/^[a-z0-9-]+$/.test(nome)) return null;
+  return document.querySelector('.nav-item[data-tab="tab-' + nome + '"]');
+}
+function hashAtual() {
+  const ativo = document.querySelector('.nav-item.active');
+  const nome = ativo ? String(ativo.dataset.tab || '').replace(/^tab-/, '') : '';
+  if (!nome) return '';
+  const sel = document.getElementById('sel-posto');
+  const posto = (nome === 'matriz' && sel && sel.value) ? sel.value : '';
+  return '#' + nome + (posto ? '/posto=' + encodeURIComponent(posto) : '');
+}
+function gravarHash() {
+  const novo = hashAtual();
+  // Reescrever o mesmo hash não muda nada e ainda assim mexe na URL.
+  if (novo && location.hash !== novo) history.replaceState(null, '', novo);
+}
+// O posto pedido pela URL espera aqui: o <select> só tem opções depois do
+// GET /postos, e aplicá-lo antes seria escrever num select vazio.
+let _postoDoHash = '';
+function aplicarPostoDoHash() {
+  const sel = document.getElementById('sel-posto');
+  if (!sel || !_postoDoHash) return false;
+  // Só aceita posto que EXISTA no select: o valor vem da URL, e um nome
+  // inventado deixaria o select num estado que nenhuma opção representa.
+  const existe = [...sel.options].some(o => o.value === _postoDoHash);
+  const alvo = existe ? _postoDoHash : '';
+  _postoDoHash = '';
+  if (!alvo) return false;
+  sel.value = alvo;
+  return true;
+}
+// Abre o que o hash pedir. false quando não casa com aba nenhuma: hash
+// inválido não é erro, é ausência de instrução — e aí o padrão do HTML
+// fica como está.
+function aplicarHash() {
+  const partes = String(location.hash || '').replace(/^#/, '').split('/');
+  const el = itemDaAba(partes[0]);
+  if (!el) return false;
+  switchMainTab('tab-' + partes[0], el);
+  const m = /^posto=(.*)$/.exec(partes[1] || '');
+  _postoDoHash = m ? decodeURIComponent(m[1]) : '';
+  // Com a tela já carregada (hash trocado à mão), aplica agora; no boot
+  // quem aplica é o carregarPostos, na ordem certa.
+  if (_postoDoHash && TODOS_POSTOS.length && aplicarPostoDoHash()) onPostoChange();
+  return true;
+}
+window.addEventListener('hashchange', aplicarHash);
 
 // ── Filtro encadeado bandeira → posto (GET /postos) ─────────────
 async function carregarPostos() {
@@ -69,6 +142,11 @@ async function carregarPostos() {
     if (!TODOS_POSTOS.length) { sel.innerHTML = '<option value="">Nenhum posto</option>'; return; }
     popularSelBandeira();   // opções de bandeira do BANCO (case exata) — não hardcoded
     popularSelPosto();   // "Todos os postos" + os da bandeira atual; reseta pra "Todos"
+    // O posto da URL entra AQUI, antes do onPostoChange: assim a matriz é
+    // carregada UMA vez, já com o posto certo. Aplicá-lo depois faria o
+    // onPostoChange rodar duas vezes — a primeira só para desenhar
+    // "selecione um posto" e jogar fora, com a faixa indo ao banco à toa.
+    aplicarPostoDoHash();
     onPostoChange();     // estado inicial: Todos → sem matriz + mensagem + faixa da REDE
   } catch (err) {
     sel.innerHTML = '<option value="">Erro ao carregar</option>';
@@ -126,6 +204,7 @@ function onPostoChange() {
     window.matrizMedicao.carregar(POSTO_ATUAL);
   }
   atualizarFaixa();
+  gravarHash();
 }
 
 // ── Faixa de total de PEDIDO FINAL do dia (GET /medicao/pedido-dia) ──
@@ -481,6 +560,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Faixa de alterações de medição no topo da aba Medição (#tab-matriz).
   if (window.medicaoAlteracoes) window.medicaoAlteracoes.montar(document.getElementById('tab-matriz'));
 
+  // A URL MANDA, quando ela diz algo. Antes do carregarPostos porque ela
+  // pode trazer um posto, e o carregarPostos é quem sabe a hora de
+  // aplicá-lo sem dobrar a chamada.
+  if (!aplicarHash()) gravarHash();
   carregarPostos();
   if (escolha !== 'desktop') {
     // Sem preferência salva: mostra a tela de escolha por cima do app.

@@ -22,6 +22,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   await carregarDados();
+  // DEPOIS do carregarDados, não antes: toda aba que não é o Resumo chama
+  // renderTabela, e renderTabela sem `registros` desenha uma tabela vazia
+  // que some no primeiro clique — pior que abrir no Resumo.
+  if (!aplicarHash()) gravarHash(TAB_PADRAO);
 });
 
 // Navegação entre módulos agora é pelo rodapé (shared/js/gerente-nav.js) —
@@ -46,7 +50,44 @@ function setTab(tab) {
     document.getElementById('tab-' + t).style.display = (t === tab) ? 'block' : 'none';
   });
   if (tab !== 'resumo') renderTabela(tab);
+  // Por último: a URL guarda onde a pessoa está. Ver o bloco do hash.
+  gravarHash(tab);
 }
+
+// ── A ABA MORA NA URL ───────────────────────────────────────────
+// Mesma regra do painel-adm. Sem isto, F5 e link colado devolviam sempre
+// a aba Resumo: quem estava no meio de uma conferência perdia o lugar a
+// cada recarga.
+//
+// replaceState, e NÃO pushState: trocar de aba não é navegar. A troca é
+// declarada — o voltar/avançar não percorre as abas visitadas, porque não
+// há entrada de histórico para percorrer. O hashchange abaixo cobre o
+// resto: hash editado à mão e link colado na mesma página.
+//
+// O guard do nome não é decoração: o valor vem do hash, que é do usuário,
+// e entra num seletor CSS. Sem ele, um hash com apóstrofo quebraria o
+// querySelector — ou casaria um elemento que ninguém pediu. Aceita dígito
+// porque há aba que começa com um.
+//
+// Aqui o setTab recebe UM argumento e os botões têm data-tab — então o
+// nome é achado por atributo, e a aba '2dias' é o motivo do dígito no
+// guard.
+const TAB_PADRAO = 'resumo';
+function botaoDaAba(tab) {
+  if (!tab || !/^[a-z0-9-]+$/.test(tab)) return null;
+  return document.querySelector('.copasa-tab[data-tab="' + tab + '"]');
+}
+function gravarHash(tab) {
+  const novo = '#' + tab;
+  if (location.hash !== novo) history.replaceState(null, '', novo);
+}
+function aplicarHash() {
+  const tab = String(location.hash || '').replace(/^#/, '');
+  if (!botaoDaAba(tab)) return false;
+  setTab(tab);
+  return true;
+}
+window.addEventListener('hashchange', aplicarHash);
 
 async function carregarDados() {
   try {

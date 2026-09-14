@@ -45,7 +45,41 @@ function setTab(btn, tab) {
   if (tab === 'escala' && window.renderEscala) {
     window.renderEscala(document.getElementById('mb-escala'));
   }
+  // Por último: a URL guarda onde a pessoa está. Ver o bloco do hash.
+  gravarHash(tab);
 }
+
+// ── A ABA MORA NA URL ───────────────────────────────────────────
+// Mesma regra do painel-adm. Sem isto, F5 e link colado devolviam sempre
+// a aba Medição: quem estava no meio de uma conferência perdia o lugar a
+// cada recarga.
+//
+// replaceState, e NÃO pushState: trocar de aba não é navegar. A troca é
+// declarada — o voltar/avançar não percorre as abas visitadas, porque não
+// há entrada de histórico para percorrer. O hashchange abaixo cobre o
+// resto: hash editado à mão e link colado na mesma página.
+//
+// O guard do nome não é decoração: o valor vem do hash, que é do usuário,
+// e entra num seletor CSS. Sem ele, um hash com apóstrofo quebraria o
+// querySelector — ou casaria um elemento que ninguém pediu. Aceita dígito
+// porque há aba que começa com um.
+const TAB_PADRAO = 'medicao';
+function botaoDaAba(tab) {
+  if (!tab || !/^[a-z0-9-]+$/.test(tab)) return null;
+  return document.querySelector('.nbtn[onclick*="\'' + tab + '\'"]');
+}
+function gravarHash(tab) {
+  const novo = '#' + tab;
+  if (location.hash !== novo) history.replaceState(null, '', novo);
+}
+function aplicarHash() {
+  const tab = String(location.hash || '').replace(/^#/, '');
+  const btn = botaoDaAba(tab);
+  if (!btn) return false;
+  setTab(btn, tab);
+  return true;
+}
+window.addEventListener('hashchange', aplicarHash);
 
 // Custo & Margem — aberto pelo Mais+ (NÃO é aba do bnav). Espelha o
 // modulos/admin/app.js: fecha o modal, limpa .active de .scr/.nbtn, ativa
@@ -469,6 +503,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Faixa de alterações de medição no topo da aba Medição (#s-medicao).
   if (window.medicaoAlteracoes) window.medicaoAlteracoes.montar(document.getElementById('s-medicao'));
 
+  // A URL MANDA, quando ela diz algo: F5 e link colado voltam para onde a
+  // pessoa estava. Sem hash, segue o padrão do HTML (Medição).
+  if (!aplicarHash()) gravarHash(TAB_PADRAO);
   carregarPostosMobile();
   requestAnimationFrame(medirAlturas);   // 1ª medição depois de montar o shell
 });

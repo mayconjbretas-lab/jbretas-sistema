@@ -1,0 +1,297 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aba na URL — logistica, logistica-mobile, supervisor, copasa</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  :root {
+    --ac: var(--accent); --ac2: var(--accent2); --acd: var(--accent-dim);
+    --dg: var(--danger); --wn: var(--warning); --inf: var(--info);
+    --tx: var(--text); --tx2: var(--text2); --tx3: var(--text3);
+    --sf: var(--surface); --sf2: var(--surface2); --sf3: var(--surface3);
+    --bd: var(--border); --bd2: var(--border2);
+    --r: var(--radius); --rl: var(--radius-lg);
+  }
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; opacity:.5; }
+  .lnk { color:var(--accent); }
+</style>
+
+<div id="res">rodando…</div>
+<p>
+  <a class="lnk" href="?m=logistica">logistica</a> ·
+  <a class="lnk" href="?m=logistica-mobile">logistica-mobile</a> ·
+  <a class="lnk" href="?m=supervisor">supervisor</a> ·
+  <a class="lnk" href="?m=copasa">copasa</a>
+</p>
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA — para os quatro módulos, um por ?m=
+//
+// 1. Trocar de aba grava o hash.
+// 2. Abrir com hash abre aquela aba (é o que o F5 faz).
+// 3. Hash inválido cai no padrão, sem exceção — inclusive hash com
+//    apóstrofo, que entraria num seletor CSS se o guard não existisse.
+// 4. hashchange troca de aba.
+// 5. Na Logística, '#matriz/posto=<nome>' seleciona o posto no <select>, e
+//    a matriz é carregada UMA vez (não duas).
+//
+// SEM SESSÃO: estas telas chamam exigirSessao no topo e redirecionam. O
+// harness dubla a sessão e injeta a NAVEGAÇÃO REAL do index.html de cada
+// módulo — os nomes de aba têm de casar com os elementos que existem, e é
+// isso que um botão inventado pelo harness não provaria.
+// ════════════════════════════════════════════════════════════════
+var MODS = {
+  'logistica':        { padrao: 'matriz',  nav: '.sidebar-nav, .nav-list, .nav-item',
+                        abas: ['matriz', 'kpi', 'motorista', 'escala', 'custo', 'precos'],
+                        trocar: function (t) { switchMainTab('tab-' + t, itemDaAba(t)); },
+                        ativo: function () { var a = document.querySelector('.nav-item.active');
+                                             return a ? String(a.dataset.tab || '').replace(/^tab-/, '') : ''; } },
+  'logistica-mobile': { padrao: 'medicao', nav: '.bnav',
+                        abas: ['medicao', 'escala', 'precos'],
+                        trocar: function (t) { setTab(botaoDaAba(t), t); },
+                        ativo: function () { var a = document.querySelector('.nbtn.active');
+                                             var m = a && /'([a-z0-9-]+)'/.exec(a.getAttribute('onclick') || '');
+                                             return m ? m[1] : ''; } },
+  'supervisor':       { padrao: 'regional', nav: '.bnav',
+                        abas: ['regional', 'mix', 'comissao', 'calibrador'],
+                        trocar: function (t) { setTab(botaoDaAba(t), t); },
+                        ativo: function () { var a = document.querySelector('.nbtn.active');
+                                             var m = a && /'([a-z0-9-]+)'/.exec(a.getAttribute('onclick') || '');
+                                             return m ? m[1] : ''; } },
+  'copasa':           { padrao: 'resumo', nav: '.copasa-tabs',
+                        abas: ['resumo', '2dias', 'semanal', 'mensal', 'trimestral'],
+                        trocar: function (t) { setTab(t); },
+                        ativo: function () { var a = document.querySelector('.copasa-tab.on');
+                                             return a ? String(a.dataset.tab || '') : ''; } },
+};
+var MOD = new URLSearchParams(location.search).get('m') || 'logistica';
+var CFG = MODS[MOD];
+
+var linhas = [];
+var falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+// ESCAPA o texto que vem das asserções. O relatório é montado com innerHTML
+// (para as cores de OK/FALHA), e um rótulo com "<select>" dentro abria um
+// elemento de verdade — engolindo todo o resto do relatório em silêncio.
+// Aconteceu: o item 5 aparecia truncado em "OK o ".
+function hesc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+// ── dublês ───────────────────────────────────────────────────────
+var CHAMOU = { carregarMatriz: 0, faixa: 0 };
+window.exigirSessao = function () {
+  return { id: 'h', nome: 'Harness', email: 'h@h', perfil: 'ADM',
+           posto: { nome: 'P. BERNARDO' } };
+};
+window.aplicarTema = function () {};
+window.caminhoRaiz = function () { return '/'; };
+window.esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+  return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+// A matriz é dublada para CONTAR as cargas: o ponto do item 5 é que o posto
+// da URL não faça a matriz carregar duas vezes.
+window.matrizMedicao = {
+  montar: function () {}, desfazer: function () {}, salvar: function () {},
+  mesAtual: function () { return null; }, ajustarSticky: function () {},
+  carregar: function () { CHAMOU.carregarMatriz++; },
+};
+window.medicaoFabs = { montar: function () {}, setVisivel: function () {} };
+window.medicaoPdf = { montar: function () {} };
+window.medicaoAlteracoes = { montar: function () {} };
+window.solicitacoesLogistica = { montarEm: function () {} };
+window.renderCustoMargem = function () {};
+window.renderEscala = function () {};
+window.renderKpi = function () {};
+window.renderCalibrador = function () {};
+window.iniciarMapa = function () {};
+// GET /postos com dois nomes, o bastante para o item 5. As outras rotas
+// devolvem forma vazia válida — a tela não é o objeto do teste.
+var POSTOS_FIX = [{ id: '1', nome: 'P. BERNARDO', bandeira: 'IPIRANGA' },
+                  { id: '2', nome: 'P. TOPAZIO', bandeira: 'VIBRA' }];
+window.apiFetch = function (url) {
+  if (url.indexOf('/postos') === 0) return Promise.resolve({ postos: POSTOS_FIX });
+  if (url.indexOf('/medicao/pedido-dia') === 0) { CHAMOU.faixa++; return Promise.resolve({ total: 0 }); }
+  if (url.indexOf('/copasa/') === 0) return Promise.resolve({ registros: [] });
+  return Promise.resolve({});
+};
+try { localStorage.setItem('jb_logi_versao', 'desktop'); } catch (e) {}
+
+async function montarPalco() {
+  var doc = new DOMParser().parseFromString(
+    await (await fetch('/modulos/' + MOD + '/index.html')).text(), 'text/html');
+  // A NAVEGAÇÃO real, e as seções que o setTab de cada módulo acende.
+  var achou = 0;
+  CFG.nav.split(',').forEach(function (sel) {
+    var el = doc.querySelector(sel.trim());
+    if (el && !achou) { document.getElementById('palco').appendChild(document.importNode(el, true)); achou = 1; }
+  });
+  if (!achou) throw new Error('nao achei a navegacao (' + CFG.nav + ') no index.html de ' + MOD);
+  // Seções-alvo: o que cada setTab procura por id. Copiadas do documento real
+  // quando existirem; um placeholder quando estiverem fora do trecho da nav.
+  CFG.abas.forEach(function (t) {
+    ['s-' + t, 'tab-' + t].forEach(function (id) {
+      if (document.getElementById(id)) return;
+      var real = doc.getElementById(id);
+      var el = real ? document.importNode(real, true) : null;
+      if (!el && MOD === 'copasa') { el = document.createElement('div'); el.id = id; }
+      if (el) document.getElementById('palco').appendChild(el);
+    });
+  });
+  // A Logística precisa do <select> de posto e dos hosts da matriz.
+  if (MOD === 'logistica') {
+    ['sel-bandeira', 'sel-posto'].forEach(function (id) {
+      if (document.getElementById(id)) return;
+      var s = document.createElement('select'); s.id = id;
+      document.getElementById('palco').appendChild(s);
+    });
+    ['matriz-host', 'matriz-vazio', 'faixa-pedido'].forEach(function (id) {
+      if (document.getElementById(id)) return;
+      var d = document.createElement('div'); d.id = id;
+      document.getElementById('palco').appendChild(d);
+    });
+  }
+}
+
+function carregarApp() {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = '/modulos/' + MOD + '/app.js';
+    s.onload = ok;
+    s.onerror = function () { erro(new Error('app.js nao carregou')); };
+    document.body.appendChild(s);
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+async function rodar() {
+  if (!CFG) throw new Error('modulo desconhecido: ' + MOD);
+  linhas.push('MÓDULO: ' + MOD + '   ·   padrão: ' + CFG.padrao);
+  await montarPalco();
+  await carregarApp();
+  await esperar(60);
+
+  h3('1. Trocar de aba grava o hash');
+  for (var i = 0; i < CFG.abas.length; i++) {
+    var t = CFG.abas[i];
+    CFG.trocar(t);
+    await esperar(40);
+    eh(location.hash === '#' + t, 'aba ' + t, location.hash || '(vazio)', '#' + t);
+    eh(CFG.ativo() === t, '  e o elemento aceso é o dela', CFG.ativo() || '(nenhum)', t);
+  }
+
+  h3('2. Abrir com hash abre a aba (é o que o F5 faz)');
+  for (var j = CFG.abas.length - 1; j >= 0; j--) {
+    var t2 = CFG.abas[j];
+    history.replaceState(null, '', '#' + t2);
+    var r = aplicarHash();
+    await esperar(40);
+    eh(r === true && CFG.ativo() === t2, '#' + t2 + ' abre ' + t2,
+       (r ? '' : 'recusado, ') + (CFG.ativo() || '(nenhum)'), t2);
+  }
+
+  h3('3. Hash inválido cai no padrão, sem exceção');
+  var INVAL = ['#naoexiste', '#', '#MATRIZ', "#a'b", '#../x', '#matriz extra'];
+  var res = [];
+  for (var k = 0; k < INVAL.length; k++) {
+    history.replaceState(null, '', INVAL[k] || ' ');
+    var v;
+    try { v = aplicarHash(); } catch (e) { v = 'EXCEÇÃO: ' + e.message; }
+    res.push(INVAL[k] + ' -> ' + v);
+  }
+  nota(res.join('\n     '));
+  eh(res.filter(function (x) { return x.indexOf('EXCEÇÃO') >= 0; }).length === 0,
+     'nenhum levanta exceção',
+     res.filter(function (x) { return x.indexOf('EXCEÇÃO') >= 0; }).join(' | ') || 'nenhuma', 'nenhuma');
+  eh(res.every(function (x) { return x.indexOf('false') > 0; }),
+     'todos recusados (a tela fica no que estava)',
+     res.filter(function (x) { return x.indexOf('true') > 0; }).join(' | ') || 'todos false', 'todos false');
+
+  h3('4. hashchange troca de aba');
+  var outra = CFG.abas[CFG.abas.length - 1];
+  history.replaceState(null, '', '#' + CFG.padrao);
+  aplicarHash();
+  await esperar(40);
+  history.replaceState(null, '', '#' + outra);
+  window.dispatchEvent(new HashChangeEvent('hashchange'));
+  await esperar(60);
+  eh(CFG.ativo() === outra, 'o evento levou para ' + outra, CFG.ativo() || '(nenhum)', outra);
+
+  if (MOD === 'logistica') {
+    h3('5. Logística — o posto vem do hash, e a matriz carrega UMA vez');
+    // Estado de boot: o carregarPostos do app.js roda com o hash já lido, e é
+    // ele que aplica o posto ANTES do onPostoChange.
+    history.replaceState(null, '', '#matriz/posto=' + encodeURIComponent('P. TOPAZIO'));
+    CHAMOU.carregarMatriz = 0; CHAMOU.faixa = 0;
+    aplicarHash();                 // lê a aba e guarda o posto pedido
+    await carregarPostos();        // popula o select e aplica o posto
+    await esperar(80);
+    var sel = document.getElementById('sel-posto');
+    eh(sel.value === 'P. TOPAZIO', 'o <select> ficou no posto do hash', sel.value || '(vazio)', 'P. TOPAZIO');
+    eh(CHAMOU.carregarMatriz === 1, 'matriz carregada UMA vez, não duas',
+       CHAMOU.carregarMatriz + ' chamada(s)', '1');
+    eh(location.hash === '#matriz/posto=P.%20TOPAZIO',
+       'e o hash fica URL-encoded', location.hash, '#matriz/posto=P.%20TOPAZIO');
+
+    // Trocar o posto à mão atualiza o hash.
+    sel.value = 'P. BERNARDO';
+    onPostoChange();
+    await esperar(60);
+    eh(location.hash === '#matriz/posto=P.%20BERNARDO', 'trocar o posto atualiza o hash',
+       location.hash, '#matriz/posto=P.%20BERNARDO');
+    // "Todos os postos" tira o posto do hash — não há posto para voltar.
+    sel.value = '';
+    onPostoChange();
+    await esperar(60);
+    eh(location.hash === '#matriz', '"Todos os postos" deixa só a aba no hash', location.hash, '#matriz');
+
+    // Posto inventado na URL: cai em "Todos", sem estado impossível no select.
+    history.replaceState(null, '', '#matriz/posto=' + encodeURIComponent('P. INVENTADO'));
+    CHAMOU.carregarMatriz = 0;
+    aplicarHash();
+    await esperar(60);
+    eh(document.getElementById('sel-posto').value === '',
+       'posto inexistente cai em "Todos os postos"',
+       document.getElementById('sel-posto').value || '(vazio)', '(vazio)');
+    eh(CHAMOU.carregarMatriz === 0, 'e não dispara carga de matriz nenhuma',
+       CHAMOU.carregarMatriz + ' chamada(s)', '0');
+
+    // O posto só entra no hash da aba que o usa.
+    sel.value = 'P. TOPAZIO';
+    onPostoChange();
+    await esperar(40);
+    CFG.trocar('escala');
+    await esperar(40);
+    eh(location.hash === '#escala', 'em outra aba o posto sai do hash', location.hash, '#escala');
+  }
+
+  h3(falhas === 0 ? '<span class="ok">TUDO PASSOU</span>'
+                  : '<span class="bad">' + falhas + ' FALHA(S)</span>');
+  pintar();
+}
+
+rodar().catch(function (e) {
+  linhas.push('<span class="bad">ERRO: ' + hesc(e.message) + '</span>');
+  linhas.push(String(e.stack || '').split('\n').slice(0, 6).join('\n'));
+  pintar();
+});
+</script>

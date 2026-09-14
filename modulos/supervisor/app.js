@@ -67,6 +67,10 @@ document.addEventListener('DOMContentLoaded', () => {
   aplicarTema(localStorage.getItem('jb_theme') || 'dark');
   montarTopbar();
   carregar();
+  // A URL MANDA, quando ela diz algo: F5 e link colado voltam para onde a
+  // pessoa estava. Depois do carregar() porque as telas se preenchem com
+  // o que ele traz; trocar de aba antes só mostraria o esqueleto.
+  if (!aplicarHash()) gravarHash(TAB_PADRAO);
 });
 
 function montarTopbar() {
@@ -85,7 +89,41 @@ function setTab(btn, tab) {
   // Calibrador — arquivo proprio (calibrador.js expoe renderCalibrador),
   // no padrao das outras telas montadas por JS do projeto.
   if (tab === 'calibrador') renderCalibrador(document.getElementById('s-calibrador'));
+  // Por último: a URL guarda onde a pessoa está. Ver o bloco do hash.
+  gravarHash(tab);
 }
+
+// ── A ABA MORA NA URL ───────────────────────────────────────────
+// Mesma regra do painel-adm. Sem isto, F5 e link colado devolviam sempre
+// a aba Regional: quem estava no meio de uma conferência perdia o lugar a
+// cada recarga.
+//
+// replaceState, e NÃO pushState: trocar de aba não é navegar. A troca é
+// declarada — o voltar/avançar não percorre as abas visitadas, porque não
+// há entrada de histórico para percorrer. O hashchange abaixo cobre o
+// resto: hash editado à mão e link colado na mesma página.
+//
+// O guard do nome não é decoração: o valor vem do hash, que é do usuário,
+// e entra num seletor CSS. Sem ele, um hash com apóstrofo quebraria o
+// querySelector — ou casaria um elemento que ninguém pediu. Aceita dígito
+// porque há aba que começa com um.
+const TAB_PADRAO = 'regional';
+function botaoDaAba(tab) {
+  if (!tab || !/^[a-z0-9-]+$/.test(tab)) return null;
+  return document.querySelector('.nbtn[onclick*="\'' + tab + '\'"]');
+}
+function gravarHash(tab) {
+  const novo = '#' + tab;
+  if (location.hash !== novo) history.replaceState(null, '', novo);
+}
+function aplicarHash() {
+  const tab = String(location.hash || '').replace(/^#/, '');
+  const btn = botaoDaAba(tab);
+  if (!btn) return false;
+  setTab(btn, tab);
+  return true;
+}
+window.addEventListener('hashchange', aplicarHash);
 
 // ── Carrega classificação + mix da regional ──────────────────────
 async function carregar() {
