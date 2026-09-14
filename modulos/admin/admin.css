@@ -704,7 +704,10 @@ html:not([data-theme="light"]) body::before{
   font-family: var(--mono); font-size: .68rem; font-weight: 700; padding: 5px 11px; cursor: pointer; }
 .mp-atalho:hover { border-color: var(--ac); color: var(--ac); }
 
+/* Oito cards numa linha acima de 1400px; abaixo disso quebram em duas de
+   quatro, e no mobile em quatro de dois. */
 .mp-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; }
+@media (min-width: 1400px) { .mp-cards { grid-template-columns: repeat(8, 1fr); } }
 .mp-card { background: var(--sf2); border: 1px solid var(--bd); border-radius: var(--rl, 12px);
   padding: .7rem .8rem; text-align: left; cursor: pointer; font: inherit; color: var(--tx); }
 .mp-card.aberto { border-color: var(--ac); }
@@ -729,7 +732,13 @@ html:not([data-theme="light"]) body::before{
 
 .mp-lista { margin-top: .9rem; display: flex; flex-direction: column; gap: 2px; }
 .mp-posto { border-bottom: 1px solid var(--bd); }
-.mp-p-linha { display: grid; grid-template-columns: 150px 1fr 130px 196px; align-items: center; gap: .7rem;
+/* Sete colunas: POSTO · BARRA · LITRAGEM · APP · MIX · PRODUTO · LUCRO.
+   O cabeçalho, as linhas e a linha REDE usam a MESMA declaração — três
+   grids separados com as mesmas medidas sairiam do compasso na primeira
+   coluna que alguém mexesse. */
+.mp-cab, .mp-p-linha, .mp-rede { display: grid;
+  grid-template-columns: 150px 1fr 128px 62px 92px 112px 52px;
+  align-items: center; gap: .7rem;
   width: 100%; background: transparent; border: 0; padding: 7px 2px; cursor: pointer; font: inherit;
   color: var(--tx); text-align: left; }
 .mp-p-linha:hover { background: color-mix(in srgb, var(--ac) 7%, transparent); }
@@ -763,11 +772,49 @@ html:not([data-theme="light"]) body::before{
 /* Mobile: cards 2×2 e a linha do posto em DUAS linhas — nome+% em cima,
    barra+litros embaixo. Em 390px as quatro colunas do desktop espremem o
    nome do posto a três letras. */
+
+/* ── Cards novos ─────────────────────────────────────────────── */
+/* A seta sozinha marca o card que está ordenando a lista. */
+.mp-card { position: relative; }
+.mp-seta { position: absolute; top: 6px; right: 8px; font-size: .8rem; color: var(--ac); line-height: 1; }
+.mp-card.aberto { outline: 1px solid var(--ac); outline-offset: -1px; }
+/* Ticket: três medidas do mesmo denominador, empilhadas e alinhadas. */
+.mp-tk { display: flex; justify-content: space-between; gap: .4rem; font-family: var(--mono);
+  font-size: .68rem; color: var(--tx3); margin-top: 2px; }
+.mp-tk b { color: var(--tx); font-weight: 700; }
+.mp-card-prod .mp-num { color: var(--ok); }
+.mp-card-mix .mp-num { color: var(--mp-99); }
+/* Lucro: reservado e inerte — não é botão, não recebe hover nem foco. */
+.mp-card-lucro { opacity: .5; cursor: default; pointer-events: none; }
+
+/* ── Cabeçalho das colunas e linha REDE ──────────────────────── */
+.mp-cab { padding: 0 2px 5px; border-bottom: 1px solid var(--bd); }
+.mp-cab span { font-family: var(--mono); font-size: .58rem; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--tx3); }
+.mp-cab .mp-p-litros, .mp-cab .mp-p-pct, .mp-cab .mp-p-mix,
+.mp-cab .mp-p-prod, .mp-cab .mp-p-lucro { text-align: right; }
+.mp-rede { padding: 8px 2px 2px; border-top: 1px solid var(--bd); margin-top: 2px; }
+.mp-rede span { font-family: var(--mono); font-size: .74rem; font-weight: 700; color: var(--tx);
+  text-align: right; }
+.mp-rede .mp-p-nome { text-align: left; font-size: .72rem; letter-spacing: .05em; color: var(--tx2); }
+
+/* ── Colunas novas da linha ──────────────────────────────────── */
+.mp-p-mix, .mp-p-prod { font-family: var(--mono); font-size: .72rem; font-weight: 700; text-align: right; }
+.mp-p-mix { color: var(--mp-99); }
+.mp-p-prod { color: var(--ok); }
+.mp-p-lucro { font-family: var(--mono); font-size: .72rem; color: var(--tx3); text-align: right; }
+.mp-p-mini { display: block; font-size: .6rem; font-weight: 400; color: var(--tx3); }
+
 @media (max-width: 699px) {
   .mp-cards { grid-template-columns: repeat(2, 1fr); }
   .mp-num { font-size: 1.05rem; }
   .mp-atalhos { margin-left: 0; }
+  /* No mobile a linha volta a duas linhas e as colunas novas saem: Mix,
+     Produto e Ticket passam a viver no detalhe clicável do posto. */
   .mp-p-linha { grid-template-columns: 1fr auto; grid-template-areas: "nome pct" "barra litros"; row-gap: 4px; }
+  .mp-cab, .mp-rede { display: none; }
+  .mp-p-mix, .mp-p-prod, .mp-p-lucro { display: none; }
+  .mp-cards { grid-template-columns: repeat(2, 1fr); }
   .mp-p-nome { grid-area: nome; }
   /* No mobile os dois percentuais podem quebrar em duas linhas. */
   .mp-p-pct { grid-area: pct; white-space: normal; text-align: right; }

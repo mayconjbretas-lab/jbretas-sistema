@@ -107,6 +107,39 @@
     return CANAIS.filter(function (c) { return _filtro[c]; });
   }
   function modoPista() { return canaisLigados().length === 0; }
+
+  // ════════ ORDENAR É A MESMA AÇÃO DE ABRIR A CONTA ════════
+  // Um estado só (_cardAberto) faz as duas coisas: o card aberto mostra a
+  // conta dele E ordena a lista por aquele valor. Clicar de novo solta os
+  // dois. Dois estados separados (um "aberto", um "ordenando") podiam
+  // divergir — card de Mix aberto com a lista ordenada por Soutag — e aí a
+  // tela mente sobre o que está mostrando.
+  //
+  // Abastecimentos e Ticket abrem a conta mas NÃO ordenam: os dois são
+  // médias da rede, e ranquear posto por média de abastecimento responde uma
+  // pergunta que ninguém fez nesta tela.
+  var ORDENAVEIS = ['total', 'SOUTAG', '99', 'produto', 'mix'];
+  function ordemAtiva() {
+    return ORDENAVEIS.indexOf(_cardAberto) >= 0 ? _cardAberto : null;
+  }
+  // Mix de um posto (fração, não %). Posto sem gasolina devolve null — e no
+  // sort ele afunda, em vez de virar 0 e disputar com quem vendeu e não
+  // aditivou.
+  function mixDe(p) {
+    var g = p.gasolina || { litros_total: 0, litros_aditivada: 0 };
+    return g.litros_total > 0 ? g.litros_aditivada / g.litros_total : null;
+  }
+  function produtoDe(p) { return (p.produto && p.produto.faturamento) || 0; }
+  function appDe(p) {
+    var quais = modoPista() ? ['SOUTAG', '99'] : canaisLigados().filter(function (c) { return c !== 'NORMAL'; });
+    return quais.reduce(function (s, c) { return s + ((p.por_canal[c] && p.por_canal[c].litros) || 0); }, 0);
+  }
+  function valorOrdem(p, qual) {
+    if (qual === 'total') return p.litros;
+    if (qual === 'produto') return produtoDe(p);
+    if (qual === 'mix') { var m = mixDe(p); return m === null ? -1 : m; }
+    return (p.por_canal[qual] && p.por_canal[qual].litros) || 0;
+  }
   // Valor que ordena a lista e que a linha mostra: litros do(s) convênio(s)
   // ligado(s), ou o total do posto quando nenhum está.
   function valorDe(p) {
@@ -199,6 +232,16 @@
   }
 
   // ── Cards da rede ────────────────────────────────────────────────
+  // Oito cards, mesmo tamanho e mesmo estilo. Os quatro primeiros são os
+  // originais, byte por byte; os quatro novos entram à direita.
+  //
+  // A SETA "↓" SOZINHA marca o card que está ordenando. Sem texto ("ordenado
+  // por…") de propósito: o card já é o rótulo, e a frase repetiria o que a
+  // seta diz num espaço que não existe.
+  function setaOrd(id) {
+    return ordemAtiva() === id ? '<span class="mp-seta">↓</span>' : '';
+  }
+
   function cardConvenio(c) {
     var r = _dados.rede;
     var x = r.por_canal[c] || { litros: 0, faturamento: 0, abastecimentos: 0 };
@@ -213,7 +256,7 @@
     return '<button type="button" class="mp-card mp-card-' + (c === '99' ? '99' : 'so') +
       (ligado ? ' on' : '') + (_cardAberto === c ? ' aberto' : '') + '"' +
       ' aria-expanded="' + (_cardAberto === c ? 'true' : 'false') + '"' +
-      ' onclick="__mpCard(\'' + c + '\')">' +
+      ' onclick="__mpCard(\'' + c + '\')">' + setaOrd(c) +
       '<div class="mp-rot">' + esc(ROTULO[c]).toUpperCase() + '</div>' +
       grande +
       '<div class="mp-sub">' + nf(x.abastecimentos, 0) + ' abast.</div>' +
@@ -222,29 +265,81 @@
 
   function htmlCards() {
     var r = _dados.rede;
+    var ab = r.abastecimentos || 0;
+    var prod = (r.produto && r.produto.faturamento) || 0;
+    var gas = r.gasolina || { litros_total: 0, litros_aditivada: 0 };
+
     var cardTotal = '<button type="button" class="mp-card mp-card-total' +
       (_cardAberto === 'total' ? ' aberto' : '') + '"' +
       ' aria-expanded="' + (_cardAberto === 'total' ? 'true' : 'false') + '"' +
-      ' onclick="__mpCard(\'total\')">' +
+      ' onclick="__mpCard(\'total\')">' + setaOrd('total') +
       '<div class="mp-rot">REDE · TOTAL PISTA</div>' +
       '<div class="mp-num">' + litros(r.litros) + '</div>' +
-      '<div class="mp-sub">' + nf(r.abastecimentos, 0) + ' abast.</div>' +
+      '<div class="mp-sub">' + nf(ab, 0) + ' abast.</div>' +
     '</button>';
+
     var cardAbast = '<button type="button" class="mp-card mp-card-abast' +
       (_cardAberto === 'abast' ? ' aberto' : '') + '"' +
       ' aria-expanded="' + (_cardAberto === 'abast' ? 'true' : 'false') + '"' +
       ' onclick="__mpCard(\'abast\')">' +
       '<div class="mp-rot">ABASTECIMENTOS</div>' +
-      '<div class="mp-num">' + nf(r.abastecimentos, 0) + '</div>' +
-      '<div class="mp-sub">' + porAbast(r.litros, r.abastecimentos) + '</div>' +
+      '<div class="mp-num">' + nf(ab, 0) + '</div>' +
+      '<div class="mp-sub">' + porAbast(r.litros, ab) + '</div>' +
     '</button>';
-    return '<div class="mp-cards">' + cardTotal + cardAbast + cardConvenio('SOUTAG') + cardConvenio('99') + '</div>' +
-      htmlDetalheCard();
+
+    // TICKET: três medidas do MESMO denominador (abastecimentos), empilhadas.
+    // Não ordena a lista — ver o comentário do ORDENAVEIS.
+    var tk = function (rot, val) {
+      return '<div class="mp-tk"><span>' + esc(rot) + '</span><b>' + val + '</b></div>';
+    };
+    var cardTicket = '<button type="button" class="mp-card mp-card-ticket' +
+      (_cardAberto === 'ticket' ? ' aberto' : '') + '"' +
+      ' aria-expanded="' + (_cardAberto === 'ticket' ? 'true' : 'false') + '"' +
+      ' onclick="__mpCard(\'ticket\')">' +
+      '<div class="mp-rot">TICKET MÉDIO · POR CARRO</div>' +
+      tk('vol', ab > 0 ? nf(r.litros / ab, 1) + ' L' : '—') +
+      tk('R$', ab > 0 ? nf(r.faturamento / ab, 2) : '—') +
+      tk('produto', ab > 0 ? reais(prod / ab) : '—') +
+    '</button>';
+
+    var cardProduto = '<button type="button" class="mp-card mp-card-prod' +
+      (_cardAberto === 'produto' ? ' aberto' : '') + '"' +
+      ' aria-expanded="' + (_cardAberto === 'produto' ? 'true' : 'false') + '"' +
+      ' onclick="__mpCard(\'produto\')">' + setaOrd('produto') +
+      '<div class="mp-rot">VENDA DE PRODUTO</div>' +
+      '<div class="mp-num">' + reais(prod) + '</div>' +
+      '<div class="mp-sub">' + (ab > 0 ? reais(prod / ab) + ' por carro' : '—') + '</div>' +
+    '</button>';
+
+    // MIX: a MESMA definição do Relatórios (aditivada ÷ gasolina), agora
+    // vinda pronta da rota — GA, Octapro e Podium contam como aditivada.
+    var cardMix = '<button type="button" class="mp-card mp-card-mix' +
+      (_cardAberto === 'mix' ? ' aberto' : '') + '"' +
+      ' aria-expanded="' + (_cardAberto === 'mix' ? 'true' : 'false') + '"' +
+      ' onclick="__mpCard(\'mix\')">' + setaOrd('mix') +
+      '<div class="mp-rot">MIX G. ADITIVADA</div>' +
+      '<div class="mp-num">' + pctTxt(gas.litros_aditivada, gas.litros_total) + '</div>' +
+      '<div class="mp-sub">' + litros(gas.litros_aditivada) + ' de ' + litros(gas.litros_total) + ' de gasolina</div>' +
+    '</button>';
+
+    // LUCRO: espaço reservado, apagado e inerte. Um card vazio clicável que
+    // abre nada é pior que um card que se anuncia em preparo.
+    var cardLucro = '<div class="mp-card mp-card-lucro" aria-disabled="true">' +
+      '<div class="mp-rot">LUCRO BRUTO</div>' +
+      '<div class="mp-num">—</div>' +
+      '<div class="mp-sub">em preparo</div>' +
+    '</div>';
+
+    return '<div class="mp-cards">' +
+      cardTotal + cardAbast + cardConvenio('SOUTAG') + cardConvenio('99') +
+      cardTicket + cardProduto + cardMix + cardLucro +
+    '</div>' + htmlDetalheCard();
   }
 
   function htmlDetalheCard() {
     if (!_cardAberto) return '';
     var r = _dados.rede;
+    var ab = r.abastecimentos || 0;
     var linha = function (rot, val) {
       return '<div class="mp-det-linha"><span>' + esc(rot) + '</span><b>' + val + '</b></div>';
     };
@@ -255,21 +350,39 @@
         return linha(ROTULO[c], litros(x.litros) + '  ·  ' + pctTxt(x.litros, r.litros));
       }).join('') +
       '<div class="mp-det-sep">Litros por combustível</div>' +
-      (r.por_combustivel || []).map(function (k) {
-        return linha(k.rotulo, litros(k.litros) + '  ·  ' + pctTxt(k.litros, r.litros));
+      (r.por_combustivel || []).map(function (k2) {
+        return linha(k2.rotulo, litros(k2.litros) + '  ·  ' + pctTxt(k2.litros, r.litros));
       }).join('');
     } else if (_cardAberto === 'abast') {
       corpo = CANAIS.map(function (c) {
         var x = r.por_canal[c] || { litros: 0, abastecimentos: 0 };
         return linha(ROTULO[c], nf(x.abastecimentos, 0) + ' abast.  ·  ' + porAbast(x.litros, x.abastecimentos));
       }).join('');
-    } else {
-      var x = r.por_canal[_cardAberto] || { litros: 0, faturamento: 0, abastecimentos: 0 };
+    } else if (_cardAberto === 'ticket') {
       corpo =
-        linha('Litros ÷ total da rede', litros(x.litros) + ' ÷ ' + litros(r.litros) + ' = ' + pctTxt(x.litros, r.litros)) +
-        linha('Abastecimentos', nf(x.abastecimentos, 0)) +
-        linha('Litros por abastecimento', porAbast(x.litros, x.abastecimentos)) +
-        linha('Faturamento do canal', reais(x.faturamento));
+        linha('Litros ÷ abastecimentos', litros(r.litros) + ' ÷ ' + nf(ab, 0) + ' = ' + (ab > 0 ? nf(r.litros / ab, 2) + ' L' : '—')) +
+        linha('Faturamento ÷ abastecimentos', reais(r.faturamento) + ' ÷ ' + nf(ab, 0) + ' = ' + (ab > 0 ? reais(r.faturamento / ab) : '—')) +
+        linha('Produto ÷ abastecimentos', reais((r.produto && r.produto.faturamento) || 0) + ' ÷ ' + nf(ab, 0) + ' = ' + (ab > 0 ? reais(((r.produto && r.produto.faturamento) || 0) / ab) : '—'));
+    } else if (_cardAberto === 'produto') {
+      var prod = (r.produto && r.produto.faturamento) || 0;
+      corpo =
+        linha('Venda de produto no período', reais(prod)) +
+        linha('Por abastecimento', ab > 0 ? reais(prod / ab) : '—') +
+        linha('Sobre o faturamento de pista', pctTxt(prod, r.faturamento)) +
+        linha('Fonte', 'tecnox_venda_produto_dia — mesma do Consolidado');
+    } else if (_cardAberto === 'mix') {
+      var g = r.gasolina || { litros_total: 0, litros_aditivada: 0 };
+      corpo =
+        linha('Aditivada ÷ gasolina', litros(g.litros_aditivada) + ' ÷ ' + litros(g.litros_total) + ' = ' + pctTxt(g.litros_aditivada, g.litros_total)) +
+        linha('Gasolina comum', litros(g.litros_total - g.litros_aditivada)) +
+        linha('Definição', 'aditivada = GA + Octapro + Podium (igual ao Relatórios)');
+    } else {
+      var x2 = r.por_canal[_cardAberto] || { litros: 0, faturamento: 0, abastecimentos: 0 };
+      corpo =
+        linha('Litros ÷ total da rede', litros(x2.litros) + ' ÷ ' + litros(r.litros) + ' = ' + pctTxt(x2.litros, r.litros)) +
+        linha('Abastecimentos', nf(x2.abastecimentos, 0)) +
+        linha('Litros por abastecimento', porAbast(x2.litros, x2.abastecimentos)) +
+        linha('Faturamento do canal', reais(x2.faturamento));
     }
     return '<div class="mp-detalhe">' + corpo + '</div>';
   }
@@ -278,8 +391,6 @@
   // DUAS proporções encaixadas, e é isso que faz a barra dizer alguma coisa:
   //   o PREENCHIMENTO mede o posto contra o MAIOR da lista;
   //   os SEGMENTOS medem cada canal contra o total daquele posto.
-  // Antes só existia a segunda, então toda barra saía cheia e a coluna
-  // inteira virava um bloco da mesma largura — bonita e sem informação.
   //
   // A barra continua sendo a venda TOTAL do posto, mesmo com convênio
   // filtrado: o filtro só apaga os segmentos de fora (opacidade .2). Encolher
@@ -302,69 +413,114 @@
     '</div>';
   }
 
-  // ════════ O % DA LINHA É SEMPRE SOBRE O PRÓPRIO POSTO ════════
-  // Um percentual por APLICATIVO, dividido pelo total daquele posto — nunca
-  // pela rede. A pergunta da linha é "quanto da venda DESTE posto passou pelo
-  // convênio?", e essa resposta não depende de quanto os outros 36 venderam.
-  //
-  // A versão anterior dividia pela rede, e as duas leituras se confundiam: um
-  // posto com 22% de Soutag aparecia como "5,2%" porque 5,2% era a fatia dele
-  // no Soutag DA REDE. Dois números úteis, mas só um cabe na linha, e o da
-  // linha tem de ser o do posto. A participação na rede continua nos cards.
-  //
-  // Sem filtro os DOIS aplicativos aparecem (é a leitura de varredura: dá para
-  // achar o posto com 99 zerado correndo o olho); com filtro, só o(s)
-  // marcado(s), para a coluna não repetir o que o chip já disse.
-  function pctApp(p, c) {
-    var x = p.por_canal[c] || { litros: 0 };
-    return '<span class="mp-p-app mp-app-' + (c === '99' ? '99' : 'so') + '">' +
-      esc(c === '99' ? '99' : 'Soutag') + ' ' + pctTxt(x.litros, p.litros) + '</span>';
+  // ── Cabeçalho das colunas (só desktop; o CSS o esconde no mobile) ──
+  function htmlCabecalho() {
+    var h = function (cls, rot, id) {
+      return '<span class="' + cls + '">' + esc(rot) + (id && ordemAtiva() === id ? ' ↓' : '') + '</span>';
+    };
+    return '<div class="mp-cab">' +
+      h('mp-p-nome', 'POSTO') +
+      h('mp-barra-cab', 'BARRA') +
+      h('mp-p-litros', 'LITRAGEM', 'total') +
+      h('mp-p-pct', 'APP') +
+      h('mp-p-mix', 'MIX', 'mix') +
+      h('mp-p-prod', 'PRODUTO', 'produto') +
+      h('mp-p-lucro', 'LUCRO') +
+    '</div>';
   }
 
+  // ════════ A COLUNA APP É UM NÚMERO SÓ ════════
+  // (Soutag + 99) ÷ litros do posto. A quebra por aplicativo saiu da linha e
+  // vive no detalhe clicável, que já mostrava Soutag / App 99 / Pista: dois
+  // percentuais na linha competiam pelo mesmo lugar e nenhum dos dois era
+  // legível de relance numa lista de 37.
+  //
+  // Sempre sobre o PRÓPRIO posto, nunca sobre a rede — a pergunta da linha é
+  // "quanto da venda DESTE posto passou por aplicativo?".
   function htmlPosto(p, maior) {
     var v = valorDe(p);
     var aberto = _postoAberto === p.posto_id;
     var mostrar = modoPista() ? ['SOUTAG', '99'] : canaisLigados().filter(function (c) { return c !== 'NORMAL'; });
-    var apps = mostrar.map(function (c) { return pctApp(p, c); }).join('<span class="mp-p-sep"> · </span>');
-    // A coluna de litros mostra SEMPRE o total do posto. Com convênio ligado,
-    // os litros do convênio vão embaixo, em letra miúda: o total é a régua
-    // (tamanho do posto) e o convênio é o recorte — inverter a hierarquia fazia
-    // o posto grande com pouco convênio parecer pequeno.
+    var g = p.gasolina || { litros_total: 0, litros_aditivada: 0 };
+    var prod = produtoDe(p);
+    var ab = p.abastecimentos || 0;
+
     var numero = '<span class="mp-p-litros">' + litros(p.litros) +
       (modoPista() ? '' : '<span class="mp-p-conv">' + litros(v) + ' ' +
         esc(mostrar.map(function (c) { return c === '99' ? '99' : 'Soutag'; }).join('+')) + '</span>') +
       '</span>';
+
     var det = '';
     if (aberto) {
+      // Os três itens do fim existem para o MOBILE, onde as colunas de Mix,
+      // Produto e Ticket não entram na linha. No desktop eles repetem a
+      // coluna de propósito: o detalhe é a visão completa do posto, e quem o
+      // abriu não deveria ter de voltar o olho para a linha.
       det = '<div class="mp-p-det">' + CANAIS.map(function (c) {
         var x = p.por_canal[c] || { litros: 0, faturamento: 0, abastecimentos: 0 };
         return '<div class="mp-det-linha"><span>' + esc(ROTULO[c]) + '</span><b>' +
           litros(x.litros) + '  ·  ' + pctTxt(x.litros, p.litros) + '  ·  ' +
           nf(x.abastecimentos, 0) + ' abast.  ·  ' + reais(x.faturamento) + '</b></div>';
-      }).join('') + '</div>';
+      }).join('') +
+        '<div class="mp-det-linha"><span>Mix g. aditivada</span><b>' +
+          pctTxt(g.litros_aditivada, g.litros_total) + '  ·  ' + litros(g.litros_aditivada) +
+          ' de ' + litros(g.litros_total) + '</b></div>' +
+        '<div class="mp-det-linha"><span>Venda de produto</span><b>' + reais(prod) +
+          (ab > 0 ? '  ·  ' + reais(prod / ab) + ' por carro' : '') + '</b></div>' +
+        '<div class="mp-det-linha"><span>Ticket médio</span><b>' +
+          (ab > 0 ? nf(p.litros / ab, 1) + ' L  ·  ' + reais(p.faturamento / ab) : '—') + '</b></div>' +
+      '</div>';
     }
+
     return '<div class="mp-posto' + (aberto ? ' aberto' : '') + '">' +
       '<button type="button" class="mp-p-linha" aria-expanded="' + (aberto ? 'true' : 'false') + '"' +
         ' onclick="__mpPosto(\'' + esc(p.posto_id) + '\')">' +
         '<span class="mp-p-nome">' + esc(p.posto_nome || '—') + '</span>' +
         htmlBarra(p, maior) +
         numero +
-        '<span class="mp-p-pct">' + apps + '</span>' +
+        '<span class="mp-p-pct">' + pctTxt(appDe(p), p.litros) + '</span>' +
+        '<span class="mp-p-mix">' + pctTxt(g.litros_aditivada, g.litros_total) +
+          '<span class="mp-p-mini">' + litros(g.litros_aditivada) + ' adit.</span></span>' +
+        '<span class="mp-p-prod">' + reais(prod) +
+          '<span class="mp-p-mini">' + (ab > 0 ? reais(prod / ab) + '/carro' : '—') + '</span></span>' +
+        '<span class="mp-p-lucro">—</span>' +
       '</button>' + det +
     '</div>';
   }
 
+  // ── Linha REDE, no rodapé da lista (o CSS a esconde no mobile) ──
+  function htmlRede() {
+    var r = _dados.rede;
+    var g = r.gasolina || { litros_total: 0, litros_aditivada: 0 };
+    var appRede = modoPista()
+      ? ['SOUTAG', '99'].reduce(function (s, c) { return s + ((r.por_canal[c] && r.por_canal[c].litros) || 0); }, 0)
+      : canaisLigados().filter(function (c) { return c !== 'NORMAL'; })
+          .reduce(function (s, c) { return s + ((r.por_canal[c] && r.por_canal[c].litros) || 0); }, 0);
+    return '<div class="mp-rede">' +
+      '<span class="mp-p-nome">REDE</span>' +
+      '<span class="mp-barra-cab"></span>' +
+      '<span class="mp-p-litros">' + litros(r.litros) + '</span>' +
+      '<span class="mp-p-pct">' + pctTxt(appRede, r.litros) + '</span>' +
+      '<span class="mp-p-mix">' + pctTxt(g.litros_aditivada, g.litros_total) + '</span>' +
+      '<span class="mp-p-prod">' + reais((r.produto && r.produto.faturamento) || 0) + '</span>' +
+      '<span class="mp-p-lucro">—</span>' +
+    '</div>';
+  }
+
   function htmlLista() {
-    // Ordena pelo valor MOSTRADO: com Soutag ligado, a lista é o ranking de
-    // Soutag. Ordenar sempre por total faria o primeiro da lista ser um posto
-    // com o menor número da coluna.
-    var lista = _dados.postos.slice().sort(function (a, b) { return valorDe(b) - valorDe(a); });
+    // Ordem: pelo card ativo quando há um ordenável; senão a regra de sempre
+    // (litros do convênio marcado, ou total no modo pista).
+    var qual = ordemAtiva();
+    var lista = _dados.postos.slice().sort(qual
+      ? function (a, b) { return valorOrdem(b, qual) - valorOrdem(a, qual); }
+      : function (a, b) { return valorDe(b) - valorDe(a); });
     if (!lista.length) return '<div class="mp-vazio">Sem venda no período.</div>';
-    // Régua da barra = maior TOTAL da lista, e não o maior valor da coluna:
-    // com Soutag ligado a lista vira o ranking de Soutag, mas a barra continua
-    // medindo venda total, então as duas têm de usar a mesma referência.
+    // Régua da barra = maior TOTAL da lista, qualquer que seja a ordenação: a
+    // barra mede venda total, então a referência não pode mudar com o sort.
     var maior = lista.reduce(function (m, p) { return Math.max(m, p.litros || 0); }, 0);
-    return '<div class="mp-lista">' + lista.map(function (p) { return htmlPosto(p, maior); }).join('') + '</div>';
+    return '<div class="mp-lista">' + htmlCabecalho() +
+      lista.map(function (p) { return htmlPosto(p, maior); }).join('') +
+      htmlRede() + '</div>';
   }
 
   // ── Pintura ──────────────────────────────────────────────────────
