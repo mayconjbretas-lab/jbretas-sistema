@@ -3265,8 +3265,15 @@
   // que se lê como "não vendeu combustível" — a afirmação mais errada possível
   // numa rede onde combustível é 99% da venda. Sem o dado a métrica cai para
   // UMA barra (o total) e o balão diz por quê.
+  // O LUCRO DE CADA METADE VEM SOMADO, NÃO REDERIVADO. A API tira a venda
+  // das linhas sem custo da base do lucro (ver o custo nullable no
+  // GET /dre), e o `custo_desconhecido` que ela devolve não é quebrado por
+  // metade — então refazer `venda − custo` aqui daria um lucro maior que o
+  // da API, em silêncio. Lucro é aditivo: somar o que veio pronto fecha
+  // com a rota por construção, e continua fechando se a regra mudar lá.
   var SPLIT_SOMA = ['venda_liquida_comb', 'venda_liquida_prod',
-                    'custo_total_comb', 'custo_total_prod'];
+                    'custo_total_comb', 'custo_total_prod',
+                    'lucro_comb', 'lucro_prod'];
   // numOuNull, e NÃO Number.isFinite(Number(x)): `Number(null)` é ZERO e
   // Number.isFinite(0) é true, então a versão ingênua dava o split como
   // PRESENTE quando ele era null — e a tela mostrava R$ 0,00 de combustível,
@@ -3276,17 +3283,20 @@
     return !!o && numOuNull(o.venda_liquida_comb) !== null
                && numOuNull(o.venda_liquida_prod) !== null;
   }
-  // Lucro e margem de cada metade a partir das quatro somas. UM lugar só:
-  // margem de metade é RAZÃO das somas daquela metade, nunca média das margens
-  // diárias — mesma regra do `margem_pct` do total, pelo mesmo motivo.
+  // Margem de cada metade a partir das somas. UM lugar só: margem de metade
+  // é RAZÃO das somas daquela metade, nunca média das margens diárias —
+  // mesma regra do `margem_pct` do total, pelo mesmo motivo.
+  //
+  // O LUCRO NÃO É CALCULADO AQUI, vem somado no SPLIT_SOMA — ver o
+  // comentário de lá. O denominador é a venda CHEIA da metade, incluindo a
+  // venda sem custo, igual ao que a rota faz: é essa assimetria que
+  // reproduz o Lucro % do arquivo TecnoX.
   function derivarSplit(o) {
     if (!temSplit(o)) {
       o.lucro_comb = null;  o.lucro_prod = null;
       o.margem_comb = null; o.margem_prod = null;
       return o;
     }
-    o.lucro_comb = o.venda_liquida_comb - o.custo_total_comb;
-    o.lucro_prod = o.venda_liquida_prod - o.custo_total_prod;
     o.margem_comb = o.venda_liquida_comb !== 0
       ? o.lucro_comb / o.venda_liquida_comb * 100 : null;
     o.margem_prod = o.venda_liquida_prod !== 0
@@ -3360,6 +3370,7 @@
               // guardar a série "para o caso de" é peso morto.
               venda_liquida_comb: 0, venda_liquida_prod: 0,
               custo_total_comb: 0, custo_total_prod: 0,
+              lucro_comb: 0, lucro_prod: 0,
               splitAusente: false };
         por.set(mes, a);
       }
@@ -3387,7 +3398,12 @@
     });
     return [...por.values()].sort(function (a, b) { return a.mes.localeCompare(b.mes); })
       .map(function (a) {
-        a.lucro = a.venda_liquida - a.custo_total;
+        // A venda das linhas sem custo sai da base do lucro, igual à API:
+        // `a.sc_venda` já vem somado dos `custo_desconhecido` diários logo
+        // acima. Sem esta subtração o mês mostraria um lucro maior que o da
+        // rota, pela venda que ninguém sabe o custo. Denominador da margem
+        // segue a venda líquida CHEIA — é o que reproduz o % do arquivo.
+        a.lucro = (a.venda_liquida - a.sc_venda) - a.custo_total;
         a.margem_pct = a.venda_liquida !== 0 ? a.lucro / a.venda_liquida * 100 : null;
         a.custo_desconhecido = { linhas: a.sc_linhas, venda_liquida: a.sc_venda };
         if (a.litroAusente) a.litros = null;
@@ -3465,6 +3481,9 @@
     if (!usados.length) return null;
     var soma = usados.reduce(function (a, m) {
       a.venda += m.venda_liquida; a.custo += m.custo_total;
+      // Lucro SOMADO, não refeito de venda − custo: cada mês já desconta a
+      // venda sem custo, e refazer a conta aqui devolveria o desconto.
+      a.lucro += Number(m.lucro) || 0;
       // Litro só entra se TODOS os meses usados o têm. Média de litro com um
       // mês faltando sairia baixa e viraria projeção baixa, sem nada avisando.
       var lm = numOuNull(m.litros);
@@ -3475,19 +3494,25 @@
       if (!temSplit(m)) a.splitCompleto = false;
       else SPLIT_SOMA.forEach(function (k) { a.sp[k] += Number(m[k]) || 0; });
       return a;
-    }, { venda: 0, custo: 0, litros: 0, litroCompleto: true, splitCompleto: true,
+    }, { venda: 0, custo: 0, lucro: 0, litros: 0, litroCompleto: true, splitCompleto: true,
          sp: { venda_liquida_comb: 0, venda_liquida_prod: 0,
-               custo_total_comb: 0, custo_total_prod: 0 } });
+               custo_total_comb: 0, custo_total_prod: 0,
+               lucro_comb: 0, lucro_prod: 0 } });
     var venda = soma.venda / usados.length;
     var custo = soma.custo / usados.length;
+    var lucro = soma.lucro / usados.length;
     return {
       n: usados.length,
       meses: usados.map(function (m) { return m.mes; }),
-      venda_liquida: venda, custo_total: custo, lucro: venda - custo,
-      // MARGEM COMO RAZÃO: venda e custo projetados separados e SÓ ENTÃO
+      venda_liquida: venda, custo_total: custo, lucro: lucro,
+      // MARGEM COMO RAZÃO: venda e lucro projetados separados e SÓ ENTÃO
       // divididos. Média das margens mensais daria outro número, e daria peso
       // igual a um mês pequeno e a um mês grande.
-      margem_pct: venda !== 0 ? (venda - custo) / venda * 100 : null,
+      //
+      // `lucro` é a MÉDIA dos lucros mensais, e não venda − custo: cada mês
+      // já tirou a venda sem custo da base, e refazer a subtração aqui
+      // devolveria o que a API tinha descontado.
+      margem_pct: venda !== 0 ? lucro / venda * 100 : null,
       litros: soma.litroCompleto ? soma.litros / usados.length : null,
       split: (function () {
         var o = {};

@@ -1,0 +1,354 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lucro bruto do arquivo TecnoX — Movimentação do dia + DRE</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<!-- Alias dos tokens curtos. O painel-adm.css usa --tx/--bd/--sf2/--ac, que
+     só existem no admin.css; em produção a página do painel carrega os dois.
+     Sem esta ponte o harness renderiza sem cor E SEM ALGUMAS MEDIDAS (o
+     --rl do raio), e as afirmações de geometria passariam por engano. -->
+<style>
+  :root {
+    --ac: var(--accent); --ac2: var(--accent2); --acd: var(--accent-dim);
+    --dg: var(--danger); --wn: var(--warning); --inf: var(--info);
+    --tx: var(--text); --tx2: var(--text2); --tx3: var(--text3);
+    --sf: var(--surface); --sf2: var(--surface2); --sf3: var(--surface3);
+    --bd: var(--border); --bd2: var(--border2);
+    --r: var(--radius); --rl: var(--radius-lg);
+    --mp-so: var(--accent2); --mp-99: var(--info);
+  }
+</style>
+<link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+<style>
+  /* O painel-adm.css prende a página (html,body{overflow:hidden}) porque em
+     produção só o #screen-app rola. Aqui o harness PRECISA rolar para a
+     inspeção visual — e isto não toca em nada que as medidas leiam. */
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+
+<div id="res">rodando…</div>
+
+<div id="palco">
+  <!-- A MESMA marcação do index.html de produção: `.scr.active` com o id que
+       o CSS espera. Palco com outro id passaria sem provar nada, porque
+       `#s-movpostos.active{display:block}` é regra de id. -->
+  <section class="scr active" id="s-movpostos"></section>
+  <section class="scr active" id="s-dre"></section>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// 1. A Movimentação do dia lê o LUCRO DO ARQUIVO TECNOX (bloco `dre` da
+//    rota), e não mais a estimativa por custo_avista da planilha. O card, a
+//    coluna, a linha REDE e o detalhe mostram os mesmos números que o
+//    "Total Geral" / "Total Empresa" impressos.
+//
+// 2. A GEOMETRIA NÃO MUDOU. Cards 150×96 e colunas 150/130/90/100/70/90/110/70,
+//    medidas no layout de verdade — não é conferência de string no CSS, é
+//    getBoundingClientRect() depois do render.
+//
+// 3. O dre.js não refaz mais `venda − custo` no cliente: a venda das linhas
+//    sem custo fica fora da base do lucro, como a API faz, e a tela do DRE
+//    de 13/09 mostra 301.932,90 / 16,02%.
+//
+// AS FIXTURES SÃO RESPOSTAS REAIS da rota, capturadas do banco de produção
+// em 14/09/2026 (testes/fixtures-*.json). Nada sintetizado: se o número bate
+// aqui, bate com o que a API devolve.
+// ════════════════════════════════════════════════════════════════
+var linhas = [];
+var falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + rot +
+    (obtido === undefined ? '' : '  →  ' + obtido +
+      (esperado === undefined ? '' : '   (esperado ' + esperado + ')')));
+}
+function nota(t) { linhas.push('     ' + t); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+// O textContent NÃO traz espaço entre o <span class="mp-rs">R$</span> e o
+// número: a separação é margin-right no CSS. Comparar "R$ 301.932,90" com o
+// texto cru reprovaria um render correto — então as igualdades que envolvem
+// dinheiro passam por aqui antes.
+function semEsp(t) { return String(t).replace(/\s+/g, ''); }
+function txt(el) { return el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : ''; }
+// Largura/altura ARREDONDADAS: o navegador devolve fração por causa do zoom
+// do sistema, e comparar 149.99609375 com 150 reprovaria um layout correto.
+function larg(el) { return el ? Math.round(el.getBoundingClientRect().width) : -1; }
+function alt(el) { return el ? Math.round(el.getBoundingClientRect().height) : -1; }
+// "R$ 301.932,90" → 301932.90. É assim que se prova que a soma da coluna
+// fecha com o card: comparando NÚMEROS, não textos formatados.
+function numBR(t) {
+  var m = String(t).replace(/[^0-9.,-]/g, '').replace(/\./g, '').replace(',', '.');
+  var n = Number(m);
+  return Number.isFinite(n) ? n : null;
+}
+
+var FIX_MOV = null, FIX_DRE = null;
+var PEDIDOS = [];           // toda URL que o front pediu, para o relatório
+var SERVIDO_EXATO = {};     // quais vieram de fixture exata
+
+// ── stub do apiFetch ──────────────────────────────────────────────
+// Resolve /dre pela chave inicio|fim|agrupar. MISS NÃO É DISFARÇADO: devolve
+// uma resposta válida e vazia E fica registrado, para nenhuma afirmação se
+// apoiar num número que o harness inventou.
+function dreVazio() {
+  return { periodo: { inicio: '', fim: '', dias: 0 }, totais: null, linhas: [] };
+}
+function stubApiFetch(url) {
+  PEDIDOS.push(url);
+  if (url.indexOf('/postos') === 0) return Promise.resolve(FIX_DRE.postos || []);
+  if (url.indexOf('/tecnox/movimentacao-postos') === 0) return Promise.resolve(FIX_MOV);
+  if (url.indexOf('/dre') === 0) {
+    var q = url.split('?')[1] || '';
+    var p = {};
+    q.split('&').forEach(function (kv) {
+      var i = kv.indexOf('=');
+      if (i > 0) p[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1));
+    });
+    var k = (p.inicio || '') + '|' + (p.fim || '') + '|' + (p.agrupar || '');
+    if (FIX_DRE.dre[k]) { SERVIDO_EXATO[k] = true; return Promise.resolve(FIX_DRE.dre[k]); }
+    return Promise.resolve(dreVazio());
+  }
+  return Promise.resolve(null);
+}
+
+// O dre.js barra quem não é ADM/Logística antes de desenhar qualquer coisa.
+window.getUsuarioLogado = function () {
+  return { id: 'harness', nome: 'Harness', perfil: 'ADM' };
+};
+window.apiFetch = stubApiFetch;
+// O movimentacao-postos.js reusa nf/esc/brData daqui quando existe.
+window.mmFmt = window.mmFmt || null;
+
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+// ════════════════════════════════════════════════════════════════
+async function rodar() {
+  var r1 = await fetch('/testes/fixtures-movpostos-13-09.json');
+  FIX_MOV = await r1.json();
+  var r2 = await fetch('/testes/fixtures-dre-13-09.json');
+  FIX_DRE = await r2.json();
+
+  var secMov = document.getElementById('s-movpostos');
+  var secDre = document.getElementById('s-dre');
+
+  h3('Fixture — resposta real de GET /tecnox/movimentacao-postos 13/09');
+  var D = FIX_MOV.rede.dre;
+  nota('rede.dre.lucro ' + D.lucro + '  ·  margem_pct ' + D.margem_pct +
+       '  ·  quantidade_comb ' + D.quantidade_comb + '  ·  postos ' + FIX_MOV.postos.length);
+  eh(D.lucro === 301932.90, 'a fixture traz o Total Geral do arquivo', D.lucro, '301932.9');
+  eh(FIX_MOV.rede.lucro === undefined, 'o campo `lucro` da planilha SAIU da rota',
+     String(FIX_MOV.rede.lucro), 'undefined');
+
+  // ── 1. Movimentação do dia ──────────────────────────────────────
+  window.renderMovPostos(secMov);
+  await esperar(80);
+
+  h3('1. Card LUCRO BRUTO');
+  var card = secMov.querySelector('.mp-card-lucro');
+  eh(!!card, 'o card existe');
+  var num = card && card.querySelector('.mp-num');
+  eh(semEsp(txt(num)) === semEsp('R$ 301.932,90'), 'valor = lucro do arquivo', txt(num), 'R$ 301.932,90');
+  var tks = card && card.querySelectorAll('.mp-tk');
+  eh(tks && tks.length === 2, 'duas linhas empilhadas embaixo, como no Ticket',
+     tks ? tks.length : 0, '2');
+  if (tks && tks.length === 2) {
+    // 301932.90 ÷ 338972.672 = 0,8907…  → R$ 0,89
+    eh(txt(tks[0]).indexOf('R$ 0,89') >= 0, 'linha 1: lucro ÷ quantidade_comb', txt(tks[0]), 'R$ 0,89');
+    eh(txt(tks[1]).indexOf('16,02%') >= 0, 'linha 2: margem com 2 casas', txt(tks[1]), '16,02%');
+  }
+
+  h3('2. Conta do card (clicando nele)');
+  window.__mpCard('lucro');
+  await esperar(50);
+  var det = secMov.querySelector('.mp-detalhe');
+  var tdet = txt(det);
+  eh(tdet.indexOf('R$ 1.895.160,60') >= 0, 'venda bruta');
+  eh(tdet.indexOf('R$ 11.016,95') >= 0, 'desconto');
+  eh(tdet.indexOf('R$ 1.884.143,65') >= 0, 'venda líquida');
+  eh(tdet.indexOf('R$ 1.582.185,85') >= 0, 'custo total');
+  eh(tdet.indexOf('venda líquida − custo = R$ 301.932,90') >= 0, 'a conta, escrita');
+  eh(tdet.indexOf('16,02%') >= 0, 'margem');
+  eh(/planilha|custo_avista|defasad/i.test(tdet) === false,
+     'nenhuma palavra de planilha / custo_avista / defasado');
+
+  h3('3. Coluna LUCRO — P. SAO BERNARDO (Total Empresa do arquivo)');
+  var alvo = null;
+  var postosEl = secMov.querySelectorAll('.mp-posto');
+  for (var i = 0; i < postosEl.length; i++) {
+    if (txt(postosEl[i].querySelector('.mp-p-nome')) === 'P. SAO BERNARDO') { alvo = postosEl[i]; break; }
+  }
+  eh(!!alvo, 'a linha existe');
+  if (alvo) {
+    var cel = alvo.querySelector('.mp-p-lucro');
+    var mini = cel.querySelector('.mp-p-mini');
+    // O valor é o nó de texto antes do .mp-p-mini — textContent traria os dois.
+    var soValor = txt(cel).replace(txt(mini), '').trim();
+    eh(soValor === '7.707,92', 'valor sem prefixo R$', soValor, '7.707,92');
+    eh(txt(mini) === '15,78%', 'sublinha = margem com 2 casas (a de R$/L saiu)', txt(mini), '15,78%');
+    eh(!cel.getAttribute('title'), 'sem title de custo defasado',
+       cel.getAttribute('title') || '(nenhum)', '(nenhum)');
+  }
+
+  h3('4. Soma da coluna fecha com o card');
+  var soma = 0, semDado = 0;
+  for (var j = 0; j < postosEl.length; j++) {
+    var c = postosEl[j].querySelector('.mp-p-lucro');
+    var mn = c.querySelector('.mp-p-mini');
+    var v = numBR(txt(c).replace(txt(mn), '').trim());
+    if (v === null) semDado++; else soma += v;
+  }
+  soma = Math.round(soma * 100) / 100;
+  nota(postosEl.length + ' linhas somadas (' + semDado + ' sem dado)');
+  // ±R$ 0,01 por linha: cada célula já vem arredondada a 2 casas pela rota,
+  // então a soma das células pode diferir do total no último centavo.
+  eh(Math.abs(soma - 301932.90) <= 0.35, 'Σ coluna == card', soma, '301.932,90');
+
+  h3('5. Linha REDE');
+  var rede = secMov.querySelector('.mp-rede');
+  var celR = rede && rede.querySelector('.mp-p-lucro');
+  var miniR = celR && celR.querySelector('.mp-p-mini');
+  var valR = celR ? txt(celR).replace(txt(miniR), '').trim() : '';
+  eh(valR === '301.932,90', 'valor sem prefixo', valR, '301.932,90');
+  eh(txt(miniR) === '16,02%', 'margem embaixo', txt(miniR), '16,02%');
+
+  h3('6. Detalhe do posto (uma linha por campo, ordem do arquivo)');
+  if (alvo) {
+    var btn = alvo.querySelector('.mp-p-linha');
+    btn.click();
+    await esperar(50);
+    var alvo2 = null, pos2 = secMov.querySelectorAll('.mp-posto');
+    for (var k2 = 0; k2 < pos2.length; k2++) {
+      if (txt(pos2[k2].querySelector('.mp-p-nome')) === 'P. SAO BERNARDO') { alvo2 = pos2[k2]; break; }
+    }
+    var pd = alvo2 && alvo2.querySelector('.mp-p-det');
+    var tp = txt(pd);
+    eh(semEsp(tp).indexOf(semEsp('Venda bruta R$ 49.334,16')) >= 0, 'Venda bruta', tp.indexOf('Venda bruta') >= 0 ? 'presente' : 'ausente');
+    eh(semEsp(tp).indexOf(semEsp('Venda líquida R$ 48.832,08')) >= 0, 'Venda líquida');
+    eh(semEsp(tp).indexOf(semEsp('Custo total R$ 41.099,26')) >= 0, 'Custo total');
+    eh(semEsp(tp).indexOf(semEsp('Lucro R$ 7.707,92')) >= 0, 'Lucro');
+    eh(semEsp(tp).indexOf(semEsp('Margem 15,78%')) >= 0, 'Margem');
+    eh(/defasad|custo_avista|planilha/i.test(tp) === false, 'sem texto de planilha/defasagem');
+    btn.click();
+    await esperar(30);
+  }
+
+  h3('7. Ordenação pelo card Lucro');
+  // O card já está aberto desde o passo 2 — a lista deve estar em ordem de
+  // lucro decrescente, e o posto sem dado no fim (null afunda, não vira 0).
+  var nomes = [], vals = [];
+  var po = secMov.querySelectorAll('.mp-posto');
+  for (var m2 = 0; m2 < po.length; m2++) {
+    var cc = po[m2].querySelector('.mp-p-lucro');
+    var mm = cc.querySelector('.mp-p-mini');
+    vals.push(numBR(txt(cc).replace(txt(mm), '').trim()));
+    nomes.push(txt(po[m2].querySelector('.mp-p-nome')));
+  }
+  var ordenado = true;
+  for (var n2 = 1; n2 < vals.length; n2++) {
+    var a = vals[n2 - 1] === null ? -Infinity : vals[n2 - 1];
+    var b = vals[n2] === null ? -Infinity : vals[n2];
+    if (a < b) ordenado = false;
+  }
+  eh(ordenado, 'lista em lucro decrescente, sem dado no fim',
+     nomes[0] + ' ' + vals[0] + '  …  ' + nomes[nomes.length - 1] + ' ' + vals[vals.length - 1]);
+
+  h3('8. GEOMETRIA — nada mudou de tamanho');
+  var cards = secMov.querySelectorAll('.mp-card');
+  eh(cards.length === 8, 'oito cards', cards.length, '8');
+  var lg = {}, at = {};
+  for (var c2 = 0; c2 < cards.length; c2++) {
+    lg[larg(cards[c2])] = (lg[larg(cards[c2])] || 0) + 1;
+    at[alt(cards[c2])] = (at[alt(cards[c2])] || 0) + 1;
+  }
+  eh(Object.keys(lg).length === 1 && Number(Object.keys(lg)[0]) === 150,
+     'todos com 150px de largura', JSON.stringify(lg), '{"150":8}');
+  eh(Object.keys(at).length === 1 && Number(Object.keys(at)[0]) === 96,
+     'todos com 96px de altura', JSON.stringify(at), '{"96":8}');
+  // O card do lucro ganhou uma linha embaixo; a prova de que isso não o
+  // esticou é ele ter exatamente a mesma caixa dos outros sete.
+  // RE-QUERY: o __mpCard do passo 2 repintou o #mp-corpo inteiro, e o nó
+  // capturado lá em cima está destacado do documento (mede 0×0).
+  var cardVivo = secMov.querySelector('.mp-card-lucro');
+  eh(larg(cardVivo) === 150 && alt(cardVivo) === 96, 'o card do lucro tem a MESMA caixa',
+     larg(cardVivo) + '×' + alt(cardVivo), '150×96');
+
+  var ESPERADAS = [['.mp-p-nome', 150], ['.mp-barra-cab', 130], ['.mp-p-litros', 90],
+                   ['.mp-p-comb', 100], ['.mp-p-pct', 70], ['.mp-p-mix', 90],
+                   ['.mp-p-prod', 110], ['.mp-p-lucro', 70]];
+  var cab = secMov.querySelector('.mp-cab');
+  for (var e2 = 0; e2 < ESPERADAS.length; e2++) {
+    var sel = ESPERADAS[e2][0], esp = ESPERADAS[e2][1];
+    var no = cab.querySelector(sel);
+    eh(larg(no) === esp, 'coluna ' + sel, larg(no) + 'px', esp + 'px');
+  }
+  // A célula da linha tem de cair na MESMA coluna do cabeçalho — medir só o
+  // cabeçalho deixaria passar uma linha desalinhada dele.
+  var l0 = secMov.querySelector('.mp-posto .mp-p-lucro');
+  eh(larg(l0) === 70, 'a célula LUCRO da linha também tem 70px', larg(l0) + 'px', '70px');
+
+  // ── 2. DRE ──────────────────────────────────────────────────────
+  h3('9. Tela do DRE, dia 13/09');
+  window.renderDre(secDre);
+  await esperar(150);
+  window.__dreSubaba('dia');
+  await esperar(60);
+  var inp = secDre.querySelector('#dre-dia');
+  if (inp) { inp.value = '2026-09-13'; inp.onchange(); }
+  await esperar(200);
+  var tdre = txt(secDre);
+  eh(SERVIDO_EXATO['2026-09-13|2026-09-13|categoria'] === true ||
+     SERVIDO_EXATO['2026-09-13|2026-09-13|posto'] === true ||
+     SERVIDO_EXATO['2026-09-13|2026-09-13|dia'] === true,
+     'a tela foi servida por fixture EXATA de 13/09 (não por fallback vazio)',
+     Object.keys(SERVIDO_EXATO).join(', '));
+  eh(tdre.indexOf('301.932,90') >= 0, 'o DRE mostra o lucro do arquivo', '301.932,90');
+  eh(tdre.indexOf('16,02') >= 0, 'o DRE mostra a margem do arquivo', '16,02');
+  eh(tdre.indexOf('301.957,80') < 0, 'o número ANTIGO (venda − custo) não aparece em lugar nenhum');
+
+  h3('10. dre.js — a venda sem custo fica fora da base do lucro');
+  // Prova pela definição, sobre a MESMA resposta que a tela usou: o lucro da
+  // rota não é venda_liquida − custo_total; a diferença é exatamente a venda
+  // das linhas sem custo. Se o cliente refizesse a conta, daria o outro.
+  var t13 = FIX_DRE.dre['2026-09-13|2026-09-13|categoria'].totais;
+  var vlct = Math.round((t13.venda_liquida - t13.custo_total) * 100) / 100;
+  nota('venda_liquida − custo_total = ' + vlct.toFixed(2) +
+       '   ·   lucro da rota = ' + t13.lucro.toFixed(2) +
+       '   ·   venda sem custo = ' + t13.custo_desconhecido.venda_liquida.toFixed(2));
+  eh(Math.round((vlct - t13.lucro) * 100) / 100 === t13.custo_desconhecido.venda_liquida,
+     'a diferença é a venda sem custo, ao centavo',
+     (vlct - t13.lucro).toFixed(2), t13.custo_desconhecido.venda_liquida.toFixed(2));
+  eh(Math.abs(t13.lucro_comb + t13.lucro_prod - t13.lucro) <= 0.011,
+     'lucro_comb + lucro_prod == lucro (as metades seguem a mesma regra)',
+     (t13.lucro_comb + t13.lucro_prod).toFixed(2), t13.lucro.toFixed(2));
+
+  h3('URLs que o front pediu');
+  nota(PEDIDOS.join('\n     '));
+
+  h3(falhas === 0 ? '<span class="ok">TUDO PASSOU</span>'
+                  : '<span class="bad">' + falhas + ' FALHA(S)</span>');
+  pintar();
+}
+
+rodar().catch(function (e) {
+  linhas.push('<span class="bad">ERRO: ' + e.message + '</span>');
+  linhas.push(String(e.stack || '').split('\n').slice(0, 6).join('\n'));
+  pintar();
+});
+</script>
+
+<script src="/modulos/painel-adm/movimentacao-mes.js"></script>
+<script src="/modulos/painel-adm/movimentacao-postos.js"></script>
+<script src="/modulos/painel-adm/dre.js"></script>

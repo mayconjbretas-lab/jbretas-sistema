@@ -484,7 +484,10 @@ html, body { height: 100%; overflow: hidden; }
 /* Ticket: três medidas do mesmo denominador, empilhadas e alinhadas. */
 /* Ticket: três linhas no lugar do valor único, ocupando a faixa do meio. */
 .mp-card-ticket { grid-template-rows: auto 1fr; }
-.mp-card-ticket .mp-tks { display: flex; flex-direction: column; justify-content: flex-end; }
+/* Pilha de linhas curtas no pé de um card. Nasceu no Ticket e agora o
+   Lucro bruto usa a mesma: o card tem altura fixa, então a linha 1fr do
+   meio cede o espaço e nada muda de tamanho. */
+.mp-tks { display: flex; flex-direction: column; justify-content: flex-end; }
 .mp-tk { display: flex; justify-content: space-between; gap: .3rem; font-family: var(--mono);
   font-size: 11px; color: var(--tx3); white-space: nowrap; overflow: hidden; }
 .mp-tk b { color: var(--tx); font-weight: 700; }

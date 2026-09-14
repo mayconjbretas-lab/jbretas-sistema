@@ -87,6 +87,12 @@
   function reaisSemPrefixo(v) {
     return Number.isFinite(Number(v)) ? nf(Number(v), 2) : '—';
   }
+  // Margem com DUAS casas, como o relatório TecnoX imprime. O pctTxt tem
+  // uma só porque mede litro; aqui o número precisa bater dígito a dígito
+  // com a coluna Lucro % do arquivo — 16,02%, não 16,0%.
+  function pctDec(v) {
+    return Number.isFinite(Number(v)) ? nf(Number(v), 2) + '%' : '—';
+  }
   function pct(parte, todo) {
     if (!Number.isFinite(Number(todo)) || Number(todo) <= 0) return null;
     return Number(parte) / Number(todo) * 100;
@@ -145,26 +151,24 @@
     return g.litros_total > 0 ? g.litros_aditivada / g.litros_total : null;
   }
   function produtoDe(p) { return (p.produto && p.produto.faturamento) || 0; }
-  function lucroDe(p) { return (p.lucro && p.lucro.valor) || 0; }
-  // Quanto dos litros com custo usou o custo de um dia anterior.
-  function pctDefasado(u) {
-    return (u && u.litros_com_custo > 0) ? (u.litros_custo_defasado / u.litros_com_custo * 100) : 0;
-  }
-  // AVISO SEM MARCA NO NÚMERO. Antes a coluna trazia um "~" antes do valor
-  // (e um "*" quando havia litro sem custo). Saiu: a planilha de custo é
-  // importada em dia útil, então TODO fim de semana e TODA janela que inclua
-  // um marca 100% dos postos — um til em 37 de 37 linhas não distingue nada,
-  // só suja a coluna e rouba caractere de uma célula de 70px.
+  // ════════ O LUCRO VEM DO ARQUIVO, NÃO DE UMA ESTIMATIVA ════════
+  // Era valor_liquido − litros × custo_avista, sobre a planilha de custo.
+  // Agora é o bloco `dre` da rota: venda líquida menos custo, TODAS as
+  // categorias, a mesma agregação do GET /dre. Por posto é o "Total
+  // Empresa" do relatório TecnoX; na rede, o "Total Geral" — os números
+  // que o supervisor tem impressos na mão.
   //
-  // O aviso continua nos três lugares onde há espaço para a frase inteira: o
-  // title da célula (hover), a conta do card e o detalhe do posto.
-  function avisoLucro(u) {
-    if (!u) return '';
-    var partes = [];
-    if (u.litros_custo_defasado > 0) partes.push('custo do último dia disponível em ' + nf(pctDefasado(u), 1) + '% dos litros');
-    if (u.litros_sem_custo > 0) partes.push(litros(u.litros_sem_custo) + ' sem custo, fora da conta');
-    return partes.join(' · ');
+  // Saiu junto tudo que falava de custo defasado: não existe mais custo
+  // defasado nesta tela, porque não existe mais planilha nesta tela.
+  //
+  // NULL, E NÃO ZERO, quando o arquivo ainda não cobre o posto. Zero o
+  // poria no meio da lista, entre quem lucrou pouco e quem teve prejuízo;
+  // null afunda no sort e a célula mostra travessão.
+  function dreDe(p) {
+    var d = p.dre || null;
+    return (d && d.lucro !== null && d.lucro !== undefined) ? d : null;
   }
+  function lucroDe(p) { var d = dreDe(p); return d ? d.lucro : null; }
   function appDe(p) {
     var quais = modoPista() ? ['SOUTAG', '99'] : canaisLigados().filter(function (c) { return c !== 'NORMAL'; });
     return quais.reduce(function (s, c) { return s + ((p.por_canal[c] && p.por_canal[c].litros) || 0); }, 0);
@@ -173,7 +177,9 @@
     if (qual === 'total') return p.litros;
     if (qual === 'produto') return produtoDe(p);
     if (qual === 'mix') { var m = mixDe(p); return m === null ? -1 : m; }
-    if (qual === 'lucro') return lucroDe(p);
+    // -Infinity, e não -1: lucro pode ser NEGATIVO, e -1 poria o posto sem
+    // dado acima de quem teve prejuízo de verdade.
+    if (qual === 'lucro') { var lv = lucroDe(p); return lv === null ? -Infinity : lv; }
     return (p.por_canal[qual] && p.por_canal[qual].litros) || 0;
   }
   // Valor que ordena a lista e que a linha mostra: litros do(s) convênio(s)
@@ -360,20 +366,29 @@
       '<div class="mp-sub">' + litros(gas.litros_aditivada) + ' aditivada</div>' +
     '</button>';
 
-    // LUCRO BRUTO: é valor_liquido − litros ×
-    // custo_avista, não a conta do DRE (que sai de tecnox_categoria_dia, por
-    // categoria contábil e com o custo da própria TecnoX). Medido em 10/09,
-    // dia limpo dos dois lados, os dois ficaram a 0,2% um do outro — perto,
-    // mas não é o mesmo número, e o rótulo não pode prometer que é.
-    var lu = _dados.rede.lucro || null;
+    // LUCRO BRUTO = o "Total Geral" do arquivo TecnoX. Duas linhas
+    // empilhadas embaixo, com o mesmo `tk` do Ticket: o número sozinho não
+    // diz se o lucro foi bom, e as duas medidas que dizem (por litro e
+    // margem) cabem sem tocar nos 150×96 — o card tem altura fixa, e a
+    // linha 1fr do meio é que cede o espaço.
+    //
+    // POR LITRO usa quantidade_comb, e NÃO a litragem da tela: o lucro vem
+    // da tecnox_categoria_dia e dividir por litros da tecnox_venda_dia
+    // misturaria duas importações no mesmo quociente. As duas divergem em
+    // 0,01% num dia e 0,09% em treze — pouco, e ainda assim é a conta errada.
+    var lu = _dados.rede.dre || null;
+    var temLu = !!(lu && lu.lucro !== null && lu.lucro !== undefined);
     var cardLucro = '<button type="button" class="mp-card mp-card-lucro' +
       (_cardAberto === 'lucro' ? ' aberto' : '') + '"' +
       ' aria-expanded="' + (_cardAberto === 'lucro' ? 'true' : 'false') + '"' +
       ' onclick="__mpCard(\'lucro\')">' + setaOrd('lucro') +
       '<div class="mp-rot">LUCRO BRUTO</div>' +
-      '<div class="mp-num mp-card-valor">' + (lu ? reaisCard(lu.valor) : '—') + '</div>' +
-      '<div class="mp-sub">' + (lu && lu.margem_litro !== null
-        ? reais(lu.margem_litro) + ' por litro' : '—') + '</div>' +
+      '<div class="mp-num mp-card-valor">' + (temLu ? reaisCard(lu.lucro) : '—') + '</div>' +
+      '<div class="mp-tks">' +
+        tk('por litro', (temLu && lu.quantidade_comb > 0)
+          ? reais(lu.lucro / lu.quantidade_comb) : '—') +
+        tk('margem', temLu ? pctDec(lu.margem_pct) : '—') +
+      '</div>' +
     '</button>';
 
     return '<div class="mp-cards">' +
@@ -417,19 +432,32 @@
         linha('Sobre o faturamento de pista', pctTxt(prod, r.faturamento)) +
         linha('Fonte', 'tecnox_venda_produto_dia — mesma do Consolidado');
     } else if (_cardAberto === 'lucro') {
-      var u = r.lucro || { valor: 0, litros_com_custo: 0, litros_sem_custo: 0, litros_custo_defasado: 0, margem_litro: null };
-      corpo =
-        linha('A conta', 'valor_liquido − litros × custo = ' + reais(u.valor)) +
-        linha('Margem por litro', u.margem_litro !== null ? reais(u.margem_litro) + ' / L' : '—') +
-        linha('Litros com custo', litros(u.litros_com_custo));
-      if (u.litros_custo_defasado > 0) {
-        corpo += linha('Custo do dia anterior',
-          nf(pctDefasado(u), 1) + '% dos litros (' + litros(u.litros_custo_defasado) + ')');
+      // A conta na ORDEM DO ARQUIVO, de cima para baixo, para conferir
+      // linha a linha contra o "Total Geral" impresso.
+      var u = r.dre || null;
+      if (!u || u.lucro === null || u.lucro === undefined) {
+        corpo = linha('Sem dado', 'o arquivo TecnoX não cobre nenhum dia deste período');
+      } else {
+        corpo =
+          linha('Venda bruta', reais(u.venda_bruta)) +
+          linha('Desconto', reais(u.desconto)) +
+          linha('Venda líquida', reais(u.venda_liquida)) +
+          linha('Custo total', reais(u.custo_total)) +
+          linha('A conta', 'venda líquida − custo = ' + reais(u.lucro)) +
+          linha('Margem', pctDec(u.margem_pct)) +
+          linha('Por litro', u.quantidade_comb > 0
+            ? reais(u.lucro / u.quantidade_comb) + ' / L  ·  ' + litros(u.quantidade_comb) + ' de combustível' : '—');
+        // COBERTURA. Sem isto, um lucro de 1 dia apareceria do lado de uma
+        // litragem de 7 como se fossem a mesma janela. A data do último dia
+        // com dado não é dita porque a rota não a devolve — e deduzi-la do
+        // contador seria chute: o buraco nem sempre está no fim (11/09 o
+        // P. ARAPONGA ficou sem linha no meio do período).
+        if (u.dias_com_dado < u.dias_periodo) {
+          corpo += linha('Cobertura', 'dados do arquivo TecnoX em ' + u.dias_com_dado +
+            ' de ' + u.dias_periodo + ' dias do período');
+        }
+        corpo += linha('Fonte', 'tecnox_categoria_dia — a mesma conta do DRE');
       }
-      if (u.litros_sem_custo > 0) {
-        corpo += linha('Sem custo (fora da conta)', litros(u.litros_sem_custo));
-      }
-      corpo += linha('Fonte do custo', 'custos_precos.custo_avista — não é a conta do DRE');
     } else if (_cardAberto === 'mix') {
       var g = r.gasolina || { litros_total: 0, litros_aditivada: 0 };
       corpo =
@@ -505,8 +533,7 @@
     var g = p.gasolina || { litros_total: 0, litros_aditivada: 0 };
     var prod = produtoDe(p);
     var ab = p.abastecimentos || 0;
-    var ul = p.lucro || null;
-    var aviso = avisoLucro(ul);
+    var ul = dreDe(p);
 
     var numero = '<span class="mp-p-litros">' + litros(p.litros) +
       (modoPista() ? '' : '<span class="mp-p-conv">' + litros(v) + ' ' +
@@ -534,9 +561,17 @@
           (ab > 0 ? nf(p.litros / ab, 1) + ' L  ·  ' + reais(p.faturamento / ab) : '—') + '</b></div>' +
         '<div class="mp-det-linha"><span>Venda de combustível</span><b>' +
           reais(p.faturamento) + (p.litros > 0 ? '  ·  ' + reais(p.faturamento / p.litros) + '/L' : '') + '</b></div>' +
-        '<div class="mp-det-linha"><span>Lucro bruto</span><b>' +
-          (ul ? reais(ul.valor) + (ul.margem_litro !== null ? '  ·  ' + reais(ul.margem_litro) + '/L' : '') +
-            (aviso ? '  ·  ' + esc(aviso) : '') : '—') + '</b></div>' +
+        // LUCRO BRUTO na ordem do arquivo, uma linha cada: é assim que se
+        // confere contra o "Total Empresa" impresso, de cima para baixo.
+        '<div class="mp-det-sep">Lucro bruto</div>' +
+        (ul
+          ? '<div class="mp-det-linha"><span>Venda bruta</span><b>' + reais(ul.venda_bruta) + '</b></div>' +
+            '<div class="mp-det-linha"><span>Desconto</span><b>' + reais(ul.desconto) + '</b></div>' +
+            '<div class="mp-det-linha"><span>Venda líquida</span><b>' + reais(ul.venda_liquida) + '</b></div>' +
+            '<div class="mp-det-linha"><span>Custo total</span><b>' + reais(ul.custo_total) + '</b></div>' +
+            '<div class="mp-det-linha"><span>Lucro</span><b>' + reais(ul.lucro) + '</b></div>' +
+            '<div class="mp-det-linha"><span>Margem</span><b>' + pctDec(ul.margem_pct) + '</b></div>'
+          : '<div class="mp-det-linha"><span>Lucro</span><b>—</b></div>') +
       '</div>';
     }
 
@@ -553,9 +588,9 @@
           '<span class="mp-p-mini">' + litros(g.litros_aditivada) + ' adit.</span></span>' +
         '<span class="mp-p-prod">' + reais(prod) +
           '<span class="mp-p-mini">' + (ab > 0 ? reais(prod / ab) + '/carro' : '—') + '</span></span>' +
-        '<span class="mp-p-lucro"' + (aviso ? ' title="' + esc(aviso) + '"' : '') + '>' +
-          (ul ? reaisSemPrefixo(ul.valor) : '—') +
-          '<span class="mp-p-mini">' + (ul && ul.margem_litro !== null ? reais(ul.margem_litro) + '/L' : '—') + '</span></span>' +
+        '<span class="mp-p-lucro">' +
+          (ul ? reaisSemPrefixo(ul.lucro) : '—') +
+          '<span class="mp-p-mini">' + (ul ? pctDec(ul.margem_pct) : '—') + '</span></span>' +
       '</button>' + det +
     '</div>';
   }
@@ -564,8 +599,7 @@
   function htmlRede() {
     var r = _dados.rede;
     var g = r.gasolina || { litros_total: 0, litros_aditivada: 0 };
-    var ul = r.lucro || null;
-    var aviso = avisoLucro(ul);
+    var ul = r.dre && r.dre.lucro !== null && r.dre.lucro !== undefined ? r.dre : null;
     var appRede = modoPista()
       ? ['SOUTAG', '99'].reduce(function (s, c) { return s + ((r.por_canal[c] && r.por_canal[c].litros) || 0); }, 0)
       : canaisLigados().filter(function (c) { return c !== 'NORMAL'; })
@@ -578,8 +612,8 @@
       '<span class="mp-p-pct">' + pctTxt(appRede, r.litros) + '</span>' +
       '<span class="mp-p-mix">' + pctTxt(g.litros_aditivada, g.litros_total) + '</span>' +
       '<span class="mp-p-prod">' + reais((r.produto && r.produto.faturamento) || 0) + '</span>' +
-      '<span class="mp-p-lucro"' + (aviso ? ' title="' + esc(aviso) + '"' : '') + '>' +
-        (ul ? reaisSemPrefixo(ul.valor) : '—') + '</span>' +
+      '<span class="mp-p-lucro">' + (ul ? reaisSemPrefixo(ul.lucro) : '—') +
+        '<span class="mp-p-mini">' + (ul ? pctDec(ul.margem_pct) : '—') + '</span></span>' +
     '</div>';
   }
 
