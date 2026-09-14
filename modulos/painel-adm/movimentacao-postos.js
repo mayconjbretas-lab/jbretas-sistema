@@ -409,22 +409,20 @@
     '</div>';
   }
 
-  // A CONTA FICA À VISTA. Um número projetado sem a régra de três ao lado é
-  // indistinguível de um número medido, e quem abrir a tela no dia 3 vai ler
-  // a projeção de dez vezes o que se vendeu como se fosse venda.
+  // O MÊS PROJETADO E A BASE DO LUCRO, e mais nada. A régra de três da venda
+  // saiu daqui: ela continua escrita, inteira, na conta de cada card aberto
+  // ("5.911.405 L ÷ 13 × 30 = 13.641.703 L"), que é onde alguém a procura
+  // quando quer conferir. Repeti-la no alto da tela gastava uma linha inteira
+  // para dizer de novo o que os cards já dizem um a um.
+  //
+  // A BASE DO LUCRO FICA, mesmo igual à da venda: ela é a única das duas que
+  // NÃO aparece em card nenhum — vem de uma segunda fonte, a
+  // tecnox_categoria_dia, que anda dessincronizada da venda. Sem esta linha,
+  // um lucro projetado sobre 11 dias apareceria do lado de uma litragem
+  // projetada sobre 13 sem nada avisando.
   function htmlProjInfo() {
     if (!_proj) return '';
-    // Mesmo mês nos dois extremos: o mês é dito UMA vez, no fim — "01–13/09",
-    // não "01/09–13/09". A projeção quase sempre roda dentro de um mês só.
-    var mesmoMes = _inicio.slice(0, 7) === _fim.slice(0, 7);
-    var periodo = (mesmoMes ? _inicio.slice(8, 10) : diaMes(_inicio)) + '–' + diaMes(_fim);
-    var txt = 'PROJEÇÃO ' + _proj.mes + ' · base ' + periodo +
-      ' (' + _proj.diasVenda + ' dia' + (_proj.diasVenda === 1 ? '' : 's') + ') × ' +
-      _proj.diasMes + '/' + _proj.diasVenda;
-    // A BASE DO LUCRO É DITA SEMPRE, mesmo quando é a mesma da venda. Omiti-la
-    // nesse caso pareceria economia, mas deixaria o leitor sem saber se a
-    // ausência quer dizer "mesma base" ou "não foi mostrado" — e são as duas
-    // fontes dessincronizadas que tornam a pergunta razoável.
+    var txt = 'PROJEÇÃO ' + _proj.mes;
     if (_proj.fatorLucro === null) {
       txt += ' · sem lucro no arquivo, sem projeção de lucro';
     } else {

@@ -513,9 +513,13 @@ async function rodar() {
   eh(!!info, 'a linha de projeção aparece');
   nota('linha: ' + txt(info));
   eh(txt(info).indexOf('PROJEÇÃO SET/2026') === 0, 'rótulo do mês', txt(info).slice(0, 18), 'PROJEÇÃO SET/2026');
-  eh(txt(info) === 'PROJEÇÃO SET/2026 · base 01–13/09 (13 dias) × 30/13 · lucro base 13 dias',
+  eh(txt(info) === 'PROJEÇÃO SET/2026 · lucro base 13 dias',
      'a linha inteira, palavra por palavra', txt(info),
-     'PROJEÇÃO SET/2026 · base 01–13/09 (13 dias) × 30/13 · lucro base 13 dias');
+     'PROJEÇÃO SET/2026 · lucro base 13 dias');
+  // A régra de três da venda saiu da linha e continua na conta do card —
+  // afirmado nos dois sentidos para ninguém a apagar de lá também.
+  eh(txt(info).indexOf('×') < 0 && txt(info).indexOf('base 01') < 0,
+     'o período e o fator saíram da linha', txt(info), 'sem "× 30/13" e sem "base 01–13/09"');
 
   // ABSOLUTOS sobem
   var qb = function (a, b) { return Math.abs(a - b) <= Math.max(1, Math.abs(b) * 0.0001); };
