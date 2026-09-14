@@ -87,15 +87,15 @@
   function reaisSemPrefixo(v) {
     return Number.isFinite(Number(v)) ? nf(Number(v), 2) : '—';
   }
-  // Margem com DUAS casas, como o relatório TecnoX imprime. O pctTxt tem
-  // uma só porque mede litro; aqui o número precisa bater dígito a dígito
-  // com a coluna Lucro % do arquivo — 16,02%, não 16,0%.
   // dd/mm, sem o ano. A frase vive dentro de um período que o usuário
   // acabou de escolher no filtro; repetir o ano ali não informa nada.
   function diaMes(iso) {
     if (!iso || String(iso).length < 10) return '';
     return String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7);
   }
+  // Margem com DUAS casas, como o relatório TecnoX imprime. O pctTxt tem
+  // uma só porque mede litro; aqui o número precisa bater dígito a dígito
+  // com a coluna Lucro % do arquivo — 16,02%, não 16,0%.
   function pctDec(v) {
     return Number.isFinite(Number(v)) ? nf(Number(v), 2) + '%' : '—';
   }
@@ -399,7 +399,13 @@
 
     return '<div class="mp-cards">' +
       cardTotal + cardAbast + cardConvenio('SOUTAG') + cardConvenio('99') +
-      cardTicket + cardProduto + cardMix + cardLucro +
+      // ORDEM = A DAS COLUNAS DA LISTA, nao a de criacao. A grade embaixo e
+      // POSTO BARRA LITRAGEM COMBUSTIVEL APP MIX PRODUTO LUCRO, e os cards
+      // tem a mesma largura e o mesmo gap — entao o card 6 fica exatamente
+      // sobre a coluna 6. Com Produto antes de Mix, a coluna MIX caia sob o
+      // card VENDA DE PRODUTO: alinhado ao pixel e trocado no rotulo, que e
+      // pior do que nao alinhar nada.
+      cardTicket + cardMix + cardProduto + cardLucro +
     '</div>' + htmlDetalheCard();
   }
 

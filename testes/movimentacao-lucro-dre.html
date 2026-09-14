@@ -407,6 +407,23 @@ async function rodar() {
     eh(fora === 0, 'as 8 colunas casam com os 8 cards (±1px na borda e na largura)',
        (COLS.length - fora) + ' de ' + COLS.length, '8 de 8');
 
+    // CASAR POR NOME, e não só por pixel. As cinco primeiras colunas medem
+    // coisas que card nenhum mede (nome, barra, litragem, R$ de combustível,
+    // % de app), então ali só o alinhamento importa. Nas TRÊS últimas o card
+    // e a coluna falam do mesmo número — e aí um rótulo trocado em cima de
+    // uma coluna alinhada ao pixel é pior do que não alinhar nada.
+    var PARES = [[6, '.mp-p-mix', 'MIX G. ADITIVADA'],
+                 [7, '.mp-p-prod', 'VENDA DE PRODUTO'],
+                 [8, '.mp-p-lucro', 'LUCRO BRUTO']];
+    PARES.forEach(function (par) {
+      var rot = txt(cardsEl[par[0] - 1].querySelector('.mp-rot'));
+      var dx = Math.round(cab.querySelector(par[1]).getBoundingClientRect().left -
+                          cardsEl[par[0] - 1].getBoundingClientRect().left);
+      eh(rot === par[2] && Math.abs(dx) <= 1,
+         'col ' + par[0] + ' ' + par[1].slice(1) + ' sob o card certo POR NOME',
+         rot + ' (Δ' + dx + 'px)', par[2]);
+    });
+
     var wLista = larg(secMov.querySelector('.mp-cab'));
     var wCards = larg(secMov.querySelector('.mp-cards'));
     // A GRADE medida da borda esquerda da 1ª coluna à direita da 8ª — e nao
