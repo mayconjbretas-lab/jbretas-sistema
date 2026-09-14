@@ -435,14 +435,28 @@ html, body { height: 100%; overflow: hidden; }
    grids separados com as mesmas medidas sairiam do compasso na primeira
    coluna que alguém mexesse. */
 .mp-cab, .mp-p-linha, .mp-rede { display: grid;
-  /* COLUNAS FIXAS, alinhadas à esquerda. O 1fr da barra fazia a lista ocupar
-     a largura inteira do monitor e espalhava os números até a borda direita,
-     longe do nome do posto. Somadas dão 710px + 6 gaps = ~777px, e a sobra
-     fica vazia de propósito. */
-  grid-template-columns: 150px 130px 90px 100px 70px 90px 110px 70px;
+  /* COLUNAS FIXAS, alinhadas à esquerda, NA MESMA MEDIDA DOS CARDS: oito de
+     150px com 8px de gap dão 1256px, que é exatamente 8×150 + 7×8 — a
+     largura da fila de cards lá de cima. Assim a coluna LUCRO começa onde
+     começa o card LUCRO BRUTO, PRODUTO sob VENDA DE PRODUTO, e assim por
+     diante: o olho desce do card para a coluna sem procurar.
+
+     NADA DE 1fr. Com fração a lista ocupava o monitor inteiro e espalhava
+     os números até a borda direita, longe do nome do posto — e a régua
+     deixava de casar com os cards, que têm largura fixa. A sobra de tela à
+     direita fica vazia de propósito.
+
+     O gap é 8px SÓ NA HORIZONTAL (`gap: linha coluna`), para casar com o
+     gap da .mp-cards. O de linha continua .7rem porque é ele que o mobile
+     sobrescreve para 4px. */
+  grid-template-columns: repeat(8, 150px);
   justify-content: start;
-  align-items: center; gap: .7rem;
-  width: 100%; background: transparent; border: 0; padding: 7px 2px; cursor: pointer; font: inherit;
+  align-items: center; gap: .7rem 8px;
+  /* PADDING LATERAL ZERO. Os 2px que havia aqui punham cada coluna 2px à
+     direita do seu card — medido, Δesquerda 2px nas oito, Δlargura 0. A
+     régua só fecha se a lista começar exatamente onde a fila de cards
+     começa. O vertical continua: é ele que dá altura à linha. */
+  width: 100%; background: transparent; border: 0; padding: 7px 0; cursor: pointer; font: inherit;
   color: var(--tx); text-align: left; }
 .mp-p-linha:hover { background: color-mix(in srgb, var(--ac) 7%, transparent); }
 .mp-p-nome { font-size: .78rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -497,12 +511,12 @@ html, body { height: 100%; overflow: hidden; }
    estilo dos demais, sem cor nova. */
 
 /* ── Cabeçalho das colunas e linha REDE ──────────────────────── */
-.mp-cab { padding: 0 2px 5px; border-bottom: 1px solid var(--bd); }
+.mp-cab { padding: 0 0 5px; border-bottom: 1px solid var(--bd); }
 .mp-cab span { font-family: var(--mono); font-size: .58rem; font-weight: 700; letter-spacing: .05em;
   text-transform: uppercase; color: var(--tx3); }
 .mp-cab .mp-p-litros, .mp-cab .mp-p-comb, .mp-cab .mp-p-pct, .mp-cab .mp-p-mix,
 .mp-cab .mp-p-prod, .mp-cab .mp-p-lucro { text-align: right; }
-.mp-rede { padding: 8px 2px 2px; border-top: 1px solid var(--bd); margin-top: 2px; }
+.mp-rede { padding: 8px 0 2px; border-top: 1px solid var(--bd); margin-top: 2px; }
 .mp-rede span { font-family: var(--mono); font-size: .74rem; font-weight: 700; color: var(--tx);
   text-align: right; }
 .mp-rede .mp-p-nome { text-align: left; font-size: .72rem; letter-spacing: .05em; color: var(--tx2); }
@@ -523,7 +537,16 @@ html, body { height: 100%; overflow: hidden; }
   .mp-atalhos { margin-left: 0; }
   /* No mobile a linha volta a duas linhas e as colunas novas saem: Mix,
      Produto e Ticket passam a viver no detalhe clicável do posto. */
-  .mp-p-linha { grid-template-columns: 1fr auto; grid-template-areas: "nome pct" "barra litros"; row-gap: 4px; }
+  /* column-gap REPETIDO aqui de propósito: a regra base passou a declarar
+     `gap: .7rem 8px` para casar com os cards, e no mobile não há card
+     nenhum para casar — sem esta linha o espaço entre nome e percentual
+     encolheria de 11px para 8px sem ninguém ter pedido. */
+  /* column-gap e padding REPETIDOS aqui de proposito: a regra base mudou os
+     dois para casar a grade com os cards (gap 8px, padding lateral 0), e no
+     mobile nao ha card nenhum para casar. Sem estas duas declaracoes o
+     espaco entre nome e percentual cairia de 11px para 8px e a linha
+     encostaria 2px mais a esquerda — mudanca que ninguem pediu. */
+  .mp-p-linha { grid-template-columns: 1fr auto; grid-template-areas: "nome pct" "barra litros"; row-gap: 4px; column-gap: .7rem; padding: 7px 2px; }
   .mp-cab, .mp-rede { display: none; }
   .mp-p-comb, .mp-p-mix, .mp-p-prod, .mp-p-lucro { display: none; }
   .mp-p-nome { grid-area: nome; }

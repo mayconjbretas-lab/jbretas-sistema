@@ -53,9 +53,11 @@
 //    coluna, a linha REDE e o detalhe mostram os mesmos números que o
 //    "Total Geral" / "Total Empresa" impressos.
 //
-// 2. A GEOMETRIA NÃO MUDOU. Cards 150×96 e colunas 150/130/90/100/70/90/110/70,
-//    medidas no layout de verdade — não é conferência de string no CSS, é
-//    getBoundingClientRect() depois do render.
+// 2. A GRADE DA LISTA REPETE A MEDIDA DOS CARDS. Oito cards de 150×96 com
+//    8px de gap, e oito colunas de 150px com 8px de gap: 1256px dos dois
+//    lados, e a borda esquerda de cada coluna sobre a do card de mesma
+//    posição. Medido no layout de verdade com getBoundingClientRect depois
+//    do render — não é conferência de string no CSS.
 //
 // 3. O dre.js não refaz mais `venda − custo` no cliente: a venda das linhas
 //    sem custo fica fora da base do lucro, como a API faz, e a tela do DRE
@@ -360,9 +362,12 @@ async function rodar() {
     linhas.push('     Abra com pelo menos 700px de largura para medir a grade.');
     falhas++;
   } else {
-    var ESPERADAS = [['.mp-p-nome', 150], ['.mp-barra-cab', 130], ['.mp-p-litros', 90],
-                     ['.mp-p-comb', 100], ['.mp-p-pct', 70], ['.mp-p-mix', 90],
-                     ['.mp-p-prod', 110], ['.mp-p-lucro', 70]];
+    // Todas 150px agora: a grade repete a medida do card. As larguras
+    // antigas (130/90/100/70/90/110/70) eram sete medidas diferentes que
+    // nao casavam com nada — e por isso o olho nao descia do card para a coluna.
+    var ESPERADAS = [['.mp-p-nome', 150], ['.mp-barra-cab', 150], ['.mp-p-litros', 150],
+                     ['.mp-p-comb', 150], ['.mp-p-pct', 150], ['.mp-p-mix', 150],
+                     ['.mp-p-prod', 150], ['.mp-p-lucro', 150]];
     for (var e2 = 0; e2 < ESPERADAS.length; e2++) {
       var sel = ESPERADAS[e2][0], esp = ESPERADAS[e2][1];
       var no = cab.querySelector(sel);
@@ -371,13 +376,62 @@ async function rodar() {
     // A célula da linha tem de cair na MESMA coluna do cabeçalho — medir só o
     // cabeçalho deixaria passar uma linha desalinhada dele.
     var l0 = secMov.querySelector('.mp-posto .mp-p-lucro');
-    eh(larg(l0) === 70, 'a célula LUCRO da linha também tem 70px', larg(l0) + 'px', '70px');
+    eh(larg(l0) === 150, 'a célula LUCRO da linha também tem 150px', larg(l0) + 'px', '150px');
     // A REDE ganhou a sublinha de margem e passou a ter DUAS linhas, como as
     // de posto. É a única altura que mudou nesta tela, e por isso está aqui.
     var rede2 = secMov.querySelector('.mp-rede');
     var lin2 = secMov.querySelector('.mp-posto .mp-p-linha');
     eh(Math.abs(alt(rede2) - alt(lin2)) <= 2, 'a linha REDE tem a mesma altura das de posto',
        alt(rede2) + 'px vs ' + alt(lin2) + 'px', 'diferença ≤ 2px');
+
+    // ── 8b. A RÉGUA ────────────────────────────────────────────
+    // Oito colunas de 150px com 8px de gap = 1256px, a mesma medida da fila
+    // de cards. A prova não é somar no papel: é medir a borda esquerda de
+    // cada coluna e a do card de mesma posição, no layout de verdade.
+    linhas.push('\n<h3>8b. Colunas alinhadas aos cards</h3>');
+    var cardsEl = [...secMov.querySelectorAll('.mp-card')];
+    var COLS = ['.mp-p-nome', '.mp-barra-cab', '.mp-p-litros', '.mp-p-comb',
+                '.mp-p-pct', '.mp-p-mix', '.mp-p-prod', '.mp-p-lucro'];
+    var fora = 0;
+    for (var g = 0; g < COLS.length; g++) {
+      var colEl = cardsEl[g] && cab.querySelector(COLS[g]);
+      if (!colEl) { fora++; continue; }
+      var dx = Math.round(colEl.getBoundingClientRect().left - cardsEl[g].getBoundingClientRect().left);
+      var dw = Math.round(colEl.getBoundingClientRect().width - cardsEl[g].getBoundingClientRect().width);
+      if (Math.abs(dx) > 1 || Math.abs(dw) > 1) fora++;
+      nota((Math.abs(dx) <= 1 && Math.abs(dw) <= 1 ? 'ok  ' : 'FORA') +
+        ' col ' + (g + 1) + ' ' + COLS[g].slice(1).padEnd(13) +
+        ' Δesquerda ' + String(dx).padStart(4) + 'px   Δlargura ' + String(dw).padStart(4) + 'px' +
+        '   [card: ' + txt(cardsEl[g].querySelector('.mp-rot')) + ']');
+    }
+    eh(fora === 0, 'as 8 colunas casam com os 8 cards (±1px na borda e na largura)',
+       (COLS.length - fora) + ' de ' + COLS.length, '8 de 8');
+
+    var wLista = larg(secMov.querySelector('.mp-cab'));
+    var wCards = larg(secMov.querySelector('.mp-cards'));
+    // A GRADE medida da borda esquerda da 1ª coluna à direita da 8ª — e nao
+    // a caixa do .mp-cab, que e width:100%% do contêiner.
+    var r1c = cab.querySelector(COLS[0]).getBoundingClientRect();
+    var r8c = cab.querySelector(COLS[7]).getBoundingClientRect();
+    var wGrade = Math.round(r8c.right - r1c.left);
+    eh(wGrade === 1256, 'largura da grade (1ª à 8ª coluna) = 8×150 + 7×8', wGrade + 'px', '1256px');
+    eh(Math.abs(wCards - 1256) <= 1, 'largura da fila de cards', wCards + 'px', '1256px');
+    nota('(.mp-cab mede ' + wLista + 'px — o padding lateral de 2px saiu, era ele que punha cada coluna 2px à direita do seu card)');
+
+    // TEXTO NÃO QUEBRA: as alturas têm de continuar as de antes da mudança —
+    // qualquer célula que quebrasse em duas linhas esticaria a sua.
+    eh(alt(cab) === 22, 'altura do cabeçalho inalterada', alt(cab) + 'px', '22px');
+    eh(alt(lin2) === 50, 'altura da linha de posto inalterada', alt(lin2) + 'px', '50px');
+    // E nenhuma célula numérica pode estar cortada (elas só ganharam largura).
+    var cortadas = [];
+    [...secMov.querySelectorAll('.mp-posto .mp-p-linha')].forEach(function (ln) {
+      ['.mp-p-litros', '.mp-p-comb', '.mp-p-pct', '.mp-p-mix', '.mp-p-prod', '.mp-p-lucro'].forEach(function (sel) {
+        var c = ln.querySelector(sel);
+        if (c && c.scrollWidth > c.clientWidth + 1) cortadas.push(sel);
+      });
+    });
+    eh(cortadas.length === 0, 'nenhuma célula numérica cortada nas 35 linhas',
+       cortadas.length ? cortadas.join(', ') : 'nenhuma', 'nenhuma');
   }
 
   // ── 2. DRE ──────────────────────────────────────────────────────
