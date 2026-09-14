@@ -38,6 +38,42 @@ html, body { height: 100%; overflow: hidden; }
   font-size: .85rem; font-weight: 500; font-family: var(--sans);
 }
 .sel-posto:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+
+/* ── BUSCA DE POSTO ──────────────────────────────────────────
+   O campo herda .sel-posto inteiro (mesma largura, altura, borda e foco
+   do <select> que ele cobre) — nenhuma medida é redeclarada aqui, para
+   não haver dois lugares dizendo o tamanho do mesmo controle.
+   O .pb-wrap é só o contexto de posicionamento da lista; como filho de
+   .sb-block (flex column, align stretch) ele já ocupa a largura toda. */
+.pb-wrap { position: relative; }
+/* A ÚNICA medida que o campo redeclara, e por um motivo medido: com padding,
+   borda, fonte e box-sizing IDÊNTICOS, o <select> renderiza 38,19px e o
+   <input> 36,19px — a altura intrínseca de conteúdo que o navegador reserva
+   para cada um é diferente. 1,25 × 13,6px = 17px de linha fecha os 2px e
+   sobrevive a uma troca de font-size, que um height fixo não sobreviveria.
+   Importa porque o <select> de BANDEIRA, logo acima, continua visível: dois
+   controles empilhados com 2px de diferença é o tipo de desalinho que se vê
+   sem saber nomear. */
+.pb-input { line-height: 1.25; }
+.pb-oculto { display: none; }
+/* z-index acima da lista de módulos e do conteúdo: a lista abre POR CIMA,
+   sem empurrar a sidebar e sem mudar a altura de nada. */
+.pb-lista {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 40;
+  max-height: 280px; overflow-y: auto; list-style: none; padding: 4px; margin: 0;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .38);
+}
+.pb-op {
+  padding: .45rem .6rem; border-radius: 6px; cursor: pointer;
+  font-family: var(--sans); font-size: .84rem; color: var(--text2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* O MESMO destaque para o teclado e para o mouse: a seta e o ponteiro
+   apontam a mesma linha, e ter dois realces diferentes na mesma lista faz
+   o Enter parecer que vai escolher outra coisa. */
+.pb-op.pb-on, .pb-op:hover { background: var(--accent-dim); color: var(--accent); }
+.pb-vazio { padding: .45rem .6rem; font-family: var(--mono); font-size: .78rem; color: var(--text3); }
 .nav-list { display: flex; flex-direction: column; gap: .35rem; list-style: none; }
 .nav-item {
   display: flex; align-items: center; gap: .6rem; padding: .7rem .9rem;

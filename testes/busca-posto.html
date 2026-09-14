@@ -1,0 +1,295 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logística — busca de posto no lugar do select</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/modulos/logistica/logistica.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  /* O palco reproduz a MEDIDA da sidebar de produção (.logi-sidebar), porque
+     a largura do campo é a metade do que este teste tem de provar. */
+  #palco { border:1px dashed var(--border); padding:10px; margin:12px 0;
+           width: 260px; display:flex; flex-direction:column; gap:1rem; }
+</style>
+
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// 1. O campo tem A MESMA CAIXA do <select> que ele cobre — medida no layout,
+//    com o select revelado só para comparar e escondido de novo.
+// 2. Digitar "ana" filtra até "P. ANA LUCIA"; "topa" até "P. TOPAZIO". Sem
+//    acento e sem caixa, por TRECHO — não pelo começo, que é o que o
+//    <select> nativo já fazia e não resolvia nada com 37 nomes em "P. ".
+// 3. Enter escolhe e dispara o change UMA vez: é o onchange do select que
+//    carrega a matriz, e duas cargas seria o bug que este teste guarda.
+// 4. Esc restaura o valor atual e fecha; clicar fora idem.
+// 5. O hash acompanha a escolha (a persistência do commit anterior segue
+//    valendo por este caminho novo).
+// 6. "Todos os postos" é sempre a primeira da lista, com ou sem filtro.
+//
+// Com o app.js e o index.html DE VERDADE. A sessão é dublada porque a tela
+// redireciona sem ela.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function cx(el) {
+  if (!el) return null;
+  var r = el.getBoundingClientRect();
+  return { l: Math.round(r.left), w: Math.round(r.width), h: Math.round(r.height) };
+}
+function opcoes() {
+  return [...document.querySelectorAll('#pb-lista .pb-op')].map(function (li) { return li.textContent; });
+}
+// .focus() NAO dispara o handler de focus quando a janela do navegador nao
+// esta em primeiro plano — e o harness roda num painel que pode estar atras.
+// Focar e EMITIR o evento cobre os dois casos, e e o mesmo evento que o
+// usuario gera ao clicar no campo.
+function focar(el) {
+  el.focus();
+  el.dispatchEvent(new FocusEvent('focus', { bubbles: false }));
+}
+function tecla(el, k) {
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+}
+
+// ── dublês ───────────────────────────────────────────────────────
+var CARGAS = 0, CHANGES = 0;
+window.exigirSessao = function () { return { id: 'h', nome: 'Harness', perfil: 'ADM' }; };
+window.aplicarTema = function () {};
+window.caminhoRaiz = function () { return '/'; };
+window.matrizMedicao = { montar: function () {}, desfazer: function () {}, salvar: function () {},
+  mesAtual: function () { return null; }, ajustarSticky: function () {},
+  carregar: function () { CARGAS++; } };
+window.medicaoFabs = { montar: function () {}, setVisivel: function () {} };
+window.medicaoPdf = { montar: function () {} };
+window.medicaoAlteracoes = { montar: function () {} };
+window.solicitacoesLogistica = { montarEm: function () {} };
+window.renderCustoMargem = function () {};
+window.renderEscala = function () {};
+window.renderKpi = function () {};
+// Os nomes são os de produção, inclusive os dois que o teste procura por
+// trecho e um com acento, que é o ponto do pbSemAcento.
+var POSTOS_FIX = [
+  { nome: 'P. ANA LUCIA', bandeira: 'IPIRANGA' },
+  { nome: 'P. TOPAZIO', bandeira: 'IPIRANGA' },
+  { nome: 'P. ESPAÇO REAL', bandeira: 'VIBRA' },
+  { nome: 'P. SANTA INES - JOAQUIM', bandeira: 'VIBRA' },
+  { nome: 'P. BERNARDO', bandeira: 'ALE' },
+];
+window.apiFetch = function (url) {
+  if (url.indexOf('/postos') === 0) return Promise.resolve({ postos: POSTOS_FIX });
+  return Promise.resolve({ total: 0 });
+};
+try { localStorage.setItem('jb_logi_versao', 'desktop'); } catch (e) {}
+
+async function montarPalco() {
+  var doc = new DOMParser().parseFromString(
+    await (await fetch('/modulos/logistica/index.html')).text(), 'text/html');
+  // Os DOIS blocos da sidebar, do documento real: bandeira e posto.
+  var blocos = [...doc.querySelectorAll('.logi-sidebar .sb-block')].slice(0, 2);
+  if (blocos.length !== 2) throw new Error('nao achei os dois .sb-block da sidebar');
+  blocos.forEach(function (b) { document.getElementById('palco').appendChild(document.importNode(b, true)); });
+  if (!document.getElementById('pb-input')) throw new Error('o index.html nao tem o #pb-input');
+  // A nav e os hosts que o app.js procura.
+  var nav = doc.querySelector('.nav-list');
+  if (nav) document.getElementById('palco').appendChild(document.importNode(nav, true));
+  ['matriz-host', 'matriz-vazio', 'faixa-pedido', 'tab-matriz'].forEach(function (id) {
+    if (document.getElementById(id)) return;
+    var d = document.createElement('div'); d.id = id;
+    document.getElementById('palco').appendChild(d);
+  });
+}
+function carregarApp() {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = '/modulos/logistica/app.js';
+    s.onload = ok; s.onerror = function () { erro(new Error('app.js nao carregou')); };
+    document.body.appendChild(s);
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+async function rodar() {
+  await montarPalco();
+  await carregarApp();
+  pbMontar();
+  var sel = document.getElementById('sel-posto');
+  var inp = document.getElementById('pb-input');
+  var lst = document.getElementById('pb-lista');
+  sel.addEventListener('change', function () { CHANGES++; });
+  await carregarPostos();
+  await esperar(80);
+
+  h3('1. O select continua no DOM, e escondido');
+  eh(!!sel, 'o #sel-posto existe');
+  eh(getComputedStyle(sel).display === 'none', 'e está escondido',
+     getComputedStyle(sel).display, 'none');
+  eh(sel.getAttribute('onchange') === 'onPostoChange()',
+     'com o onchange original intacto', sel.getAttribute('onchange'), 'onPostoChange()');
+  eh(sel.options.length === POSTOS_FIX.length + 1,
+     'populado pelo carregarPostos', sel.options.length + ' opções', (POSTOS_FIX.length + 1) + '');
+
+  h3('2. Mesma caixa do select');
+  // Revela o select só para medir, e devolve — comparar com ele escondido
+  // (0×0) provaria nada.
+  sel.style.display = 'block';
+  await esperar(30);
+  var cs = cx(sel), ci = cx(inp);
+  sel.style.display = '';
+  nota('select ' + cs.w + '×' + cs.h + ' @x=' + cs.l + '   ·   campo ' + ci.w + '×' + ci.h + ' @x=' + ci.l);
+  eh(cs.w === ci.w, 'mesma largura', ci.w + 'px', cs.w + 'px');
+  eh(Math.abs(cs.h - ci.h) <= 1, 'mesma altura (±1px)', ci.h + 'px', cs.h + 'px');
+  eh(cs.l === ci.l, 'mesma borda esquerda', ci.l + 'px', cs.l + 'px');
+  eh(inp.placeholder === 'Buscar posto…', 'placeholder', inp.placeholder, 'Buscar posto…');
+
+  h3('3. Filtro por trecho, sem acento e sem caixa');
+  focar(inp);
+  await esperar(40);
+  eh(!lst.hidden, 'focar abre a lista');
+  // FOCAR SELECIONA O TEXTO: sem isto a primeira letra digitada emendaria no
+  // nome do posto que já está no campo e o filtro daria zero.
+  eh(inp.selectionStart === 0 && inp.selectionEnd === inp.value.length,
+     'e seleciona o texto, para a 1ª letra substituir',
+     inp.selectionStart + '..' + inp.selectionEnd, '0..' + inp.value.length);
+  // O foco renderiza com termo VAZIO, e não com o valor do campo: a lista tem
+  // de abrir mostrando tudo, não filtrada pelo nome que já está lá.
+  eh(opcoes().length === POSTOS_FIX.length + 1, 'sem termo, mostra todas',
+     opcoes().length + '', (POSTOS_FIX.length + 1) + '');
+  eh(opcoes()[0] === 'Todos os postos', '"Todos os postos" é a primeira', opcoes()[0], 'Todos os postos');
+
+  var CASOS = [
+    // 'SANTA' NAO contem 'ANA' (S-A-N-T-A) — conferido no proprio teste abaixo.
+    ['ana', ['Todos os postos', 'P. ANA LUCIA']],
+    ['topa', ['Todos os postos', 'P. TOPAZIO']],
+    ['ESPACO', ['Todos os postos', 'P. ESPAÇO REAL']],
+    ['espaço', ['Todos os postos', 'P. ESPAÇO REAL']],
+    ['joaquim', ['Todos os postos', 'P. SANTA INES - JOAQUIM']],
+    ['zzz', ['Todos os postos']],
+  ];
+  for (var i = 0; i < CASOS.length; i++) {
+    inp.value = CASOS[i][0];
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    await esperar(30);
+    var got = opcoes();
+    eh(JSON.stringify(got) === JSON.stringify(CASOS[i][1]),
+       '"' + CASOS[i][0] + '"', got.join(' | '), CASOS[i][1].join(' | '));
+  }
+  // "ana" acha P. ANA LUCIA: é o caso que o <select> nativo NÃO fazia, porque
+  // o casamento dele é pelo começo e todo posto começa com "P. ".
+  eh('P. SANTA INES - JOAQUIM'.indexOf('ANA') < 0,
+     'e SANTA nao casa com "ana" (S-A-N-T-A) — a expectativa acima nao e chute',
+     'indexOf = ' + 'P. SANTA INES - JOAQUIM'.indexOf('ANA'), '-1');
+  nota('"ana" casa por trecho — o select nativo casa pelo começo, e todos começam com "P. "');
+
+  h3('4. Enter escolhe e dispara o change UMA vez');
+  inp.value = 'topa';
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+  await esperar(30);
+  CARGAS = 0; CHANGES = 0;
+  tecla(inp, 'ArrowDown');   // sai de "Todos os postos"
+  tecla(inp, 'ArrowDown');   // P. TOPAZIO
+  tecla(inp, 'Enter');
+  await esperar(80);
+  eh(sel.value === 'P. TOPAZIO', 'o select ficou no posto', sel.value || '(vazio)', 'P. TOPAZIO');
+  eh(inp.value === 'P. TOPAZIO', 'o campo mostra o posto', inp.value || '(vazio)', 'P. TOPAZIO');
+  eh(CHANGES === 1, 'change disparado 1×', CHANGES + '', '1');
+  eh(CARGAS === 1, 'matriz carregada 1×', CARGAS + '', '1');
+  eh(lst.hidden, 'a lista fechou');
+  eh(location.hash === '#matriz/posto=P.%20TOPAZIO', 'e o hash acompanhou', location.hash, '#matriz/posto=P.%20TOPAZIO');
+
+  h3('5. Clique escolhe pelo mesmo caminho');
+  focar(inp);
+  inp.value = 'bern';
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+  await esperar(30);
+  CARGAS = 0; CHANGES = 0;
+  var alvo = [...lst.querySelectorAll('.pb-op')].filter(function (li) { return li.textContent === 'P. BERNARDO'; })[0];
+  eh(!!alvo, 'a opção está na lista');
+  alvo.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+  await esperar(80);
+  eh(sel.value === 'P. BERNARDO', 'o select ficou no posto clicado', sel.value, 'P. BERNARDO');
+  eh(CHANGES === 1 && CARGAS === 1, 'change e carga, 1× cada',
+     CHANGES + ' change / ' + CARGAS + ' carga', '1 / 1');
+
+  h3('6. Esc restaura e fecha');
+  focar(inp);
+  inp.value = 'topa';               // digita outra coisa, sem escolher
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+  await esperar(30);
+  CARGAS = 0; CHANGES = 0;
+  tecla(inp, 'Escape');
+  await esperar(50);
+  eh(lst.hidden, 'a lista fechou');
+  eh(inp.value === 'P. BERNARDO', 'o campo voltou ao posto atual', inp.value, 'P. BERNARDO');
+  eh(sel.value === 'P. BERNARDO', 'o select não mudou', sel.value, 'P. BERNARDO');
+  eh(CHANGES === 0 && CARGAS === 0, 'e nada foi disparado',
+     CHANGES + ' change / ' + CARGAS + ' carga', '0 / 0');
+
+  h3('7. Clicar fora fecha e restaura');
+  focar(inp);
+  inp.value = 'ana';
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+  await esperar(30);
+  document.getElementById('res').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  await esperar(50);
+  eh(lst.hidden, 'a lista fechou');
+  eh(inp.value === 'P. BERNARDO', 'o campo voltou ao posto atual', inp.value, 'P. BERNARDO');
+
+  h3('8. "Todos os postos" desfaz a escolha');
+  focar(inp);
+  inp.value = '';
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+  await esperar(30);
+  CARGAS = 0; CHANGES = 0;
+  tecla(inp, 'ArrowDown');   // a primeira é "Todos os postos"
+  tecla(inp, 'Enter');
+  await esperar(80);
+  eh(sel.value === '', 'o select voltou a vazio', sel.value === '' ? '(vazio)' : sel.value, '(vazio)');
+  eh(inp.value === 'Todos os postos', 'e o campo diz "Todos os postos"', inp.value, 'Todos os postos');
+  eh(CARGAS === 0, 'sem carga de matriz (é o estado sem posto)', CARGAS + '', '0');
+  eh(location.hash === '#matriz', 'e o posto saiu do hash', location.hash, '#matriz');
+
+  h3('9. O posto do hash chega ao campo');
+  history.replaceState(null, '', '#matriz/posto=' + encodeURIComponent('P. ESPAÇO REAL'));
+  aplicarHash();
+  await esperar(80);
+  eh(sel.value === 'P. ESPAÇO REAL', 'select', sel.value || '(vazio)', 'P. ESPAÇO REAL');
+  eh(inp.value === 'P. ESPAÇO REAL', 'campo', inp.value || '(vazio)', 'P. ESPAÇO REAL');
+
+  h3(falhas === 0 ? '<span class="ok">TUDO PASSOU</span>'
+                  : '<span class="bad">' + falhas + ' FALHA(S)</span>');
+  pintar();
+  // Deixa a lista aberta com um filtro, para o print mostrar o que o teste diz.
+  focar(inp);
+  inp.value = 'ana';
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+rodar().catch(function (e) {
+  linhas.push('<span class="bad">ERRO: ' + hesc(e.message) + '</span>');
+  linhas.push(hesc(String(e.stack || '').split('\n').slice(0, 6).join('\n')));
+  pintar();
+});
+</script>

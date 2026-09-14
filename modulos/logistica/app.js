@@ -205,6 +205,144 @@ function onPostoChange() {
   }
   atualizarFaixa();
   gravarHash();
+  // O campo de busca espelha o select DAQUI: é o ponto por onde passam
+  // boot, hash, troca de bandeira e escolha pelo próprio campo.
+  pbSincronizar();
+}
+
+// ── BUSCA DE POSTO ──────────────────────────────────────────────
+// São 37 postos num <select>: achar "P. SANTA INES - JOAQUIM" pedia rolar
+// a lista inteira, e o teclado nativo do select só casa pelo COMEÇO do
+// nome — digitar "ana" não leva a "P. ANA LUCIA" porque todos começam com
+// "P. ". O campo filtra por TRECHO, que é como alguém lembra de um posto.
+//
+// O <select> segue sendo a fonte de verdade. Este bloco só escreve nele e
+// dispara o change; quem carrega a matriz, atualiza a faixa e grava o hash
+// continua sendo o onPostoChange, chamado pelo onchange do próprio select.
+// Chamar onPostoChange direto daqui criaria um segundo caminho para o
+// mesmo efeito — e um deles acabaria esquecido numa mudança futura.
+function pbSemAcento(v) {
+  return String(v == null ? '' : v).normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').toUpperCase();
+}
+let _pbIdx = -1;          // opção sob a seta; -1 = nenhuma
+let _pbFiltrados = [];    // [{valor, texto}] do render atual
+function pbEl() {
+  return {
+    inp: document.getElementById('pb-input'),
+    lst: document.getElementById('pb-lista'),
+    sel: document.getElementById('sel-posto'),
+  };
+}
+// O texto do campo é o rótulo da opção selecionada — "Todos os postos"
+// quando o value é vazio. Fica em branco só enquanto o select não foi
+// populado, para o placeholder aparecer em vez de "Carregando postos...".
+function pbSincronizar() {
+  const { inp, sel } = pbEl();
+  if (!inp || !sel) return;
+  const op = sel.options[sel.selectedIndex];
+  const pronto = [...sel.options].some(o => o.value !== '');
+  inp.value = (pronto && op) ? op.textContent : '';
+}
+// Filtra por TRECHO, sem acento e sem caixa. "Todos os postos" (value "")
+// fica SEMPRE primeiro e nunca é filtrado: é a saída para desfazer a
+// escolha, e escondê-la atrás de um termo deixaria o usuário sem volta.
+function pbFiltrar(termo) {
+  const { sel } = pbEl();
+  if (!sel) return [];
+  const t = pbSemAcento(termo).trim();
+  const todas = [...sel.options].map(o => ({ valor: o.value, texto: o.textContent }));
+  const todos = todas.filter(o => o.valor === '');
+  const resto = todas
+    .filter(o => o.valor !== '')
+    .filter(o => !t || pbSemAcento(o.texto).indexOf(t) >= 0);
+  return todos.concat(resto);
+}
+function pbRender(termo) {
+  const { inp, lst } = pbEl();
+  if (!lst) return;
+  _pbFiltrados = pbFiltrar(termo);
+  if (!_pbFiltrados.length) {
+    lst.innerHTML = '<li class="pb-vazio">Nenhum posto com esse trecho</li>';
+  } else {
+    lst.innerHTML = _pbFiltrados.map((o, i) =>
+      '<li class="pb-op' + (i === _pbIdx ? ' pb-on' : '') + '" role="option"' +
+      ' aria-selected="' + (i === _pbIdx ? 'true' : 'false') + '"' +
+      ' data-i="' + i + '">' + esc(o.texto) + '</li>').join('');
+  }
+  lst.hidden = false;
+  if (inp) inp.setAttribute('aria-expanded', 'true');
+}
+function pbFechar(restaurar) {
+  const { inp, lst } = pbEl();
+  if (lst) { lst.hidden = true; lst.innerHTML = ''; }
+  if (inp) inp.setAttribute('aria-expanded', 'false');
+  _pbIdx = -1; _pbFiltrados = [];
+  if (restaurar) pbSincronizar();
+}
+// Move a seta e ROLA a opção para dentro da caixa: com 37 postos a
+// terceira seta já sai da área visível, e navegar às cegas é pior que não
+// navegar.
+function pbMover(passo) {
+  if (!_pbFiltrados.length) return;
+  _pbIdx = (_pbIdx + passo + _pbFiltrados.length) % _pbFiltrados.length;
+  const { lst } = pbEl();
+  [...lst.querySelectorAll('.pb-op')].forEach((li, i) => {
+    li.classList.toggle('pb-on', i === _pbIdx);
+    li.setAttribute('aria-selected', i === _pbIdx ? 'true' : 'false');
+    if (i === _pbIdx) li.scrollIntoView({ block: 'nearest' });
+  });
+}
+function pbEscolher(i) {
+  const o = _pbFiltrados[i];
+  if (!o) return;
+  const { sel } = pbEl();
+  sel.value = o.valor;
+  pbFechar(false);
+  pbSincronizar();
+  // O CHANGE É DISPARADO, o onPostoChange NÃO é chamado. Ver o comentário
+  // do topo: é o onchange do select que aciona carga, faixa e hash, e
+  // duplicar a chamada carregaria a matriz duas vezes.
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+}
+function pbMontar() {
+  const { inp, lst } = pbEl();
+  if (!inp || !lst) return;
+  // FOCAR SELECIONA O TEXTO. Sem isto, o campo chega com "P. BERNARDO"
+  // dentro e a primeira letra digitada vira "P. BERNARDOa" — zero
+  // resultados, e o usuário tendo de apagar o nome antes de buscar.
+  inp.addEventListener('focus', () => { _pbIdx = -1; inp.select(); pbRender(''); });
+  // Ao digitar, a seta volta para o começo: manter o índice antigo faria o
+  // Enter escolher uma opção que saiu da lista.
+  inp.addEventListener('input', () => { _pbIdx = -1; pbRender(inp.value); });
+  inp.addEventListener('keydown', (e) => {
+    const aberta = !lst.hidden;
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (!aberta) pbRender(inp.value); pbMover(1); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); if (!aberta) pbRender(inp.value); pbMover(-1); return; }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (!aberta) return;
+      // Enter sem seta escolhe a PRIMEIRA da lista: é a que está à vista e
+      // a que o filtro elegeu.
+      pbEscolher(_pbIdx >= 0 ? _pbIdx : 0);
+      return;
+    }
+    if (e.key === 'Escape') { e.preventDefault(); pbFechar(true); inp.blur(); }
+  });
+  lst.addEventListener('mousedown', (e) => {
+    // mousedown, e não click: o blur do campo chegaria antes do click e
+    // fecharia a lista debaixo do dedo.
+    const li = e.target.closest('.pb-op');
+    if (!li) return;
+    e.preventDefault();
+    pbEscolher(Number(li.dataset.i));
+  });
+  // Clicar fora fecha e devolve o valor atual — sem isto o campo ficaria
+  // com um termo digitado que não corresponde ao posto em tela.
+  document.addEventListener('mousedown', (e) => {
+    if (lst.hidden) return;
+    if (!e.target.closest('#pb-wrap')) pbFechar(true);
+  });
 }
 
 // ── Faixa de total de PEDIDO FINAL do dia (GET /medicao/pedido-dia) ──
@@ -563,6 +701,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // A URL MANDA, quando ela diz algo. Antes do carregarPostos porque ela
   // pode trazer um posto, e o carregarPostos é quem sabe a hora de
   // aplicá-lo sem dobrar a chamada.
+  pbMontar();   // campo de busca por cima do <select> de posto
   if (!aplicarHash()) gravarHash();
   carregarPostos();
   if (escolha !== 'desktop') {

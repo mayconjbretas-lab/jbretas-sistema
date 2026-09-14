@@ -96,9 +96,25 @@
       </div>
       <div class="sb-block">
         <div class="sb-section-title">Posto</div>
-        <select class="sel-posto" id="sel-posto" onchange="onPostoChange()">
-          <option value="">Carregando postos...</option>
-        </select>
+        <!-- O <select> CONTINUA AQUI, e continua sendo a fonte de verdade:
+             é o value dele que o app lê (POSTO_ATUAL) e o onchange dele que
+             aciona a carga da matriz, a faixa e o hash. O campo de busca só
+             escreve nele e dispara o change — não há segundo caminho para o
+             mesmo efeito. Escondido por .pb-oculto, não removido: tirá-lo do
+             DOM exigiria reescrever popularSelPosto, onPostoChange,
+             aplicarPostoDoHash e o hash inteiro.
+             tabindex="-1" para o Tab não parar num campo invisível. -->
+        <div class="pb-wrap" id="pb-wrap">
+          <input type="text" class="sel-posto pb-input" id="pb-input"
+                 placeholder="Buscar posto…" autocomplete="off" spellcheck="false"
+                 role="combobox" aria-expanded="false" aria-autocomplete="list"
+                 aria-controls="pb-lista">
+          <ul class="pb-lista" id="pb-lista" role="listbox" hidden></ul>
+          <select class="sel-posto pb-oculto" id="sel-posto" onchange="onPostoChange()"
+                  tabindex="-1" aria-hidden="true">
+            <option value="">Carregando postos...</option>
+          </select>
+        </div>
       </div>
       <nav class="sb-block" style="flex:1;">
         <div class="sb-section-title">Módulos</div>
