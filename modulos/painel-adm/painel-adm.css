@@ -370,10 +370,14 @@ html, body { height: 100%; overflow: hidden; }
   font-family: var(--mono); font-size: .68rem; font-weight: 700; padding: 5px 11px; cursor: pointer; }
 .mp-atalho:hover { border-color: var(--ac); color: var(--ac); }
 
-/* Oito cards numa linha acima de 1400px; abaixo disso quebram em duas de
-   quatro, e no mobile em quatro de dois. */
-.mp-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; }
-@media (min-width: 1400px) { .mp-cards { grid-template-columns: repeat(8, 1fr); } }
+/* CARDS COM LARGURA DE CONTEÚDO, nunca 1fr. Com grid de frações os oito
+   esticavam para ocupar a tela toda e cada card virava um retângulo enorme
+   com um número pequeno no canto. Aqui cada um tem 156px fixos e o flex-wrap
+   decide quantos cabem: os oito entram em ~1290px; abaixo disso a linha
+   quebra, e no celular sobram dois por linha. Eles NÃO encolhem nem esticam
+   — a sobra de tela fica vazia à direita. */
+.mp-cards { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
+.mp-card { flex: 0 0 auto; width: 146px; }
 .mp-card { background: var(--sf2); border: 1px solid var(--bd); border-radius: var(--rl, 12px);
   padding: .7rem .8rem; text-align: left; cursor: pointer; font: inherit; color: var(--tx); }
 .mp-card.aberto { border-color: var(--ac); }
@@ -396,14 +400,22 @@ html, body { height: 100%; overflow: hidden; }
 .mp-det-sep { font-family: var(--mono); font-size: .6rem; text-transform: uppercase; letter-spacing: .05em;
   color: var(--tx3); margin: .5rem 0 .2rem; border-top: 1px solid var(--bd); padding-top: .4rem; }
 
-.mp-lista { margin-top: .9rem; display: flex; flex-direction: column; gap: 2px; }
+/* A lista encolhe para a soma das colunas (~777px) em vez de esticar até a
+   borda do monitor: com width:100% os números iam parar longe do nome do
+   posto, do outro lado da tela. A sobra fica vazia à direita. */
+.mp-lista { margin-top: .9rem; display: flex; flex-direction: column; gap: 2px; width: fit-content; }
 .mp-posto { border-bottom: 1px solid var(--bd); }
 /* Sete colunas: POSTO · BARRA · LITRAGEM · APP · MIX · PRODUTO · LUCRO.
    O cabeçalho, as linhas e a linha REDE usam a MESMA declaração — três
    grids separados com as mesmas medidas sairiam do compasso na primeira
    coluna que alguém mexesse. */
 .mp-cab, .mp-p-linha, .mp-rede { display: grid;
-  grid-template-columns: 150px 1fr 128px 62px 92px 112px 52px;
+  /* COLUNAS FIXAS, alinhadas à esquerda. O 1fr da barra fazia a lista ocupar
+     a largura inteira do monitor e espalhava os números até a borda direita,
+     longe do nome do posto. Somadas dão 710px + 6 gaps = ~777px, e a sobra
+     fica vazia de propósito. */
+  grid-template-columns: 150px 130px 90px 70px 90px 110px 70px;
+  justify-content: start;
   align-items: center; gap: .7rem;
   width: 100%; background: transparent; border: 0; padding: 7px 2px; cursor: pointer; font: inherit;
   color: var(--tx); text-align: left; }
@@ -472,7 +484,7 @@ html, body { height: 100%; overflow: hidden; }
 .mp-p-mini { display: block; font-size: .6rem; font-weight: 400; color: var(--tx3); }
 
 @media (max-width: 699px) {
-  .mp-cards { grid-template-columns: repeat(2, 1fr); }
+  .mp-lista { width: auto; }
   .mp-num { font-size: 1.05rem; }
   .mp-atalhos { margin-left: 0; }
   /* No mobile a linha volta a duas linhas e as colunas novas saem: Mix,
@@ -480,7 +492,6 @@ html, body { height: 100%; overflow: hidden; }
   .mp-p-linha { grid-template-columns: 1fr auto; grid-template-areas: "nome pct" "barra litros"; row-gap: 4px; }
   .mp-cab, .mp-rede { display: none; }
   .mp-p-mix, .mp-p-prod, .mp-p-lucro { display: none; }
-  .mp-cards { grid-template-columns: repeat(2, 1fr); }
   .mp-p-nome { grid-area: nome; }
   /* No mobile os dois percentuais podem quebrar em duas linhas. */
   .mp-p-pct { grid-area: pct; white-space: normal; text-align: right; }
