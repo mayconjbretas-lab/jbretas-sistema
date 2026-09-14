@@ -451,6 +451,137 @@ async function rodar() {
        cortadas.length ? cortadas.join(', ') : 'nenhuma', 'nenhuma');
   }
 
+  // ── 8c. PROJEÇÃO ────────────────────────────────────────────────
+  // Fixture 01–13/09: 13 dias com venda, setembro tem 30 → fator 30/13.
+  // O que importa provar não é que os absolutos sobem — é que as RAZÕES
+  // NÃO sobem. Se mix, ticket, R$/L ou margem mudassem, a tela estaria
+  // afirmando que o mês inteiro vende com uma eficiência diferente da que
+  // se mediu, o que a regra de três não diz.
+  h3('8c. Projeção — absolutos × 30/13, razões idênticas');
+  FIX_MOV = FIX_MEIO;
+  window.__mpPeriodo('fim', '2026-09-13');
+  window.__mpPeriodo('inicio', '2026-09-01');
+  await esperar(150);
+
+  // Leitura da tela SEM projeção, para comparar depois.
+  var leTela = function () {
+    var o = { postos: {} };
+    var c = secMov.querySelector('.mp-card-total .mp-num');
+    o.cardLitros = numBR(txt(c));
+    o.cardMix = txt(secMov.querySelector('.mp-card-mix .mp-num'));
+    o.cardProd = numBR(txt(secMov.querySelector('.mp-card-prod .mp-num')));
+    var lu = secMov.querySelector('.mp-card-lucro');
+    o.cardLucro = numBR(txt(lu.querySelector('.mp-num')));
+    var tks = lu.querySelectorAll('.mp-tk');
+    o.lucroPorLitro = txt(tks[0]);
+    o.lucroMargem = txt(tks[1]);
+    var tk = secMov.querySelectorAll('.mp-card-ticket .mp-tk');
+    o.ticket = [txt(tk[0]), txt(tk[1]), txt(tk[2])];
+    [...secMov.querySelectorAll('.mp-posto')].forEach(function (p) {
+      var nome = txt(p.querySelector('.mp-p-nome'));
+      var lt = p.querySelector('.mp-p-litros');
+      var conv = lt.querySelector('.mp-p-conv');
+      var cb = p.querySelector('.mp-p-comb');
+      var mini = cb.querySelector('.mp-p-mini');
+      var lc = p.querySelector('.mp-p-lucro');
+      var lmini = lc.querySelector('.mp-p-mini');
+      o.postos[nome] = {
+        litros: numBR(txt(lt).replace(conv ? txt(conv) : '', '')),
+        comb: numBR(txt(cb).replace(txt(mini), '')),
+        combPorL: txt(mini),
+        mix: txt(p.querySelector('.mp-p-mix')).replace(txt(p.querySelector('.mp-p-mix .mp-p-mini')), ''),
+        app: txt(p.querySelector('.mp-p-pct')),
+        lucro: numBR(txt(lc).replace(txt(lmini), '')),
+        margem: txt(lmini),
+      };
+    });
+    return o;
+  };
+  var BASE = leTela();
+  nota('sem projeção: rede ' + BASE.cardLitros + ' L · mix ' + BASE.cardMix +
+       ' · lucro ' + BASE.cardLucro + ' (' + BASE.lucroMargem + ')');
+
+  window.__mpProjecao();
+  await esperar(200);
+  var PROJ = leTela();
+  var F = 30 / 13;
+  nota('com projeção: rede ' + PROJ.cardLitros + ' L · mix ' + PROJ.cardMix +
+       ' · lucro ' + PROJ.cardLucro + ' (' + PROJ.lucroMargem + ')');
+
+  // A linha de informação
+  var info = secMov.querySelector('.mp-proj');
+  eh(!!info, 'a linha de projeção aparece');
+  nota('linha: ' + txt(info));
+  eh(txt(info).indexOf('PROJEÇÃO SET/2026') === 0, 'rótulo do mês', txt(info).slice(0, 18), 'PROJEÇÃO SET/2026');
+  eh(txt(info) === 'PROJEÇÃO SET/2026 · base 01–13/09 (13 dias) × 30/13 · lucro base 13 dias',
+     'a linha inteira, palavra por palavra', txt(info),
+     'PROJEÇÃO SET/2026 · base 01–13/09 (13 dias) × 30/13 · lucro base 13 dias');
+
+  // ABSOLUTOS sobem
+  var qb = function (a, b) { return Math.abs(a - b) <= Math.max(1, Math.abs(b) * 0.0001); };
+  eh(qb(PROJ.cardLitros, BASE.cardLitros * F), 'card TOTAL × 30/13',
+     PROJ.cardLitros, Math.round(BASE.cardLitros * F));
+  eh(qb(PROJ.cardProd, BASE.cardProd * F), 'card PRODUTO × 30/13',
+     PROJ.cardProd, (BASE.cardProd * F).toFixed(2));
+  // O lucro usa o fator DELE: 13 dias de arquivo neste período, mesmo 30/13.
+  eh(qb(PROJ.cardLucro, BASE.cardLucro * F), 'card LUCRO × 30/13 (base do lucro = 13 dias)',
+     PROJ.cardLucro, (BASE.cardLucro * F).toFixed(2));
+  var pb = BASE.postos['P. BERNARDO'], pp = PROJ.postos['P. BERNARDO'];
+  eh(qb(pp.litros, pb.litros * F), 'P. BERNARDO litros × 30/13 na linha',
+     pp.litros, Math.round(pb.litros * F));
+  eh(qb(pp.lucro, pb.lucro * F), 'P. BERNARDO lucro × 30/13 na linha',
+     pp.lucro, (pb.lucro * F).toFixed(2));
+
+  // RAZÕES ficam
+  eh(PROJ.cardMix === BASE.cardMix, 'mix da rede IDÊNTICO', PROJ.cardMix, BASE.cardMix);
+  eh(PROJ.lucroMargem === BASE.lucroMargem, 'margem do card IDÊNTICA', PROJ.lucroMargem, BASE.lucroMargem);
+  eh(PROJ.lucroPorLitro === BASE.lucroPorLitro, 'R$/litro do card IDÊNTICO', PROJ.lucroPorLitro, BASE.lucroPorLitro);
+  eh(JSON.stringify(PROJ.ticket) === JSON.stringify(BASE.ticket), 'as três medidas do TICKET IDÊNTICAS',
+     PROJ.ticket.join(' | '), BASE.ticket.join(' | '));
+  var razoesFora = [];
+  Object.keys(BASE.postos).forEach(function (n) {
+    var a = BASE.postos[n], b = PROJ.postos[n];
+    if (a.mix !== b.mix) razoesFora.push(n + ' mix');
+    if (a.app !== b.app) razoesFora.push(n + ' app');
+    if (a.margem !== b.margem) razoesFora.push(n + ' margem');
+    if (a.combPorL !== b.combPorL) razoesFora.push(n + ' R$/L');
+  });
+  eh(razoesFora.length === 0, 'nas 37 linhas: mix, app%, margem e R$/L IDÊNTICOS',
+     razoesFora.length ? razoesFora.slice(0, 4).join(', ') : 'nenhum mudou', 'nenhum mudou');
+
+  // A conta escrita no card
+  window.__mpCard('total');
+  await esperar(60);
+  var dp = txt(secMov.querySelector('.mp-detalhe'));
+  eh(dp.indexOf('÷ 13 × 30 =') >= 0, 'a conta do card mostra a multiplicação',
+     dp.indexOf('Projeção') >= 0 ? dp.slice(dp.indexOf('Projeção'), dp.indexOf('Projeção') + 48) : '(ausente)',
+     'x ÷ 13 × 30 = y');
+  window.__mpCard('total');
+  await esperar(40);
+
+  // DESLIGAR volta ao base
+  window.__mpProjecao();
+  await esperar(200);
+  var VOLTA = leTela();
+  eh(!secMov.querySelector('.mp-proj'), 'a linha some ao desligar');
+  eh(JSON.stringify(VOLTA) === JSON.stringify(BASE), 'desligar devolve a tela EXATAMENTE ao estado base',
+     VOLTA.cardLitros + ' L', BASE.cardLitros + ' L');
+
+  // MUDAR FILTRO também desliga
+  window.__mpProjecao();
+  await esperar(200);
+  eh(!!secMov.querySelector('.mp-proj'), 'religada');
+  window.__mpCanal('SOUTAG');
+  await esperar(80);
+  eh(!secMov.querySelector('.mp-proj'), 'mexer no chip Soutag desliga a projeção');
+  window.__mpCanal('SOUTAG');
+  await esperar(80);
+
+  // volta ao cenário dos testes seguintes
+  FIX_MOV = FIX13;
+  window.__mpPeriodo('inicio', '2026-09-13');
+  await esperar(150);
+
   // ── 2. DRE ──────────────────────────────────────────────────────
   h3('9. Tela do DRE, dia 13/09');
   window.renderDre(secDre);

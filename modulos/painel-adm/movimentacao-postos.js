@@ -46,6 +46,30 @@
   var _cardAberto = null;    // 'total' | 'abast' | 'SOUTAG' | '99' | null
   var _postoAberto = null;   // posto_id
 
+  // ════════ PROJEÇÃO ════════
+  // Regra de três e nada mais: o que o mês já vendeu, dividido pelos dias
+  // que venderam, vezes os dias do mês. NÃO é previsão — não olha
+  // sazonalidade, nem dia de semana, nem feriado. Um mês que começou com
+  // três segundas fracas projeta baixo, e está certo que projete: o número
+  // é "neste ritmo, fecha em X", não "vai fechar em X".
+  //
+  // SÓ VALORES ABSOLUTOS SOBEM. Razão nenhuma é multiplicada — e não por
+  // uma lista de exceções, mas porque razão é divisão de dois números que
+  // sobem pelo MESMO fator: mix, ticket, R$/L, % de Soutag, todos saem
+  // idênticos ao período base. A única razão guardada pronta na resposta é
+  // `dre.margem_pct`, e essa fica intocada de propósito.
+  //
+  // DOIS FATORES, porque são duas fontes com cobertura diferente: a venda
+  // vem da tecnox_venda_dia e o lucro da tecnox_categoria_dia, e em
+  // 14/09/2026 uma ia até 13/09 e a outra até 14/09. Um fator só faria o
+  // lucro projetado usar dias que ele não tem.
+  //
+  // O FATOR DO LUCRO É O DA REDE, também por posto. Cada posto com o seu
+  // daria a 37 linhas 37 bases diferentes, e somá-las não daria a rede.
+  var _projecao = false;
+  var _proj = null;     // {diasMes, diasVenda, diasLucro, fator, fatorLucro, mes}
+  var _vista = null;    // _dados, ou a cópia projetada dele
+
   // ── Formatação ───────────────────────────────────────────────────
   // nf e esc vêm do movimentacao-mes.js (window.mmFmt). O fallback existe
   // porque a ordem dos <script> é do HTML, e uma tela não pode quebrar por
@@ -126,6 +150,16 @@
   function diasEntre(a, b) {
     return Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000) + 1;
   }
+  // Dia 0 do mês seguinte é o último do mês pedido — pega fevereiro
+  // bissexto sem tabela.
+  function diasNoMes(iso) {
+    return new Date(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)), 0)).getUTCDate();
+  }
+  var MES_ABREV = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO',
+                   'SET', 'OUT', 'NOV', 'DEZ'];
+  function mesRotulo(iso) {
+    return MES_ABREV[Number(iso.slice(5, 7)) - 1] + '/' + iso.slice(0, 4);
+  }
 
   // ── Seleção do filtro ────────────────────────────────────────────
   // Um lugar só decide o que a tela está mostrando. Sem isto, "modo pista"
@@ -197,6 +231,79 @@
     }, 0);
   }
 
+  // ── Projeção ─────────────────────────────────────────────────────
+  // Dias DISTINTOS com litro no período, da rede. Vem do por_dia, que a
+  // rota manda e esta tela não desenha — é o único lugar que sabe QUAIS
+  // dias venderam. Dividir pelos dias do período contaria o domingo que
+  // não abriu como dia fraco, e a projeção sairia baixa.
+  function diasComVenda(d) {
+    var set = {};
+    (d.postos || []).forEach(function (p) {
+      (p.por_dia || []).forEach(function (x) { if (x.litros > 0) set[x.data] = 1; });
+    });
+    return Object.keys(set).length;
+  }
+  // Copia rasa + os campos absolutos multiplicados. `abastecimentos` NÃO é
+  // arredondado aqui: o ticket é faturamento ÷ abastecimentos, e arredondar
+  // só um dos dois mexeria numa razão que tem de sair idêntica. Quem
+  // arredonda é o nf() na hora de escrever.
+  function escalarDre(dre, fL) {
+    if (!dre) return dre;
+    var o = {}; for (var k in dre) o[k] = dre[k];
+    if (fL === null || dre.lucro === null || dre.lucro === undefined) return o;
+    // quantidade_comb entra na lista porque é o DENOMINADOR do R$/litro do
+    // card. Escalar o lucro e deixar os litros parados mudaria uma razão.
+    ['venda_bruta', 'desconto', 'venda_liquida', 'custo_total', 'lucro',
+     'quantidade_comb'].forEach(function (k) {
+      if (typeof o[k] === 'number') o[k] = o[k] * fL;
+    });
+    // margem_pct, dias_com_dado, dias_periodo e ultimo_dia ficam como vieram.
+    return o;
+  }
+  function escalarBloco(b, f, fL) {
+    var o = {}; for (var k in b) o[k] = b[k];
+    o.litros = b.litros * f;
+    o.faturamento = b.faturamento * f;
+    o.abastecimentos = b.abastecimentos * f;
+    o.por_canal = {};
+    for (var c in b.por_canal) {
+      var x = b.por_canal[c];
+      o.por_canal[c] = { litros: x.litros * f, faturamento: x.faturamento * f,
+                         abastecimentos: x.abastecimentos * f };
+    }
+    o.produto = { faturamento: ((b.produto && b.produto.faturamento) || 0) * f };
+    var g = b.gasolina || { litros_total: 0, litros_aditivada: 0 };
+    o.gasolina = { litros_total: g.litros_total * f, litros_aditivada: g.litros_aditivada * f };
+    o.dre = escalarDre(b.dre, fL);
+    return o;
+  }
+  // Define _vista e _proj. Sem dia com venda não há base: a projeção fica
+  // desligada em silêncio, porque dividir por zero não é projetar por zero.
+  function prepararVista() {
+    _vista = _dados; _proj = null;
+    if (!_projecao || !_dados || !_dados.postos || !_dados.postos.length) return;
+    var diasV = diasComVenda(_dados);
+    if (!diasV) return;
+    var dreRede = _dados.rede.dre || {};
+    var diasL = dreRede.dias_com_dado || 0;
+    var diasM = diasNoMes(_inicio);
+    var f = diasM / diasV;
+    var fL = diasL > 0 ? diasM / diasL : null;
+    _proj = { diasMes: diasM, diasVenda: diasV, diasLucro: diasL,
+              fator: f, fatorLucro: fL, mes: mesRotulo(_inicio) };
+    _vista = {
+      success: _dados.success, consulta: _dados.consulta,
+      rede: escalarBloco(_dados.rede, f, fL),
+      postos: _dados.postos.map(function (p) { return escalarBloco(p, f, fL); }),
+    };
+    // por_combustivel não é reescalado: ele vive dentro da rede e o
+    // escalarBloco o copiou por referência. Sobe junto aqui, para o detalhe
+    // do card Total não mostrar litros de combustível menores que o total.
+    _vista.rede.por_combustivel = (_dados.rede.por_combustivel || []).map(function (k) {
+      return { codigo: k.codigo, rotulo: k.rotulo, litros: k.litros * f };
+    });
+  }
+
   // ── Carga ────────────────────────────────────────────────────────
   async function carregar() {
     _carregando = true; _erro = ''; pintar();
@@ -219,14 +326,20 @@
   }
 
   // ── Ações (onclick inline, padrão do módulo) ─────────────────────
+  // PROJEÇÃO CAI EM QUALQUER MEXIDA. O botão amarra um período específico
+  // (o mês corrente até ontem); mudar chip, data ou atalho desfaz essa
+  // amarração, e deixar a projeção ligada mostraria números multiplicados
+  // por um fator que não é mais o daquele recorte.
   window.__mpCanal = function (c) {
     _filtro[c] = !_filtro[c];
+    _projecao = false;
     _cardAberto = null;
     pintar();     // filtro é recorte do que já veio: NÃO refaz a chamada
   };
   window.__mpPeriodo = function (qual, valor) {
     if (qual === 'inicio') _inicio = valor;
     if (qual === 'fim') _fim = valor;
+    _projecao = false;
     if (!_inicio || !_fim) return;
     if (_fim < _inicio) { _erro = 'Fim anterior ao início.'; _dados = null; pintar(); return; }
     if (diasEntre(_inicio, _fim) > MAX_DIAS) {
@@ -239,6 +352,20 @@
     var ontem = somaDias(hojeISO(), -1);
     if (qual === 'ontem') { _inicio = ontem; _fim = ontem; }
     if (qual === '7') { _fim = ontem; _inicio = somaDias(ontem, -6); }
+    _projecao = false;
+    _cardAberto = null; _postoAberto = null;
+    carregar();
+  };
+  // Liga a projeção E amarra o período ao mês corrente: projetar "os
+  // últimos 7 dias" para 30 seria multiplicar uma semana por quatro e
+  // chamar de mês. Se o fim já está dentro do mês corrente, é respeitado.
+  window.__mpProjecao = function () {
+    if (_projecao) { _projecao = false; _cardAberto = null; pintar(); return; }
+    var ontem = somaDias(hojeISO(), -1);
+    var mesCorr = hojeISO().slice(0, 7);
+    _fim = (_fim && _fim.slice(0, 7) === mesCorr && _fim <= ontem) ? _fim : ontem;
+    _inicio = mesCorr + '-01';
+    _projecao = true;
     _cardAberto = null; _postoAberto = null;
     carregar();
   };
@@ -275,8 +402,35 @@
       '<div class="mp-atalhos">' +
         '<button type="button" class="mp-atalho" onclick="__mpAtalho(\'ontem\')">Ontem</button>' +
         '<button type="button" class="mp-atalho" onclick="__mpAtalho(\'7\')">7 dias</button>' +
+        '<button type="button" class="mp-atalho' + (_projecao ? ' on' : '') + '"' +
+          ' aria-pressed="' + (_projecao ? 'true' : 'false') + '"' +
+          ' onclick="__mpProjecao()">Projeção</button>' +
       '</div>' +
     '</div>';
+  }
+
+  // A CONTA FICA À VISTA. Um número projetado sem a régra de três ao lado é
+  // indistinguível de um número medido, e quem abrir a tela no dia 3 vai ler
+  // a projeção de dez vezes o que se vendeu como se fosse venda.
+  function htmlProjInfo() {
+    if (!_proj) return '';
+    // Mesmo mês nos dois extremos: o mês é dito UMA vez, no fim — "01–13/09",
+    // não "01/09–13/09". A projeção quase sempre roda dentro de um mês só.
+    var mesmoMes = _inicio.slice(0, 7) === _fim.slice(0, 7);
+    var periodo = (mesmoMes ? _inicio.slice(8, 10) : diaMes(_inicio)) + '–' + diaMes(_fim);
+    var txt = 'PROJEÇÃO ' + _proj.mes + ' · base ' + periodo +
+      ' (' + _proj.diasVenda + ' dia' + (_proj.diasVenda === 1 ? '' : 's') + ') × ' +
+      _proj.diasMes + '/' + _proj.diasVenda;
+    // A BASE DO LUCRO É DITA SEMPRE, mesmo quando é a mesma da venda. Omiti-la
+    // nesse caso pareceria economia, mas deixaria o leitor sem saber se a
+    // ausência quer dizer "mesma base" ou "não foi mostrado" — e são as duas
+    // fontes dessincronizadas que tornam a pergunta razoável.
+    if (_proj.fatorLucro === null) {
+      txt += ' · sem lucro no arquivo, sem projeção de lucro';
+    } else {
+      txt += ' · lucro base ' + _proj.diasLucro + ' dia' + (_proj.diasLucro === 1 ? '' : 's');
+    }
+    return '<div class="mp-proj">' + esc(txt) + '</div>';
   }
 
   // ── Cards da rede ────────────────────────────────────────────────
@@ -291,7 +445,7 @@
   }
 
   function cardConvenio(c) {
-    var r = _dados.rede;
+    var r = _vista.rede;
     var x = r.por_canal[c] || { litros: 0, faturamento: 0, abastecimentos: 0 };
     var ligado = !!_filtro[c];
     // COM o filtro ligado o número grande é o PERCENTUAL — é a pergunta que
@@ -312,7 +466,7 @@
   }
 
   function htmlCards() {
-    var r = _dados.rede;
+    var r = _vista.rede;
     var ab = r.abastecimentos || 0;
     var prod = (r.produto && r.produto.faturamento) || 0;
     var gas = r.gasolina || { litros_total: 0, litros_aditivada: 0 };
@@ -382,7 +536,7 @@
     // da tecnox_categoria_dia e dividir por litros da tecnox_venda_dia
     // misturaria duas importações no mesmo quociente. As duas divergem em
     // 0,01% num dia e 0,09% em treze — pouco, e ainda assim é a conta errada.
-    var lu = _dados.rede.dre || null;
+    var lu = _vista.rede.dre || null;
     var temLu = !!(lu && lu.lucro !== null && lu.lucro !== undefined);
     var cardLucro = '<button type="button" class="mp-card mp-card-lucro' +
       (_cardAberto === 'lucro' ? ' aberto' : '') + '"' +
@@ -411,14 +565,47 @@
 
   function htmlDetalheCard() {
     if (!_cardAberto) return '';
-    var r = _dados.rede;
+    var r = _vista.rede;
     var ab = r.abastecimentos || 0;
     var linha = function (rot, val) {
       return '<div class="mp-det-linha"><span>' + esc(rot) + '</span><b>' + val + '</b></div>';
     };
-    var corpo = '';
+    // ── A REGRA DE TRÊS, ESCRITA ───────────────────────────────
+    // O valor de partida vem de `_dados` (o medido), não de `_vista` (o
+    // projetado): a linha existe para mostrar de onde o número saiu, e
+    // partir do número já multiplicado não mostraria nada.
+    //
+    // Cards de RAZÃO não ganham a linha, ganham a frase — Ticket e Mix não
+    // mudam com a projeção, e pôr uma multiplicação ao lado deles sugeriria
+    // que mudam.
+    var contaProjecao = function () {
+      if (!_proj) return '';
+      var b = _dados.rede;
+      var f = _proj.fator, dias = _proj.diasVenda;
+      var base, fmt;
+      if (_cardAberto === 'total')      { base = b.litros; fmt = litros; }
+      else if (_cardAberto === 'abast') { base = b.abastecimentos; fmt = function (v) { return nf(Math.round(v), 0); }; }
+      else if (_cardAberto === 'produto') { base = (b.produto && b.produto.faturamento) || 0; fmt = reais; }
+      else if (_cardAberto === 'lucro') {
+        var d = b.dre || {};
+        if (d.lucro === null || d.lucro === undefined || _proj.fatorLucro === null) {
+          return linha('Projeção', 'sem lucro no arquivo — nada a projetar');
+        }
+        base = d.lucro; fmt = reais; f = _proj.fatorLucro; dias = _proj.diasLucro;
+      }
+      else if (_cardAberto === 'SOUTAG' || _cardAberto === '99') {
+        base = (b.por_canal[_cardAberto] || { litros: 0 }).litros; fmt = litros;
+      }
+      else if (_cardAberto === 'ticket' || _cardAberto === 'mix') {
+        return linha('Projeção', 'não muda: é razão, e as duas partes sobem juntas');
+      }
+      else return '';
+      return linha('Projeção', fmt(base) + ' ÷ ' + dias + ' × ' + _proj.diasMes +
+        ' = ' + fmt(base * f));
+    };
+    var corpo = contaProjecao();
     if (_cardAberto === 'total') {
-      corpo = CANAIS.map(function (c) {
+      corpo += CANAIS.map(function (c) {
         var x = r.por_canal[c] || { litros: 0 };
         return linha(ROTULO[c], litros(x.litros) + '  ·  ' + pctTxt(x.litros, r.litros));
       }).join('') +
@@ -427,18 +614,18 @@
         return linha(k2.rotulo, litros(k2.litros) + '  ·  ' + pctTxt(k2.litros, r.litros));
       }).join('');
     } else if (_cardAberto === 'abast') {
-      corpo = CANAIS.map(function (c) {
+      corpo += CANAIS.map(function (c) {
         var x = r.por_canal[c] || { litros: 0, abastecimentos: 0 };
         return linha(ROTULO[c], nf(x.abastecimentos, 0) + ' abast.  ·  ' + porAbast(x.litros, x.abastecimentos));
       }).join('');
     } else if (_cardAberto === 'ticket') {
-      corpo =
+      corpo +=
         linha('Litros ÷ abastecimentos', litros(r.litros) + ' ÷ ' + nf(ab, 0) + ' = ' + (ab > 0 ? nf(r.litros / ab, 2) + ' L' : '—')) +
         linha('Faturamento ÷ abastecimentos', reais(r.faturamento) + ' ÷ ' + nf(ab, 0) + ' = ' + (ab > 0 ? reais(r.faturamento / ab) : '—')) +
         linha('Produto ÷ abastecimentos', reais((r.produto && r.produto.faturamento) || 0) + ' ÷ ' + nf(ab, 0) + ' = ' + (ab > 0 ? reais(((r.produto && r.produto.faturamento) || 0) / ab) : '—'));
     } else if (_cardAberto === 'produto') {
       var prod = (r.produto && r.produto.faturamento) || 0;
-      corpo =
+      corpo +=
         linha('Venda de produto no período', reais(prod)) +
         linha('Por abastecimento', ab > 0 ? reais(prod / ab) : '—') +
         linha('Sobre o faturamento de pista', pctTxt(prod, r.faturamento)) +
@@ -448,9 +635,9 @@
       // linha a linha contra o "Total Geral" impresso.
       var u = r.dre || null;
       if (!u || u.lucro === null || u.lucro === undefined) {
-        corpo = linha('Sem dado', 'o arquivo TecnoX não cobre nenhum dia deste período');
+        corpo += linha('Sem dado', 'o arquivo TecnoX não cobre nenhum dia deste período');
       } else {
-        corpo =
+        corpo +=
           linha('Venda bruta', reais(u.venda_bruta)) +
           linha('Desconto', reais(u.desconto)) +
           linha('Venda líquida', reais(u.venda_liquida)) +
@@ -481,13 +668,13 @@
       }
     } else if (_cardAberto === 'mix') {
       var g = r.gasolina || { litros_total: 0, litros_aditivada: 0 };
-      corpo =
+      corpo +=
         linha('Aditivada ÷ gasolina', litros(g.litros_aditivada) + ' ÷ ' + litros(g.litros_total) + ' = ' + pctTxt(g.litros_aditivada, g.litros_total)) +
         linha('Gasolina comum', litros(g.litros_total - g.litros_aditivada)) +
         linha('Definição', 'aditivada = GA + Octapro + Podium (igual ao Relatórios)');
     } else {
       var x2 = r.por_canal[_cardAberto] || { litros: 0, faturamento: 0, abastecimentos: 0 };
-      corpo =
+      corpo +=
         linha('Litros ÷ total da rede', litros(x2.litros) + ' ÷ ' + litros(r.litros) + ' = ' + pctTxt(x2.litros, r.litros)) +
         linha('Abastecimentos', nf(x2.abastecimentos, 0)) +
         linha('Litros por abastecimento', porAbast(x2.litros, x2.abastecimentos)) +
@@ -618,7 +805,7 @@
 
   // ── Linha REDE, no rodapé da lista (o CSS a esconde no mobile) ──
   function htmlRede() {
-    var r = _dados.rede;
+    var r = _vista.rede;
     var g = r.gasolina || { litros_total: 0, litros_aditivada: 0 };
     var ul = r.dre && r.dre.lucro !== null && r.dre.lucro !== undefined ? r.dre : null;
     var appRede = modoPista()
@@ -642,7 +829,7 @@
     // Ordem: pelo card ativo quando há um ordenável; senão a regra de sempre
     // (litros do convênio marcado, ou total no modo pista).
     var qual = ordemAtiva();
-    var lista = _dados.postos.slice().sort(qual
+    var lista = _vista.postos.slice().sort(qual
       ? function (a, b) { return valorOrdem(b, qual) - valorOrdem(a, qual); }
       : function (a, b) { return valorDe(b) - valorDe(a); });
     if (!lista.length) return '<div class="mp-vazio">Sem venda no período.</div>';
@@ -659,7 +846,10 @@
     if (!_sec) return;
     var alvo = _sec.querySelector('#mp-corpo');
     if (!alvo) return;
-    var cab = htmlFiltros();
+    // A vista é preparada ANTES de qualquer html*(): é ela que as funções
+    // de render leem, e a linha de projeção depende do _proj que ela define.
+    prepararVista();
+    var cab = htmlFiltros() + htmlProjInfo();
     if (_carregando) { alvo.innerHTML = cab + '<div class="mp-estado">Carregando…</div>'; return; }
     if (_erro) { alvo.innerHTML = cab + '<div class="mp-erro">' + esc(_erro) + '</div>'; return; }
     if (!_dados) { alvo.innerHTML = cab + '<div class="mp-estado">—</div>'; return; }
