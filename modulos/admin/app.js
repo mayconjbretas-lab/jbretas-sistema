@@ -102,23 +102,38 @@ function abrirMais() { document.getElementById('modal-mais').classList.add('open
 // A adaptação para 375px é toda por CSS DENTRO do dre.js, por LARGURA (700px):
 // só Mês e Projeção; KPIs abreviados com o cheio a um toque; a margem por dia
 // vira linha; e 4 das 8 colunas da tabela viram detalhe ao toque.
-// AS VISTAS DA ABA, num MAPA e não num if/else: o terceiro relatório
-// (Mercado) entra como uma linha aqui, e o resto da função não muda.
-// 'relat' (a lista de PDFs) não está no mapa de propósito — ela é o que
-// aparece quando NENHUMA vista está aberta, não uma vista a mais.
+// AS VISTAS DA ABA, num MAPA e não num if/else: uma linha por relatório, e
+// o resto da função não muda quando entra o próximo.
+//
+// O CONSOLIDADO É UMA VISTA COMO AS OUTRAS. Ele era o estado "nenhuma
+// aberta" — quem quisesse vê-lo clicava no botão aceso para fechar o que
+// estava abrindo. Isso fazia a tela de entrada da aba ser a menos usada das
+// quatro, e obrigava a conhecer um gesto (fechar para chegar) que botão
+// nenhum anunciava. Agora tem botão, como os outros três.
+//
+// `plano: true` no Consolidado porque o #s-relat-lista é um DIV comum, e
+// não uma .scr: a visibilidade dele é por `hidden`. Transformá-lo em .scr
+// uniformizaria o loop e mudaria o layout — .scr é display:flex com
+// height:100% no desktop e ganha padding no mobile, e o conteúdo do
+// Consolidado não pediu nada disso.
+//
+// A ORDEM DAS CHAVES é a dos botões na tela, para quem ler as duas listas
+// não precisar cruzá-las. `mov` (mês × mês) fica sem botão de propósito,
+// como já estava: a vista existe, a entrada visível não.
 const REL_VISTAS = {
-  dre: { sec: 's-dre', botao: 'rel-btn-dre', render: (el) => renderDre(el) },
-  mov: { sec: 's-movmes', botao: 'rel-btn-mov', render: (el) => renderMovMes(el) },
   postos: { sec: 's-movpostos', botao: 'rel-btn-postos', render: (el) => renderMovPostos(el) },
+  dre: { sec: 's-dre', botao: 'rel-btn-dre', render: (el) => renderDre(el) },
   mercado: { sec: 's-mercado', botao: 'rel-btn-mercado', render: (el) => renderMercado(el) },
+  lista: { sec: 's-relat-lista', botao: 'rel-btn-lista', plano: true,
+           render: (el) => renderRelatorios(el) },
+  mov: { sec: 's-movmes', botao: 'rel-btn-mov', render: (el) => renderMovMes(el) },
 };
-let _relatVista = 'relat';
+// Padrão da aba: a Movimentação do dia. A variável é de MÓDULO e sobrevive
+// à troca de aba, então voltar a Relatórios reabre a última vista escolhida
+// — só a primeira entrada da sessão usa este valor.
+let _relatVista = 'postos';
 
 function renderRelatArea() {
-  const lista = document.getElementById('s-relat-lista');
-  const aberta = REL_VISTAS[_relatVista] || null;
-  if (lista) lista.hidden = !!aberta;
-
   Object.keys(REL_VISTAS).forEach((k) => {
     const v = REL_VISTAS[k];
     const sec = document.getElementById(v.sec);
@@ -128,7 +143,13 @@ function renderRelatArea() {
     // (.scr{display:none} / #s-dre.active{display:block}, injetada pelo próprio
     // dre.js; a gêmea do #s-movmes vem do shared/css/mov-mes.css). `hidden` não
     // bastaria aqui — o seletor de id com classe vence o atributo.
-    if (sec) sec.classList.toggle('active', ativa);
+    //
+    // O Consolidado é a exceção, e por isso tem `plano`: div comum, sem
+    // regra de .scr atrás dele, e aí `hidden` é justamente o que funciona.
+    if (sec) {
+      if (v.plano) sec.hidden = !ativa;
+      else sec.classList.toggle('active', ativa);
+    }
     // O botão fica ACESO enquanto o relatório está aberto, e é por ele que se
     // volta. aria-pressed, e não aria-expanded: é botão de estado numa barra.
     if (btn) {
@@ -140,14 +161,19 @@ function renderRelatArea() {
     // (guardam o próprio shell), então reentrar não remonta nada.
     if (ativa && sec) v.render(sec);
   });
-
-  if (!aberta) renderRelatorios(lista);
 }
 
-// Um botão por relatório, e o MESMO botão fecha. NÃO mexe na .bnav:
-// continua-se na aba Relatórios.
+// Um botão por relatório, e SEM fechar. NÃO mexe na .bnav: continua-se na
+// aba Relatórios.
+//
+// O MESMO BOTÃO NÃO FECHA MAIS. Fechava quando o Consolidado era o estado
+// vazio e havia para onde voltar; agora as quatro vistas são vistas, e
+// "fechar" deixaria a aba sem conteúdo nenhum na tela. Clicar no botão
+// aceso repinta a vista dele, o que é inofensivo (todos os renders são
+// idempotentes) e é o que o usuário esperaria de um botão já marcado.
 function relAbrir(vista) {
-  _relatVista = (_relatVista === vista) ? 'relat' : vista;
+  if (!REL_VISTAS[vista]) return;
+  _relatVista = vista;
   renderRelatArea();
 }
 

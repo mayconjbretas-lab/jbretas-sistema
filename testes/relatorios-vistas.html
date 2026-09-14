@@ -1,0 +1,301 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aba Relatórios — quatro vistas, padrão na Movimentação</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  :root {
+    --ac: var(--accent); --ac2: var(--accent2); --acd: var(--accent-dim);
+    --dg: var(--danger); --wn: var(--warning); --inf: var(--info);
+    --tx: var(--text); --tx2: var(--text2); --tx3: var(--text3);
+    --sf: var(--surface); --sf2: var(--surface2); --sf3: var(--surface3);
+    --bd: var(--border); --bd2: var(--border2);
+    --r: var(--radius); --rl: var(--radius-lg);
+    --mp-so: var(--accent2); --mp-99: var(--info);
+  }
+</style>
+<!-- O CSS do módulo é injetado por JS (ver montarPalco), porque ele depende
+     do ?m= e um <link> no head é resolvido antes de qualquer script rodar.
+     E ele IMPORTA para este teste: quem decide se uma vista está visível são
+     as regras .scr{display:none} / #id.active{display:block}, e as duas
+     folhas as escrevem diferente (flex no desktop, block no celular). -->
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+
+<div id="res">rodando…</div>
+
+<div id="palco">
+  <!-- A .bnav e a .pa-main existem porque o setTab de verdade as consulta:
+       `.bnav .nbtn` para apagar o aceso e `.pa-main .scr` para limpar o
+       `active` de todas as telas. Sem elas eu estaria testando um setTab
+       diferente do que está no ar. O #s-relat é INJETADO do index.html real
+       (ver montarPalco): markup copiado à mão sairia do compasso na primeira
+       vez que alguém mexesse lá. -->
+  <nav class="bnav"><button class="nbtn" id="nbtn-relat" type="button">Relatórios</button></nav>
+  <!-- DOIS nomes no mesmo elemento porque os dois setTab o procuram
+       diferente: o do desktop varre `.pa-main .scr`, o do celular varre
+       `.scr` e ainda faz getElementById('main').classList.toggle(...) sem
+       guard nenhum. Um palco que servisse só a um dos dois faria este teste
+       passar num módulo e estourar no outro — que é exatamente o que ele
+       existe para impedir. -->
+  <main class="pa-main main" id="main"></main>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// 1. Entrar na aba Relatórios abre a MOVIMENTAÇÃO DO DIA, com o botão dela
+//    marcado — e não mais o Consolidado.
+// 2. O Consolidado virou a quarta vista, com botão "Relatório", e abre o
+//    MESMO conteúdo de antes: Dia / Período e o Copiar p/ WhatsApp vivos.
+// 3. Uma vista visível por vez, e SÓ ela renderiza (cada relatório faz o
+//    próprio GET; renderizar as quatro custaria quatro leituras por clique).
+// 4. A memória de última vista sobrevive à troca de aba.
+// 5. Ordem dos botões: Movimentação do dia · DRE · Mercado · Relatório.
+//
+// COM O app.js DE VERDADE, não com uma cópia da lógica: o arquivo é carregado
+// inteiro e só as dependências de fora dele são dubladas (sessão e os quatro
+// renders). Se o REL_VISTAS ou o relAbrir mudarem, este teste sente.
+// ════════════════════════════════════════════════════════════════
+var linhas = [];
+var falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + rot + (obtido === undefined ? '' : '  →  ' + obtido +
+      (esperado === undefined ? '' : '   (esperado ' + esperado + ')')));
+}
+function nota(t) { linhas.push('     ' + t); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function txt(el) { return el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : ''; }
+function visivel(el) {
+  if (!el) return false;
+  var r = el.getBoundingClientRect();
+  return !el.hidden && getComputedStyle(el).display !== 'none' && (r.width > 0 || r.height > 0);
+}
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+// ── dublês ───────────────────────────────────────────────────────
+// Só o que app.js espera achar FORA dele. Os quatro renders contam chamadas,
+// que é como se prova "só a vista visível renderizou".
+// MÓDULO por querystring: ?m=admin roda o MESMO teste contra o app.js e o
+// index.html do celular. Os dois arquivos são gêmeos nesta parte de
+// propósito, e um teste só é o que garante que sigam gêmeos.
+var MOD = (new URLSearchParams(location.search).get('m') === 'admin') ? 'admin' : 'painel-adm';
+var CHAMOU = {};
+function conta(nome) { CHAMOU[nome] = (CHAMOU[nome] || 0) + 1; }
+window.exigirSessao = function () { return { id: 'h', nome: 'Harness', perfil: 'ADM' }; };
+window.getUsuarioLogado = function () { return { id: 'h', nome: 'Harness', perfil: 'ADM' }; };
+window.aplicarTema = function () {};
+window.abrirPainelDesktop = function () {};
+window.caminhoRaiz = function () { return '/'; };
+window.renderDre = function (el) { conta('dre'); el.innerHTML = '<div>DRE</div>'; };
+window.renderMovMes = function (el) { conta('mov'); el.innerHTML = '<div>MES</div>'; };
+window.renderMovPostos = function (el) { conta('postos'); el.innerHTML = '<div id="marca-postos">MOVIMENTAÇÃO</div>'; };
+window.renderMercado = function (el) { conta('mercado'); el.innerHTML = '<div>MERCADO</div>'; };
+// Os demais renders que o setTab alcança nas OUTRAS abas. Existem só para
+// o passo da memória poder sair de Relatórios e voltar; sem eles o teste
+// morreria num ReferenceError de uma tela que não está sendo testada.
+window.renderCustoMargem = function () {};
+window.renderKpi = function () {};
+window.renderColetaRevisao = function () {};
+window.renderMedicao = function () {};
+window.renderMedicaoMobile = function () {};
+window.renderFornecedores = function () {};
+window.carregarDadosComparar = function () {};
+window.abrirMais = function () {};
+// O Consolidado NÃO é dublado: é o relatorios.js de verdade, com fixture real.
+var FIX_REL = null;
+window.apiFetch = function (url) {
+  var q = url.indexOf('?') >= 0 ? url.slice(url.indexOf('?') + 1) : '';
+  if (url.indexOf('/relatorios/mix-periodo') === 0) return Promise.resolve(FIX_REL.mix);
+  if (url.indexOf('/relatorios/produtos-periodo') === 0) return Promise.resolve(FIX_REL.produtos);
+  if (url.indexOf('/relatorios') === 0 && FIX_REL[q]) return Promise.resolve(FIX_REL[q]);
+  return Promise.reject(new Error('sem fixture para ' + url));
+};
+// A escolha desktop já feita evita o redirect do DOMContentLoaded do app.js.
+try { localStorage.setItem('jb_versao_painel', 'desktop'); } catch (e) {}
+
+// ── palco com o markup REAL ──────────────────────────────────────
+function carregarCss() {
+  return new Promise(function (ok) {
+    var l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = '/modulos/' + MOD + '/' + MOD + '.css';
+    l.onload = ok; l.onerror = ok;     // erro não derruba: as asserções acusam
+    document.head.appendChild(l);
+  });
+}
+async function montarPalco() {
+  await carregarCss();
+  var html = await (await fetch('/modulos/' + MOD + '/index.html')).text();
+  var doc = new DOMParser().parseFromString(html, 'text/html');
+  var sec = doc.getElementById('s-relat');
+  if (!sec) throw new Error('nao achei #s-relat no index.html');
+  document.getElementById('main').appendChild(document.importNode(sec, true));
+  return sec;
+}
+
+function carregarApp() {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = '/modulos/' + MOD + '/app.js';
+    s.onload = ok;
+    s.onerror = function () { erro(new Error('app.js nao carregou')); };
+    document.body.appendChild(s);
+  });
+}
+
+var VISTAS = [
+  ['postos', 'rel-btn-postos', 's-movpostos', 'Movimentação do dia'],
+  ['dre', 'rel-btn-dre', 's-dre', 'DRE'],
+  ['mercado', 'rel-btn-mercado', 's-mercado', 'Mercado'],
+  ['lista', 'rel-btn-lista', 's-relat-lista', 'Relatório'],
+];
+function qualVisivel() {
+  return VISTAS.filter(function (v) { return visivel(document.getElementById(v[2])); })
+               .map(function (v) { return v[0]; });
+}
+function qualMarcado() {
+  return VISTAS.filter(function (v) {
+    var b = document.getElementById(v[1]);
+    return b && b.classList.contains('active');
+  }).map(function (v) { return v[0]; });
+}
+
+// ════════════════════════════════════════════════════════════════
+async function rodar() {
+  FIX_REL = await (await fetch('/testes/fixtures-relatorios.json')).json();
+  linhas.push('MÓDULO: ' + MOD + '   (troque com ?m=admin / ?m=painel-adm)');
+  await montarPalco();
+  await carregarApp();
+  await esperar(50);
+
+  h3('1. Ordem dos sub-botões');
+  var botoes = [...document.querySelectorAll('#rel-seletor .fueltab')].map(txt);
+  nota(botoes.join('  ·  '));
+  eh(JSON.stringify(botoes) === JSON.stringify(['Movimentação do dia', 'DRE', 'Mercado', 'Relatório']),
+     'quatro botões, nesta ordem', botoes.join(' · '),
+     'Movimentação do dia · DRE · Mercado · Relatório');
+  // Mesma classe dos de antes: o pedido era não mexer em largura nem estilo.
+  var classes = [...document.querySelectorAll('#rel-seletor button')]
+    .map(function (b) { return b.className; });
+  eh(classes.every(function (c) { return c.indexOf('fueltab') === 0; }),
+     'todos .fueltab, como os três de antes', classes.join(' | '), 'fueltab');
+
+  h3('2. Entrar na aba abre a Movimentação do dia');
+  CHAMOU = {};
+  setTab(document.getElementById('nbtn-relat'), 'relat');
+  await esperar(60);
+  eh(JSON.stringify(qualVisivel()) === JSON.stringify(['postos']),
+     'só a Movimentação visível', qualVisivel().join(',') || '(nenhuma)', 'postos');
+  eh(JSON.stringify(qualMarcado()) === JSON.stringify(['postos']),
+     'só o botão dela marcado', qualMarcado().join(',') || '(nenhum)', 'postos');
+  eh(!!document.getElementById('marca-postos'), 'o render dela rodou de fato');
+  eh(CHAMOU.dre === undefined && CHAMOU.mercado === undefined,
+     'DRE e Mercado NÃO renderizaram (cada um faz o próprio GET)',
+     JSON.stringify(CHAMOU), '{"postos":1}');
+
+  h3('3. Botão Relatório abre o Consolidado — o de verdade');
+  CHAMOU = {};
+  relAbrir('lista');
+  await esperar(400);        // o relatorios.js faz o GET do dia
+  eh(JSON.stringify(qualVisivel()) === JSON.stringify(['lista']),
+     'só o Consolidado visível', qualVisivel().join(',') || '(nenhuma)', 'lista');
+  eh(JSON.stringify(qualMarcado()) === JSON.stringify(['lista']),
+     'só o botão Relatório marcado', qualMarcado().join(',') || '(nenhum)', 'lista');
+  var cons = document.getElementById('s-relat-lista');
+  var tcons = txt(cons);
+  eh(tcons.indexOf('Dia') >= 0 && tcons.indexOf('Período') >= 0,
+     'os chips Dia e Período estão lá', tcons.indexOf('Dia') >= 0 ? 'Dia + Período' : 'faltando');
+  var copiar = [...cons.querySelectorAll('.rel-copy')];
+  eh(copiar.length >= 1, 'o botão Copiar p/ WhatsApp existe', copiar.length + ' botão(ões)', '>= 1');
+  eh(typeof window.__relCopiar === 'function', 'o handler __relCopiar está registrado');
+  // O guard que entrou quando o clipboard.js passou a ser carregado antes:
+  // sem window.jbCopiar o botão avisa em vez de estourar.
+  eh(copiar.length === 0 || copiar[0].getAttribute('onclick').indexOf('__relCopiar') >= 0,
+     'o onclick do botão chama __relCopiar',
+     copiar.length ? copiar[0].getAttribute('onclick') : '(sem botão)');
+
+  h3('4. Copiar p/ WhatsApp de ponta a ponta');
+  // jbCopiar dublado para capturar o texto sem tocar na área de transferência
+  // do usuário — o que se prova aqui é que o handler MONTA e ENTREGA texto.
+  var copiado = null;
+  window.jbCopiar = function (t) { copiado = t; };
+  copiar[0].click();
+  await esperar(500);
+  eh(typeof copiado === 'string' && copiado.length > 20,
+     'o handler entregou texto ao jbCopiar',
+     copiado === null ? '(nada)' : copiado.length + ' caracteres', '> 20');
+  if (typeof copiado === 'string') nota('1ª linha: ' + copiado.split('\n')[0]);
+
+  h3('5. Os outros dois, inalterados');
+  for (var i = 0; i < 2; i++) {
+    var v = VISTAS[i + 1];          // dre, mercado
+    CHAMOU = {};
+    relAbrir(v[0]);
+    await esperar(60);
+    eh(JSON.stringify(qualVisivel()) === JSON.stringify([v[0]]),
+       'só ' + v[3] + ' visível', qualVisivel().join(',') || '(nenhuma)', v[0]);
+    eh(CHAMOU[v[0]] === 1 && Object.keys(CHAMOU).length === 1,
+       'só o render de ' + v[3] + ' rodou', JSON.stringify(CHAMOU), '{"' + v[0] + '":1}');
+  }
+
+  h3('6. Clicar no botão aceso NÃO esvazia a aba');
+  // Antes o mesmo botão fechava, porque havia o estado "nada aberto". Agora
+  // as quatro são vistas, e fechar deixaria a tela em branco.
+  relAbrir('mercado');
+  await esperar(60);
+  relAbrir('mercado');
+  await esperar(60);
+  eh(JSON.stringify(qualVisivel()) === JSON.stringify(['mercado']),
+     'segue no Mercado depois do segundo clique', qualVisivel().join(',') || '(nenhuma, tela vazia)', 'mercado');
+
+  h3('7. A memória sobrevive à troca de aba');
+  relAbrir('lista');
+  await esperar(300);
+  setTab(document.getElementById('nbtn-relat'), 'mapa');    // sai para uma aba sem render
+  await esperar(40);
+  CHAMOU = {};
+  setTab(document.getElementById('nbtn-relat'), 'relat');    // volta
+  await esperar(300);
+  eh(JSON.stringify(qualVisivel()) === JSON.stringify(['lista']),
+     'voltou no Consolidado, a última aberta', qualVisivel().join(',') || '(nenhuma)', 'lista');
+  eh(CHAMOU.postos === undefined, 'e não caiu no padrão por cima da memória',
+     JSON.stringify(CHAMOU), 'sem postos');
+
+  h3('8. Nenhuma outra section da aba sobrou visível');
+  var soltas = [...document.querySelectorAll('#s-relat .scr')]
+    .filter(visivel).map(function (e) { return e.id; });
+  nota('sections .scr visíveis dentro de #s-relat: ' + (soltas.join(', ') || 'nenhuma'));
+  eh(soltas.length <= 1, 'no máximo uma', soltas.join(', ') || 'nenhuma', '<= 1');
+  eh(!visivel(document.getElementById('s-movmes')),
+     'o mês × mês continua sem entrada visível');
+
+  h3(falhas === 0 ? '<span class="ok">TUDO PASSOU</span>'
+                  : '<span class="bad">' + falhas + ' FALHA(S)</span>');
+  pintar();
+}
+
+rodar().catch(function (e) {
+  linhas.push('<span class="bad">ERRO: ' + e.message + '</span>');
+  linhas.push(String(e.stack || '').split('\n').slice(0, 6).join('\n'));
+  pintar();
+});
+</script>
+
+<script src="/shared/js/clipboard.js"></script>
+<!-- relatorios.js NÃO é parametrizado: é um arquivo só, e o admin mobile
+     carrega este mesmo (../painel-adm/relatorios.js) — sem fork. -->
+<script src="/modulos/painel-adm/relatorios.js"></script>

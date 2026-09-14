@@ -1,0 +1,1391 @@
+{
+ "data=2026-09-13": {
+  "success": true,
+  "modo": "dia",
+  "data": "2026-09-13",
+  "postos": [
+   {
+    "posto": "P. ALEX",
+    "litros": 4832,
+    "mix": 0.038,
+    "lubrificantes_rs": 493.6,
+    "abastecimentos": 1351,
+    "gasolina_litros": 2159,
+    "tecnox": {
+     "litros_gas": 9639,
+     "mix": 0.08009129577757029
+    }
+   },
+   {
+    "posto": "P. ANA LUCIA",
+    "litros": 10071,
+    "mix": 0,
+    "lubrificantes_rs": 92.7,
+    "abastecimentos": null,
+    "gasolina_litros": 5218,
+    "tecnox": {
+     "litros_gas": null,
+     "mix": null
+    }
+   },
+   {
+    "posto": "P. ARAPONGA",
+    "litros": 7511,
+    "mix": 0.1243,
+    "lubrificantes_rs": 163.6,
+    "abastecimentos": 1521,
+    "gasolina_litros": 4843,
+    "tecnox": {
+     "litros_gas": 18025,
+     "mix": 0.12815533980582525
+    }
+   },
+   {
+    "posto": "P. AVIVA",
+    "litros": 15261,
+    "mix": 0.123,
+    "lubrificantes_rs": 614.5,
+    "abastecimentos": 3952,
+    "gasolina_litros": 7205,
+    "tecnox": {
+     "litros_gas": 24536,
+     "mix": 0.1217394848386045
+    }
+   },
+   {
+    "posto": "P. BAHAMAS",
+    "litros": 0,
+    "mix": null,
+    "lubrificantes_rs": null,
+    "abastecimentos": null,
+    "gasolina_litros": 0,
+    "tecnox": {
+     "litros_gas": null,
+     "mix": null
+    }
+   },
+   {
+    "posto": "P. BEATRIZ",
+    "litros": 10173,
+    "mix": 0.1113,
+    "lubrificantes_rs": 1164.03,
+    "abastecimentos": 1547,
+    "gasolina_litros": 3549,
+    "tecnox": {
+     "litros_gas": 12006.59,
+     "mix": 0.12441251012985369
+    }
+   },
+   {
+    "posto": "P. BERNARDO",
+    "litros": 19339,
+    "mix": 0,
+    "lubrificantes_rs": 2602.16,
+    "abastecimentos": 1704,
+    "gasolina_litros": 4338,
+    "tecnox": {
+     "litros_gas": null,
+     "mix": null
+    }
+   },
+   {
+    "posto": "P. BIANCA",
+    "litros": 5741,
+    "mix": 0.0427,
+    "lubrificantes_rs": 380.8,
+    "abastecimentos": 1814,
+    "gasolina_litros": 2672,
+    "tecnox": {
+     "litros_gas": 10511,
+     "mix": 0.04414422985443821
+    }
+   },
+   {
+    "posto": "P. BOMBOM FILIAL",
+    "litros": 6728,
+    "mix": 0.0843,
+    "lubrificantes_rs": 618,
+    "abastecimentos": 1859,
+    "gasolina_litros": 3440,
+    "tecnox": {
+     "litros_gas": 13457,
+     "mix": 0.10604146540833767
+    }
+   },
+   {
+    "posto": "P. BOMBOM MATRIZ",
+    "litros": 0,
+    "mix": null,
+    "lubrificantes_rs": null,
+    "abastecimentos": 456,
+    "gasolina_litros": 0,
+    "tecnox": {
+     "litros_gas": 4243,
+     "mix": 0.10393589441432949
+    }
+   },
+   {
+    "posto": "P. BRUNA",
+    "litros": 13703,
+    "mix": 0.1346,
+    "lubrificantes_rs": 631.58,
+    "abastecimentos": 2334,
+    "gasolina_litros": 3945,
+    "tecnox": {
+     "litros_gas": 16662,
+     "mix": 0.16906733885487937
+    }
+   },
+   {
+    "posto": "P. DIFERENCIAL",
+    "litros": 10140,
+    "mix": 0.0847,
+    "lubrificantes_rs": 209.5,
+    "abastecimentos": 2226,
+    "gasolina_litros": 5525,
+    "tecnox": {
+     "litros_gas": 22580,
+     "mix": 0.08649247121346325
+    }
+   },
+   {
+    "posto": "P. DUDU",
+    "litros": 4195,
+    "mix": 0,
+    "lubrificantes_rs": 223.8,
+    "abastecimentos": 1250,
+    "gasolina_litros": 1805,
+    "tecnox": {
+     "litros_gas": null,
+     "mix": null
+    }
+   },
+   {
+    "posto": "P. ESPAÇO REAL",
+    "litros": 21198,
+    "mix": 0.0842,
+    "lubrificantes_rs": 992.79,
+    "abastecimentos": 2996,
+    "gasolina_litros": 11089,
+    "tecnox": {
+     "litros_gas": 35945.009999999995,
+     "mix": 0.07678645798123301
+    }
+   },
+   {
+    "posto": "P. FELIPAO",
+    "litros": 13216,
+    "mix": 0,
+    "lubrificantes_rs": 830.21,
+    "abastecimentos": 1940,
+    "gasolina_litros": 7915,
+    "tecnox": {
+     "litros_gas": 19555.1,
+     "mix": 0
+    }
+   },
+   {
+    "posto": "P. GLORIA",
+    "litros": 4286,
+    "mix": 0,
+    "lubrificantes_rs": null,
+    "abastecimentos": 1195,
+    "gasolina_litros": 1668,
+    "tecnox": {
+     "litros_gas": null,
+     "mix": null
+    }
+   },
+   {
+    "posto": "P. ITAPOA",
+    "litros": 13731,
+    "mix": 0.1221,
+    "lubrificantes_rs": 517,
+    "abastecimentos": 2800,
+    "gasolina_litros": 7805,
+    "tecnox": {
+     "litros_gas": 29785,
+     "mix": 0.1191539365452409
+    }
+   },
+   {
+    "posto": "P. JA",
+    "litros": 8554,
+    "mix": 0.197,
+    "lubrificantes_rs": 619.7,
+    "abastecimentos": 1896,
+    "gasolina_litros": 5117,
+    "tecnox": {
+     "litros_gas": 23014,
+     "mix": 0.2391587729208308
+    }
+   },
+   {
+    "posto": "P. JOCA",
+    "litros": 4962,
+    "mix": 0,
+    "lubrificantes_rs": 82,
+    "abastecimentos": 2507,
+    "gasolina_litros": 4242,
+    "tecnox": {
+     "litros_gas": null,
+     "mix": null
+    }
+   },
+   {
+    "posto": "P. LEANDRO",
+    "litros": 3811,
+    "mix": 0.1463,
+    "lubrificantes_rs": 264.5,
+    "abastecimentos": 1042,
+    "gasolina_litros": 1825,
+    "tecnox": {
+     "litros_gas": 7364,
+     "mix": 0.18753394894079306
+    }
+   },
+   {
+    "posto": "P. LOURA EMPREENDIMENTOS",
+    "litros": 14293,
+    "mix": 0.0689,
+    "lubrificantes_rs": 1301.5,
+    "abastecimentos": 3019,
+    "gasolina_litros": 7159,
+    "tecnox": {
+     "litros_gas": 26095,
+     "mix": 0.06928530369802645
+    }
+   },
+   {
+    "posto": "P. MANGABEIRAS",
+    "litros": 5435,
+    "mix": 0.1019,
+    "lubrificantes_rs": 303.6,
+    "abastecimentos": 1018,
+    "gasolina_litros": 3160,
+    "tecnox": {
+     "litros_gas": 12714,
+     "mix": 0.12678936605316973
+    }
+   },
+   {
+    "posto": "P. MIRAGEM JBRETAS",
+    "litros": 3137,
+    "mix": 0.5333,
+    "lubrificantes_rs": 29.9,
+    "abastecimentos": 897,
+    "gasolina_litros": 1817,
+    "tecnox": {
+     "litros_gas": 9452,
+     "mix": 0.3665890816758358
+    }
+   },
+   {
+    "posto": "P. OURO BRANCO",
+    "litros": 5745,
+    "mix": 0.0451,
+    "lubrificantes_rs": 177,
+    "abastecimentos": 1818,
+    "gasolina_litros": 2904,
+    "tecnox": {
+     "litros_gas": 11419,
+     "mix": 0.05245643226201944
+    }
+   },
+   {
+    "posto": "P. PLANALTO",
+    "litros": 13516,
+    "mix": 0.0837,
+    "lubrificantes_rs": 987.2,
+    "abastecimentos": null,
+    "gasolina_litros": 6907,
+    "tecnox": {
+     "litros_gas": null,
+     "mix": null
+    }
+   },
+   {
+    "posto": "P. QUATRO RODAS",
+    "litros": 9995,
+    "mix": 0.0707,
+    "lubrificantes_rs": 507,
+    "abastecimentos": 2325,
+    "gasolina_litros": 4387,
+    "tecnox": {
+     "litros_gas": 18060,
+     "mix": 0.08460686600221484
+    }
+   },
+   {
+    "posto": "P. RODRIGO",
+    "litros": 7382,
+    "mix": 0.0922,
+    "lubrificantes_rs": 764.1,
+    "abastecimentos": 1703,
+    "gasolina_litros": 3328,
+    "tecnox": {
+     "litros_gas": 13297,
+     "mix": 0.07084304730390313
+    }
+   },
+   {
+    "posto": "P. SANTA INES - JOAQUIM",
+    "litros": 7363,
+    "mix": 0.1147,
+    "lubrificantes_rs": 340.65,
+    "abastecimentos": 1826,
+    "gasolina_litros": 3251,
+    "tecnox": {
+     "litros_gas": 15583,
+     "mix": 0.0922800487710967
+    }
+   },
+   {
+    "posto": "P. SANTA INES MINAS",
+    "litros": 12736,
+    "mix": 0.1868,
+    "lubrificantes_rs": 442.3,
+    "abastecimentos": null,
+    "gasolina_litros": 6830,
+    "tecnox": {
+     "litros_gas": null,
+     "mix": null
+    }
+   },
+   {
+    "posto": "P. SANTA MARIA",
+    "litros": 11570,
+    "mix": 0.0965,
+    "lubrificantes_rs": 1729.4,
+    "abastecimentos": 2630,
+    "gasolina_litros": 5690,
+    "tecnox": {
+     "litros_gas": 21517,
+     "mix": 0.08365478458892968
+    }
+   },
+   {
+    "posto": "P. SAO BERNARDO",
+    "litros": 9248,
+    "mix": 0.1505,
+    "lubrificantes_rs": 564,
+    "abastecimentos": null,
+    "gasolina_litros": 4797,
+    "tecnox": {
+     "litros_gas": null,
+     "mix": null
+    }
+   },
+   {
+    "posto": "P. SAO LUIZ RL",
+    "litros": 2979,
+    "mix": 0,
+    "lubrificantes_rs": 304.2,
+    "abastecimentos": 929,
+    "gasolina_litros": 1047,
+    "tecnox": {
+     "litros_gas": null,
+     "mix": null
+    }
+   },
+   {
+    "posto": "P. SERENA COLIBRI",
+    "litros": 19203,
+    "mix": 0.0691,
+    "lubrificantes_rs": 1096.2,
+    "abastecimentos": null,
+    "gasolina_litros": 9707,
+    "tecnox": {
+     "litros_gas": null,
+     "mix": null
+    }
+   },
+   {
+    "posto": "P. TOPAZIO",
+    "litros": 12188,
+    "mix": 0.1095,
+    "lubrificantes_rs": 153.7,
+    "abastecimentos": 2689,
+    "gasolina_litros": 5461,
+    "tecnox": {
+     "litros_gas": 18516,
+     "mix": 0.10234391877295312
+    }
+   },
+   {
+    "posto": "P. TRANCOSO",
+    "litros": 5528,
+    "mix": 0.0507,
+    "lubrificantes_rs": 105,
+    "abastecimentos": null,
+    "gasolina_litros": 2606,
+    "tecnox": {
+     "litros_gas": null,
+     "mix": null
+    }
+   },
+   {
+    "posto": "P. TUNEL",
+    "litros": 9203,
+    "mix": 0.1319,
+    "lubrificantes_rs": 941.2,
+    "abastecimentos": null,
+    "gasolina_litros": 4828,
+    "tecnox": {
+     "litros_gas": null,
+     "mix": null
+    }
+   },
+   {
+    "posto": "P. URBANO FERRAZ",
+    "litros": 8277,
+    "mix": 0.1505,
+    "lubrificantes_rs": 69.9,
+    "abastecimentos": 2028,
+    "gasolina_litros": 4379,
+    "tecnox": {
+     "litros_gas": 16673,
+     "mix": 0.1538415402147184
+    }
+   }
+  ],
+  "totais": {
+   "litros": 335250,
+   "lubrificantes_rs": 20317.320000000007,
+   "mix": 0.09382110221500695,
+   "tecnox_litros_gas": 410648.69999999995
+  }
+ },
+ "inicio=2026-09-01&fim=2026-09-13": {
+  "success": true,
+  "modo": "periodo",
+  "inicio": "2026-09-01",
+  "fim": "2026-09-13",
+  "postos": [
+   {
+    "posto": "P. ALEX",
+    "gasolina_litros": 42956.545999999995,
+    "produtos_rs": 3866.8000000000015,
+    "mix": 0.0548,
+    "dias": 13
+   },
+   {
+    "posto": "P. ANA LUCIA",
+    "gasolina_litros": 74991.062,
+    "produtos_rs": 3360.6000000000013,
+    "mix": 0,
+    "dias": 13
+   },
+   {
+    "posto": "P. ARAPONGA",
+    "gasolina_litros": 81895.93,
+    "produtos_rs": 10324.789999999986,
+    "mix": 0.1078,
+    "dias": 13
+   },
+   {
+    "posto": "P. AVIVA",
+    "gasolina_litros": 106109.674,
+    "produtos_rs": 13259.399999999987,
+    "mix": 0.0975,
+    "dias": 13
+   },
+   {
+    "posto": "P. BAHAMAS",
+    "gasolina_litros": 29829.534999999996,
+    "produtos_rs": 4630.5,
+    "mix": 0.1342,
+    "dias": 11
+   },
+   {
+    "posto": "P. BEATRIZ",
+    "gasolina_litros": 49974.96500000001,
+    "produtos_rs": 10988.249999999998,
+    "mix": 0.1161,
+    "dias": 13
+   },
+   {
+    "posto": "P. BERNARDO",
+    "gasolina_litros": 57734.611,
+    "produtos_rs": 40254.760000000046,
+    "mix": 0,
+    "dias": 13
+   },
+   {
+    "posto": "P. BIANCA",
+    "gasolina_litros": 48110.305,
+    "produtos_rs": 4980.8,
+    "mix": 0.0432,
+    "dias": 13
+   },
+   {
+    "posto": "P. BOMBOM FILIAL",
+    "gasolina_litros": 57930.245,
+    "produtos_rs": 9751.29999999999,
+    "mix": 0.1129,
+    "dias": 13
+   },
+   {
+    "posto": "P. BOMBOM MATRIZ",
+    "gasolina_litros": 26629.425000000003,
+    "produtos_rs": 896.3999999999999,
+    "mix": 0.1065,
+    "dias": 11
+   },
+   {
+    "posto": "P. BRUNA",
+    "gasolina_litros": 74997.31800000001,
+    "produtos_rs": 16262.379999999968,
+    "mix": 0.1352,
+    "dias": 13
+   },
+   {
+    "posto": "P. DIFERENCIAL",
+    "gasolina_litros": 100942.657,
+    "produtos_rs": 8906.289999999992,
+    "mix": 0.0982,
+    "dias": 13
+   },
+   {
+    "posto": "P. DUDU",
+    "gasolina_litros": 42425.681000000004,
+    "produtos_rs": 7775.2099999999955,
+    "mix": 0,
+    "dias": 13
+   },
+   {
+    "posto": "P. ESPAÇO REAL",
+    "gasolina_litros": 152046.101,
+    "produtos_rs": 15728.25999999999,
+    "mix": 0.0782,
+    "dias": 13
+   },
+   {
+    "posto": "P. FELIPAO",
+    "gasolina_litros": 69293.072,
+    "produtos_rs": 10959.769999999991,
+    "mix": 0,
+    "dias": 13
+   },
+   {
+    "posto": "P. GLORIA",
+    "gasolina_litros": 31060.487,
+    "produtos_rs": 2412.2000000000016,
+    "mix": 0,
+    "dias": 13
+   },
+   {
+    "posto": "P. ITAPOA",
+    "gasolina_litros": 135756.05399999997,
+    "produtos_rs": 17094.29999999998,
+    "mix": 0.0998,
+    "dias": 13
+   },
+   {
+    "posto": "P. JA",
+    "gasolina_litros": 108680.514,
+    "produtos_rs": 11358.99999999998,
+    "mix": 0.2453,
+    "dias": 13
+   },
+   {
+    "posto": "P. JOCA",
+    "gasolina_litros": 62933.16499999999,
+    "produtos_rs": 3712.6000000000013,
+    "mix": 0,
+    "dias": 13
+   },
+   {
+    "posto": "P. LEANDRO",
+    "gasolina_litros": 33151.08,
+    "produtos_rs": 3740.3000000000015,
+    "mix": 0.1653,
+    "dias": 13
+   },
+   {
+    "posto": "P. LOURA EMPREENDIMENTOS",
+    "gasolina_litros": 117727.401,
+    "produtos_rs": 16556.999999999978,
+    "mix": 0.0705,
+    "dias": 13
+   },
+   {
+    "posto": "P. MANGABEIRAS",
+    "gasolina_litros": 59241.375,
+    "produtos_rs": 8935.099999999995,
+    "mix": 0.1047,
+    "dias": 13
+   },
+   {
+    "posto": "P. MIRAGEM JBRETAS",
+    "gasolina_litros": 46713.92600000001,
+    "produtos_rs": 6760.399999999996,
+    "mix": 0.3209,
+    "dias": 13
+   },
+   {
+    "posto": "P. OURO BRANCO",
+    "gasolina_litros": 50278.26700000001,
+    "produtos_rs": 2006.1300000000003,
+    "mix": 0.0715,
+    "dias": 13
+   },
+   {
+    "posto": "P. PLANALTO",
+    "gasolina_litros": 113007.313,
+    "produtos_rs": 16884.699999999986,
+    "mix": 0.0764,
+    "dias": 13
+   },
+   {
+    "posto": "P. QUATRO RODAS",
+    "gasolina_litros": 82096.92800000001,
+    "produtos_rs": 5958.2999999999965,
+    "mix": 0.0799,
+    "dias": 13
+   },
+   {
+    "posto": "P. RODRIGO",
+    "gasolina_litros": 58206.988000000005,
+    "produtos_rs": 14979.889999999983,
+    "mix": 0.0672,
+    "dias": 13
+   },
+   {
+    "posto": "P. SANTA INES - JOAQUIM",
+    "gasolina_litros": 68811.59800000001,
+    "produtos_rs": 11842.439999999984,
+    "mix": 0.104,
+    "dias": 13
+   },
+   {
+    "posto": "P. SANTA INES MINAS",
+    "gasolina_litros": 108483.82599999999,
+    "produtos_rs": 8908.299999999994,
+    "mix": 0.1659,
+    "dias": 13
+   },
+   {
+    "posto": "P. SANTA MARIA",
+    "gasolina_litros": 88914.87400000001,
+    "produtos_rs": 12768.789999999988,
+    "mix": 0.0805,
+    "dias": 13
+   },
+   {
+    "posto": "P. SAO BERNARDO",
+    "gasolina_litros": 69993.678,
+    "produtos_rs": 7770.899999999986,
+    "mix": 0.1022,
+    "dias": 13
+   },
+   {
+    "posto": "P. SAO LUIZ RL",
+    "gasolina_litros": 21963.98,
+    "produtos_rs": 1650.4000000000003,
+    "mix": 0,
+    "dias": 13
+   },
+   {
+    "posto": "P. SERENA COLIBRI",
+    "gasolina_litros": 135055.556,
+    "produtos_rs": 18144.899999999987,
+    "mix": 0.0882,
+    "dias": 13
+   },
+   {
+    "posto": "P. TOPAZIO",
+    "gasolina_litros": 80481.998,
+    "produtos_rs": 8891.789999999994,
+    "mix": 0.0918,
+    "dias": 13
+   },
+   {
+    "posto": "P. TRANCOSO",
+    "gasolina_litros": 56105.714,
+    "produtos_rs": 3993.2000000000007,
+    "mix": 0.0703,
+    "dias": 13
+   },
+   {
+    "posto": "P. TUNEL",
+    "gasolina_litros": 85568.841,
+    "produtos_rs": 6248.879999999999,
+    "mix": 0.0918,
+    "dias": 13
+   },
+   {
+    "posto": "P. URBANO FERRAZ",
+    "gasolina_litros": 76247.662,
+    "produtos_rs": 6442.389999999998,
+    "mix": 0.1496,
+    "dias": 13
+   }
+  ],
+  "totais": {
+   "gasolina_litros": 2706348.352,
+   "produtos_rs": 359007.41999999975,
+   "mix": 0.0941,
+   "dias_max": 13
+  }
+ },
+ "mix": {
+  "inicio": "2026-09-01",
+  "fim": "2026-09-13",
+  "postos": [
+   {
+    "posto_id": "e9d62aa1-3919-4bd0-a059-b20cf6303cfb",
+    "nome": "P. MIRAGEM JBRETAS",
+    "gc": 31723.362,
+    "aditivada": 14990.564000000002,
+    "dias": 13,
+    "mix": 0.3209,
+    "gasolina_litros": 46713.92600000001
+   },
+   {
+    "posto_id": "1a3b8dc8-874b-4931-a8a5-cb41e058e55d",
+    "nome": "P. JA",
+    "gc": 82026.383,
+    "aditivada": 26654.131,
+    "dias": 13,
+    "mix": 0.2453,
+    "gasolina_litros": 108680.514
+   },
+   {
+    "posto_id": "58b3f267-8207-4298-b51c-b46da29ed563",
+    "nome": "P. SANTA INES MINAS",
+    "gc": 90482.54899999998,
+    "aditivada": 18001.277000000002,
+    "dias": 13,
+    "mix": 0.1659,
+    "gasolina_litros": 108483.82599999999
+   },
+   {
+    "posto_id": "0e9e9f48-b108-4f38-b7db-49f55fdb44a0",
+    "nome": "P. LEANDRO",
+    "gc": 27670.502,
+    "aditivada": 5480.5779999999995,
+    "dias": 13,
+    "mix": 0.1653,
+    "gasolina_litros": 33151.08
+   },
+   {
+    "posto_id": "4a22963b-edaf-4f95-a060-32ebfd55fc0b",
+    "nome": "P. URBANO FERRAZ",
+    "gc": 64838.86,
+    "aditivada": 11408.802,
+    "dias": 13,
+    "mix": 0.1496,
+    "gasolina_litros": 76247.662
+   },
+   {
+    "posto_id": "313ce861-36c0-4ea4-afb8-9553a9fe63c6",
+    "nome": "P. BRUNA",
+    "gc": 64857.88500000001,
+    "aditivada": 10139.433,
+    "dias": 13,
+    "mix": 0.1352,
+    "gasolina_litros": 74997.31800000001
+   },
+   {
+    "posto_id": "94e2284e-cdb8-443a-a4ae-220b06696be8",
+    "nome": "P. BAHAMAS",
+    "gc": 25825.753999999997,
+    "aditivada": 4003.7809999999995,
+    "dias": 11,
+    "mix": 0.1342,
+    "gasolina_litros": 29829.534999999996
+   },
+   {
+    "posto_id": "08f892ef-2534-40a1-966e-d2ec2e2ac515",
+    "nome": "P. BEATRIZ",
+    "gc": 44174.68700000001,
+    "aditivada": 5800.278,
+    "dias": 13,
+    "mix": 0.1161,
+    "gasolina_litros": 49974.96500000001
+   },
+   {
+    "posto_id": "2c984381-2097-41bc-bdf8-4ac7f2904d4f",
+    "nome": "P. BOMBOM FILIAL",
+    "gc": 51392.813,
+    "aditivada": 6537.432000000001,
+    "dias": 13,
+    "mix": 0.1129,
+    "gasolina_litros": 57930.245
+   },
+   {
+    "posto_id": "937bec35-50a5-4707-94d3-bd09be256d26",
+    "nome": "P. ARAPONGA",
+    "gc": 73070.678,
+    "aditivada": 8825.251999999999,
+    "dias": 13,
+    "mix": 0.1078,
+    "gasolina_litros": 81895.93
+   },
+   {
+    "posto_id": "ca05768f-37eb-48a5-928f-68e6a82a6abe",
+    "nome": "P. BOMBOM MATRIZ",
+    "gc": 23794.065000000002,
+    "aditivada": 2835.3599999999997,
+    "dias": 11,
+    "mix": 0.1065,
+    "gasolina_litros": 26629.425000000003
+   },
+   {
+    "posto_id": "62155149-2f31-4b67-b73e-0b96a8ab5722",
+    "nome": "P. MANGABEIRAS",
+    "gc": 53039.415,
+    "aditivada": 6201.959999999999,
+    "dias": 13,
+    "mix": 0.1047,
+    "gasolina_litros": 59241.375
+   },
+   {
+    "posto_id": "bb45b857-8a43-47f6-95e0-d47cedf2f676",
+    "nome": "P. SANTA INES - JOAQUIM",
+    "gc": 61658.04100000001,
+    "aditivada": 7153.556999999998,
+    "dias": 13,
+    "mix": 0.104,
+    "gasolina_litros": 68811.59800000001
+   },
+   {
+    "posto_id": "c9f661a6-9b23-4247-854e-b911bc7326d5",
+    "nome": "P. SAO BERNARDO",
+    "gc": 62843.257999999994,
+    "aditivada": 7150.42,
+    "dias": 13,
+    "mix": 0.1022,
+    "gasolina_litros": 69993.678
+   },
+   {
+    "posto_id": "634d3cb4-d6dc-4d6b-8c72-ec0a09b6d281",
+    "nome": "P. ITAPOA",
+    "gc": 122202.28999999998,
+    "aditivada": 13553.764,
+    "dias": 13,
+    "mix": 0.0998,
+    "gasolina_litros": 135756.05399999997
+   },
+   {
+    "posto_id": "6d1f9416-ae4d-4385-9bd6-38f8c17ea94e",
+    "nome": "P. DIFERENCIAL",
+    "gc": 91030.849,
+    "aditivada": 9911.808,
+    "dias": 13,
+    "mix": 0.0982,
+    "gasolina_litros": 100942.657
+   },
+   {
+    "posto_id": "eb06b557-8611-48f4-a959-cb3e9dafb032",
+    "nome": "P. AVIVA",
+    "gc": 95768.01699999999,
+    "aditivada": 10341.657,
+    "dias": 13,
+    "mix": 0.0975,
+    "gasolina_litros": 106109.674
+   },
+   {
+    "posto_id": "c09961e1-7c86-42fd-8109-9e6693d2aa47",
+    "nome": "P. TOPAZIO",
+    "gc": 73092.811,
+    "aditivada": 7389.187,
+    "dias": 13,
+    "mix": 0.0918,
+    "gasolina_litros": 80481.998
+   },
+   {
+    "posto_id": "cb65b058-6ee1-4db8-a0ca-693ac248612b",
+    "nome": "P. TUNEL",
+    "gc": 77710.341,
+    "aditivada": 7858.5,
+    "dias": 13,
+    "mix": 0.0918,
+    "gasolina_litros": 85568.841
+   },
+   {
+    "posto_id": "2e6497a5-228e-43e9-8361-3cdbaa45987a",
+    "nome": "P. SERENA COLIBRI",
+    "gc": 123150.085,
+    "aditivada": 11905.470999999998,
+    "dias": 13,
+    "mix": 0.0882,
+    "gasolina_litros": 135055.556
+   },
+   {
+    "posto_id": "c99631fa-a08c-433c-861e-6d15812ad921",
+    "nome": "P. SANTA MARIA",
+    "gc": 81753.179,
+    "aditivada": 7161.695,
+    "dias": 13,
+    "mix": 0.0805,
+    "gasolina_litros": 88914.87400000001
+   },
+   {
+    "posto_id": "80365714-4cd9-4183-9dcf-5fc863a7207a",
+    "nome": "P. QUATRO RODAS",
+    "gc": 75534.32800000001,
+    "aditivada": 6562.600000000001,
+    "dias": 13,
+    "mix": 0.0799,
+    "gasolina_litros": 82096.92800000001
+   },
+   {
+    "posto_id": "b68a1d67-cf61-483c-aef4-beba1ee05957",
+    "nome": "P. ESPAÇO REAL",
+    "gc": 140161.549,
+    "aditivada": 11884.552,
+    "dias": 13,
+    "mix": 0.0782,
+    "gasolina_litros": 152046.101
+   },
+   {
+    "posto_id": "f5092f8d-e54d-4fbd-8146-e4161949717b",
+    "nome": "P. PLANALTO",
+    "gc": 104371.11,
+    "aditivada": 8636.203,
+    "dias": 13,
+    "mix": 0.0764,
+    "gasolina_litros": 113007.313
+   },
+   {
+    "posto_id": "ba9d5886-bad8-4be9-b51c-1254f3fdb5bd",
+    "nome": "P. OURO BRANCO",
+    "gc": 46681.67600000001,
+    "aditivada": 3596.5910000000003,
+    "dias": 13,
+    "mix": 0.0715,
+    "gasolina_litros": 50278.26700000001
+   },
+   {
+    "posto_id": "100a8539-1f94-4fbc-8935-76855f1bad5d",
+    "nome": "P. LOURA EMPREENDIMENTOS",
+    "gc": 109428.675,
+    "aditivada": 8298.725999999999,
+    "dias": 13,
+    "mix": 0.0705,
+    "gasolina_litros": 117727.401
+   },
+   {
+    "posto_id": "76592d18-79ca-45a4-be6d-13e7ad5f1f12",
+    "nome": "P. TRANCOSO",
+    "gc": 52160.21,
+    "aditivada": 3945.504,
+    "dias": 13,
+    "mix": 0.0703,
+    "gasolina_litros": 56105.714
+   },
+   {
+    "posto_id": "9c664170-5d77-4b44-b2d1-fa3a95ca0f05",
+    "nome": "P. RODRIGO",
+    "gc": 54295.067,
+    "aditivada": 3911.921,
+    "dias": 13,
+    "mix": 0.0672,
+    "gasolina_litros": 58206.988000000005
+   },
+   {
+    "posto_id": "f24b7fcc-3e17-43a6-956e-f69468603c49",
+    "nome": "P. ALEX",
+    "gc": 40602.878,
+    "aditivada": 2353.668,
+    "dias": 13,
+    "mix": 0.0548,
+    "gasolina_litros": 42956.545999999995
+   },
+   {
+    "posto_id": "7021e917-66d7-473c-989a-cfe5815e5086",
+    "nome": "P. BIANCA",
+    "gc": 46031.855,
+    "aditivada": 2078.45,
+    "dias": 13,
+    "mix": 0.0432,
+    "gasolina_litros": 48110.305
+   },
+   {
+    "posto_id": "3488cdf8-1d87-4ba3-902e-baffa854e1d1",
+    "nome": "P. ANA LUCIA",
+    "gc": 74991.062,
+    "aditivada": 0,
+    "dias": 13,
+    "mix": 0,
+    "gasolina_litros": 74991.062
+   },
+   {
+    "posto_id": "b55eacd7-f0d5-4f72-821a-12136fe02cd0",
+    "nome": "P. BERNARDO",
+    "gc": 57734.611,
+    "aditivada": 0,
+    "dias": 13,
+    "mix": 0,
+    "gasolina_litros": 57734.611
+   },
+   {
+    "posto_id": "3ff49ecb-08ee-4982-bb5b-ad2ff9330171",
+    "nome": "P. DUDU",
+    "gc": 42425.681000000004,
+    "aditivada": 0,
+    "dias": 13,
+    "mix": 0,
+    "gasolina_litros": 42425.681000000004
+   },
+   {
+    "posto_id": "b411fa91-85bb-481a-9dfe-9c4531b03823",
+    "nome": "P. FELIPAO",
+    "gc": 69293.072,
+    "aditivada": 0,
+    "dias": 13,
+    "mix": 0,
+    "gasolina_litros": 69293.072
+   },
+   {
+    "posto_id": "c9c4c58a-6d2d-4f8b-9d64-9fca7dd06dba",
+    "nome": "P. GLORIA",
+    "gc": 31060.487,
+    "aditivada": 0,
+    "dias": 13,
+    "mix": 0,
+    "gasolina_litros": 31060.487
+   },
+   {
+    "posto_id": "eaf5f137-3f91-4d55-8409-21dff2d9623e",
+    "nome": "P. JOCA",
+    "gc": 62933.16499999999,
+    "aditivada": 0,
+    "dias": 13,
+    "mix": 0,
+    "gasolina_litros": 62933.16499999999
+   },
+   {
+    "posto_id": "bf9c866f-8264-4ea7-8d7d-833d723dc3d6",
+    "nome": "P. SAO LUIZ RL",
+    "gc": 21963.98,
+    "aditivada": 0,
+    "dias": 13,
+    "mix": 0,
+    "gasolina_litros": 21963.98
+   }
+  ],
+  "total": {
+   "gc": 2451775.23,
+   "aditivada": 254573.122,
+   "dias_min": 11,
+   "dias_max": 13,
+   "mix": 0.0941,
+   "gasolina_litros": 2706348.352,
+   "postos_na_rede": 37,
+   "postos_com_dado": 37
+  }
+ },
+ "produtos": {
+  "inicio": "2026-09-01",
+  "fim": "2026-09-13",
+  "postos": [
+   {
+    "posto_id": "b55eacd7-f0d5-4f72-821a-12136fe02cd0",
+    "nome": "P. BERNARDO",
+    "produtos_rs": 40254.76,
+    "lubrificante_rs": 8638.3,
+    "produto_rs": 31616.46,
+    "dias": 13
+   },
+   {
+    "posto_id": "2e6497a5-228e-43e9-8361-3cdbaa45987a",
+    "nome": "P. SERENA COLIBRI",
+    "produtos_rs": 18144.9,
+    "lubrificante_rs": 6904.6,
+    "produto_rs": 11240.3,
+    "dias": 13
+   },
+   {
+    "posto_id": "634d3cb4-d6dc-4d6b-8c72-ec0a09b6d281",
+    "nome": "P. ITAPOA",
+    "produtos_rs": 17094.3,
+    "lubrificante_rs": 6983.1,
+    "produto_rs": 10111.2,
+    "dias": 13
+   },
+   {
+    "posto_id": "f5092f8d-e54d-4fbd-8146-e4161949717b",
+    "nome": "P. PLANALTO",
+    "produtos_rs": 16884.7,
+    "lubrificante_rs": 5996.2,
+    "produto_rs": 10888.5,
+    "dias": 13
+   },
+   {
+    "posto_id": "100a8539-1f94-4fbc-8935-76855f1bad5d",
+    "nome": "P. LOURA EMPREENDIMENTOS",
+    "produtos_rs": 16557,
+    "lubrificante_rs": 8677,
+    "produto_rs": 7880,
+    "dias": 13
+   },
+   {
+    "posto_id": "313ce861-36c0-4ea4-afb8-9553a9fe63c6",
+    "nome": "P. BRUNA",
+    "produtos_rs": 16262.38,
+    "lubrificante_rs": 6998.4,
+    "produto_rs": 9263.98,
+    "dias": 13
+   },
+   {
+    "posto_id": "b68a1d67-cf61-483c-aef4-beba1ee05957",
+    "nome": "P. ESPAÇO REAL",
+    "produtos_rs": 15728.26,
+    "lubrificante_rs": 7235.5,
+    "produto_rs": 8492.76,
+    "dias": 13
+   },
+   {
+    "posto_id": "9c664170-5d77-4b44-b2d1-fa3a95ca0f05",
+    "nome": "P. RODRIGO",
+    "produtos_rs": 14979.89,
+    "lubrificante_rs": 5880,
+    "produto_rs": 9099.89,
+    "dias": 13
+   },
+   {
+    "posto_id": "eb06b557-8611-48f4-a959-cb3e9dafb032",
+    "nome": "P. AVIVA",
+    "produtos_rs": 13259.4,
+    "lubrificante_rs": 7729.9,
+    "produto_rs": 5529.5,
+    "dias": 13
+   },
+   {
+    "posto_id": "c99631fa-a08c-433c-861e-6d15812ad921",
+    "nome": "P. SANTA MARIA",
+    "produtos_rs": 12768.79,
+    "lubrificante_rs": 5638.6,
+    "produto_rs": 7130.19,
+    "dias": 13
+   },
+   {
+    "posto_id": "bb45b857-8a43-47f6-95e0-d47cedf2f676",
+    "nome": "P. SANTA INES - JOAQUIM",
+    "produtos_rs": 11842.44,
+    "lubrificante_rs": 5133.2,
+    "produto_rs": 6709.24,
+    "dias": 13
+   },
+   {
+    "posto_id": "1a3b8dc8-874b-4931-a8a5-cb41e058e55d",
+    "nome": "P. JA",
+    "produtos_rs": 11359,
+    "lubrificante_rs": 4339.2,
+    "produto_rs": 7019.8,
+    "dias": 13
+   },
+   {
+    "posto_id": "08f892ef-2534-40a1-966e-d2ec2e2ac515",
+    "nome": "P. BEATRIZ",
+    "produtos_rs": 10988.25,
+    "lubrificante_rs": 5222.2,
+    "produto_rs": 5766.05,
+    "dias": 13
+   },
+   {
+    "posto_id": "b411fa91-85bb-481a-9dfe-9c4531b03823",
+    "nome": "P. FELIPAO",
+    "produtos_rs": 10959.77,
+    "lubrificante_rs": 6310.8,
+    "produto_rs": 4648.97,
+    "dias": 13
+   },
+   {
+    "posto_id": "937bec35-50a5-4707-94d3-bd09be256d26",
+    "nome": "P. ARAPONGA",
+    "produtos_rs": 10324.79,
+    "lubrificante_rs": 6097.7,
+    "produto_rs": 4227.09,
+    "dias": 13
+   },
+   {
+    "posto_id": "2c984381-2097-41bc-bdf8-4ac7f2904d4f",
+    "nome": "P. BOMBOM FILIAL",
+    "produtos_rs": 9751.3,
+    "lubrificante_rs": 3688.9,
+    "produto_rs": 6062.4,
+    "dias": 13
+   },
+   {
+    "posto_id": "62155149-2f31-4b67-b73e-0b96a8ab5722",
+    "nome": "P. MANGABEIRAS",
+    "produtos_rs": 8935.1,
+    "lubrificante_rs": 2809.4,
+    "produto_rs": 6125.7,
+    "dias": 13
+   },
+   {
+    "posto_id": "58b3f267-8207-4298-b51c-b46da29ed563",
+    "nome": "P. SANTA INES MINAS",
+    "produtos_rs": 8908.3,
+    "lubrificante_rs": 2853.1,
+    "produto_rs": 6055.2,
+    "dias": 13
+   },
+   {
+    "posto_id": "6d1f9416-ae4d-4385-9bd6-38f8c17ea94e",
+    "nome": "P. DIFERENCIAL",
+    "produtos_rs": 8906.29,
+    "lubrificante_rs": 2983.5,
+    "produto_rs": 5922.79,
+    "dias": 13
+   },
+   {
+    "posto_id": "c09961e1-7c86-42fd-8109-9e6693d2aa47",
+    "nome": "P. TOPAZIO",
+    "produtos_rs": 8891.79,
+    "lubrificante_rs": 5767.2,
+    "produto_rs": 3124.59,
+    "dias": 13
+   },
+   {
+    "posto_id": "3ff49ecb-08ee-4982-bb5b-ad2ff9330171",
+    "nome": "P. DUDU",
+    "produtos_rs": 7775.21,
+    "lubrificante_rs": 3271.4,
+    "produto_rs": 4503.81,
+    "dias": 13
+   },
+   {
+    "posto_id": "c9f661a6-9b23-4247-854e-b911bc7326d5",
+    "nome": "P. SAO BERNARDO",
+    "produtos_rs": 7770.9,
+    "lubrificante_rs": 3993.2,
+    "produto_rs": 3777.7,
+    "dias": 13
+   },
+   {
+    "posto_id": "e9d62aa1-3919-4bd0-a059-b20cf6303cfb",
+    "nome": "P. MIRAGEM JBRETAS",
+    "produtos_rs": 6760.4,
+    "lubrificante_rs": 3991.2,
+    "produto_rs": 2769.2,
+    "dias": 13
+   },
+   {
+    "posto_id": "4a22963b-edaf-4f95-a060-32ebfd55fc0b",
+    "nome": "P. URBANO FERRAZ",
+    "produtos_rs": 6442.39,
+    "lubrificante_rs": 3073.5,
+    "produto_rs": 3368.89,
+    "dias": 13
+   },
+   {
+    "posto_id": "cb65b058-6ee1-4db8-a0ca-693ac248612b",
+    "nome": "P. TUNEL",
+    "produtos_rs": 6248.88,
+    "lubrificante_rs": 3094.88,
+    "produto_rs": 3154,
+    "dias": 13
+   },
+   {
+    "posto_id": "80365714-4cd9-4183-9dcf-5fc863a7207a",
+    "nome": "P. QUATRO RODAS",
+    "produtos_rs": 5958.3,
+    "lubrificante_rs": 2491.5,
+    "produto_rs": 3466.8,
+    "dias": 13
+   },
+   {
+    "posto_id": "7021e917-66d7-473c-989a-cfe5815e5086",
+    "nome": "P. BIANCA",
+    "produtos_rs": 4980.8,
+    "lubrificante_rs": 3369.7,
+    "produto_rs": 1611.1,
+    "dias": 13
+   },
+   {
+    "posto_id": "94e2284e-cdb8-443a-a4ae-220b06696be8",
+    "nome": "P. BAHAMAS",
+    "produtos_rs": 4630.5,
+    "lubrificante_rs": 2295.2,
+    "produto_rs": 2335.3,
+    "dias": 11
+   },
+   {
+    "posto_id": "76592d18-79ca-45a4-be6d-13e7ad5f1f12",
+    "nome": "P. TRANCOSO",
+    "produtos_rs": 3993.2,
+    "lubrificante_rs": 2318.3,
+    "produto_rs": 1674.9,
+    "dias": 13
+   },
+   {
+    "posto_id": "f24b7fcc-3e17-43a6-956e-f69468603c49",
+    "nome": "P. ALEX",
+    "produtos_rs": 3866.8,
+    "lubrificante_rs": 1081,
+    "produto_rs": 2785.8,
+    "dias": 13
+   },
+   {
+    "posto_id": "0e9e9f48-b108-4f38-b7db-49f55fdb44a0",
+    "nome": "P. LEANDRO",
+    "produtos_rs": 3740.3,
+    "lubrificante_rs": 1894.3,
+    "produto_rs": 1846,
+    "dias": 13
+   },
+   {
+    "posto_id": "eaf5f137-3f91-4d55-8409-21dff2d9623e",
+    "nome": "P. JOCA",
+    "produtos_rs": 3712.6,
+    "lubrificante_rs": 2506,
+    "produto_rs": 1206.6,
+    "dias": 13
+   },
+   {
+    "posto_id": "3488cdf8-1d87-4ba3-902e-baffa854e1d1",
+    "nome": "P. ANA LUCIA",
+    "produtos_rs": 3360.6,
+    "lubrificante_rs": 1599.9,
+    "produto_rs": 1760.7,
+    "dias": 13
+   },
+   {
+    "posto_id": "c9c4c58a-6d2d-4f8b-9d64-9fca7dd06dba",
+    "nome": "P. GLORIA",
+    "produtos_rs": 2412.2,
+    "lubrificante_rs": 1531.7,
+    "produto_rs": 880.5,
+    "dias": 11
+   },
+   {
+    "posto_id": "ba9d5886-bad8-4be9-b51c-1254f3fdb5bd",
+    "nome": "P. OURO BRANCO",
+    "produtos_rs": 2006.13,
+    "lubrificante_rs": 1170.89,
+    "produto_rs": 835.24,
+    "dias": 13
+   },
+   {
+    "posto_id": "bf9c866f-8264-4ea7-8d7d-833d723dc3d6",
+    "nome": "P. SAO LUIZ RL",
+    "produtos_rs": 1650.4,
+    "lubrificante_rs": 877.7,
+    "produto_rs": 772.7,
+    "dias": 13
+   },
+   {
+    "posto_id": "ca05768f-37eb-48a5-928f-68e6a82a6abe",
+    "nome": "P. BOMBOM MATRIZ",
+    "produtos_rs": 896.4,
+    "lubrificante_rs": 238.6,
+    "produto_rs": 657.8,
+    "dias": 9
+   }
+  ],
+  "total": {
+   "produtos_rs": 359007.42,
+   "lubrificante_rs": 154685.77,
+   "produto_rs": 204321.65,
+   "dias_max": 13,
+   "postos_na_rede": 37,
+   "postos_com_dado": 37
+  }
+ }
+}
