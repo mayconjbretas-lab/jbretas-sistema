@@ -118,7 +118,7 @@
   // Abastecimentos e Ticket abrem a conta mas NÃO ordenam: os dois são
   // médias da rede, e ranquear posto por média de abastecimento responde uma
   // pergunta que ninguém fez nesta tela.
-  var ORDENAVEIS = ['total', 'SOUTAG', '99', 'produto', 'mix'];
+  var ORDENAVEIS = ['total', 'SOUTAG', '99', 'produto', 'mix', 'lucro'];
   function ordemAtiva() {
     return ORDENAVEIS.indexOf(_cardAberto) >= 0 ? _cardAberto : null;
   }
@@ -130,6 +130,22 @@
     return g.litros_total > 0 ? g.litros_aditivada / g.litros_total : null;
   }
   function produtoDe(p) { return (p.produto && p.produto.faturamento) || 0; }
+  function lucroDe(p) { return (p.lucro && p.lucro.valor) || 0; }
+  // Quanto dos litros com custo usou o custo de um dia anterior. É o que vira
+  // o "~" na coluna: o número é bom, mas o custo não é o do dia.
+  function pctDefasado(u) {
+    return (u && u.litros_com_custo > 0) ? (u.litros_custo_defasado / u.litros_com_custo * 100) : 0;
+  }
+  // O sinal e o title da coluna/linha REDE, num lugar só. "~" = custo de outro
+  // dia; "*" = litro que ficou fora da conta por não ter custo nenhum.
+  function marcaLucro(u) {
+    if (!u) return { sinal: '', title: '' };
+    var partes = [];
+    if (u.litros_custo_defasado > 0) partes.push('custo do último dia disponível em ' + nf(pctDefasado(u), 1) + '% dos litros');
+    if (u.litros_sem_custo > 0) partes.push(litros(u.litros_sem_custo) + ' sem custo, fora da conta');
+    var sinal = (u.litros_sem_custo > 0 ? '*' : '') + (u.litros_custo_defasado > 0 ? '~' : '');
+    return { sinal: sinal, title: partes.join(' · ') };
+  }
   function appDe(p) {
     var quais = modoPista() ? ['SOUTAG', '99'] : canaisLigados().filter(function (c) { return c !== 'NORMAL'; });
     return quais.reduce(function (s, c) { return s + ((p.por_canal[c] && p.por_canal[c].litros) || 0); }, 0);
@@ -138,6 +154,7 @@
     if (qual === 'total') return p.litros;
     if (qual === 'produto') return produtoDe(p);
     if (qual === 'mix') { var m = mixDe(p); return m === null ? -1 : m; }
+    if (qual === 'lucro') return lucroDe(p);
     return (p.por_canal[qual] && p.por_canal[qual].litros) || 0;
   }
   // Valor que ordena a lista e que a linha mostra: litros do(s) convênio(s)
@@ -322,13 +339,21 @@
       '<div class="mp-sub">' + litros(gas.litros_aditivada) + ' de ' + litros(gas.litros_total) + ' de gasolina</div>' +
     '</button>';
 
-    // LUCRO: espaço reservado, apagado e inerte. Um card vazio clicável que
-    // abre nada é pior que um card que se anuncia em preparo.
-    var cardLucro = '<div class="mp-card mp-card-lucro" aria-disabled="true">' +
-      '<div class="mp-rot">LUCRO BRUTO</div>' +
-      '<div class="mp-num">—</div>' +
-      '<div class="mp-sub">em preparo</div>' +
-    '</div>';
+    // LUCRO ESTIMADO, e não "lucro bruto": é valor_liquido − litros ×
+    // custo_avista, não a conta do DRE (que sai de tecnox_categoria_dia, por
+    // categoria contábil e com o custo da própria TecnoX). Medido em 10/09,
+    // dia limpo dos dois lados, os dois ficaram a 0,2% um do outro — perto,
+    // mas não é o mesmo número, e o rótulo não pode prometer que é.
+    var lu = _dados.rede.lucro || null;
+    var cardLucro = '<button type="button" class="mp-card mp-card-lucro' +
+      (_cardAberto === 'lucro' ? ' aberto' : '') + '"' +
+      ' aria-expanded="' + (_cardAberto === 'lucro' ? 'true' : 'false') + '"' +
+      ' onclick="__mpCard(\'lucro\')">' + setaOrd('lucro') +
+      '<div class="mp-rot">LUCRO ESTIMADO</div>' +
+      '<div class="mp-num">' + (lu ? reais(lu.valor) : '—') + '</div>' +
+      '<div class="mp-sub">' + (lu && lu.margem_litro !== null
+        ? reais(lu.margem_litro) + ' por litro' : '—') + '</div>' +
+    '</button>';
 
     return '<div class="mp-cards">' +
       cardTotal + cardAbast + cardConvenio('SOUTAG') + cardConvenio('99') +
@@ -370,6 +395,20 @@
         linha('Por abastecimento', ab > 0 ? reais(prod / ab) : '—') +
         linha('Sobre o faturamento de pista', pctTxt(prod, r.faturamento)) +
         linha('Fonte', 'tecnox_venda_produto_dia — mesma do Consolidado');
+    } else if (_cardAberto === 'lucro') {
+      var u = r.lucro || { valor: 0, litros_com_custo: 0, litros_sem_custo: 0, litros_custo_defasado: 0, margem_litro: null };
+      corpo =
+        linha('A conta', 'valor_liquido − litros × custo = ' + reais(u.valor)) +
+        linha('Margem por litro', u.margem_litro !== null ? reais(u.margem_litro) + ' / L' : '—') +
+        linha('Litros com custo', litros(u.litros_com_custo));
+      if (u.litros_custo_defasado > 0) {
+        corpo += linha('Custo do dia anterior',
+          nf(pctDefasado(u), 1) + '% dos litros (' + litros(u.litros_custo_defasado) + ')');
+      }
+      if (u.litros_sem_custo > 0) {
+        corpo += linha('Sem custo (fora da conta)', litros(u.litros_sem_custo));
+      }
+      corpo += linha('Fonte do custo', 'custos_precos.custo_avista — não é a conta do DRE');
     } else if (_cardAberto === 'mix') {
       var g = r.gasolina || { litros_total: 0, litros_aditivada: 0 };
       corpo =
@@ -425,7 +464,7 @@
       h('mp-p-pct', 'APP') +
       h('mp-p-mix', 'MIX', 'mix') +
       h('mp-p-prod', 'PRODUTO', 'produto') +
-      h('mp-p-lucro', 'LUCRO') +
+      h('mp-p-lucro', 'LUCRO', 'lucro') +
     '</div>';
   }
 
@@ -444,6 +483,8 @@
     var g = p.gasolina || { litros_total: 0, litros_aditivada: 0 };
     var prod = produtoDe(p);
     var ab = p.abastecimentos || 0;
+    var ul = p.lucro || null;
+    var mk = marcaLucro(ul);
 
     var numero = '<span class="mp-p-litros">' + litros(p.litros) +
       (modoPista() ? '' : '<span class="mp-p-conv">' + litros(v) + ' ' +
@@ -469,6 +510,9 @@
           (ab > 0 ? '  ·  ' + reais(prod / ab) + ' por carro' : '') + '</b></div>' +
         '<div class="mp-det-linha"><span>Ticket médio</span><b>' +
           (ab > 0 ? nf(p.litros / ab, 1) + ' L  ·  ' + reais(p.faturamento / ab) : '—') + '</b></div>' +
+        '<div class="mp-det-linha"><span>Lucro estimado</span><b>' +
+          (ul ? reais(ul.valor) + (ul.margem_litro !== null ? '  ·  ' + reais(ul.margem_litro) + '/L' : '') +
+            (mk.title ? '  ·  ' + esc(mk.title) : '') : '—') + '</b></div>' +
       '</div>';
     }
 
@@ -483,7 +527,9 @@
           '<span class="mp-p-mini">' + litros(g.litros_aditivada) + ' adit.</span></span>' +
         '<span class="mp-p-prod">' + reais(prod) +
           '<span class="mp-p-mini">' + (ab > 0 ? reais(prod / ab) + '/carro' : '—') + '</span></span>' +
-        '<span class="mp-p-lucro">—</span>' +
+        '<span class="mp-p-lucro"' + (mk.title ? ' title="' + esc(mk.title) + '"' : '') + '>' +
+          (ul ? mk.sinal + reais(ul.valor) : '—') +
+          '<span class="mp-p-mini">' + (ul && ul.margem_litro !== null ? reais(ul.margem_litro) + '/L' : '—') + '</span></span>' +
       '</button>' + det +
     '</div>';
   }
@@ -492,6 +538,8 @@
   function htmlRede() {
     var r = _dados.rede;
     var g = r.gasolina || { litros_total: 0, litros_aditivada: 0 };
+    var ul = r.lucro || null;
+    var mk = marcaLucro(ul);
     var appRede = modoPista()
       ? ['SOUTAG', '99'].reduce(function (s, c) { return s + ((r.por_canal[c] && r.por_canal[c].litros) || 0); }, 0)
       : canaisLigados().filter(function (c) { return c !== 'NORMAL'; })
@@ -503,7 +551,8 @@
       '<span class="mp-p-pct">' + pctTxt(appRede, r.litros) + '</span>' +
       '<span class="mp-p-mix">' + pctTxt(g.litros_aditivada, g.litros_total) + '</span>' +
       '<span class="mp-p-prod">' + reais((r.produto && r.produto.faturamento) || 0) + '</span>' +
-      '<span class="mp-p-lucro">—</span>' +
+      '<span class="mp-p-lucro"' + (mk.title ? ' title="' + esc(mk.title) + '"' : '') + '>' +
+        (ul ? mk.sinal + reais(ul.valor) : '—') + '</span>' +
     '</div>';
   }
 

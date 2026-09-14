@@ -796,8 +796,8 @@ html:not([data-theme="light"]) body::before{
 .mp-tk b { color: var(--tx); font-weight: 700; }
 .mp-card-prod .mp-num { color: var(--ok); }
 .mp-card-mix .mp-num { color: var(--mp-99); }
-/* Lucro: reservado e inerte — não é botão, não recebe hover nem foco. */
-.mp-card-lucro { opacity: .5; cursor: default; pointer-events: none; }
+/* O card de lucro virou clicável como os outros; o número usa o mesmo
+   estilo dos demais, sem cor nova. */
 
 /* ── Cabeçalho das colunas e linha REDE ──────────────────────── */
 .mp-cab { padding: 0 2px 5px; border-bottom: 1px solid var(--bd); }
@@ -814,7 +814,7 @@ html:not([data-theme="light"]) body::before{
 .mp-p-mix, .mp-p-prod { font-family: var(--mono); font-size: .72rem; font-weight: 700; text-align: right; }
 .mp-p-mix { color: var(--mp-99); }
 .mp-p-prod { color: var(--ok); }
-.mp-p-lucro { font-family: var(--mono); font-size: .72rem; color: var(--tx3); text-align: right; }
+.mp-p-lucro { font-family: var(--mono); font-size: .72rem; font-weight: 700; color: var(--tx); text-align: right; }
 .mp-p-mini { display: block; font-size: .6rem; font-weight: 400; color: var(--tx3); }
 
 @media (max-width: 699px) {
