@@ -72,6 +72,13 @@
   function reais(v) {
     return Number.isFinite(Number(v)) ? 'R$ ' + nf(Number(v), 2) : '—';
   }
+  // SEM o prefixo, só para a COLUNA da lista. Com 70px de largura, o "R$ "
+  // empurrava o valor para a segunda linha e a célula ficava mais alta que as
+  // vizinhas. O cabeçalho da coluna já diz LUCRO, e o card e o detalhe
+  // continuam com o prefixo, onde há espaço.
+  function reaisSemPrefixo(v) {
+    return Number.isFinite(Number(v)) ? nf(Number(v), 2) : '—';
+  }
   function pct(parte, todo) {
     if (!Number.isFinite(Number(todo)) || Number(todo) <= 0) return null;
     return Number(parte) / Number(todo) * 100;
@@ -528,7 +535,7 @@
         '<span class="mp-p-prod">' + reais(prod) +
           '<span class="mp-p-mini">' + (ab > 0 ? reais(prod / ab) + '/carro' : '—') + '</span></span>' +
         '<span class="mp-p-lucro"' + (mk.title ? ' title="' + esc(mk.title) + '"' : '') + '>' +
-          (ul ? mk.sinal + reais(ul.valor) : '—') +
+          (ul ? mk.sinal + reaisSemPrefixo(ul.valor) : '—') +
           '<span class="mp-p-mini">' + (ul && ul.margem_litro !== null ? reais(ul.margem_litro) + '/L' : '—') + '</span></span>' +
       '</button>' + det +
     '</div>';
@@ -552,7 +559,7 @@
       '<span class="mp-p-mix">' + pctTxt(g.litros_aditivada, g.litros_total) + '</span>' +
       '<span class="mp-p-prod">' + reais((r.produto && r.produto.faturamento) || 0) + '</span>' +
       '<span class="mp-p-lucro"' + (mk.title ? ' title="' + esc(mk.title) + '"' : '') + '>' +
-        (ul ? mk.sinal + reais(ul.valor) : '—') + '</span>' +
+        (ul ? mk.sinal + reaisSemPrefixo(ul.valor) : '—') + '</span>' +
     '</div>';
   }
 
