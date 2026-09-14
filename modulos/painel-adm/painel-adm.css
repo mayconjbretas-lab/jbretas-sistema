@@ -439,7 +439,7 @@ html, body { height: 100%; overflow: hidden; }
      a largura inteira do monitor e espalhava os números até a borda direita,
      longe do nome do posto. Somadas dão 710px + 6 gaps = ~777px, e a sobra
      fica vazia de propósito. */
-  grid-template-columns: 150px 130px 90px 70px 90px 110px 70px;
+  grid-template-columns: 150px 130px 90px 100px 70px 90px 110px 70px;
   justify-content: start;
   align-items: center; gap: .7rem;
   width: 100%; background: transparent; border: 0; padding: 7px 2px; cursor: pointer; font: inherit;
@@ -497,7 +497,7 @@ html, body { height: 100%; overflow: hidden; }
 .mp-cab { padding: 0 2px 5px; border-bottom: 1px solid var(--bd); }
 .mp-cab span { font-family: var(--mono); font-size: .58rem; font-weight: 700; letter-spacing: .05em;
   text-transform: uppercase; color: var(--tx3); }
-.mp-cab .mp-p-litros, .mp-cab .mp-p-pct, .mp-cab .mp-p-mix,
+.mp-cab .mp-p-litros, .mp-cab .mp-p-comb, .mp-cab .mp-p-pct, .mp-cab .mp-p-mix,
 .mp-cab .mp-p-prod, .mp-cab .mp-p-lucro { text-align: right; }
 .mp-rede { padding: 8px 2px 2px; border-top: 1px solid var(--bd); margin-top: 2px; }
 .mp-rede span { font-family: var(--mono); font-size: .74rem; font-weight: 700; color: var(--tx);
@@ -509,6 +509,9 @@ html, body { height: 100%; overflow: hidden; }
 .mp-p-mix { color: var(--mp-99); }
 .mp-p-prod { color: var(--ok); }
 .mp-p-lucro { font-family: var(--mono); font-size: .72rem; font-weight: 700; color: var(--tx); text-align: right; }
+/* Venda de combustível em R$. Sem prefixo, como a coluna LUCRO: o
+   cabeçalho já diz COMBUSTÍVEL e os 100px não comportam o "R$ ". */
+.mp-p-comb { font-family: var(--mono); font-size: .72rem; font-weight: 700; color: var(--tx); text-align: right; }
 .mp-p-mini { display: block; font-size: .6rem; font-weight: 400; color: var(--tx3); }
 
 @media (max-width: 699px) {
@@ -519,7 +522,7 @@ html, body { height: 100%; overflow: hidden; }
      Produto e Ticket passam a viver no detalhe clicável do posto. */
   .mp-p-linha { grid-template-columns: 1fr auto; grid-template-areas: "nome pct" "barra litros"; row-gap: 4px; }
   .mp-cab, .mp-rede { display: none; }
-  .mp-p-mix, .mp-p-prod, .mp-p-lucro { display: none; }
+  .mp-p-comb, .mp-p-mix, .mp-p-prod, .mp-p-lucro { display: none; }
   .mp-p-nome { grid-area: nome; }
   /* No mobile os dois percentuais podem quebrar em duas linhas. */
   .mp-p-pct { grid-area: pct; white-space: normal; text-align: right; }

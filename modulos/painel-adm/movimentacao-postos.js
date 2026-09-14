@@ -360,7 +360,7 @@
       '<div class="mp-sub">' + litros(gas.litros_aditivada) + ' aditivada</div>' +
     '</button>';
 
-    // LUCRO ESTIMADO, e não "lucro bruto": é valor_liquido − litros ×
+    // LUCRO BRUTO: é valor_liquido − litros ×
     // custo_avista, não a conta do DRE (que sai de tecnox_categoria_dia, por
     // categoria contábil e com o custo da própria TecnoX). Medido em 10/09,
     // dia limpo dos dois lados, os dois ficaram a 0,2% um do outro — perto,
@@ -370,7 +370,7 @@
       (_cardAberto === 'lucro' ? ' aberto' : '') + '"' +
       ' aria-expanded="' + (_cardAberto === 'lucro' ? 'true' : 'false') + '"' +
       ' onclick="__mpCard(\'lucro\')">' + setaOrd('lucro') +
-      '<div class="mp-rot">LUCRO ESTIMADO</div>' +
+      '<div class="mp-rot">LUCRO BRUTO</div>' +
       '<div class="mp-num mp-card-valor">' + (lu ? reaisCard(lu.valor) : '—') + '</div>' +
       '<div class="mp-sub">' + (lu && lu.margem_litro !== null
         ? reais(lu.margem_litro) + ' por litro' : '—') + '</div>' +
@@ -482,6 +482,7 @@
       h('mp-p-nome', 'POSTO') +
       h('mp-barra-cab', 'BARRA') +
       h('mp-p-litros', 'LITRAGEM', 'total') +
+      h('mp-p-comb', 'COMBUSTÍVEL') +
       h('mp-p-pct', 'APP') +
       h('mp-p-mix', 'MIX', 'mix') +
       h('mp-p-prod', 'PRODUTO', 'produto') +
@@ -531,7 +532,9 @@
           (ab > 0 ? '  ·  ' + reais(prod / ab) + ' por carro' : '') + '</b></div>' +
         '<div class="mp-det-linha"><span>Ticket médio</span><b>' +
           (ab > 0 ? nf(p.litros / ab, 1) + ' L  ·  ' + reais(p.faturamento / ab) : '—') + '</b></div>' +
-        '<div class="mp-det-linha"><span>Lucro estimado</span><b>' +
+        '<div class="mp-det-linha"><span>Venda de combustível</span><b>' +
+          reais(p.faturamento) + (p.litros > 0 ? '  ·  ' + reais(p.faturamento / p.litros) + '/L' : '') + '</b></div>' +
+        '<div class="mp-det-linha"><span>Lucro bruto</span><b>' +
           (ul ? reais(ul.valor) + (ul.margem_litro !== null ? '  ·  ' + reais(ul.margem_litro) + '/L' : '') +
             (aviso ? '  ·  ' + esc(aviso) : '') : '—') + '</b></div>' +
       '</div>';
@@ -543,6 +546,8 @@
         '<span class="mp-p-nome">' + esc(p.posto_nome || '—') + '</span>' +
         htmlBarra(p, maior) +
         numero +
+        '<span class="mp-p-comb">' + reaisSemPrefixo(p.faturamento) +
+          '<span class="mp-p-mini">' + (p.litros > 0 ? reais(p.faturamento / p.litros) + '/L' : '—') + '</span></span>' +
         '<span class="mp-p-pct">' + pctTxt(appDe(p), p.litros) + '</span>' +
         '<span class="mp-p-mix">' + pctTxt(g.litros_aditivada, g.litros_total) +
           '<span class="mp-p-mini">' + litros(g.litros_aditivada) + ' adit.</span></span>' +
@@ -569,6 +574,7 @@
       '<span class="mp-p-nome">REDE</span>' +
       '<span class="mp-barra-cab"></span>' +
       '<span class="mp-p-litros">' + litros(r.litros) + '</span>' +
+      '<span class="mp-p-comb">' + reaisSemPrefixo(r.faturamento) + '</span>' +
       '<span class="mp-p-pct">' + pctTxt(appRede, r.litros) + '</span>' +
       '<span class="mp-p-mix">' + pctTxt(g.litros_aditivada, g.litros_total) + '</span>' +
       '<span class="mp-p-prod">' + reais((r.produto && r.produto.faturamento) || 0) + '</span>' +
