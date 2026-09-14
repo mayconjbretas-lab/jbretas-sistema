@@ -138,20 +138,24 @@
   }
   function produtoDe(p) { return (p.produto && p.produto.faturamento) || 0; }
   function lucroDe(p) { return (p.lucro && p.lucro.valor) || 0; }
-  // Quanto dos litros com custo usou o custo de um dia anterior. É o que vira
-  // o "~" na coluna: o número é bom, mas o custo não é o do dia.
+  // Quanto dos litros com custo usou o custo de um dia anterior.
   function pctDefasado(u) {
     return (u && u.litros_com_custo > 0) ? (u.litros_custo_defasado / u.litros_com_custo * 100) : 0;
   }
-  // O sinal e o title da coluna/linha REDE, num lugar só. "~" = custo de outro
-  // dia; "*" = litro que ficou fora da conta por não ter custo nenhum.
-  function marcaLucro(u) {
-    if (!u) return { sinal: '', title: '' };
+  // AVISO SEM MARCA NO NÚMERO. Antes a coluna trazia um "~" antes do valor
+  // (e um "*" quando havia litro sem custo). Saiu: a planilha de custo é
+  // importada em dia útil, então TODO fim de semana e TODA janela que inclua
+  // um marca 100% dos postos — um til em 37 de 37 linhas não distingue nada,
+  // só suja a coluna e rouba caractere de uma célula de 70px.
+  //
+  // O aviso continua nos três lugares onde há espaço para a frase inteira: o
+  // title da célula (hover), a conta do card e o detalhe do posto.
+  function avisoLucro(u) {
+    if (!u) return '';
     var partes = [];
     if (u.litros_custo_defasado > 0) partes.push('custo do último dia disponível em ' + nf(pctDefasado(u), 1) + '% dos litros');
     if (u.litros_sem_custo > 0) partes.push(litros(u.litros_sem_custo) + ' sem custo, fora da conta');
-    var sinal = (u.litros_sem_custo > 0 ? '*' : '') + (u.litros_custo_defasado > 0 ? '~' : '');
-    return { sinal: sinal, title: partes.join(' · ') };
+    return partes.join(' · ');
   }
   function appDe(p) {
     var quais = modoPista() ? ['SOUTAG', '99'] : canaisLigados().filter(function (c) { return c !== 'NORMAL'; });
@@ -491,7 +495,7 @@
     var prod = produtoDe(p);
     var ab = p.abastecimentos || 0;
     var ul = p.lucro || null;
-    var mk = marcaLucro(ul);
+    var aviso = avisoLucro(ul);
 
     var numero = '<span class="mp-p-litros">' + litros(p.litros) +
       (modoPista() ? '' : '<span class="mp-p-conv">' + litros(v) + ' ' +
@@ -519,7 +523,7 @@
           (ab > 0 ? nf(p.litros / ab, 1) + ' L  ·  ' + reais(p.faturamento / ab) : '—') + '</b></div>' +
         '<div class="mp-det-linha"><span>Lucro estimado</span><b>' +
           (ul ? reais(ul.valor) + (ul.margem_litro !== null ? '  ·  ' + reais(ul.margem_litro) + '/L' : '') +
-            (mk.title ? '  ·  ' + esc(mk.title) : '') : '—') + '</b></div>' +
+            (aviso ? '  ·  ' + esc(aviso) : '') : '—') + '</b></div>' +
       '</div>';
     }
 
@@ -534,8 +538,8 @@
           '<span class="mp-p-mini">' + litros(g.litros_aditivada) + ' adit.</span></span>' +
         '<span class="mp-p-prod">' + reais(prod) +
           '<span class="mp-p-mini">' + (ab > 0 ? reais(prod / ab) + '/carro' : '—') + '</span></span>' +
-        '<span class="mp-p-lucro"' + (mk.title ? ' title="' + esc(mk.title) + '"' : '') + '>' +
-          (ul ? mk.sinal + reaisSemPrefixo(ul.valor) : '—') +
+        '<span class="mp-p-lucro"' + (aviso ? ' title="' + esc(aviso) + '"' : '') + '>' +
+          (ul ? reaisSemPrefixo(ul.valor) : '—') +
           '<span class="mp-p-mini">' + (ul && ul.margem_litro !== null ? reais(ul.margem_litro) + '/L' : '—') + '</span></span>' +
       '</button>' + det +
     '</div>';
@@ -546,7 +550,7 @@
     var r = _dados.rede;
     var g = r.gasolina || { litros_total: 0, litros_aditivada: 0 };
     var ul = r.lucro || null;
-    var mk = marcaLucro(ul);
+    var aviso = avisoLucro(ul);
     var appRede = modoPista()
       ? ['SOUTAG', '99'].reduce(function (s, c) { return s + ((r.por_canal[c] && r.por_canal[c].litros) || 0); }, 0)
       : canaisLigados().filter(function (c) { return c !== 'NORMAL'; })
@@ -558,8 +562,8 @@
       '<span class="mp-p-pct">' + pctTxt(appRede, r.litros) + '</span>' +
       '<span class="mp-p-mix">' + pctTxt(g.litros_aditivada, g.litros_total) + '</span>' +
       '<span class="mp-p-prod">' + reais((r.produto && r.produto.faturamento) || 0) + '</span>' +
-      '<span class="mp-p-lucro"' + (mk.title ? ' title="' + esc(mk.title) + '"' : '') + '>' +
-        (ul ? mk.sinal + reaisSemPrefixo(ul.valor) : '—') + '</span>' +
+      '<span class="mp-p-lucro"' + (aviso ? ' title="' + esc(aviso) + '"' : '') + '>' +
+        (ul ? reaisSemPrefixo(ul.valor) : '—') + '</span>' +
     '</div>';
   }
 
