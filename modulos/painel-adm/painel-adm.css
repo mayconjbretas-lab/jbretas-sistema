@@ -158,6 +158,15 @@ html, body { height: 100%; overflow: hidden; }
    display:block, então lá não falta nada. */
 #s-relat.active { display: block; }
 
+/* MESMO CASO, uma section abaixo. #s-movpostos também é .scr, e com o
+   display:flex herdado dali a .mp-wrap virava flex item: ela encolhia para
+   o conteúdo (1256px) em vez de ocupar os 1777px da section, e o
+   `margin: 0 auto` do #mp-corpo computava 0 por falta de espaço livre — a
+   Movimentação ficava encostada à esquerda em monitor largo. Medido em
+   14/09/2026, janela de 1840px. No admin isso nunca apareceu porque lá o
+   .scr.active já é display:block. */
+#s-movpostos.active { display: block; }
+
 /* Os botões de relatório ficam CENTRADOS na coluna; o relatório escolhido
    abre abaixo deles, e eles seguem no topo para trocar.
 
