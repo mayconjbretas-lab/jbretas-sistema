@@ -1,0 +1,278 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Import de despesas — uma tela, dois relatórios</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  :root {
+    --ac: var(--accent); --ac2: var(--accent2); --acd: var(--accent-dim);
+    --dg: var(--danger); --wn: var(--warning); --inf: var(--info);
+    --tx: var(--text); --tx2: var(--text2); --tx3: var(--text3);
+    --sf: var(--surface); --sf2: var(--surface2); --sf3: var(--surface3);
+    --bd: var(--border); --bd2: var(--border2);
+    --r: var(--radius); --rl: var(--radius-lg);
+  }
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+
+<div id="res">rodando…</div>
+<div id="palco"><section class="scr active" id="s-dre"></section></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// 1. O botão "Importar despesas" entra ao lado do "Importar planilha", no
+//    mesmo contêiner e com a mesma classe — mesmo estilo e mesmo tamanho.
+// 2. A prévia das despesas renderiza as CINCO conferências (a)–(e) na mesma
+//    tela do DRE, com a resposta REAL do dry-run da rota.
+// 3. A (b) com empresa sem posto sai AMARELA (warn) e NÃO bloqueia: o botão
+//    de confirmar continua lá. É o mesmo tratamento da conferência 5 do DRE.
+// 4. Confirmar posta em /despesas/importar com dry_run=false — a rota certa,
+//    não a do DRE.
+// 5. A TELA DO DRE NÃO MUDOU: a mesma resposta real do /dre/importar renderiza
+//    HTML idêntico ao da versão anterior do dre.js, byte a byte.
+//
+// Com o dre.js DE VERDADE e fixtures REAIS das duas rotas (testes/
+// fixtures-import.json, capturadas do banco de produção em 15/09/2026).
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function txt(el) { return el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : ''; }
+
+// ── dublês ───────────────────────────────────────────────────────
+// ti E perfil ADM: o harness precisa dos DOIS botões na tela para poder
+// comparar o estilo de um com o do outro.
+window.getUsuarioLogado = function () {
+  return { id: 'h', nome: 'Harness', perfil: 'ADM', ti: true };
+};
+window.JBRETAS_CONFIG = { API_URL: 'http://api-de-teste' };
+window.jbretasGetItem = function () { return 'token-de-teste'; };
+window.caminhoRaiz = function () { return '/'; };
+
+var FIX = null;
+// O fetch é interceptado para (a) devolver a fixture e (b) REGISTRAR para onde
+// a tela postou — é o item 4 deste teste.
+var POSTS = [];
+window.fetch = function (url, opts) {
+  var body = opts && opts.body;
+  var dry = null;
+  if (body && typeof body.get === 'function') dry = body.get('dry_run');
+  POSTS.push({ url: String(url), dry_run: dry });
+  var alvo = String(url).indexOf('/despesas/importar') >= 0 ? FIX.despesas : FIX.dre;
+  return Promise.resolve({
+    status: alvo.status,
+    json: function () { return Promise.resolve(alvo.body); },
+  });
+};
+// apiFetch das cargas da própria aba do DRE: o harness não testa a tela do
+// DRE em si, só o modal — devolve forma vazia válida.
+window.apiFetch = function () { return Promise.resolve({ totais: null, linhas: [] }); };
+
+function carregarJs(src) {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { erro(new Error(src + ' não carregou')); };
+    document.body.appendChild(s);
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+async function rodar() {
+  FIX = await (await fetch.__original ? fetch.__original : window.XMLHttpRequest ? null : null) || null;
+  // O fetch já está interceptado, então a fixture vem por XHR.
+  FIX = await new Promise(function (ok, erro) {
+    var x = new XMLHttpRequest();
+    x.open('GET', '/testes/fixtures-import.json');
+    x.onload = function () { try { ok(JSON.parse(x.responseText)); } catch (e) { erro(e); } };
+    x.onerror = function () { erro(new Error('fixture não carregou')); };
+    x.send();
+  });
+
+  await carregarJs('/modulos/painel-adm/custo-margem.js').catch(function () {
+    nota('(custo-margem.js não carregou: o modal fica sem estilo, as asserções não dependem dele)');
+  });
+  await carregarJs('/modulos/painel-adm/dre.js');
+  await esperar(50);
+
+  var sec = document.getElementById('s-dre');
+  window.renderDre(sec);
+  await esperar(250);
+
+  h3('1. Os dois botões, mesmo contêiner e mesma classe');
+  var cx = sec.querySelector('.dre-imp-acao');
+  eh(!!cx, 'o contêiner .dre-imp-acao existe');
+  var bDre = document.getElementById('dre-imp-btn');
+  var bDesp = document.getElementById('dre-imp-btn-desp');
+  eh(!!bDre && !!bDesp, 'os dois botões estão lá',
+     (bDre ? 'dre ' : '') + (bDesp ? 'despesas' : ''), 'dre despesas');
+  if (bDre && bDesp) {
+    eh(bDre.className === bDesp.className, 'mesma classe (mesmo estilo)',
+       '"' + bDesp.className + '" vs "' + bDre.className + '"', 'iguais');
+    eh(bDre.parentElement === bDesp.parentElement, 'mesmo contêiner');
+    var rd = bDre.getBoundingClientRect(), rp = bDesp.getBoundingClientRect();
+    nota('caixas: planilha ' + Math.round(rd.width) + '×' + Math.round(rd.height) +
+         '   despesas ' + Math.round(rp.width) + '×' + Math.round(rp.height));
+    eh(Math.abs(rd.height - rp.height) <= 1, 'mesma altura (±1px)',
+       Math.round(rp.height) + 'px', Math.round(rd.height) + 'px');
+    eh(txt(bDesp).indexOf('Importar despesas') >= 0, 'rótulo', txt(bDesp), '🧾 Importar despesas');
+    eh(String(bDesp.getAttribute('onclick')).indexOf("'despesas'") >= 0,
+       'o onclick escolhe o tipo', bDesp.getAttribute('onclick'));
+  }
+  // Um input só, compartilhado.
+  eh(sec.querySelectorAll('input[type=file]').length === 1,
+     'UM input de arquivo, compartilhado pelos dois',
+     sec.querySelectorAll('input[type=file]').length + '', '1');
+
+  h3('2. As cinco conferências das despesas, na mesma tela');
+  POSTS = [];
+  window.__dreImpAbrir('despesas');
+  // O clique no input não abre diálogo nenhum no harness; o fluxo é disparado
+  // entregando o arquivo ao handler, que é o que o onchange faria.
+  var falso = new File(['x'], 'Despesas 15092026.xls', { type: 'application/vnd.ms-excel' });
+  await window.__dreImpFile({ files: [falso], value: '' });
+  await esperar(150);
+  var confs = [...document.querySelectorAll('#dri-body .dri-conf')];
+  nota(confs.map(function (c) { return txt(c.querySelector('.dri-rot')); }).join('\n     '));
+  eh(confs.length === 5, 'cinco conferências renderizadas', confs.length + '', '5');
+  var rots = confs.map(function (c) { return txt(c.querySelector('.dri-rot')); });
+  ['a.', 'b.', 'c.', 'd.', 'e.'].forEach(function (n, i) {
+    eh(rots[i] && rots[i].indexOf(n) === 0, 'a ' + i + 'ª é "' + n + '"', rots[i]);
+  });
+  var corpo = txt(document.getElementById('dri-body'));
+  eh(corpo.indexOf('42.427.331,46') >= 0, 'o Total Geral aparece na tela', '42.427.331,46');
+  eh(corpo.indexOf('39131') >= 0 || corpo.indexOf('39.131') >= 0, 'a contagem de lançamentos aparece');
+  eh(txt(document.getElementById('dri-title')).indexOf('Despesas') >= 0,
+     'o título diz de qual relatório se trata', txt(document.getElementById('dri-title')));
+
+  h3('3. A (b) é AVISO amarelo e NÃO bloqueia');
+  var cB = confs[1];
+  eh(cB.classList.contains('warn'), 'a linha da (b) tem a classe warn (amarelo)',
+     cB.className, 'dri-conf warn');
+  eh(!cB.classList.contains('bad'), 'e NÃO tem a classe bad (vermelho)');
+  var corDeAviso = getComputedStyle(cB.querySelector('.dri-ic')).color;
+  nota('cor do ícone da (b): ' + corDeAviso + '   ícone "' + txt(cB.querySelector('.dri-ic')) + '"');
+  eh(txt(cB.querySelector('.dri-ic')) === '!', 'o ícone é "!" (nem ✓ nem ✕)',
+     txt(cB.querySelector('.dri-ic')), '!');
+  // O que prova "não bloqueia": o botão de confirmar existe.
+  var gravar = document.getElementById('dri-gravar');
+  eh(!!gravar, 'o botão Confirmar importação continua na tela');
+  eh(!!gravar && txt(gravar).indexOf('39131') >= 0, 'com a contagem', txt(gravar));
+  // O card "Barrando" tem de dizer ZERO.
+  var cards = [...document.querySelectorAll('#dri-body .cmi-c')];
+  var barr = cards.filter(function (c) { return txt(c).indexOf('Barrando') >= 0; })[0];
+  eh(barr && txt(barr).indexOf('0') === 0, 'o card "Barrando" diz 0', txt(barr), '0 Barrando');
+  // E a empresa 33 é nomeada.
+  eh(corpo.indexOf('PARAISO DAS AGUAS') >= 0, 'a empresa 33 é nomeada no aviso');
+  eh(corpo.indexOf('33') >= 0, 'com o código dela');
+  eh(corpo.indexOf('cod_empresa_tecnox') >= 0,
+     'e o aviso diz que o que falta é CADASTRO, não corrigir o arquivo');
+
+  h3('4. Confirmar posta na rota das despesas');
+  POSTS = [];
+  await window.__dreImpConfirmar();
+  await esperar(150);
+  nota(POSTS.map(function (p) { return p.url + '   dry_run=' + p.dry_run; }).join('\n     '));
+  eh(POSTS.length === 1, 'uma requisição', POSTS.length + '', '1');
+  eh(POSTS[0] && POSTS[0].url.indexOf('/despesas/importar') >= 0,
+     'para /despesas/importar', POSTS[0] && POSTS[0].url, '…/despesas/importar');
+  eh(POSTS[0] && POSTS[0].url.indexOf('/dre/importar') < 0, 'e NÃO para /dre/importar');
+  eh(POSTS[0] && POSTS[0].dry_run === 'false', 'com dry_run=false',
+     POSTS[0] && POSTS[0].dry_run, 'false');
+
+  h3('5. A tela do DRE não mudou — HTML byte a byte');
+  // Renderiza a prévia do DRE com a resposta REAL do /dre/importar, captura o
+  // HTML, e compara com o que a versão ANTERIOR do dre.js produzia para a
+  // MESMA resposta. O "antes" é gerado por um iframe que carrega o dre.js
+  // anterior — guardado em testes/dre-antes-import.js pelo commit.
+  window.__dreImpAbrir('dre');
+  var falsoDre = new File(['x'], 'Venda de produtos 15092026.xls', { type: 'application/vnd.ms-excel' });
+  await window.__dreImpFile({ files: [falsoDre], value: '' });
+  await esperar(150);
+  var htmlDepois = document.getElementById('dri-body').innerHTML;
+  var tituloDepois = txt(document.getElementById('dri-title'));
+  nota('prévia do DRE: ' + htmlDepois.length + ' caracteres · título "' + tituloDepois + '"');
+  var confsDre = [...document.querySelectorAll('#dri-body .dri-conf')];
+  eh(confsDre.length === 5, 'as 5 conferências do DRE (1..5)', confsDre.length + '', '5');
+  eh(txt(confsDre[0].querySelector('.dri-rot')).indexOf('1.') === 0, 'a 1ª é "1."',
+     txt(confsDre[0].querySelector('.dri-rot')));
+  eh(tituloDepois === 'Prévia da importação', 'título do DRE inalterado', tituloDepois, 'Prévia da importação');
+  var corpoDre = txt(document.getElementById('dri-body'));
+  eh(corpoDre.indexOf('Resumo por posto') >= 0, 'o resumo por posto do DRE continua lá');
+  eh(corpoDre.indexOf('Postos detectados') >= 0, 'e a linha de postos detectados');
+
+  // ── A COMPARAÇÃO BYTE A BYTE, num IFRAME ──────────────────────
+  // O "antes" é renderizado pelo dre.js ANTERIOR, carregado num iframe: dois
+  // arquivos que definem window.renderDre não cabem no mesmo escopo global, e
+  // rodar só o novo e conferir "parece igual" não é comparação.
+  //
+  // O iframe é da MESMA origem, então o __REF__ dele é legível daqui. Se ele
+  // não subir, o teste DIZ que não comparou — em vez de passar calado.
+  var ref = await new Promise(function (ok) {
+    var f = document.createElement("iframe");
+    f.style.cssText = "width:900px;height:200px;border:1px solid var(--border);opacity:.35";
+    f.src = "/testes/_gerar-previa-antes";
+    var pronto = false;
+    f.onload = function () {
+      var t0 = Date.now();
+      (function espia() {
+        var w = f.contentWindow;
+        if (w && w.__REF__) { pronto = true; return ok(w.__REF__); }
+        if (Date.now() - t0 > 8000) return ok(null);
+        setTimeout(espia, 150);
+      })();
+    };
+    f.onerror = function () { ok(null); };
+    document.getElementById("palco").appendChild(f);
+    setTimeout(function () { if (!pronto) ok(null); }, 12000);
+  });
+  if (ref === null) {
+    linhas.push("<span class=\"bad\">PULADO</span> o dre.js anterior não subiu no iframe — " +
+      "a comparação byte a byte NÃO foi feita.");
+    falhas++;
+  } else {
+    nota("referência (dre.js anterior): " + ref.length + " caracteres");
+    var igual = ref.trim() === htmlDepois.trim();
+    eh(igual, "HTML da prévia do DRE IDÊNTICO ao de antes da mudança",
+       igual ? ref.length + " == " + htmlDepois.length + " caracteres"
+             : ref.length + " vs " + htmlDepois.length + " caracteres", "idêntico");
+    if (!igual) {
+      var a = ref.trim(), b = htmlDepois.trim();
+      var i = 0; while (i < a.length && i < b.length && a[i] === b[i]) i++;
+      nota("1ª diferença no caractere " + i);
+      nota("antes:  …" + a.slice(Math.max(0, i - 50), i + 70));
+      nota("depois: …" + b.slice(Math.max(0, i - 50), i + 70));
+    }
+  }
+
+  h3(falhas === 0 ? '<span class="ok">TUDO PASSOU</span>'
+                  : '<span class="bad">' + falhas + ' FALHA(S)</span>');
+  pintar();
+}
+
+rodar().catch(function (e) {
+  linhas.push('<span class="bad">ERRO: ' + hesc(e.message) + '</span>');
+  linhas.push(hesc(String(e.stack || '').split('\n').slice(0, 8).join('\n')));
+  pintar();
+});
+</script>

@@ -1,0 +1,1093 @@
+{
+ "despesas": {
+  "status": 200,
+  "body": {
+   "arquivo": {
+    "nome": "Despesas 15092026.xls",
+    "bytes": 6560768
+   },
+   "dry_run": true,
+   "periodo": {
+    "inicio": "2026-01-01",
+    "fim": "2026-06-30"
+   },
+   "gerado": "15/09/2026 10:02:42",
+   "empresas": 37,
+   "lancamentos": 39131,
+   "conferencias": {
+    "a": {
+     "ok": true,
+     "declarado": {
+      "inicio": "2026-01-01",
+      "fim": "2026-06-30"
+     },
+     "observado": {
+      "inicio": "2026-01-01",
+      "fim": "2026-06-30"
+     },
+     "lancamentos_fora_do_periodo": 0,
+     "exemplos": [],
+     "descricao": "período declarado x emissões do arquivo",
+     "bloqueante": false
+    },
+    "b": {
+     "ok": false,
+     "descricao": "empresa do arquivo -> postos.cod_empresa_tecnox",
+     "bloqueante": false,
+     "casadas": 36,
+     "empresas": 37,
+     "nao_casadas": [
+      {
+       "empresa_cod": 33,
+       "nome_arquivo": "POSTO PARAISO DAS AGUAS LTDA",
+       "linha": 27080,
+       "valor": 440
+      }
+     ]
+    },
+    "c": {
+     "ok": true,
+     "soma": 42427331.46,
+     "total_geral": 42427331.46,
+     "delta": 0,
+     "descricao": "soma dos lançamentos x \"Total Geral:\"",
+     "bloqueante": true
+    },
+    "d": {
+     "ok": true,
+     "empresas": 37,
+     "totais_no_arquivo": 37,
+     "divergentes": [],
+     "descricao": "soma por empresa x \"Total empresa\"",
+     "bloqueante": true
+    },
+    "e": {
+     "ok": true,
+     "meses": [
+      {
+       "mes": "2026-01",
+       "lancamentos": 4958,
+       "valor": 6313636.44
+      },
+      {
+       "mes": "2026-02",
+       "lancamentos": 5026,
+       "valor": 5980346.66
+      },
+      {
+       "mes": "2026-03",
+       "lancamentos": 7244,
+       "valor": 6216649.56
+      },
+      {
+       "mes": "2026-04",
+       "lancamentos": 6747,
+       "valor": 8478001.4
+      },
+      {
+       "mes": "2026-05",
+       "lancamentos": 7193,
+       "valor": 7299161.66
+      },
+      {
+       "mes": "2026-06",
+       "lancamentos": 7963,
+       "valor": 8139535.74
+      }
+     ],
+     "descricao": "meses cobertos e lançamentos por mês",
+     "bloqueante": false
+    },
+    "seq": {
+     "total": 39131,
+     "vazio": 794,
+     "zero": 8174,
+     "distintos": 30164,
+     "valores_repetidos": 1,
+     "lancamentos_em_repeticao": 8174,
+     "unicos": 30163,
+     "serve_como_chave": false,
+     "descricao": "`seq` serve como chave única?",
+     "bloqueante": false
+    }
+   },
+   "avisos": [],
+   "gravados": 0
+  }
+ },
+ "dre": {
+  "status": 200,
+  "body": {
+   "dry_run": true,
+   "arquivo": {
+    "nome": "Venda de produtos 15092026.xls",
+    "bytes": 62976
+   },
+   "periodo": {
+    "inicio": "2026-09-14",
+    "fim": "2026-09-14",
+    "dias": 1
+   },
+   "postos_detectados": [
+    {
+     "cod_empresa": 1,
+     "nome_arquivo": "POSTO J A",
+     "posto_id": "1a3b8dc8-874b-4931-a8a5-cb41e058e55d",
+     "codigo": "P18",
+     "nome": "P. JA"
+    },
+    {
+     "cod_empresa": 2,
+     "nome_arquivo": "POSTO ITAPOA",
+     "posto_id": "634d3cb4-d6dc-4d6b-8c72-ec0a09b6d281",
+     "codigo": "P17",
+     "nome": "P. ITAPOA"
+    },
+    {
+     "cod_empresa": 3,
+     "nome_arquivo": "POSTO PLANALTO",
+     "posto_id": "f5092f8d-e54d-4fbd-8146-e4161949717b",
+     "codigo": "P25",
+     "nome": "P. PLANALTO"
+    },
+    {
+     "cod_empresa": 4,
+     "nome_arquivo": "POSTO LOURA",
+     "posto_id": "100a8539-1f94-4fbc-8935-76855f1bad5d",
+     "codigo": "P21",
+     "nome": "P. LOURA EMPREENDIMENTOS"
+    },
+    {
+     "cod_empresa": 5,
+     "nome_arquivo": "POSTO GLORIA LIMITADA",
+     "posto_id": "c9c4c58a-6d2d-4f8b-9d64-9fca7dd06dba",
+     "codigo": "P16",
+     "nome": "P. GLORIA"
+    },
+    {
+     "cod_empresa": 6,
+     "nome_arquivo": "POSTO ANA LUCIA",
+     "posto_id": "3488cdf8-1d87-4ba3-902e-baffa854e1d1",
+     "codigo": "P02",
+     "nome": "P. ANA LUCIA"
+    },
+    {
+     "cod_empresa": 7,
+     "nome_arquivo": "POSTO SANTA INES",
+     "posto_id": "58b3f267-8207-4298-b51c-b46da29ed563",
+     "codigo": "P29",
+     "nome": "P. SANTA INES MINAS"
+    },
+    {
+     "cod_empresa": 8,
+     "nome_arquivo": "POSTO URBANO",
+     "posto_id": "4a22963b-edaf-4f95-a060-32ebfd55fc0b",
+     "codigo": "P37",
+     "nome": "P. URBANO FERRAZ"
+    },
+    {
+     "cod_empresa": 9,
+     "nome_arquivo": "POSTO TOPAZIO",
+     "posto_id": "c09961e1-7c86-42fd-8109-9e6693d2aa47",
+     "codigo": "P34",
+     "nome": "P. TOPAZIO"
+    },
+    {
+     "cod_empresa": 10,
+     "nome_arquivo": "POSTO JOCA",
+     "posto_id": "eaf5f137-3f91-4d55-8409-21dff2d9623e",
+     "codigo": "P19",
+     "nome": "P. JOCA"
+    },
+    {
+     "cod_empresa": 12,
+     "nome_arquivo": "POSTO BRUNA",
+     "posto_id": "313ce861-36c0-4ea4-afb8-9553a9fe63c6",
+     "codigo": "P11",
+     "nome": "P. BRUNA"
+    },
+    {
+     "cod_empresa": 13,
+     "nome_arquivo": "POSTO NIQUELINA",
+     "posto_id": "6d1f9416-ae4d-4385-9bd6-38f8c17ea94e",
+     "codigo": "P12",
+     "nome": "P. DIFERENCIAL"
+    },
+    {
+     "cod_empresa": 14,
+     "nome_arquivo": "POSTO JOAQUIM",
+     "posto_id": "bb45b857-8a43-47f6-95e0-d47cedf2f676",
+     "codigo": "P28",
+     "nome": "P. SANTA INES - JOAQUIM"
+    },
+    {
+     "cod_empresa": 15,
+     "nome_arquivo": "POSTO SANTA MARIA",
+     "posto_id": "c99631fa-a08c-433c-861e-6d15812ad921",
+     "codigo": "P30",
+     "nome": "P. SANTA MARIA"
+    },
+    {
+     "cod_empresa": 16,
+     "nome_arquivo": "POSTO RODRIGO",
+     "posto_id": "9c664170-5d77-4b44-b2d1-fa3a95ca0f05",
+     "codigo": "P27",
+     "nome": "P. RODRIGO"
+    },
+    {
+     "cod_empresa": 17,
+     "nome_arquivo": "POSTO MANGABEIRAS",
+     "posto_id": "62155149-2f31-4b67-b73e-0b96a8ab5722",
+     "codigo": "P22",
+     "nome": "P. MANGABEIRAS"
+    },
+    {
+     "cod_empresa": 18,
+     "nome_arquivo": "POSTO MIRAGEM",
+     "posto_id": "e9d62aa1-3919-4bd0-a059-b20cf6303cfb",
+     "codigo": "P23",
+     "nome": "P. MIRAGEM JBRETAS"
+    },
+    {
+     "cod_empresa": 19,
+     "nome_arquivo": "POSTO ARAPONGA",
+     "posto_id": "937bec35-50a5-4707-94d3-bd09be256d26",
+     "codigo": "P03",
+     "nome": "P. ARAPONGA"
+    },
+    {
+     "cod_empresa": 20,
+     "nome_arquivo": "POSTO LEANDRO",
+     "posto_id": "0e9e9f48-b108-4f38-b7db-49f55fdb44a0",
+     "codigo": "P20",
+     "nome": "P. LEANDRO"
+    },
+    {
+     "cod_empresa": 21,
+     "nome_arquivo": "POSTO TUNEL",
+     "posto_id": "cb65b058-6ee1-4db8-a0ca-693ac248612b",
+     "codigo": "P36",
+     "nome": "P. TUNEL"
+    },
+    {
+     "cod_empresa": 22,
+     "nome_arquivo": "POSTO QUATRO RODAS",
+     "posto_id": "80365714-4cd9-4183-9dcf-5fc863a7207a",
+     "codigo": "P26",
+     "nome": "P. QUATRO RODAS"
+    },
+    {
+     "cod_empresa": 23,
+     "nome_arquivo": "POSTO TRANCOSO",
+     "posto_id": "76592d18-79ca-45a4-be6d-13e7ad5f1f12",
+     "codigo": "P35",
+     "nome": "P. TRANCOSO"
+    },
+    {
+     "cod_empresa": 24,
+     "nome_arquivo": "POSTO SERENA COLIBRI",
+     "posto_id": "2e6497a5-228e-43e9-8361-3cdbaa45987a",
+     "codigo": "P33",
+     "nome": "P. SERENA COLIBRI"
+    },
+    {
+     "cod_empresa": 25,
+     "nome_arquivo": "AVIVA COMERCIO DE COMBUSTIVEIS E LUBRIFICANTES EIRELI",
+     "posto_id": "eb06b557-8611-48f4-a959-cb3e9dafb032",
+     "codigo": "P04",
+     "nome": "P. AVIVA"
+    },
+    {
+     "cod_empresa": 26,
+     "nome_arquivo": "AUTO POSTO ESPACO REAL",
+     "posto_id": "b68a1d67-cf61-483c-aef4-beba1ee05957",
+     "codigo": "P14",
+     "nome": "P. ESPAÇO REAL"
+    },
+    {
+     "cod_empresa": 27,
+     "nome_arquivo": "POSTO BIANCA",
+     "posto_id": "7021e917-66d7-473c-989a-cfe5815e5086",
+     "codigo": "P08",
+     "nome": "P. BIANCA"
+    },
+    {
+     "cod_empresa": 28,
+     "nome_arquivo": "POSTO BEATRIZ",
+     "posto_id": "08f892ef-2534-40a1-966e-d2ec2e2ac515",
+     "codigo": "P06",
+     "nome": "P. BEATRIZ"
+    },
+    {
+     "cod_empresa": 29,
+     "nome_arquivo": "POSTO FELIPAO",
+     "posto_id": "b411fa91-85bb-481a-9dfe-9c4531b03823",
+     "codigo": "P15",
+     "nome": "P. FELIPAO"
+    },
+    {
+     "cod_empresa": 30,
+     "nome_arquivo": "POSTO ALEX",
+     "posto_id": "f24b7fcc-3e17-43a6-956e-f69468603c49",
+     "codigo": "P01",
+     "nome": "P. ALEX"
+    },
+    {
+     "cod_empresa": 31,
+     "nome_arquivo": "POSTO DUDU",
+     "posto_id": "3ff49ecb-08ee-4982-bb5b-ad2ff9330171",
+     "codigo": "P13",
+     "nome": "P. DUDU"
+    },
+    {
+     "cod_empresa": 32,
+     "nome_arquivo": "POSTO BERNARDO LTDA",
+     "posto_id": "b55eacd7-f0d5-4f72-821a-12136fe02cd0",
+     "codigo": "P07",
+     "nome": "P. BERNARDO"
+    },
+    {
+     "cod_empresa": 34,
+     "nome_arquivo": "POSTO SAO LUIZ",
+     "posto_id": "bf9c866f-8264-4ea7-8d7d-833d723dc3d6",
+     "codigo": "P32",
+     "nome": "P. SAO LUIZ RL"
+    },
+    {
+     "cod_empresa": 36,
+     "nome_arquivo": "POSTO OURO BRANCO",
+     "posto_id": "ba9d5886-bad8-4be9-b51c-1254f3fdb5bd",
+     "codigo": "P24",
+     "nome": "P. OURO BRANCO"
+    },
+    {
+     "cod_empresa": 37,
+     "nome_arquivo": "POSTO BAHAMAS",
+     "posto_id": "94e2284e-cdb8-443a-a4ae-220b06696be8",
+     "codigo": "P05",
+     "nome": "P. BAHAMAS"
+    },
+    {
+     "cod_empresa": 38,
+     "nome_arquivo": "POSTO BOMBOM MATRIZ",
+     "posto_id": "ca05768f-37eb-48a5-928f-68e6a82a6abe",
+     "codigo": "P10",
+     "nome": "P. BOMBOM MATRIZ"
+    },
+    {
+     "cod_empresa": 39,
+     "nome_arquivo": "POSTO BOMBOM FILIAL",
+     "posto_id": "2c984381-2097-41bc-bdf8-4ac7f2904d4f",
+     "codigo": "P09",
+     "nome": "P. BOMBOM FILIAL"
+    },
+    {
+     "cod_empresa": 40,
+     "nome_arquivo": "POSTO SAO BERNARDO",
+     "posto_id": "c9f661a6-9b23-4247-854e-b911bc7326d5",
+     "codigo": "P31",
+     "nome": "P. SAO BERNARDO"
+    }
+   ],
+   "registros": 181,
+   "conferencias": {
+    "c1": {
+     "ok": true,
+     "descricao": "soma das categorias x \"Total Empresa:\"",
+     "bloqueante": true,
+     "blocos": 37,
+     "colunas_conferidas": [
+      "quantidade",
+      "venda_bruta",
+      "venda_liquida",
+      "custo_total"
+     ],
+     "falhas": []
+    },
+    "c2": {
+     "ok": true,
+     "descricao": "soma dos \"Total Dia:\" x \"Total Geral:\"",
+     "bloqueante": true,
+     "dias": 1,
+     "motivo": null,
+     "colunas": [],
+     "desconto_arquivo": {
+      "soma_dias": 594.63,
+      "total_geral": 13859.81
+     }
+    },
+    "c3": {
+     "ok": true,
+     "descricao": "(cod_empresa, data, cat_codigo) único no arquivo",
+     "bloqueante": true,
+     "chaves": 181,
+     "duplicadas": []
+    },
+    "c4": {
+     "ok": true,
+     "descricao": "cod_empresa -> postos.cod_empresa_tecnox",
+     "bloqueante": true,
+     "postos": 37,
+     "faltando": []
+    },
+    "c5": {
+     "ok": true,
+     "descricao": "\"Lucro Total R$\" do arquivo x (venda_liquida - custo_total)",
+     "bloqueante": false,
+     "comparadas": 179,
+     "sem_lucro": 2,
+     "total": 181,
+     "delta_total": 0,
+     "divergencias": []
+    }
+   },
+   "sem_custo": {
+    "linhas": 2,
+    "venda_liquida": 115,
+    "total_linhas": 181,
+    "pct_linhas": 1.1,
+    "postos": [
+     20,
+     36
+    ],
+    "categorias": [
+     2
+    ]
+   },
+   "resumo_por_posto": [
+    {
+     "cod_empresa": 1,
+     "posto_id": "1a3b8dc8-874b-4931-a8a5-cb41e058e55d",
+     "codigo": "P18",
+     "nome": "P. JA",
+     "dias": 1,
+     "categorias": 9,
+     "linhas": 9,
+     "quantidade": 15570.25,
+     "venda_bruta": 95819.38,
+     "venda_liquida": 95201.88,
+     "custo_total": 75126.35,
+     "lucro": 20075.53,
+     "margem_pct": 21.09,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 2,
+     "posto_id": "634d3cb4-d6dc-4d6b-8c72-ec0a09b6d281",
+     "codigo": "P17",
+     "nome": "P. ITAPOA",
+     "dias": 1,
+     "categorias": 6,
+     "linhas": 6,
+     "quantidade": 20956.942,
+     "venda_bruta": 116637.97,
+     "venda_liquida": 116091.03,
+     "custo_total": 95854.1,
+     "lucro": 20236.93,
+     "margem_pct": 17.43,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 3,
+     "posto_id": "f5092f8d-e54d-4fbd-8146-e4161949717b",
+     "codigo": "P25",
+     "nome": "P. PLANALTO",
+     "dias": 1,
+     "categorias": 7,
+     "linhas": 7,
+     "quantidade": 18970.042,
+     "venda_bruta": 102083.15,
+     "venda_liquida": 101185.23,
+     "custo_total": 84358.7,
+     "lucro": 16826.53,
+     "margem_pct": 16.63,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 4,
+     "posto_id": "100a8539-1f94-4fbc-8935-76855f1bad5d",
+     "codigo": "P21",
+     "nome": "P. LOURA EMPREENDIMENTOS",
+     "dias": 1,
+     "categorias": 3,
+     "linhas": 3,
+     "quantidade": 18876.779,
+     "venda_bruta": 104772.48,
+     "venda_liquida": 104346.32,
+     "custo_total": 87865.6,
+     "lucro": 16480.72,
+     "margem_pct": 15.79,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 5,
+     "posto_id": "c9c4c58a-6d2d-4f8b-9d64-9fca7dd06dba",
+     "codigo": "P16",
+     "nome": "P. GLORIA",
+     "dias": 1,
+     "categorias": 4,
+     "linhas": 4,
+     "quantidade": 7600.171,
+     "venda_bruta": 39261.72,
+     "venda_liquida": 38703.77,
+     "custo_total": 33189.77,
+     "lucro": 5514,
+     "margem_pct": 14.25,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 6,
+     "posto_id": "3488cdf8-1d87-4ba3-902e-baffa854e1d1",
+     "codigo": "P02",
+     "nome": "P. ANA LUCIA",
+     "dias": 1,
+     "categorias": 4,
+     "linhas": 4,
+     "quantidade": 11878.705,
+     "venda_bruta": 63542.7,
+     "venda_liquida": 63132.94,
+     "custo_total": 52346.05,
+     "lucro": 10786.89,
+     "margem_pct": 17.09,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 7,
+     "posto_id": "58b3f267-8207-4298-b51c-b46da29ed563",
+     "codigo": "P29",
+     "nome": "P. SANTA INES MINAS",
+     "dias": 1,
+     "categorias": 5,
+     "linhas": 5,
+     "quantidade": 15692.707,
+     "venda_bruta": 86125.67,
+     "venda_liquida": 85355.02,
+     "custo_total": 70789.09,
+     "lucro": 14565.93,
+     "margem_pct": 17.07,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 8,
+     "posto_id": "4a22963b-edaf-4f95-a060-32ebfd55fc0b",
+     "codigo": "P37",
+     "nome": "P. URBANO FERRAZ",
+     "dias": 1,
+     "categorias": 2,
+     "linhas": 2,
+     "quantidade": 15035.728,
+     "venda_bruta": 79764.91,
+     "venda_liquida": 79049.97,
+     "custo_total": 64596.93,
+     "lucro": 14453.04,
+     "margem_pct": 18.28,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 9,
+     "posto_id": "c09961e1-7c86-42fd-8109-9e6693d2aa47",
+     "codigo": "P34",
+     "nome": "P. TOPAZIO",
+     "dias": 1,
+     "categorias": 3,
+     "linhas": 3,
+     "quantidade": 13778.501,
+     "venda_bruta": 73362.88,
+     "venda_liquida": 72530.87,
+     "custo_total": 60854.36,
+     "lucro": 11676.51,
+     "margem_pct": 16.1,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 10,
+     "posto_id": "eaf5f137-3f91-4d55-8409-21dff2d9623e",
+     "codigo": "P19",
+     "nome": "P. JOCA",
+     "dias": 1,
+     "categorias": 5,
+     "linhas": 5,
+     "quantidade": 10979.305,
+     "venda_bruta": 58528.41,
+     "venda_liquida": 57956.22,
+     "custo_total": 48047.7,
+     "lucro": 9908.52,
+     "margem_pct": 17.1,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 12,
+     "posto_id": "313ce861-36c0-4ea4-afb8-9553a9fe63c6",
+     "codigo": "P11",
+     "nome": "P. BRUNA",
+     "dias": 1,
+     "categorias": 6,
+     "linhas": 6,
+     "quantidade": 28137.193,
+     "venda_bruta": 166177.04,
+     "venda_liquida": 166045.45,
+     "custo_total": 146635.64,
+     "lucro": 19409.81,
+     "margem_pct": 11.69,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 13,
+     "posto_id": "6d1f9416-ae4d-4385-9bd6-38f8c17ea94e",
+     "codigo": "P12",
+     "nome": "P. DIFERENCIAL",
+     "dias": 1,
+     "categorias": 2,
+     "linhas": 2,
+     "quantidade": 14302.633,
+     "venda_bruta": 77620.68,
+     "venda_liquida": 77208.3,
+     "custo_total": 64151.96,
+     "lucro": 13056.34,
+     "margem_pct": 16.91,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 14,
+     "posto_id": "bb45b857-8a43-47f6-95e0-d47cedf2f676",
+     "codigo": "P28",
+     "nome": "P. SANTA INES - JOAQUIM",
+     "dias": 1,
+     "categorias": 7,
+     "linhas": 7,
+     "quantidade": 16965.131,
+     "venda_bruta": 98178.16,
+     "venda_liquida": 97822.37,
+     "custo_total": 84668.12,
+     "lucro": 13154.25,
+     "margem_pct": 13.45,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 15,
+     "posto_id": "c99631fa-a08c-433c-861e-6d15812ad921",
+     "codigo": "P30",
+     "nome": "P. SANTA MARIA",
+     "dias": 1,
+     "categorias": 5,
+     "linhas": 5,
+     "quantidade": 13402.335,
+     "venda_bruta": 73185.26,
+     "venda_liquida": 72580.33,
+     "custo_total": 60202.1,
+     "lucro": 12378.23,
+     "margem_pct": 17.05,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 16,
+     "posto_id": "9c664170-5d77-4b44-b2d1-fa3a95ca0f05",
+     "codigo": "P27",
+     "nome": "P. RODRIGO",
+     "dias": 1,
+     "categorias": 10,
+     "linhas": 10,
+     "quantidade": 11801.262,
+     "venda_bruta": 67419.89,
+     "venda_liquida": 67055.16,
+     "custo_total": 57035.47,
+     "lucro": 10019.69,
+     "margem_pct": 14.94,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 17,
+     "posto_id": "62155149-2f31-4b67-b73e-0b96a8ab5722",
+     "codigo": "P22",
+     "nome": "P. MANGABEIRAS",
+     "dias": 1,
+     "categorias": 6,
+     "linhas": 6,
+     "quantidade": 8284.696,
+     "venda_bruta": 47322.47,
+     "venda_liquida": 47030.02,
+     "custo_total": 37487.1,
+     "lucro": 9542.92,
+     "margem_pct": 20.29,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 18,
+     "posto_id": "e9d62aa1-3919-4bd0-a059-b20cf6303cfb",
+     "codigo": "P23",
+     "nome": "P. MIRAGEM JBRETAS",
+     "dias": 1,
+     "categorias": 2,
+     "linhas": 2,
+     "quantidade": 8931.046,
+     "venda_bruta": 50079.85,
+     "venda_liquida": 49868.77,
+     "custo_total": 41480.5,
+     "lucro": 8388.27,
+     "margem_pct": 16.82,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 19,
+     "posto_id": "937bec35-50a5-4707-94d3-bd09be256d26",
+     "codigo": "P03",
+     "nome": "P. ARAPONGA",
+     "dias": 1,
+     "categorias": 8,
+     "linhas": 8,
+     "quantidade": 15151.328,
+     "venda_bruta": 80726.42,
+     "venda_liquida": 79821.15,
+     "custo_total": 66102.92,
+     "lucro": 13718.23,
+     "margem_pct": 17.19,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 20,
+     "posto_id": "0e9e9f48-b108-4f38-b7db-49f55fdb44a0",
+     "codigo": "P20",
+     "nome": "P. LEANDRO",
+     "dias": 1,
+     "categorias": 4,
+     "linhas": 4,
+     "quantidade": 6866.631,
+     "venda_bruta": 37723.24,
+     "venda_liquida": 37383.68,
+     "custo_total": 31671.06,
+     "lucro": 5712.62,
+     "margem_pct": 15.28,
+     "sem_custo_linhas": 1,
+     "sem_custo_venda_liquida": 25
+    },
+    {
+     "cod_empresa": 21,
+     "posto_id": "cb65b058-6ee1-4db8-a0ca-693ac248612b",
+     "codigo": "P36",
+     "nome": "P. TUNEL",
+     "dias": 1,
+     "categorias": 6,
+     "linhas": 6,
+     "quantidade": 11825.564,
+     "venda_bruta": 63604.25,
+     "venda_liquida": 63498.01,
+     "custo_total": 52425.35,
+     "lucro": 11072.66,
+     "margem_pct": 17.44,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 22,
+     "posto_id": "80365714-4cd9-4183-9dcf-5fc863a7207a",
+     "codigo": "P26",
+     "nome": "P. QUATRO RODAS",
+     "dias": 1,
+     "categorias": 4,
+     "linhas": 4,
+     "quantidade": 14534.249,
+     "venda_bruta": 80534.36,
+     "venda_liquida": 80252.15,
+     "custo_total": 67642.98,
+     "lucro": 12609.17,
+     "margem_pct": 15.71,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 23,
+     "posto_id": "76592d18-79ca-45a4-be6d-13e7ad5f1f12",
+     "codigo": "P35",
+     "nome": "P. TRANCOSO",
+     "dias": 1,
+     "categorias": 3,
+     "linhas": 3,
+     "quantidade": 10692.173,
+     "venda_bruta": 59248.15,
+     "venda_liquida": 59056.47,
+     "custo_total": 50015.31,
+     "lucro": 9041.16,
+     "margem_pct": 15.31,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 24,
+     "posto_id": "2e6497a5-228e-43e9-8361-3cdbaa45987a",
+     "codigo": "P33",
+     "nome": "P. SERENA COLIBRI",
+     "dias": 1,
+     "categorias": 5,
+     "linhas": 5,
+     "quantidade": 23446.797,
+     "venda_bruta": 126757.15,
+     "venda_liquida": 126183.41,
+     "custo_total": 104502.25,
+     "lucro": 21681.16,
+     "margem_pct": 17.18,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 25,
+     "posto_id": "eb06b557-8611-48f4-a959-cb3e9dafb032",
+     "codigo": "P04",
+     "nome": "P. AVIVA",
+     "dias": 1,
+     "categorias": 7,
+     "linhas": 7,
+     "quantidade": 19937.181,
+     "venda_bruta": 110112.33,
+     "venda_liquida": 109439.15,
+     "custo_total": 92917.63,
+     "lucro": 16521.52,
+     "margem_pct": 15.1,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 26,
+     "posto_id": "b68a1d67-cf61-483c-aef4-beba1ee05957",
+     "codigo": "P14",
+     "nome": "P. ESPAÇO REAL",
+     "dias": 1,
+     "categorias": 9,
+     "linhas": 9,
+     "quantidade": 23171.284,
+     "venda_bruta": 142786.85,
+     "venda_liquida": 142678.06,
+     "custo_total": 120996.97,
+     "lucro": 21681.09,
+     "margem_pct": 15.2,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 27,
+     "posto_id": "7021e917-66d7-473c-989a-cfe5815e5086",
+     "codigo": "P08",
+     "nome": "P. BIANCA",
+     "dias": 1,
+     "categorias": 3,
+     "linhas": 3,
+     "quantidade": 7986.069,
+     "venda_bruta": 45939.52,
+     "venda_liquida": 45898.73,
+     "custo_total": 39293.09,
+     "lucro": 6605.64,
+     "margem_pct": 14.39,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 28,
+     "posto_id": "08f892ef-2534-40a1-966e-d2ec2e2ac515",
+     "codigo": "P06",
+     "nome": "P. BEATRIZ",
+     "dias": 1,
+     "categorias": 5,
+     "linhas": 5,
+     "quantidade": 14103.69,
+     "venda_bruta": 88662.87,
+     "venda_liquida": 88554.43,
+     "custo_total": 77242.59,
+     "lucro": 11311.84,
+     "margem_pct": 12.77,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 29,
+     "posto_id": "b411fa91-85bb-481a-9dfe-9c4531b03823",
+     "codigo": "P15",
+     "nome": "P. FELIPAO",
+     "dias": 1,
+     "categorias": 6,
+     "linhas": 6,
+     "quantidade": 7794.699,
+     "venda_bruta": 47420.17,
+     "venda_liquida": 47420.17,
+     "custo_total": 39612.17,
+     "lucro": 7808,
+     "margem_pct": 16.47,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 30,
+     "posto_id": "f24b7fcc-3e17-43a6-956e-f69468603c49",
+     "codigo": "P01",
+     "nome": "P. ALEX",
+     "dias": 1,
+     "categorias": 3,
+     "linhas": 3,
+     "quantidade": 8186.775,
+     "venda_bruta": 42197.44,
+     "venda_liquida": 42197.44,
+     "custo_total": 35364.38,
+     "lucro": 6833.06,
+     "margem_pct": 16.19,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 31,
+     "posto_id": "3ff49ecb-08ee-4982-bb5b-ad2ff9330171",
+     "codigo": "P13",
+     "nome": "P. DUDU",
+     "dias": 1,
+     "categorias": 5,
+     "linhas": 5,
+     "quantidade": 9418.945,
+     "venda_bruta": 52020.97,
+     "venda_liquida": 51815.18,
+     "custo_total": 43837.75,
+     "lucro": 7977.43,
+     "margem_pct": 15.4,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 32,
+     "posto_id": "b55eacd7-f0d5-4f72-821a-12136fe02cd0",
+     "codigo": "P07",
+     "nome": "P. BERNARDO",
+     "dias": 1,
+     "categorias": 5,
+     "linhas": 5,
+     "quantidade": 26432.808,
+     "venda_bruta": 160621.88,
+     "venda_liquida": 160621.88,
+     "custo_total": 147678.98,
+     "lucro": 12942.9,
+     "margem_pct": 8.06,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 34,
+     "posto_id": "bf9c866f-8264-4ea7-8d7d-833d723dc3d6",
+     "codigo": "P32",
+     "nome": "P. SAO LUIZ RL",
+     "dias": 1,
+     "categorias": 2,
+     "linhas": 2,
+     "quantidade": 4802.495,
+     "venda_bruta": 26336.48,
+     "venda_liquida": 26238.91,
+     "custo_total": 22336.98,
+     "lucro": 3901.93,
+     "margem_pct": 14.87,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 36,
+     "posto_id": "ba9d5886-bad8-4be9-b51c-1254f3fdb5bd",
+     "codigo": "P24",
+     "nome": "P. OURO BRANCO",
+     "dias": 1,
+     "categorias": 3,
+     "linhas": 3,
+     "quantidade": 8256.412,
+     "venda_bruta": 45008.95,
+     "venda_liquida": 44774.12,
+     "custo_total": 37289.09,
+     "lucro": 7485.03,
+     "margem_pct": 16.72,
+     "sem_custo_linhas": 1,
+     "sem_custo_venda_liquida": 90
+    },
+    {
+     "cod_empresa": 37,
+     "posto_id": "94e2284e-cdb8-443a-a4ae-220b06696be8",
+     "codigo": "P05",
+     "nome": "P. BAHAMAS",
+     "dias": 1,
+     "categorias": 4,
+     "linhas": 4,
+     "quantidade": 4958.333,
+     "venda_bruta": 28087.48,
+     "venda_liquida": 28020.27,
+     "custo_total": 23512.71,
+     "lucro": 4507.56,
+     "margem_pct": 16.09,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 38,
+     "posto_id": "ca05768f-37eb-48a5-928f-68e6a82a6abe",
+     "codigo": "P10",
+     "nome": "P. BOMBOM MATRIZ",
+     "dias": 1,
+     "categorias": 4,
+     "linhas": 4,
+     "quantidade": 4653.014,
+     "venda_bruta": 24855.47,
+     "venda_liquida": 24580.63,
+     "custo_total": 20480.39,
+     "lucro": 4100.24,
+     "margem_pct": 16.68,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 39,
+     "posto_id": "2c984381-2097-41bc-bdf8-4ac7f2904d4f",
+     "codigo": "P09",
+     "nome": "P. BOMBOM FILIAL",
+     "dias": 1,
+     "categorias": 4,
+     "linhas": 4,
+     "quantidade": 6886.613,
+     "venda_bruta": 38298.44,
+     "venda_liquida": 38009.09,
+     "custo_total": 28810.14,
+     "lucro": 9198.95,
+     "margem_pct": 24.2,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    },
+    {
+     "cod_empresa": 40,
+     "posto_id": "c9f661a6-9b23-4247-854e-b911bc7326d5",
+     "codigo": "P31",
+     "nome": "P. SAO BERNARDO",
+     "dias": 1,
+     "categorias": 5,
+     "linhas": 5,
+     "quantidade": 10311.283,
+     "venda_bruta": 55164.67,
+     "venda_liquida": 54523.32,
+     "custo_total": 45920.43,
+     "lucro": 8602.89,
+     "margem_pct": 15.78,
+     "sem_custo_linhas": 0,
+     "sem_custo_venda_liquida": 0
+    }
+   ],
+   "avisos": [],
+   "gravados": 0,
+   "aviso": "dry_run: nada gravado. Reenvie com dry_run=false para gravar."
+  }
+ }
+}

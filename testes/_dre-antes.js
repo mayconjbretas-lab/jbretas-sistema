@@ -135,12 +135,6 @@
     var u = (typeof getUsuarioLogado === 'function') ? getUsuarioLogado() : null;
     return !!(u && u.ti === true);
   }
-  // O import de despesas é ehAdm na rota, não ehTI. Guarda própria para o
-  // botão não aparecer para quem levaria 403.
-  function ehAdmAqui() {
-    var u = (typeof getUsuarioLogado === 'function') ? getUsuarioLogado() : null;
-    return !!(u && u.perfil === 'ADM');
-  }
 
   // ── Datas (Brasília, en-CA = YYYY-MM-DD, mesmo default do backend) ──
   // toLocaleDateString com timeZone, NÃO toISOString: toISOString devolve UTC,
@@ -1354,24 +1348,10 @@
           // Botão só para TI: a rota é ehTI, e mostrar um botão que responde
           // 403 é pior que não mostrar. Mesmo par botão+input escondido da
           // importação do Custo & Margem.
-          // DOIS BOTÕES, UM INPUT. O <input type=file> é compartilhado: o
-          // tipo já foi guardado pelo __dreImpAbrir antes do clique, e dois
-          // inputs escondidos com o mesmo accept só dariam dois lugares para
-          // esquecer de limpar o value.
-          //
-          // GUARDAS DIFERENTES porque as rotas são diferentes: /dre/importar
-          // é ehTI e /despesas/importar é ehAdm. Mostrar um botão que
-          // responde 403 é pior que não mostrar.
-          ((ehTIAqui() || ehAdmAqui())
+          (ehTIAqui()
             ? '<div class="dre-imp-acao">' +
-                (ehTIAqui()
-                  ? '<button class="cm-btn ghost" id="dre-imp-btn" onclick="__dreImpAbrir(\'dre\')"' +
-                    ' title="Importar o .xls de categoria da TecnoX">📥 Importar planilha</button>'
-                  : '') +
-                (ehAdmAqui()
-                  ? '<button class="cm-btn ghost" id="dre-imp-btn-desp" onclick="__dreImpAbrir(\'despesas\')"' +
-                    ' title="Importar o .xls de despesas analítico da TecnoX">🧾 Importar despesas</button>'
-                  : '') +
+                '<button class="cm-btn ghost" id="dre-imp-btn" onclick="__dreImpAbrir()"' +
+                  ' title="Importar o .xls de categoria da TecnoX">📥 Importar planilha</button>' +
                 '<input type="file" id="dre-imp-file" accept=".xls" hidden onchange="__dreImpFile(this)">' +
               '</div>'
             : '') +
@@ -4775,11 +4755,7 @@
     fd.append('dry_run', dryRun ? 'true' : 'false');
     var headers = {};
     if (token) headers['Authorization'] = 'Bearer ' + token;
-    // A ROTA VEM DO TIPO. Era fixa em /dre/importar; a tela passou a servir
-    // dois relatórios e o resto do fluxo (FormData, refresh-once do token,
-    // corpo em erro) é idêntico nos dois — duplicar o fetch só criaria dois
-    // lugares para corrigir o mesmo bug de sessão.
-    var resp = await fetch(window.JBRETAS_CONFIG.API_URL + impCfg().rota, {
+    var resp = await fetch(window.JBRETAS_CONFIG.API_URL + '/dre/importar', {
       method: 'POST', headers: headers, body: fd,
     });
     if (resp.status === 401 && !_retry && typeof window.jbretasRefresh === 'function') {
@@ -4799,7 +4775,7 @@
   // Custo & Margem, com os status que ESTA rota devolve.
   function impMensagemErro(status, json) {
     var base = json && json.erro ? String(json.erro) : '';
-    if (status === 403) return impCfg().erro403;
+    if (status === 403) return 'Só o perfil TI pode importar a DRE.';
     if (status === 413) return 'Arquivo maior que ' + IMP_MAX_MB + ' MB. A rota recusa antes de ler.';
     if (status === 429) {
       var seg = Number(json && json.retry_apos) || 0;
@@ -4859,22 +4835,17 @@
       '<div class="dri-load"><div class="dri-spin"></div><div>' + esc(texto) + '</div></div>';
   }
 
-  // ════════ UMA TELA, DOIS RELATÓRIOS ════════
-  // O fluxo de importação (escolher .xls -> dry-run -> conferências ->
-  // confirmar -> resultado) é o MESMO para a DRE e para as despesas: mesma
-  // modal, mesmo fetch, mesma prévia, mesmo tratamento de 401/413/429. O que
-  // difere é a rota, o título, QUAIS conferências existem, quais BARRAM e o
-  // bloco extra de detalhe. Isso virou configuração; a tela não sabe de qual
-  // relatório se trata.
-  //
-  // Duplicar a tela era o caminho curto e o mais caro: são ~250 linhas com
-  // modal, spinner, retry de token, mensagens de erro por status e rolagem
-  // de tabela em 375px. Duas cópias divergiriam na primeira correção.
-  var _impTipo = 'dre';
-  function impCfg() { return IMP_TIPOS[_impTipo]; }
+  // As 5 conferências, na ordem, com o rótulo do que cada uma garante.
+  var IMP_CONF = [
+    { k: 'c1', n: '1', rot: 'Soma das categorias x "Total Empresa:"' },
+    { k: 'c2', n: '2', rot: 'Soma dos "Total Dia:" x "Total Geral:"' },
+    { k: 'c3', n: '3', rot: 'Chave (posto, data, categoria) única no arquivo' },
+    { k: 'c4', n: '4', rot: 'cod_empresa casa com posto cadastrado' },
+    { k: 'c5', n: '5', rot: '"Lucro Total R$" x (líquida − custo)' },
+  ];
 
   // Detalhe curto por conferência — o que ela mediu, não só ok/falhou.
-  function impDetalheDre(k, c) {
+  function impDetalheConf(k, c) {
     if (!c) return 'não executada (uma anterior barrou antes)';
     if (k === 'c1') return c.ok ? c.blocos + ' bloco(s) fecham' : c.falhas.length + ' bloco(s) não fecham';
     if (k === 'c2') return c.ok ? c.dias + ' dia(s) somam o total geral' : (c.motivo || 'não fecha');
@@ -4888,40 +4859,69 @@
     return '';
   }
 
-  function impDetalheDespesas(k, c) {
-    if (!c) return 'não executada';
-    if (k === 'a') return c.ok
-      ? brData(c.declarado.inicio) + ' a ' + brData(c.declarado.fim) + ', nenhum lançamento fora'
-      : c.lancamentos_fora_do_periodo + ' lançamento(s) fora do período declarado';
-    if (k === 'b') return c.casadas + ' de ' + c.empresas + ' empresa(s) com posto cadastrado';
-    if (k === 'c') return c.ok
-      ? 'soma ' + fmtRS(c.soma) + ' fecha com o Total Geral'
-      : 'delta ' + fmtRS(c.delta) + ' (soma ' + fmtRS(c.soma) + ' x total ' + fmtRS(c.total_geral) + ')';
-    if (k === 'd') return c.ok
-      ? c.totais_no_arquivo + ' empresa(s) fecham com o "Total empresa"'
-      : c.divergentes.length + ' empresa(s) não fecham';
-    if (k === 'e') return (c.meses || []).length + ' mês(es): ' +
-      (c.meses || []).map(function (m) { return m.mes; }).join(', ');
-    return '';
-  }
-
-  // ── extras do DRE ────────────────────────────────────────────
-  // SÃO DOIS BLOCOS, e a posição importa: os "Postos detectados" vinham
-  // ANTES das conferências e as divergências/resumo DEPOIS. Juntar tudo num
-  // extras só passaria os postos para baixo — mesmo HTML, ordem diferente. O
-  // harness pegou exatamente isso comparando byte a byte com a versão
-  // anterior, e é por isso que o hook é duplo.
-  function impExtrasDreAntes(p) {
+  function impRenderPrevia(p, gravado) {
+    var C = p.conferencias || {};
+    var per = p.periodo || {};
     var postos = p.postos_detectados || [];
-    return postos.length
+    var resumo = p.resumo_por_posto || [];
+    var c5 = C.c5 || null;
+    // BLOQUEIA o confirmar se 1, 2, 3 ou 4 falharam. A 5 avisa e NÃO bloqueia.
+    var bloqueadas = ['c1', 'c2', 'c3', 'c4'].filter(function (k) { return C[k] && C[k].ok === false; });
+    var podeGravar = !bloqueadas.length;
+
+    document.getElementById('dri-title').textContent = gravado ? 'Importação concluída' : 'Prévia da importação';
+    document.getElementById('dri-file').textContent = (p.arquivo && p.arquivo.nome) || (_impFile ? _impFile.name : '');
+
+    // Cards no topo: o que o celular precisa ver primeiro.
+    var cards = '<div class="cmi-cards">' +
+      '<div class="cmi-c"><b>' + (p.registros != null ? p.registros : '—') + '</b><span>Registros</span></div>' +
+      '<div class="cmi-c"><b>' + postos.length + '</b><span>Posto(s)</span></div>' +
+      '<div class="cmi-c' + (bloqueadas.length ? ' bad' : '') + '"><b>' + bloqueadas.length +
+        '</b><span>Barrando</span></div>' +
+    '</div>';
+
+    var faixa = (per.inicio || per.fim)
+      ? '<div class="cmi-faixa">Período: <b>' + esc(brData(per.inicio)) + '</b> → <b>' +
+        esc(brData(per.fim)) + '</b>' + (per.dias ? ' · ' + per.dias + ' dia(s)' : '') + '</div>'
+      : '';
+
+    var postosTxt = postos.length
       ? '<div class="cmi-info">Postos detectados: ' + postos.map(function (x) {
           return esc(x.nome || x.nome_arquivo) + ' (' + x.cod_empresa + ')';
         }).join(', ') + '</div>'
       : '';
-  }
-  function impExtrasDreDepois(p, C) {
-    var resumo = p.resumo_por_posto || [];
-    var c5 = C.c5 || null;
+
+    // As 5 conferências, uma a uma.
+    var confs = '<div class="dri-confs">' + IMP_CONF.map(function (cf) {
+      var c = C[cf.k];
+      var st = !c ? 'na' : (c.ok ? 'ok' : (cf.k === 'c5' ? 'warn' : 'bad'));
+      var ic = st === 'ok' ? '✓' : (st === 'bad' ? '✕' : (st === 'warn' ? '!' : '–'));
+      return '<div class="dri-conf ' + st + '">' +
+        '<span class="dri-ic">' + ic + '</span>' +
+        '<span class="dri-rot"><b>' + cf.n + '.</b> ' + esc(cf.rot) + '</span>' +
+        '<span class="dri-val">' + esc(impDetalheConf(cf.k, c)) + '</span>' +
+      '</div>';
+    }).join('') + '</div>';
+
+    // O que precisa ser corrigido NO ARQUIVO quando alguma barrou.
+    var erroBloq = '';
+    if (bloqueadas.length) {
+      var det = (p.detalhes && p.detalhes.length) ? p.detalhes : [];
+      // O QUE CORRIGIR depende de QUAL conferência barrou, e a diferença é
+      // real: 1, 2 e 3 são problema DO ARQUIVO (soma que não fecha, chave
+      // repetida); a 4 é problema de CADASTRO — o arquivo está certo, falta o
+      // cod_empresa no posto. Mandar "corrija a planilha" num caso de cadastro
+      // faz o operador reexportar da TecnoX à toa e voltar com o mesmo erro.
+      var comoCorrigir = (C.c4 && C.c4.ok === false)
+        ? 'Não é problema do arquivo: falta o cod_empresa no cadastro do posto. ' +
+          'Preencha postos.cod_empresa_tecnox e importe de novo. Nada foi gravado.'
+        : 'Corrija no arquivo exportado da TecnoX, salve e importe de novo. Nada foi gravado.';
+      erroBloq = '<div class="cmi-bloq">' +
+        '<div class="cmi-bloq-tit">⛔ ' + esc(p.erro || 'Conferência não fechou') + '</div>' +
+        (det.length ? '<ul>' + det.map(function (d) { return '<li>' + esc(d) + '</li>'; }).join('') + '</ul>' : '') +
+        '<div class="cmi-fix">' + esc(comoCorrigir) + '</div>' +
+      '</div>';
+    }
 
     // Divergências da conferência 5: EM DESTAQUE, mas sem bloquear.
     var divHtml = '';
@@ -4968,168 +4968,6 @@
           rows + '</tbody></table></div>' +
       '</details>';
     }
-    return divHtml + resumoHtml;
-  }
-
-  // ── extras das despesas: o aviso da (b) e a tabela de meses ──
-  function impExtrasDespesasDepois(p, C) {
-    var cB = C.b || null;
-    var avisoB = '';
-    // EMPRESA SEM POSTO É AVISO, NÃO BARREIRA — mesmo tratamento da
-    // conferência 5 do DRE. A rota grava a linha com posto_id nulo de
-    // propósito: descartá-la faria o total da tabela divergir do Total Geral
-    // do arquivo e o buraco ficaria invisível. O que falta é CADASTRO
-    // (cod_empresa_tecnox no posto), não correção do arquivo — reexportar da
-    // TecnoX voltaria com o mesmo aviso.
-    if (cB && !cB.ok && cB.nao_casadas && cB.nao_casadas.length) {
-      var ls = cB.nao_casadas.map(function (e) {
-        return '<tr><td class="cmi-cst">' + e.empresa_cod + '</td><td>' + esc(e.nome_arquivo) +
-          '</td><td class="cmi-cst">' + fmtRS(e.valor) + '</td></tr>';
-      }).join('');
-      avisoB = '<div class="dri-aviso">' +
-        '<div class="dri-aviso-tit">⚠️ Conferência (b): ' + cB.nao_casadas.length +
-          ' empresa(s) sem posto cadastrado</div>' +
-        '<div class="dri-aviso-txt">Isto AVISA e não impede a importação. Os lançamentos ' +
-          'entram com o posto em branco, e continuam no total da rede — jogá-los fora faria ' +
-          'a soma da tabela divergir do Total Geral do arquivo, calado. Para eles caírem no ' +
-          'posto certo, preencha o cod_empresa_tecnox no cadastro e importe de novo.</div>' +
-        '<div class="dri-tblwrap"><table class="cmi-tbl"><thead><tr><th>Cód.</th>' +
-          '<th>Empresa no arquivo</th><th>Valor</th></tr></thead><tbody>' + ls +
-          '</tbody></table></div>' +
-      '</div>';
-    }
-
-    var cE = C.e || null;
-    var mesesHtml = '';
-    if (cE && cE.meses && cE.meses.length) {
-      var rows = cE.meses.map(function (m) {
-        return '<tr><td>' + esc(m.mes) + '</td><td class="cmi-cst">' + m.lancamentos +
-          '</td><td class="cmi-cst">' + fmtRS(m.valor) + '</td></tr>';
-      }).join('');
-      var estreito = !!(window.matchMedia && window.matchMedia('(max-width: 560px)').matches);
-      mesesHtml = '<details class="dri-det-box"' + (estreito ? '' : ' open') + '>' +
-        '<summary>Meses no arquivo (' + cE.meses.length + ')</summary>' +
-        '<div class="dri-tblwrap"><table class="cmi-tbl"><thead><tr><th>Mês</th>' +
-          '<th>Lançamentos</th><th>Valor</th></tr></thead><tbody>' + rows +
-          '</tbody></table></div>' +
-      '</details>';
-    }
-    return avisoB + mesesHtml;
-  }
-
-  var IMP_TIPOS = {
-    dre: {
-      rota: '/dre/importar',
-      rotulo: '📥 Importar planilha',
-      titulo: 'Prévia da importação',
-      tituloOk: 'Importação concluída',
-      erro403: 'Só o perfil TI pode importar a DRE.',
-      contarChave: 'registros',
-      contarRot: 'Registros',
-      confs: [
-        { k: 'c1', n: '1', rot: 'Soma das categorias x "Total Empresa:"' },
-        { k: 'c2', n: '2', rot: 'Soma dos "Total Dia:" x "Total Geral:"' },
-        { k: 'c3', n: '3', rot: 'Chave (posto, data, categoria) única no arquivo' },
-        { k: 'c4', n: '4', rot: 'cod_empresa casa com posto cadastrado' },
-        { k: 'c5', n: '5', rot: '"Lucro Total R$" x (líquida − custo)' },
-      ],
-      // A 5 avisa e NÃO bloqueia: ver o texto do próprio aviso.
-      bloqueantes: ['c1', 'c2', 'c3', 'c4'],
-      detalhe: impDetalheDre,
-      extrasAntes: impExtrasDreAntes,
-      extrasDepois: impExtrasDreDepois,
-      // Depois de gravar, recarrega a aba: quando o usuário fechar o modal, a
-      // tela atrás já mostra o que subiu.
-      recarregar: function () { return carregar(); },
-      comoCorrigir: function (C) {
-        return (C.c4 && C.c4.ok === false)
-          ? 'Não é problema do arquivo: falta o cod_empresa no cadastro do posto. ' +
-            'Preencha postos.cod_empresa_tecnox e importe de novo. Nada foi gravado.'
-          : 'Corrija no arquivo exportado da TecnoX, salve e importe de novo. Nada foi gravado.';
-      },
-    },
-    despesas: {
-      rota: '/despesas/importar',
-      rotulo: '🧾 Importar despesas',
-      titulo: 'Prévia da importação — Despesas',
-      tituloOk: 'Importação de despesas concluída',
-      erro403: 'Só o perfil ADM pode importar despesas.',
-      contarChave: 'lancamentos',
-      contarRot: 'Lançamentos',
-      confs: [
-        { k: 'a', n: 'a', rot: 'Período declarado x emissões do arquivo' },
-        { k: 'b', n: 'b', rot: 'Empresa do arquivo casa com posto cadastrado' },
-        { k: 'c', n: 'c', rot: 'Soma dos lançamentos x "Total Geral:"' },
-        { k: 'd', n: 'd', rot: 'Soma por empresa x "Total empresa"' },
-        { k: 'e', n: 'e', rot: 'Meses cobertos e lançamentos por mês' },
-      ],
-      // Só (c) e (d) barram: são as que dizem que o parse leu o arquivo
-      // certo. (a) e (e) são descritivas e (b) é cadastro — ver o aviso.
-      bloqueantes: ['c', 'd'],
-      detalhe: impDetalheDespesas,
-      extrasAntes: null,
-      extrasDepois: impExtrasDespesasDepois,
-      // Nada a recarregar: a despesa não aparece na tela do DRE. Quem a
-      // consome é o GET /despesas/meses, em outra tela.
-      recarregar: null,
-      comoCorrigir: function () {
-        return 'A soma do arquivo não fecha com o total dele mesmo: reexporte da ' +
-          'TecnoX e importe de novo. Nada foi gravado.';
-      },
-    },
-  };
-
-  function impRenderPrevia(p, gravado) {
-    var cfg = impCfg();
-    var C = p.conferencias || {};
-    var per = p.periodo || {};
-    var bloqueadas = cfg.bloqueantes.filter(function (k) { return C[k] && C[k].ok === false; });
-    var podeGravar = !bloqueadas.length;
-    var quantos = p[cfg.contarChave];
-
-    document.getElementById('dri-title').textContent = gravado ? cfg.tituloOk : cfg.titulo;
-    document.getElementById('dri-file').textContent = (p.arquivo && p.arquivo.nome) || (_impFile ? _impFile.name : '');
-
-    // Cards no topo: o que o celular precisa ver primeiro.
-    var cards = '<div class="cmi-cards">' +
-      '<div class="cmi-c"><b>' + (quantos != null ? quantos : '—') + '</b><span>' + esc(cfg.contarRot) + '</span></div>' +
-      '<div class="cmi-c"><b>' + impQtdEmpresas(p) + '</b><span>Posto(s)</span></div>' +
-      '<div class="cmi-c' + (bloqueadas.length ? ' bad' : '') + '"><b>' + bloqueadas.length +
-        '</b><span>Barrando</span></div>' +
-    '</div>';
-
-    var faixa = impFaixaPeriodo(p, per);
-
-    // As conferências do tipo, uma a uma. A que NÃO bloqueia e falhou sai
-    // AMARELA (warn), não vermelha: vermelho ao lado de um botão de
-    // confirmar habilitado faz o operador achar que a tela está quebrada.
-    var confs = '<div class="dri-confs">' + cfg.confs.map(function (cf) {
-      var c = C[cf.k];
-      var bloqueia = cfg.bloqueantes.indexOf(cf.k) >= 0;
-      var st = !c ? 'na' : (c.ok ? 'ok' : (bloqueia ? 'bad' : 'warn'));
-      var ic = st === 'ok' ? '✓' : (st === 'bad' ? '✕' : (st === 'warn' ? '!' : '–'));
-      return '<div class="dri-conf ' + st + '">' +
-        '<span class="dri-ic">' + ic + '</span>' +
-        '<span class="dri-rot"><b>' + cf.n + '.</b> ' + esc(cf.rot) + '</span>' +
-        '<span class="dri-val">' + esc(cfg.detalhe(cf.k, c)) + '</span>' +
-      '</div>';
-    }).join('') + '</div>';
-
-    // O que precisa ser corrigido quando alguma barrou.
-    var erroBloq = '';
-    if (bloqueadas.length) {
-      var det = (p.detalhes && p.detalhes.length) ? p.detalhes : [];
-      erroBloq = '<div class="cmi-bloq">' +
-        '<div class="cmi-bloq-tit">⛔ ' + esc(p.erro || 'Conferência não fechou') + '</div>' +
-        (det.length ? '<ul>' + det.map(function (d) { return '<li>' + esc(d) + '</li>'; }).join('') + '</ul>' : '') +
-        '<div class="cmi-fix">' + esc(cfg.comoCorrigir(C)) + '</div>' +
-      '</div>';
-    }
-
-    // A ORDEM É A DE ANTES: cards, faixa, extras-de-cima, conferências,
-    // bloqueio, extras-de-baixo, rodapé.
-    var antes = cfg.extrasAntes ? cfg.extrasAntes(p, C) : '';
-    var depois = cfg.extrasDepois ? cfg.extrasDepois(p, C) : '';
 
     // Rodapé: antes de gravar mostra o confirmar (se nada barrou); depois de
     // gravar troca por "Fechar", mantendo TODO o resultado na tela — o usuário
@@ -5137,12 +4975,12 @@
     var foot;
     if (gravado) {
       foot = '<div class="dri-ok">✓ ' + (p.gravados != null ? p.gravados : 0) +
-               ' registro(s) gravados.' + (cfg.recarregar ? ' Os dados da aba já foram recarregados.' : '') + '</div>' +
+               ' registro(s) gravados. Os dados da aba já foram recarregados.</div>' +
              '<div class="cmi-foot"><button class="cmi-btn ghost" onclick="__dreImpFechar()">Fechar</button></div>';
     } else if (podeGravar) {
       foot = '<div class="cmi-foot">' +
         '<button class="cmi-btn" id="dri-gravar" onclick="__dreImpConfirmar()">Confirmar importação' +
-          (quantos != null ? ' (' + quantos + ')' : '') + '</button>' +
+          (p.registros != null ? ' (' + p.registros + ')' : '') + '</button>' +
         '<button class="cmi-btn ghost" onclick="__dreImpFechar()">Cancelar</button></div>';
     } else {
       // Sem botão de confirmar: não há o que fazer aqui além de corrigir o arquivo.
@@ -5150,33 +4988,11 @@
     }
 
     document.getElementById('dri-body').innerHTML =
-      cards + faixa + antes + confs + erroBloq + depois + foot;
+      cards + faixa + postosTxt + confs + erroBloq + divHtml + resumoHtml + foot;
   }
 
-  // O card "Posto(s)" conta coisas diferentes nos dois relatórios, e os dois
-  // números querem dizer a mesma coisa para quem olha: quantas empresas o
-  // arquivo trouxe.
-  function impQtdEmpresas(p) {
-    if (p.postos_detectados) return p.postos_detectados.length;
-    if (p.empresas != null) return p.empresas;
-    return '—';
-  }
-
-  // O período vem em formatos diferentes: o DRE manda {inicio, fim, dias} em
-  // `periodo`; as despesas mandam {inicio, fim} e o `dias` não existe.
-  function impFaixaPeriodo(p, per) {
-    var i = per.inicio || (p.periodo && p.periodo.inicio);
-    var f = per.fim || (p.periodo && p.periodo.fim);
-    if (!i && !f) return '';
-    return '<div class="cmi-faixa">Período: <b>' + esc(brData(i)) + '</b> → <b>' +
-      esc(brData(f)) + '</b>' + (per.dias ? ' · ' + per.dias + ' dia(s)' : '') + '</div>';
-  }
   // ── Handlers ─────────────────────────────────────────────────────
-  // O TIPO É ESCOLHIDO AQUI e vale até a próxima abertura. Guardá-lo no
-  // módulo (e não no input) é o que deixa o confirmar saber para qual rota
-  // postar sem ter de reler o DOM.
-  window.__dreImpAbrir = function (tipo) {
-    _impTipo = IMP_TIPOS[tipo] ? tipo : 'dre';
+  window.__dreImpAbrir = function () {
     var inp = document.getElementById('dre-imp-file');
     if (inp) { inp.value = ''; inp.click(); }
   };
@@ -5191,10 +5007,7 @@
     if (file.size > IMP_MAX_MB * 1024 * 1024) { alert('Arquivo maior que ' + IMP_MAX_MB + ' MB.'); return; }
 
     _impFile = file;
-    // O botão que vira "Conferindo…" é o do tipo aberto, não o do DRE
-    // sempre: piscar o rótulo errado faria o operador achar que clicou no
-    // outro.
-    var btn = document.getElementById(_impTipo === 'despesas' ? 'dre-imp-btn-desp' : 'dre-imp-btn');
+    var btn = document.getElementById('dre-imp-btn');
     var rot = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = 'Conferindo…'; }
     impProcessando('Conferindo o arquivo', 'Lendo e conferindo bloco por bloco. Arquivo com muitos postos demora.');
@@ -5209,7 +5022,7 @@
     } catch (err) {
       impErro('Erro ao enviar o arquivo: ' + ((err && err.message) || err));
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = rot || impCfg().rotulo; }
+      if (btn) { btn.disabled = false; btn.textContent = rot || '📥 Importar planilha'; }
     }
   };
 
@@ -5222,9 +5035,8 @@
       var r = await impFetch(_impFile, false);
       if (r.status === 200 && r.json && r.json.gravados != null) {
         // Recarrega os dados da aba ANTES de repintar o modal: quando o usuário
-        // fechar, a tela atrás já mostra o que subiu. As despesas não têm o
-        // que recarregar aqui — elas não aparecem nesta tela.
-        if (impCfg().recarregar) await impCfg().recarregar();
+        // fechar, a tela atrás já mostra o que subiu.
+        await carregar();
         impRenderPrevia(r.json, true);
         return;
       }
