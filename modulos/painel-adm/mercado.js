@@ -574,7 +574,8 @@
     const el = document.getElementById('mrc-painel');
     if (el) el.innerHTML = '<div class="mrc-placeholder">Carregando painel…</div>';
     try {
-      _pData = await apiFetch('/mercado-dashboard');
+      const qs = _dataISO ? '?ate=' + encodeURIComponent(_dataISO) : '';
+      _pData = await apiFetch('/mercado-dashboard' + qs);
     } catch (err) {
       _pData = null;
       if (el) {
