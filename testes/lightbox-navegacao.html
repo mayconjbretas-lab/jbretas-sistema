@@ -1,0 +1,182 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparação — navegação no lightbox</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  :root {
+    --ac: var(--accent); --tx: var(--text); --tx2: var(--text2); --tx3: var(--text3);
+    --bd: var(--border); --brand-blue: var(--info);
+  }
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+<link rel="stylesheet" href="/shared/css/comparacao.css">
+
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script src="/shared/js/comparacao-card.js"></script>
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// O lightbox da faixa de fotos navega entre as fotos do MESMO card, por
+// seta e por teclado, em ciclo. A tira é montada pelo cmpFotosHtml DE
+// PRODUÇÃO — as três telas (painel-adm, admin, Logística) chamam essa
+// mesma função, então provar aqui prova nas três: nenhuma delas tem
+// código de lightbox próprio.
+//
+// Fotos são data: URI (SVG de 1 cor, com o número da foto desenhado).
+// URL assinada do bucket expira e faria o teste falhar por rede, não por
+// defeito — e aqui o que importa é QUAL src está no <img>, não a imagem.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+
+// ── fixture: P. ARAPONGA, própria + 3 concorrentes ───────────────
+function foto(n, cor) {
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80">' +
+    '<rect width="120" height="80" fill="' + cor + '"/>' +
+    '<text x="60" y="50" font-size="34" text-anchor="middle" fill="#fff">' + n + '</text></svg>');
+}
+var F1 = foto(1, '#2b6cb0'), F2 = foto(2, '#b06a2b'),
+    F3 = foto(3, '#2b8a5a'), F4 = foto(4, '#8a2b6a');
+
+var POSTO = { k: 'araponga', ap: 'ARAPONGA' };
+var DADO = {
+  proprio: { foto: F1, hora: '07:12' },
+  concorrentes: [
+    { nome: 'SKY 2',     registro: { foto: F2, hora: '07:20' } },
+    { nome: 'PETROSUL',  registro: { foto: F3, hora: '07:34' } },
+    { nome: 'AUTO POSTO SANTA RITA', registro: { foto: F4, hora: '07:41' } },
+  ],
+};
+// Card de UMA foto só: prova que a seta não aparece onde não há para onde ir.
+var DADO_SOLO = { proprio: { foto: F1, hora: '07:12' }, concorrentes: [] };
+
+// ── helpers de interação ─────────────────────────────────────────
+function lb()      { return document.querySelector('.cmpf-lightbox'); }
+function lbImg()   { var l = lb(); return l ? l.querySelector('.cmpf-lb-fig img') : null; }
+function lbCap()   { var l = lb(); return l ? l.querySelector('.cmpf-lb-fig figcaption') : null; }
+function lbSrc()   { var i = lbImg(); return i ? i.getAttribute('src') : null; }
+function lbTexto() { var c = lbCap(); return c ? c.textContent : null; }
+function qualFoto(src) {
+  return src === F1 ? 'foto 1 (própria)' : src === F2 ? 'foto 2' :
+         src === F3 ? 'foto 3' : src === F4 ? 'foto 4' : '(desconhecida: ' + String(src).slice(0, 24) + ')';
+}
+function tecla(k) {
+  // keydown no document: é onde o cmpAbrirFoto liga o listener.
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+}
+
+// ── palco ────────────────────────────────────────────────────────
+var palco = document.getElementById('palco');
+palco.innerHTML =
+  '<div class="cmpc-card" data-posto="araponga">' + cmpFotosHtml(POSTO, DADO) + '</div>' +
+  '<div class="cmpc-card" data-posto="solo">'     + cmpFotosHtml(POSTO, DADO_SOLO) + '</div>';
+var tiras = palco.querySelectorAll('.cmpf-fotos');
+var minis = tiras[0].querySelectorAll('img');
+
+h3('0. A tira do card (código de produção)');
+eh(tiras.length === 2, 'os dois cards montaram a faixa', tiras.length + ' faixas');
+eh(minis.length === 4, 'P. ARAPONGA tem 4 miniaturas (própria + 3)', minis.length);
+eh(minis[0].closest('figure').classList.contains('meu'), 'a 1ª é a PRÓPRIA (.meu)');
+eh(String(minis[1].getAttribute('onclick')).indexOf('cmpAbrirFoto') >= 0,
+   'a miniatura mantém o onclick do lightbox',
+   String(minis[1].getAttribute('onclick')).slice(0, 34) + '…');
+eh(/,this\)/.test(String(minis[1].getAttribute('onclick'))),
+   'e passa o elemento de origem (3º argumento)');
+eh(minis[0].getAttribute('data-legenda').indexOf('🏠') === 0,
+   'a própria carrega o rótulo 🏠 na legenda', minis[0].getAttribute('data-legenda'));
+
+h3('1. Abrir a 2ª foto do P. ARAPONGA');
+minis[1].click();
+eh(!!lb(), 'lightbox abriu');
+eh(lbSrc() === F2, 'abriu NA 2ª foto (não na 1ª)', qualFoto(lbSrc()), 'foto 2');
+eh(lbTexto() === 'SKY 2 · coletado 07:20', 'legenda da 2ª', lbTexto());
+eh(!!lb().querySelector('.cmpf-lb-nav.ant') && !!lb().querySelector('.cmpf-lb-nav.prox'),
+   'as duas setas existem');
+
+h3('2. → vai à 3ª');
+tecla('ArrowRight');
+eh(lbSrc() === F3, 'seta direita avançou', qualFoto(lbSrc()), 'foto 3');
+eh(lbTexto() === 'PETROSUL · coletado 07:34', 'legenda acompanhou', lbTexto());
+
+h3('3. ← volta à 2ª');
+tecla('ArrowLeft');
+eh(lbSrc() === F2, 'seta esquerda voltou', qualFoto(lbSrc()), 'foto 2');
+eh(lbTexto() === 'SKY 2 · coletado 07:20', 'legenda voltou junto', lbTexto());
+
+h3('4. ← na 1ª dá a volta para a última (circular)');
+tecla('ArrowLeft');
+eh(lbSrc() === F1, 'chegou na 1ª, a própria', qualFoto(lbSrc()), 'foto 1');
+eh(lbTexto() === '🏠 ARAPONGA · coletado 07:12',
+   'e a própria mantém o 🏠 na legenda do lightbox', lbTexto());
+tecla('ArrowLeft');
+eh(lbSrc() === F4, 'da 1ª para trás caiu na ÚLTIMA', qualFoto(lbSrc()), 'foto 4');
+eh(lbTexto() === 'AUTO POSTO SANTA RITA · coletado 07:41', 'legenda da última', lbTexto());
+tecla('ArrowRight');
+eh(lbSrc() === F1, 'e da última para frente volta à 1ª', qualFoto(lbSrc()), 'foto 1');
+
+h3('5. As setas do mouse fazem o mesmo');
+lb().querySelector('.cmpf-lb-nav.prox').click();
+eh(lbSrc() === F2, 'clique em › avançou', qualFoto(lbSrc()), 'foto 2');
+eh(!!lb(), 'e NÃO fechou o lightbox');
+lb().querySelector('.cmpf-lb-nav.ant').click();
+eh(lbSrc() === F1, 'clique em ‹ voltou', qualFoto(lbSrc()), 'foto 1');
+eh(!!lb(), 'e também não fechou');
+
+h3('6. Tocar a imagem continua NÃO fechando');
+lbImg().click();
+eh(!!lb(), 'lightbox segue aberto depois de clicar na foto');
+
+h3('7. Esc fecha');
+tecla('Escape');
+eh(!lb(), 'lightbox fechou');
+// Listener órfão: se o keydown ficasse ligado, a seta seguiria "navegando"
+// um lightbox inexistente e a página rolaria sozinha.
+tecla('ArrowRight');
+eh(!lb(), 'e a seta depois de fechado não reabre nada');
+
+h3('8. Foto única não ganha seta');
+var solo = tiras[1].querySelectorAll('img');
+eh(solo.length === 1, 'o card solo tem 1 miniatura', solo.length);
+solo[0].click();
+eh(!!lb(), 'lightbox abriu');
+eh(!lb().querySelector('.cmpf-lb-nav'), 'nenhuma seta injetada');
+tecla('ArrowRight');
+eh(lbSrc() === F1, 'e a seta do teclado não muda nada', qualFoto(lbSrc()), 'foto 1');
+tecla('Escape');
+
+h3('9. Fallback: chamada direta, sem tira de origem');
+cmpAbrirFoto(F3, 'SOLTA · coletado 09:00');
+eh(!!lb(), 'abre mesmo sem 3º argumento (compatibilidade)');
+eh(lbSrc() === F3, 'mostra a foto pedida', qualFoto(lbSrc()), 'foto 3');
+eh(lbTexto() === 'SOLTA · coletado 09:00', 'com a legenda do 2º argumento', lbTexto());
+eh(!lb().querySelector('.cmpf-lb-nav'), 'e sem setas, porque não há lista');
+tecla('Escape');
+
+linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                           : '<span class="ok">TUDO PASSOU</span>'));
+pintar();
+document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — lightbox';
+</script>

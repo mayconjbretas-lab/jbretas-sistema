@@ -71,6 +71,20 @@
 .cmpf-lb-x { position: absolute; top: 14px; right: 16px; background: rgba(0,0,0,.5);
   border: 1px solid rgba(255,255,255,.35); border-radius: 8px; color: #fff;
   font-size: 1rem; padding: 3px 11px; cursor: pointer; }
+/* Setas de navegação entre as fotos do MESMO card. Só existem quando o card
+   tem mais de uma foto — o cmpAbrirFoto nem injeta o botão com uma só.
+   Mesma casca do ✕ de propósito: não inventa um segundo estilo de botão
+   por cima da foto. 44px de alvo porque a imagem ocupa 94vw e a seta fica
+   SOBRE ela no celular — alvo menor erra o toque e acerta o fundo, que
+   fecha o lightbox. z-index pelo mesmo motivo: a figura não pode comer o
+   clique da seta. */
+.cmpf-lb-nav { position: absolute; top: 50%; transform: translateY(-50%);
+  min-width: 44px; height: 56px; z-index: 1; background: rgba(0,0,0,.5);
+  border: 1px solid rgba(255,255,255,.35); border-radius: 8px; color: #fff;
+  font-size: 1.5rem; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; }
+.cmpf-lb-nav.ant  { left: 8px; }
+.cmpf-lb-nav.prox { right: 8px; }
 
 
 /* ════════════════════════════════════════════════════════════════

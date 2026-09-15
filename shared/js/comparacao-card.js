@@ -472,11 +472,18 @@ function cmpFlashCheck(k, f) {
   // cada tela de ligar um listener no container certo. A aspa simples na
   // URL vira %27 antes de entrar no atributo (mesma defesa do csZoom).
   function mini(url, etiqueta, nome, hora, ehMeu) {
-    const legenda = nome + (hora && hora !== '-' ? ' · coletado ' + hora : '');
+    const quando = (hora && hora !== '-' ? ' · coletado ' + hora : '');
+    const legenda = nome + quando;
+    // data-legenda usa a ETIQUETA, que traz o 🏠 na nossa. Navegando pelo
+    // lightbox o rótulo é a ÚNICA coisa que diz qual foto é a nossa: a borda
+    // azul do .meu fica na tira, não no lightbox. O 2º argumento segue com a
+    // legenda sem 🏠 — é só o fallback de quem chamar sem tira.
+    const legendaLb = etiqueta + quando;
     const u = String(url).replace(/'/g, '%27');
     return '<figure class="' + (ehMeu ? 'meu' : 'conc') + '">' +
       '<img loading="lazy" src="' + at(url) + '" alt="' + at(etiqueta) + '"' +
-        ' onclick="cmpAbrirFoto(&#39;' + at(u) + '&#39;,&#39;' + at(legenda) + '&#39;)">' +
+        ' data-legenda="' + at(legendaLb) + '"' +
+        ' onclick="cmpAbrirFoto(&#39;' + at(u) + '&#39;,&#39;' + at(legenda) + '&#39;,this)">' +
       '<figcaption>' + at(etiqueta) + '</figcaption>' +
     '</figure>';
   }
@@ -484,30 +491,98 @@ function cmpFlashCheck(k, f) {
   // ── Lightbox ──────────────────────────────────────────────────
   // Fecha no fundo, no ✕ e no Esc — NUNCA ao tocar a imagem. Fechar sem
   // querer custa reabrir o posto todo, e foi reclamação real na tela de
-  // revisão de coleta.
-  function cmpAbrirFoto(url, legenda) {
+  // revisão de coleta. As SETAS também não fecham: são filhas do fundo, e o
+  // handler trata a seta ANTES de testar o fundo.
+  //
+  // Navegação dentro do MESMO card. A lista sai da .cmpf-fotos de origem — o
+  // DOM que a própria tela já montou — e não de um parâmetro novo: assim
+  // painel-adm, admin e Logística ganham as setas sem uma linha a mais em
+  // cada um, porque os três montam a tira pelo mesmo cmpFotosHtml, que é quem
+  // passa o elemento clicado. Sem tira (chamada direta, sem 3º argumento) cai
+  // em lista de 1 e nenhuma seta aparece.
+  let _lbFotos = [];
+  let _lbIdx   = 0;
+
+  function lbDaTira(origem) {
+    const tira = (origem && origem.closest) ? origem.closest('.cmpf-fotos') : null;
+    if (!tira) return null;
+    const imgs = [].slice.call(tira.querySelectorAll('img'));
+    if (!imgs.length) return null;
+    return {
+      // alt como reserva: miniatura de HTML antigo em cache não tem
+      // data-legenda, e legenda vazia é pior que legenda sem a hora.
+      lista: imgs.map(im => ({
+        url: im.getAttribute('src'),
+        legenda: im.getAttribute('data-legenda') || im.getAttribute('alt') || '',
+      })),
+      idx: Math.max(0, imgs.indexOf(origem)),
+    };
+  }
+
+  // Repinta src/alt/legenda no MESMO <img> em vez de remontar o lightbox:
+  // remontar recriaria o nó a cada seta e piscaria o fundo escuro inteiro.
+  function lbPintar() {
+    const cx = document.querySelector('.cmpf-lightbox');
+    const f  = _lbFotos[_lbIdx];
+    if (!cx || !f) return;
+    const im  = cx.querySelector('.cmpf-lb-fig img');
+    const cap = cx.querySelector('.cmpf-lb-fig figcaption');
+    if (im)  { im.setAttribute('src', f.url); im.setAttribute('alt', f.legenda); }
+    if (cap) { cap.textContent = f.legenda; }   // textContent: nada a escapar
+  }
+
+  // CIRCULAR: da última vai para a primeira e vice-versa. Com 3 a 5 fotos por
+  // card, esbarrar num fim de lista que não anda lê como travamento.
+  function cmpNavFoto(passo) {
+    const n = _lbFotos.length;
+    if (n < 2) return;
+    _lbIdx = (_lbIdx + passo + n) % n;
+    lbPintar();
+  }
+
+  function cmpAbrirFoto(url, legenda, origem) {
     cmpFecharFoto();
+    const tira = lbDaTira(origem);
+    _lbFotos = tira ? tira.lista
+                    : [{ url: String(url), legenda: String(legenda == null ? '' : legenda) }];
+    _lbIdx   = tira ? tira.idx : 0;
     const cx = document.createElement('div');
     cx.className = 'cmpf-lightbox';
+    // Foto única não ganha seta: duas setas que só dão voltas em si mesmas
+    // prometem uma navegação que não existe.
+    const setas = _lbFotos.length > 1
+      ? '<button type="button" class="cmpf-lb-nav ant" aria-label="Foto anterior">‹</button>' +
+        '<button type="button" class="cmpf-lb-nav prox" aria-label="Próxima foto">›</button>'
+      : '';
     cx.innerHTML =
       '<button type="button" class="cmpf-lb-x" aria-label="Fechar">✕</button>' +
+      setas +
       '<figure class="cmpf-lb-fig">' +
-        '<img src="' + at(url) + '" alt="' + at(legenda) + '">' +
-        '<figcaption>' + at(legenda) + '</figcaption>' +
+        '<img src="" alt=""><figcaption></figcaption>' +
       '</figure>';
     cx.addEventListener('click', (e) => {
+      const seta = (e.target.closest) ? e.target.closest('.cmpf-lb-nav') : null;
+      if (seta) { cmpNavFoto(seta.classList.contains('prox') ? 1 : -1); return; }
       if (e.target === cx || (e.target.closest && e.target.closest('.cmpf-lb-x'))) cmpFecharFoto();
     });
     document.body.appendChild(cx);
-    document.addEventListener('keydown', escFechaFoto);
+    lbPintar();
+    document.addEventListener('keydown', teclaFoto);
   }
 
   function cmpFecharFoto() {
     const el = document.querySelector('.cmpf-lightbox');
     if (el) el.remove();
-    document.removeEventListener('keydown', escFechaFoto);
+    _lbFotos = []; _lbIdx = 0;
+    document.removeEventListener('keydown', teclaFoto);
   }
-  function escFechaFoto(e) { if (e.key === 'Escape') cmpFecharFoto(); }
+  // preventDefault nas setas: sem ele a seta rola a página por baixo do
+  // lightbox, e ao fechar o card não está mais onde estava.
+  function teclaFoto(e) {
+    if (e.key === 'Escape')     { cmpFecharFoto();  return; }
+    if (e.key === 'ArrowRight') { cmpNavFoto(1);  e.preventDefault(); return; }
+    if (e.key === 'ArrowLeft')  { cmpNavFoto(-1); e.preventDefault(); }
+  }
 
   // ── Superfície pública ────────────────────────────────────────
   // As quatro do card, mais os auxiliares que o app.js de cada módulo
@@ -533,4 +608,5 @@ function cmpFlashCheck(k, f) {
   window.cmpFotosHtml          = cmpFotosHtml;
   window.cmpAbrirFoto          = cmpAbrirFoto;
   window.cmpFecharFoto         = cmpFecharFoto;
+  window.cmpNavFoto            = cmpNavFoto;
 })();
