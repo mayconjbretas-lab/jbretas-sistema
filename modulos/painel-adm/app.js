@@ -675,7 +675,22 @@ function cmpCardMudancas(posto, dado) {
     </div>
     <div class="cmpc-wrap">${voceTable}</div>
     <div class="cmpc-wrap"><table class="cmpc-table">
-      <thead><tr><th>Concorrente</th><th>Comb</th><th>Ontem</th><th>Hoje</th><th>Mudou</th></tr></thead>
+      <!-- O CABECALHO USA AS MESMAS CLASSES DO CORPO. As celulas sempre
+           estiveram alinhadas — medido: mesmo left e mesma largura em th e
+           td, nos dois modulos, a 375px e a 1400px, com 5 th e 5 td. O que
+           desalinhava era o TEXTO dentro da celula: .cmpc-num e .cmpc-mudou
+           alinham o valor a DIREITA com !important, e o th ficava a
+           ESQUERDA. Medido no celular, coluna de 56px: Ontem +10px, Hoje
+           +11px, Mudou +22px de desvio entre titulo e valor — e 22px numa
+           coluna de 56 le como coluna trocada.
+
+           A classe no th NAO muda cor nem fonte: a regra
+           ".cmpc-table thead th" tem especificidade maior para color e
+           font-family. So o text-align vira, porque so ele e !important. -->
+      <thead><tr><th>Concorrente</th><th>Comb</th>
+        <th class="cmpc-num">Ontem</th>
+        <th class="cmpc-num">Hoje</th>
+        <th class="cmpc-mudou">Mudou</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
   </div>`;
