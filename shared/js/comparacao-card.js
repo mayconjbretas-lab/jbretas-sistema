@@ -472,7 +472,11 @@ function cmpFlashCheck(k, f) {
   // cada tela de ligar um listener no container certo. A aspa simples na
   // URL vira %27 antes de entrar no atributo (mesma defesa do csZoom).
   function mini(url, etiqueta, nome, hora, ehMeu) {
-    const quando = (hora && hora !== '-' ? ' · coletado ' + hora : '');
+    // HH:MM, sem os segundos. O `hora` do GET /coletas vem 'HH:MM:SS' e o
+    // ':00' do fim não diz nada a quem confere foto — só rouba largura na
+    // legenda do lightbox, onde o nome do posto já é longo. slice e não
+    // regex: hora malformada encurta em vez de virar string vazia.
+    const quando = (hora && hora !== '-' ? ' · coletado ' + String(hora).slice(0, 5) : '');
     const legenda = nome + quando;
     // data-legenda usa a ETIQUETA, que traz o 🏠 na nossa. Navegando pelo
     // lightbox o rótulo é a ÚNICA coisa que diz qual foto é a nossa: a borda

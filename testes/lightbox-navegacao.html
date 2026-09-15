@@ -61,17 +61,20 @@ function foto(n, cor) {
 var F1 = foto(1, '#2b6cb0'), F2 = foto(2, '#b06a2b'),
     F3 = foto(3, '#2b8a5a'), F4 = foto(4, '#8a2b6a');
 
+// hora 'HH:MM:SS' de propósito: é o formato que o GET /coletas devolve, e a
+// legenda tem de cortar os segundos. Fixture com 'HH:MM' passaria sem provar
+// nada — foi por isso que os segundos chegaram em produção sem ninguém ver.
 var POSTO = { k: 'araponga', ap: 'ARAPONGA' };
 var DADO = {
-  proprio: { foto: F1, hora: '07:12' },
+  proprio: { foto: F1, hora: '07:12:00' },
   concorrentes: [
-    { nome: 'SKY 2',     registro: { foto: F2, hora: '07:20' } },
-    { nome: 'PETROSUL',  registro: { foto: F3, hora: '07:34' } },
-    { nome: 'AUTO POSTO SANTA RITA', registro: { foto: F4, hora: '07:41' } },
+    { nome: 'SKY 2',     registro: { foto: F2, hora: '07:20:00' } },
+    { nome: 'PETROSUL',  registro: { foto: F3, hora: '07:34:19' } },
+    { nome: 'AUTO POSTO SANTA RITA', registro: { foto: F4, hora: '07:41:07' } },
   ],
 };
 // Card de UMA foto só: prova que a seta não aparece onde não há para onde ir.
-var DADO_SOLO = { proprio: { foto: F1, hora: '07:12' }, concorrentes: [] };
+var DADO_SOLO = { proprio: { foto: F1, hora: '07:12:00' }, concorrentes: [] };
 
 // ── helpers de interação ─────────────────────────────────────────
 function lb()      { return document.querySelector('.cmpf-lightbox'); }
@@ -107,6 +110,13 @@ eh(/,this\)/.test(String(minis[1].getAttribute('onclick'))),
    'e passa o elemento de origem (3º argumento)');
 eh(minis[0].getAttribute('data-legenda').indexOf('🏠') === 0,
    'a própria carrega o rótulo 🏠 na legenda', minis[0].getAttribute('data-legenda'));
+// Segundos: o /coletas manda 'HH:MM:SS' e a legenda mostra HH:MM.
+eh(minis[2].getAttribute('data-legenda') === 'PETROSUL · coletado 07:34',
+   'a hora sai SEM segundos (fixture manda 07:34:19)',
+   minis[2].getAttribute('data-legenda'), 'PETROSUL · coletado 07:34');
+eh(!/\d\d:\d\d:\d\d/.test([].map.call(minis, function (m) {
+     return m.getAttribute('data-legenda') + '|' + m.getAttribute('onclick'); }).join(' ')),
+   'e nenhuma das 4 legendas (tira ou lightbox) tem HH:MM:SS');
 
 h3('1. Abrir a 2ª foto do P. ARAPONGA');
 minis[1].click();
