@@ -1,0 +1,323 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparação — data retroativa e ✓ conferido</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  :root {
+    --ac: var(--accent); --ac2: var(--accent2); --acd: var(--accent-dim);
+    --dg: var(--danger); --wn: var(--warning); --inf: var(--info);
+    --tx: var(--text); --tx2: var(--text2); --tx3: var(--text3);
+    --sf: var(--surface); --sf2: var(--surface2); --sf3: var(--surface3);
+    --bd: var(--border); --bd2: var(--border2);
+    --r: var(--radius); --rl: var(--radius-lg);
+  }
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+<link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+<link rel="stylesheet" href="/shared/css/comparacao.css">
+
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// 1) O seletor de data da Comparação manda a data para as DUAS chamadas
+//    (GET /coletas e GET /coleta-revisao) e os cards passam a ser do dia
+//    escolhido — nada de DEPOIS dele vaza pelo fallback.
+// 2) O "✓ Conferir" do card manda o MESMO payload do csConfirmar da aba
+//    Coleta ({posto_nome, data}), vira "✓ Conferido" e o contador sobe.
+// 3) Recarregar (o F5) mantém o conferido, porque ele vem do GET e não de
+//    estado de tela.
+// 4) A Logística não ganha botão nem data.
+//
+// A tela é a #s-comp REAL do painel-adm/index.html e o código é o de
+// produção (coletas-service + comparacao-card + app.js). A fixture é a
+// resposta REAL do GET /coletas: 500 registros de 12 a 15/09/2026 — 123
+// deles em 12/09, que é o dia usado no teste.
+//
+// O apiFetch é dublê e guarda TODA chamada: é assim que se prova que a
+// data foi para a query, e não só que a tela pintou algo plausível.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+var HOJE = '2026-09-15';   // = data da fixture e do relógio da máquina
+var ALVO = '2026-09-12';
+
+// ── dublês de tela ───────────────────────────────────────────────
+window.exigirSessao = function () { return { id: 'h', nome: 'H', perfil: 'ADM', ti: true }; };
+window.getUsuarioLogado = window.exigirSessao;
+window.aplicarTema = function () {};
+window.caminhoRaiz = function () { return '/'; };
+window.abrirPainelDesktop = function () {};
+['renderCustoMargem','renderKpi','renderColetaRevisao','renderMedicao','renderDre',
+ 'renderMovMes','renderMovPostos','renderMercado','renderRelatorios'].forEach(function (n) {
+  window[n] = function () {};
+});
+
+// ── banco de mentira do coleta_revisao ───────────────────────────
+// { 'YYYY-MM-DD': [linha, ...] } — o POST /conferir escreve aqui e o GET lê,
+// que é como o servidor se comporta. Sem isto o "F5 mantém" não provaria nada.
+var BANCO_REV = {};
+var FIX = null;
+var CHAMADAS = [];   // { url, metodo, corpo }
+
+window.apiFetch = function (url, opcoes) {
+  var u = String(url);
+  var met = (opcoes && opcoes.method) || 'GET';
+  var corpo = null;
+  try { corpo = (opcoes && opcoes.body) ? JSON.parse(opcoes.body) : null; } catch (e) {}
+  CHAMADAS.push({ url: u, metodo: met, corpo: corpo });
+
+  if (u.indexOf('/coletas') === 0) {
+    // Devolve os 500 registros SEM filtrar por data de propósito: o corte por
+    // dia é do cliente (buscarComparacaoDoDia), e é ele que está sob teste.
+    return Promise.resolve(FIX.coletas);
+  }
+  if (u.indexOf('/postos') === 0) return Promise.resolve(FIX.postos);
+  if (u.indexOf('/coleta-revisao/conferir') === 0) {
+    var d = (corpo && corpo.data) || '';
+    if (!BANCO_REV[d]) BANCO_REV[d] = [];
+    BANCO_REV[d].push({ posto_nome: corpo.posto_nome, data: d, combustivel: 'GERAL',
+                        status: 'conferido', preco_editado: null, preco_original: null });
+    return Promise.resolve({ success: true });
+  }
+  if (u.indexOf('/coleta-revisao') === 0) {
+    var m = /[?&]data=([^&]+)/.exec(u);
+    var dia = m ? decodeURIComponent(m[1]) : '';
+    return Promise.resolve({ success: true, data: dia, linhas: (BANCO_REV[dia] || []).slice() });
+  }
+  return Promise.resolve({ success: true });
+};
+try { localStorage.setItem('jb_versao_painel', 'desktop'); } catch (e) {}
+
+function js(src) {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { erro(new Error(src + ' não carregou')); };
+    document.body.appendChild(s);
+  });
+}
+function baixar(url) {
+  return new Promise(function (ok, er) {
+    var x = new XMLHttpRequest();
+    x.open('GET', url);
+    x.onload = function () { ok(x.responseText); };
+    x.onerror = function () { er(new Error(url + ' não carregou')); };
+    x.send();
+  });
+}
+// Chamadas desde a última zerada, por rota.
+function chamadasDe(rota) { return CHAMADAS.filter(function (c) { return c.url.indexOf(rota) === 0; }); }
+function cardsNaTela() { return [...document.querySelectorAll('#cmp-regions .region-card')]; }
+function botoesConferir() { return [...document.querySelectorAll('#cmp-regions .cmp-conf')]; }
+function contadorTxt() {
+  var el = document.getElementById('cmp-conf-contador');
+  return el ? el.textContent : '(sem contador)';
+}
+
+// ════════════════════════════════════════════════════════════════
+async function rodar() {
+  FIX = JSON.parse(await baixar('/testes/fixtures-coletas.json'));
+  var porData = {};
+  (FIX.coletas.registros || []).forEach(function (r) { porData[r.data] = (porData[r.data] || 0) + 1; });
+  nota('fixture: ' + (FIX.coletas.registros || []).length + ' registros · ' + JSON.stringify(porData));
+
+  var doc = new DOMParser().parseFromString(await baixar('/modulos/painel-adm/index.html'), 'text/html');
+  var sc = doc.getElementById('s-comp');
+  if (!sc) throw new Error('não achei #s-comp no index.html');
+  sc.classList.add('active');
+  document.getElementById('palco').appendChild(document.importNode(sc, true));
+
+  await js('/shared/js/postos-mapa.js');
+  await js('/shared/js/coletas-service.js');
+  await js('/shared/js/comparacao-card.js');
+  await js('/modulos/painel-adm/app.js');
+  await esperar(80);
+
+  h3('0. O seletor de data existe e nasce em hoje');
+  var inp = document.getElementById('cmp-data');
+  eh(!!inp && inp.type === 'date', 'o <input type="date"> está na grade de filtros');
+  eh(document.querySelectorAll('#s-comp .filtros-comp-grid > div').length === 5,
+     'a grade de filtros tem 5 células (4 antigas + Data)',
+     document.querySelectorAll('#s-comp .filtros-comp-grid > div').length + '', '5');
+  ['cmp-posto','cmp-sup','cmp-band','cmp-rede','cmp-so-mudou'].forEach(function (id) {
+    eh(!!document.getElementById(id), 'filtro existente intocado: #' + id);
+  });
+
+  CHAMADAS = [];
+  await carregarDadosComparar();
+  await esperar(250);
+
+  eh(inp.value === HOJE, 'o seletor abriu em HOJE', inp.value, HOJE);
+  eh(document.getElementById('cmp-data-retro').hidden === true, 'sem chip âmbar em hoje');
+  var col0 = chamadasDe('/coletas')[0];
+  eh(!!col0 && col0.url.indexOf('data=') < 0, 'GET /coletas SEM data= quando é hoje', col0 && col0.url);
+  eh(!!col0 && col0.url.indexOf('limit=') < 0, 'e SEM limit= (chamada idêntica à de antes)', col0 && col0.url);
+  var rev0 = chamadasDe('/coleta-revisao')[0];
+  eh(!!rev0 && rev0.url === '/coleta-revisao?data=' + HOJE, 'GET /coleta-revisao em hoje', rev0 && rev0.url);
+  nota(cardsNaTela().length + ' card(s) · contador: "' + contadorTxt() + '"');
+  eh(/^0 de \d+ conferidos$/.test(contadorTxt()), 'contador começa em 0', contadorTxt());
+
+  // ══════════════════════════════════════════════════════════════
+  h3('1. Trocar a data para 12/09');
+  CHAMADAS = [];
+  cmpSetData(ALVO);
+  await esperar(350);
+
+  var col = chamadasDe('/coletas')[0];
+  nota('GET /coletas  →  ' + (col && col.url));
+  eh(!!col && /[?&]dias=18(&|$)/.test(col.url),
+     'a janela do /coletas foi ancorada em 12/09 (15 + 3 dias atrás)', col && col.url, 'dias=18');
+  eh(!!col && /[?&]limit=\d{3,}/.test(col.url),
+     'e o limit subiu junto (500 daria ~4 dias e o dia 12 sairia vazio)', col && col.url);
+  var rev = chamadasDe('/coleta-revisao')[0];
+  eh(!!rev && rev.url === '/coleta-revisao?data=' + ALVO,
+     'GET /coleta-revisao com data=2026-09-12', rev && rev.url, '/coleta-revisao?data=' + ALVO);
+
+  eh(document.getElementById('cmp-data-retro').hidden === false, 'chip âmbar apareceu');
+  eh(document.getElementById('cmp-data-retro').textContent === '12/09/2026',
+     'e mostra a data escolhida', document.getElementById('cmp-data-retro').textContent);
+
+  // Os dados: nada DEPOIS de 12/09 pode ter sobrado.
+  var proprios = [], concs = [], noDia = 0;
+  Object.keys(G_COMPARACAO).forEach(function (k) {
+    var d = G_COMPARACAO[k];
+    if (d.proprio && d.proprio.dataISO) {
+      proprios.push(d.proprio.dataISO);
+      if (d.proprio.dataISO === ALVO) noDia++;
+    }
+    (d.concorrentes || []).forEach(function (c) {
+      if (c.registro && c.registro.dataISO) concs.push(c.registro.dataISO);
+    });
+  });
+  var maxP = proprios.sort().pop(), maxC = concs.sort().pop();
+  nota('próprios: ' + proprios.length + ' · concorrentes: ' + concs.length +
+       ' · data máxima própria ' + maxP + ' / concorrente ' + maxC);
+  eh(maxP <= ALVO, 'nenhuma coleta PRÓPRIA depois de 12/09 (fallback não pegou o futuro)', maxP, '<= ' + ALVO);
+  eh(maxC <= ALVO, 'nenhuma coleta de CONCORRENTE depois de 12/09', maxC, '<= ' + ALVO);
+  eh(noDia > 0, 'e há cards com coleta própria NO dia 12/09', noDia + ' posto(s)', '> 0');
+  eh(cardsNaTela().length > 0, 'a tela renderizou cards de 12/09', cardsNaTela().length + '', '> 0');
+
+  // ══════════════════════════════════════════════════════════════
+  h3('2. Clicar ✓ Conferir num card');
+  var btns = botoesConferir();
+  nota(btns.length + ' botão(ões) "✓ Conferir" nos cards');
+  eh(btns.length > 0, 'o botão aparece no cabeçalho dos cards (perfil ADM)', btns.length + '', '> 0');
+  var alvoBtn = btns[0];
+  var cardAlvo = alvoBtn.closest('.region-card');
+  var nomeAlvo = cardAlvo.querySelector('.region-nome').textContent.replace(/^\d+º\s*/, '').trim();
+  nota('card escolhido: ' + nomeAlvo);
+  eh(alvoBtn.textContent.trim() === '✓ Conferir', 'nasce como "✓ Conferir"', alvoBtn.textContent.trim());
+  eh(!alvoBtn.classList.contains('on'), 'e sem a classe .on');
+
+  CHAMADAS = [];
+  alvoBtn.click();
+  await esperar(250);
+
+  var post = chamadasDe('/coleta-revisao/conferir')[0];
+  eh(!!post && post.metodo === 'POST', 'saiu um POST /coleta-revisao/conferir', post && post.metodo);
+  nota('corpo: ' + JSON.stringify(post && post.corpo));
+  eh(!!post && post.corpo && post.corpo.posto_nome === nomeAlvo,
+     'payload.posto_nome = o nome do posto (mesmo campo do csConfirmar)',
+     post && post.corpo && post.corpo.posto_nome, nomeAlvo);
+  eh(!!post && post.corpo && post.corpo.data === ALVO,
+     'payload.data = a data ESCOLHIDA, não hoje', post && post.corpo && post.corpo.data, ALVO);
+  eh(!!post && post.corpo && Object.keys(post.corpo).sort().join(',') === 'data,posto_nome',
+     'e só esses dois campos, como o csConfirmar manda',
+     post && post.corpo && Object.keys(post.corpo).sort().join(','), 'data,posto_nome');
+
+  eh(alvoBtn.textContent.trim() === '✓ Conferido', 'o botão virou "✓ Conferido"', alvoBtn.textContent.trim());
+  eh(alvoBtn.classList.contains('on'), 'com a classe .on (verde)');
+  eh(alvoBtn.disabled === true, 'e sem clique');
+  eh(/^1 de \d+ conferidos$/.test(contadorTxt()), 'o contador subiu para 1', contadorTxt());
+
+  // ══════════════════════════════════════════════════════════════
+  h3('3. F5 — o conferido vem do GET, não da tela');
+  CHAMADAS = [];
+  await carregarDadosComparar();   // mesma coisa que recarregar a aba
+  await esperar(350);
+
+  var revRel = chamadasDe('/coleta-revisao')[0];
+  eh(!!revRel && revRel.url === '/coleta-revisao?data=' + ALVO,
+     'releu as revisões da mesma data', revRel && revRel.url);
+  var btnDepois = botoesConferir().filter(function (b) {
+    var c = b.closest('.region-card');
+    return c && c.querySelector('.region-nome').textContent.replace(/^\d+º\s*/, '').trim() === nomeAlvo;
+  })[0];
+  eh(!!btnDepois, 'o card do posto conferido voltou a renderizar');
+  eh(!!btnDepois && btnDepois.textContent.trim() === '✓ Conferido',
+     'e o botão JÁ nasceu "✓ Conferido"', btnDepois && btnDepois.textContent.trim());
+  eh(!!btnDepois && btnDepois.disabled === true, 'desabilitado, vindo do banco');
+  eh(/^1 de \d+ conferidos$/.test(contadorTxt()), 'contador continua 1 depois do reload', contadorTxt());
+
+  h3('4. O conferido é POR DIA — voltar para hoje zera a marca');
+  cmpSetData(HOJE);
+  await esperar(350);
+  eh(/^0 de \d+ conferidos$/.test(contadorTxt()),
+     'em hoje o contador volta a 0 (o ✓ foi gravado em 12/09)', contadorTxt());
+  eh(document.getElementById('cmp-data-retro').hidden === true, 'e o chip âmbar sumiu');
+  var aindaConferido = botoesConferir().filter(function (b) { return b.classList.contains('on'); }).length;
+  eh(aindaConferido === 0, 'nenhum card marcado em hoje', aindaConferido + '', '0');
+
+  // ══════════════════════════════════════════════════════════════
+  h3('5. Logística NÃO ganha o botão nem a data');
+  // Ela monta o card pelo MESMO cmpCardMatriz, com as opções dela.
+  var OPC_LOG = { fuel: 'GC', strat: 'avg', ord: '', abaixo: false, acima: false, soMudou: false };
+  var pk = Object.keys(G_COMPARACAO)[0];
+  var mp = MAP_POSTOS.filter(function (p) { return p.k === pk; })[0] || MAP_POSTOS[0];
+  var htmlLog = cmpCardMatriz(mp, G_COMPARACAO[mp.k] || { proprio: null, concorrentes: [] }, null, OPC_LOG);
+  eh(htmlLog.indexOf('cmp-conf') < 0, 'cmpCardMatriz com as opções da Logística não emite o botão',
+     htmlLog.indexOf('cmp-conf') < 0 ? 'sem cmp-conf' : 'EMITIU o botão');
+  var htmlAdm = cmpCardMatriz(mp, G_COMPARACAO[mp.k] || { proprio: null, concorrentes: [] }, null, cmpOpcoes());
+  eh(htmlAdm.indexOf('cmp-conf') >= 0, 'e com as do painel-adm emite (opt-in funcionando)');
+  // A Logística chama cmpAplicarRevisoes(comp) com UM argumento só.
+  CHAMADAS = [];
+  await cmpAplicarRevisoes({}, undefined);
+  var revLog = chamadasDe('/coleta-revisao')[0];
+  eh(!!revLog && revLog.url === '/coleta-revisao?data=' + HOJE,
+     'cmpAplicarRevisoes sem data continua em HOJE', revLog && revLog.url,
+     '/coleta-revisao?data=' + HOJE);
+
+  h3('6. Perfil sem ADM não vê o botão');
+  window.getUsuarioLogado = function () { return { id: 'x', nome: 'L', perfil: 'LOGISTICA' }; };
+  var htmlLogist = cmpCardMatriz(mp, G_COMPARACAO[mp.k] || { proprio: null, concorrentes: [] }, null, cmpOpcoes());
+  eh(htmlLogist.indexOf('cmp-conf') < 0, 'LOGISTICA não recebe o botão nem com conferir:true');
+  window.getUsuarioLogado = window.exigirSessao;
+}
+
+rodar().then(function () {
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">TUDO PASSOU</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — data/conferido';
+}).catch(function (e) {
+  linhas.push('\n<span class="bad">ERRO NO HARNESS: ' + hesc(e.message) + '</span>');
+  linhas.push(hesc(e.stack || ''));
+  pintar();
+  document.title = 'ERRO — data/conferido';
+});
+</script>

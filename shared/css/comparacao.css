@@ -86,6 +86,37 @@
 .cmpf-lb-nav.ant  { left: 8px; }
 .cmpf-lb-nav.prox { right: 8px; }
 
+/* ── "✓ Conferir" no cabeçalho do card ────────────────────────────
+   Mora aqui, e não em cada módulo, porque quem emite o botão é o
+   comparacao-card.js (cmpBtnConferir) — mesma regra do resto do arquivo.
+   O .region-hdr/.cmpc-hdr em volta continua em cada módulo, intocado.
+   A Logística carrega este CSS mas NUNCA renderiza o botão (não passa
+   opcoes.conferir), então aqui não vaza nada para lá. */
+.cmp-conf { flex: 0 0 auto; background: var(--sf2); border: 1px solid var(--bd);
+  border-radius: 6px; color: var(--tx2); font: 600 .66rem var(--mono);
+  padding: 2px 8px; cursor: pointer; white-space: nowrap; }
+.cmp-conf:hover:not(:disabled) { color: var(--tx); border-color: var(--ok); }
+/* Conferido: verde e sem clique. `disabled` some com o cursor de mão sozinho;
+   o opacity padrão do browser em botão desabilitado é sobrescrito de propósito
+   — aqui desabilitado quer dizer "pronto", não "indisponível". */
+.cmp-conf.on { background: transparent; border-color: var(--ok); color: var(--ok);
+  cursor: default; opacity: 1; }
+/* Direita do cabeçalho do card de mudanças: mantém a contagem de mudanças
+   colada no botão. Sem este wrapper o .cmpc-hdr (space-between) passaria a
+   ter 3 filhos e jogaria a contagem para o MEIO do cabeçalho. */
+.cmpc-hdr-dir { display: flex; align-items: baseline; gap: .4rem; }
+
+/* ── Seletor de data da Comparação ────────────────────────────────
+   Chip âmbar quando a data escolhida NÃO é hoje — mesmo sinal da aba
+   Coleta (cs-chip-data), pelo mesmo motivo: evita tirar conclusão de dia
+   passado achando que é o corrente. */
+.cmp-data-cel { display: flex; flex-direction: column; gap: .2rem; }
+.cmp-data-cel .cmp-data-linha { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
+.cmp-data-cel input[type="date"] { min-width: 0; }
+.cmp-conf-cont { font: .64rem var(--mono); color: var(--tx3); white-space: nowrap; }
+.cmp-data-retro { background: var(--wn); color: #0a0d0f; font: 700 .62rem var(--mono);
+  border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
+
 
 /* ════════════════════════════════════════════════════════════════
    LOGÍSTICA — seção "Comparação de preços" (#sl-comparacao).

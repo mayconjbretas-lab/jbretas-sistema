@@ -45,6 +45,10 @@
       abaixo:  !!o.abaixo,
       acima:   !!o.acima,
       soMudou: !!o.soMudou,
+      // Botão "✓ Conferir" no cabeçalho do card. OPT-IN, e falso por padrão,
+      // porque o mesmo cmpCardMatriz monta o card da Logística — que não tem
+      // (nem deve ter) a marcação de conferido. Só painel-adm e admin ligam.
+      conferir: !!o.conferir,
     };
   }
   // ── Constantes ────────────────────────────────────────────────
@@ -248,7 +252,7 @@ function cmpCardMatriz(posto, dado, pos, opcoes) {
   const sugRow = `<tr class="cmpm-row-sug"><th class="cmpm-rowlbl">Sugerido</th>${sugCells}</tr>`;
 
   return `<div class="region-card" id="cmp-card-${idk}">
-    <div class="region-hdr"><span class="region-nome">${posPrefix}${posto.ap}</span></div>
+    <div class="region-hdr"><span class="region-nome">${posPrefix}${posto.ap}</span>${op.conferir ? cmpBtnConferir(posto) : ''}</div>
     <div class="cmpm-wrap"><table class="cmpm-table">
       <thead>${thead}</thead>
       <tbody>${linhasHtml}${concVazio}${sugRow}</tbody>
@@ -276,20 +280,43 @@ function cmpHojeISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-  // Sobrepõe no "Você" os preços já revisados HOJE. Recebe o mapa da
+  // ── Conferido por posto (sentinela GERAL) ─────────────────────
+  // A aba Coleta marca o posto conferido gravando combustivel='GERAL' com
+  // status='conferido' em coleta_revisao (POST /coleta-revisao/conferir) e lê
+  // de volta a MESMA linha no GET. A Comparação passa a ler e escrever essa
+  // mesma linha — conferir num lugar aparece no outro, sem tabela nova.
+  //
+  // O conjunto é preenchido pelo cmpAplicarRevisoes (a leitura já existia;
+  // antes as linhas GERAL eram descartadas junto com todo preco_editado nulo).
+  let _cmpConferidos = new Set();   // chaves de posto (as mesmas do MAP_POSTOS .k)
+  let _cmpDataRev    = null;        // data da última leitura — é nela que o POST grava
+
+  // Sobrepõe no "Você" os preços já revisados NA DATA. Recebe o mapa da
   // comparação, MUTA e devolve — antes lia o G_COMPARACAO do app.js por
   // escopo global, o que prendia o módulo a um nome que só existe em dois
   // arquivos.
   //
+  // `data` (YYYY-MM-DD) é opcional: sem ela é hoje, como sempre foi — é o que
+  // mantém a Logística (que chama com um argumento só) no dia corrente.
+  //
   // Falha em silêncio de propósito (console.warn, sem throw): sem o overlay
   // a matriz ainda serve, mostrando o preço coletado cru. Foi assim que o
   // 403 da LOGISTICA passou despercebido até alguém comparar os números.
-async function cmpAplicarRevisoes(comparacao) {
+async function cmpAplicarRevisoes(comparacao, data) {
+  const dia = data || cmpHojeISO();
+  _cmpDataRev    = dia;
+  _cmpConferidos = new Set();
   try {
-    const resp = await apiFetch('/coleta-revisao?data=' + cmpHojeISO());
+    const resp = await apiFetch('/coleta-revisao?data=' + dia);
     (resp.linhas || []).forEach(l => {
-      if (l.preco_editado === null || l.preco_editado === undefined) return;
       const chave = normalizarNomePosto(l.posto_nome || '');
+      // Sentinela do posto: não tem preço, marca o posto inteiro. Sai antes do
+      // teste de preco_editado — é justamente por ser nulo que ela caía fora.
+      if (l.combustivel === 'GERAL') {
+        if (chave && l.status === 'conferido') _cmpConferidos.add(chave);
+        return;
+      }
+      if (l.preco_editado === null || l.preco_editado === undefined) return;
       const dado = comparacao[chave];
       if (!dado) return;
       if (!dado.proprio) dado.proprio = {};
@@ -299,6 +326,69 @@ async function cmpAplicarRevisoes(comparacao) {
     console.warn('Não foi possível aplicar revisões na matriz:', err && err.message);
   }
   return comparacao;
+}
+
+  // Só ADM. O guard de verdade é o da rota (server.js recusa 403 para os
+  // demais); esconder aqui evita oferecer um botão que sempre daria erro.
+function cmpPodeConferir() {
+  const u = (typeof getUsuarioLogado === 'function') ? getUsuarioLogado() : null;
+  return !!(u && u.perfil === 'ADM');
+}
+function cmpEhConferido(k) { return _cmpConferidos.has(k); }
+function cmpQtdConferidos() { return _cmpConferidos.size; }
+
+  // Botão do cabeçalho do card. String vazia quando não se aplica — quem
+  // chama concatena sem condicional, e a Logística (que não passa
+  // opcoes.conferir) recebe '' e segue com o cabeçalho de hoje.
+function cmpBtnConferir(posto) {
+  if (!posto || !cmpPodeConferir()) return '';
+  if (cmpEhConferido(posto.k)) {
+    return '<button type="button" class="cmp-conf on" disabled ' +
+      'title="Posto conferido — marcado nesta tela ou na aba Coleta">✓ Conferido</button>';
+  }
+  return '<button type="button" class="cmp-conf" onclick="cmpConferir(this,&#39;' +
+    at(posto.k) + '&#39;,&#39;' + at(posto.ap) + '&#39;)" ' +
+    'title="Marcar como conferido (sem alteração)">✓ Conferir</button>';
+}
+
+  // MESMO payload do csConfirmar da aba Coleta (coleta-revisao.js:784):
+  // { posto_nome, data }. posto_nome é o .ap do MAP_POSTOS — é o que a Coleta
+  // manda (lá o campo se chama posto.nome, preenchido com mp.ap) e o backend
+  // resolve nome->id. A data é a da LEITURA, não hoje: conferindo um dia
+  // passado a marca tem de cair naquele dia, senão o F5 não a traz de volta.
+async function cmpConferir(btn, k, nome) {
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  const antes = btn.textContent;
+  btn.textContent = '…';
+  try {
+    await apiFetch('/coleta-revisao/conferir', {
+      method: 'POST',
+      body: JSON.stringify({ posto_nome: nome, data: _cmpDataRev || cmpHojeISO() }),
+    });
+  } catch (err) {
+    // Volta o botão ao estado clicável: sem isto um erro de rede deixaria o
+    // posto travado em '…' até recarregar, parecendo conferido.
+    btn.disabled = false;
+    btn.textContent = antes;
+    alert('Erro ao marcar conferido: ' + (err && err.message ? err.message : 'tente de novo'));
+    return;
+  }
+  _cmpConferidos.add(k);
+  btn.classList.add('on');
+  btn.textContent = '✓ Conferido';
+  btn.title = 'Posto conferido — marcado nesta tela ou na aba Coleta';
+  cmpPintarContador();
+}
+
+  // Contador "N de 37 conferidos". Mesmo id nos dois painéis, então a
+  // atualização mora aqui e nenhum app.js precisa de um hook próprio.
+  // Silencioso quando o elemento não existe (Logística não tem contador).
+function cmpPintarContador() {
+  const el = document.getElementById('cmp-conf-contador');
+  if (!el) return;
+  const tot = (typeof MAP_POSTOS !== 'undefined') ? MAP_POSTOS.length : 0;
+  el.textContent = cmpQtdConferidos() + ' de ' + tot + ' conferidos';
 }
 
   // Grava a revisão do preço próprio. Devolve true/false; o alert fica aqui
@@ -613,4 +703,10 @@ function cmpFlashCheck(k, f) {
   window.cmpAbrirFoto          = cmpAbrirFoto;
   window.cmpFecharFoto         = cmpFecharFoto;
   window.cmpNavFoto            = cmpNavFoto;
+  window.cmpBtnConferir        = cmpBtnConferir;
+  window.cmpConferir           = cmpConferir;
+  window.cmpPodeConferir       = cmpPodeConferir;
+  window.cmpEhConferido        = cmpEhConferido;
+  window.cmpQtdConferidos      = cmpQtdConferidos;
+  window.cmpPintarContador     = cmpPintarContador;
 })();

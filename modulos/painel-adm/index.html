@@ -140,6 +140,16 @@
                   <label class="filtro-lbl">Rede</label>
                   <select class="sel" id="cmp-rede" onchange="cmpSetRede(this.value)"><option value="">Todas redes</option></select>
                 </div>
+                <!-- 5ª célula da MESMA grade: os quatro filtros acima não saem
+                     do lugar (3 colunas, eles já ocupavam 2 linhas). -->
+                <div class="cmp-data-cel">
+                  <label class="filtro-lbl">Data</label>
+                  <div class="cmp-data-linha">
+                    <input type="date" class="sel" id="cmp-data" onchange="cmpSetData(this.value)">
+                    <span class="cmp-data-retro" id="cmp-data-retro" hidden></span>
+                  </div>
+                  <span class="cmp-conf-cont" id="cmp-conf-contador"></span>
+                </div>
               </div>
               <label style="display:flex;align-items:center;gap:.4rem;font-size:.76rem;color:var(--text2);margin:.35rem 0">
                 <input type="checkbox" id="cmp-so-mudou" onchange="cmpToggleSoMudou(this)"> Só quem mudou desde ontem

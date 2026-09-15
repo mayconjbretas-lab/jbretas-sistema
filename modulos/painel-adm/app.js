@@ -251,6 +251,11 @@ let G_CMP_SO_MUDOU = false;
 let G_CMP_ABAIXO = false; // chip "abaixo do nosso" (independente do "acima")
 let G_CMP_ACIMA  = false; // chip "acima do nosso"  (independente do "abaixo")
 let G_CMP_ORD = ''; // '' = alfabético | 'barato' = preço Você asc | 'caro' = desc
+// Data da Comparação (YYYY-MM-DD). '' = hoje, que é o estado de sempre: nada
+// muda até alguém mexer no seletor. Vazia (e não a data de hoje) de propósito
+// — é o '' que faz buscarComparacaoDoDia e cmpAplicarRevisoes seguirem pelo
+// caminho antigo, sem alargar janela nem limite do GET /coletas.
+let G_CMP_DATA = '';
 
 // Estado dos filtros no formato que o shared/js/comparacao-card.js espera.
 // Montado na hora da chamada, não guardado: estes let mudam a cada clique
@@ -263,18 +268,48 @@ function cmpOpcoes() {
     abaixo:  G_CMP_ABAIXO,
     acima:   G_CMP_ACIMA,
     soMudou: G_CMP_SO_MUDOU,
+    // Liga o "✓ Conferir" no cabeçalho do card. A Logística monta o card pelo
+    // MESMO cmpCardMatriz e não passa esta chave — por isso ela é opt-in.
+    conferir: true,
   };
+}
+
+// Troca a data da Comparação e recarrega. Valor vazio ou fora do formato volta
+// para hoje — é o que o próprio <input type="date"> devolve quando limpam o
+// campo, e cair em hoje é melhor que ficar numa data meio preenchida.
+function cmpSetData(v) {
+  const iso = String(v || '').slice(0, 10);
+  G_CMP_DATA = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : '';
+  carregarDadosComparar();
+}
+
+// Chip âmbar com a data quando NÃO é hoje — mesmo sinal da aba Coleta, pelo
+// mesmo motivo: evita ler dia passado achando que é o corrente.
+function cmpPintarDataRetro() {
+  const hoje = (typeof hojeISOLocal === 'function') ? hojeISOLocal() : '';
+  const inp = document.getElementById('cmp-data');
+  if (inp) { inp.max = hoje; inp.value = G_CMP_DATA || hoje; }
+  const chip = document.getElementById('cmp-data-retro');
+  if (!chip) return;
+  const retro = !!G_CMP_DATA && G_CMP_DATA !== hoje;
+  chip.hidden = !retro;
+  if (retro) chip.textContent = isoParaBRData(G_CMP_DATA);
 }
 
 async function carregarDadosComparar() {
   document.getElementById('upd-txt').textContent = 'Buscando dados...';
   try {
-    G_COMPARACAO = await buscarComparacaoDoDia({ dias: 15 });
-    await cmpAplicarRevisoes(G_COMPARACAO); // sobrepõe os preços editados de hoje no "Você"
+    const dia = G_CMP_DATA || null;
+    G_COMPARACAO = await buscarComparacaoDoDia({ dias: 15, data: dia });
+    await cmpAplicarRevisoes(G_COMPARACAO, dia); // sobrepõe os preços editados do dia no "Você"
     comparaCarregado = true;
     if (!document.getElementById('cmp-posto').dataset.populado) popularFiltrosComparar();
     processarKPIsComparar();
     renderComparar();
+    // Depois do render: o contador conta o que a leitura trouxe, e os botões
+    // dos cards já nasceram do mesmo _cmpConferidos.
+    cmpPintarDataRetro();
+    cmpPintarContador();
     const agora = new Date();
     document.getElementById('upd-txt').textContent =
       `Atualizado às ${String(agora.getHours()).padStart(2,'0')}:${String(agora.getMinutes()).padStart(2,'0')} · próxima em 5min`;
@@ -671,7 +706,12 @@ function cmpCardMudancas(posto, dado) {
   const html = `<div class="region-card cmpc-card" id="cmp-card-${idSafe(posto.k)}">
     <div class="cmpc-hdr">
       <span class="region-nome cmpc-posto">${posto.ap}</span>
-      <span class="cmpc-count">${mudancas} mudança${mudancas === 1 ? '' : 's'}</span>
+      <!-- Contagem e botão num wrapper só: o .cmpc-hdr é space-between, e um
+           TERCEIRO filho solto empurraria a contagem para o meio. -->
+      <span class="cmpc-hdr-dir">
+        <span class="cmpc-count">${mudancas} mudança${mudancas === 1 ? '' : 's'}</span>
+        ${cmpBtnConferir(posto)}
+      </span>
     </div>
     <div class="cmpc-wrap">${voceTable}</div>
     <div class="cmpc-wrap"><table class="cmpc-table">

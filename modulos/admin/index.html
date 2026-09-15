@@ -128,6 +128,16 @@
                 <option value="">Todas redes</option>
               </select>
             </div>
+            <!-- 5ª célula da MESMA grade: os quatro filtros acima não saem do
+                 lugar (2 colunas, eles já ocupavam 2 linhas cheias). -->
+            <div class="cmp-data-cel">
+              <label class="filtro-lbl">Data</label>
+              <div class="cmp-data-linha">
+                <input type="date" class="sel" id="cmp-data" style="margin-bottom:0" onchange="cmpSetData(this.value)">
+                <span class="cmp-data-retro" id="cmp-data-retro" hidden></span>
+              </div>
+              <span class="cmp-conf-cont" id="cmp-conf-contador"></span>
+            </div>
           </div>
           <label style="display:flex;align-items:center;gap:.4rem;font-size:.74rem;color:var(--tx2);margin:.45rem 0">
             <input type="checkbox" id="cmp-so-mudou" onchange="cmpToggleSoMudou(this)"> Só quem mudou desde ontem
