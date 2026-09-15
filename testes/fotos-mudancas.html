@@ -1,0 +1,224 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparação — fotos no card de mudanças</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  :root {
+    --ac: var(--accent); --ac2: var(--accent2); --acd: var(--accent-dim);
+    --dg: var(--danger); --wn: var(--warning); --inf: var(--info);
+    --tx: var(--text); --tx2: var(--text2); --tx3: var(--text3);
+    --sf: var(--surface); --sf2: var(--surface2); --sf3: var(--surface3);
+    --bd: var(--border); --bd2: var(--border2);
+    --r: var(--radius); --rl: var(--radius-lg);
+  }
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+<link rel="stylesheet" href="/shared/css/comparacao.css">
+
+<div id="res">rodando…</div>
+<!-- A #s-comp REAL do index.html é injetada aqui (ver montarPalco). Copiar os
+     ids à mão foi a primeira tentativa e quebrou: o renderComparar toca em
+     mais elementos do que os quatro óbvios, e um palco incompleto reprova a
+     implementação por falta de <div>, não por defeito. -->
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// Com o filtro "Só quem mudou desde ontem" LIGADO, o card de mudanças ganha a
+// faixa de fotos DENTRO do próprio .region-card — a própria e as dos
+// concorrentes —, do mesmo jeito que o card da matriz já tinha.
+//
+// O G_COMPARACAO é montado pelo CÓDIGO DE PRODUÇÃO (buscarComparacaoDoDia +
+// cmpAplicarRevisoes) sobre a resposta REAL do GET /coletas: 500 registros de
+// 12 a 15/09/2026, capturados do banco. Um objeto montado à mão provaria que o
+// harness sabe montar objeto, não que a tela funciona.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+// ── dublês ───────────────────────────────────────────────────────
+window.exigirSessao = function () { return { id: 'h', nome: 'H', perfil: 'ADM', ti: true }; };
+window.getUsuarioLogado = window.exigirSessao;
+window.aplicarTema = function () {};
+window.caminhoRaiz = function () { return '/'; };
+window.abrirPainelDesktop = function () {};
+window.renderCustoMargem = function () {};
+window.renderKpi = function () {};
+window.renderColetaRevisao = function () {};
+window.renderMedicao = function () {};
+window.renderDre = function () {};
+window.renderMovMes = function () {};
+window.renderMovPostos = function () {};
+window.renderMercado = function () {};
+window.renderRelatorios = function () {};
+
+var FIX = null;
+window.apiFetch = function (url) {
+  if (String(url).indexOf('/coletas') === 0) return Promise.resolve(FIX.coletas);
+  if (String(url).indexOf('/postos') === 0) return Promise.resolve(FIX.postos);
+  // As revisões de preço de hoje: vazio, para o "Você" ficar o do arquivo.
+  return Promise.resolve({ success: true, revisoes: [], solicitacoes: [], concorrentes: [] });
+};
+try { localStorage.setItem('jb_versao_painel', 'desktop'); } catch (e) {}
+
+function js(src) {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { erro(new Error(src + ' não carregou')); };
+    document.body.appendChild(s);
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+async function rodar() {
+  FIX = await new Promise(function (ok, erro) {
+    var x = new XMLHttpRequest();
+    x.open('GET', '/testes/fixtures-coletas.json');
+    x.onload = function () { try { ok(JSON.parse(x.responseText)); } catch (e) { erro(e); } };
+    x.onerror = function () { erro(new Error('fixture não carregou')); };
+    x.send();
+  });
+  nota('fixture: ' + (FIX.coletas.registros || []).length + ' registros de /coletas · ' +
+       ((FIX.postos.postos || []).length) + ' postos');
+
+  // A seção real, do index.html de produção.
+  var doc = new DOMParser().parseFromString(
+    await new Promise(function (ok, er) {
+      var x = new XMLHttpRequest();
+      x.open('GET', '/modulos/painel-adm/index.html');
+      x.onload = function () { ok(x.responseText); };
+      x.onerror = function () { er(new Error('index.html não carregou')); };
+      x.send();
+    }), 'text/html');
+  var sc = doc.getElementById('s-comp');
+  if (!sc) throw new Error('não achei #s-comp no index.html');
+  sc.classList.add('active');
+  document.getElementById('palco').appendChild(document.importNode(sc, true));
+
+  await js('/shared/js/postos-mapa.js');
+  await js('/shared/js/coletas-service.js');
+  await js('/shared/js/comparacao-card.js');
+  await js('/modulos/painel-adm/app.js');
+  await esperar(80);
+
+  // O G_COMPARACAO é montado pelo código de produção.
+  await carregarDadosComparar();
+  await esperar(200);
+  var chaves = Object.keys(G_COMPARACAO || {});
+  nota('G_COMPARACAO: ' + chaves.length + ' posto(s)');
+  eh(chaves.length > 0, 'o G_COMPARACAO foi montado', chaves.length + ' postos', '> 0');
+
+  h3('1. Filtro desligado: os cards da matriz já tinham fotos');
+  var comFotoMatriz = document.querySelectorAll('#cmp-regions .region-card .cmpf-fotos').length;
+  var cardsMatriz = document.querySelectorAll('#cmp-regions .region-card').length;
+  nota(cardsMatriz + ' card(s) · ' + comFotoMatriz + ' com faixa de fotos');
+  eh(comFotoMatriz > 0, 'faixa de fotos DENTRO do .region-card (comportamento que já existia)',
+     comFotoMatriz + ' de ' + cardsMatriz, '> 0');
+
+  h3('2. Filtro "Só quem mudou desde ontem" LIGADO');
+  cmpToggleSoMudou({ checked: true });
+  await esperar(200);
+  var cards = [...document.querySelectorAll('#cmp-regions .region-card')];
+  nota(cards.length + ' card(s) de mudança');
+  eh(cards.length > 0, 'há card de mudança para conferir', cards.length + '', '> 0');
+  // Quais postos entraram — dito, não suposto.
+  var nomes = cards.map(function (c) {
+    var t = c.querySelector('.region-title, .cmpc-nome, h3, h4, b');
+    return t ? t.textContent.replace(/\s+/g, ' ').trim().slice(0, 30) : c.id;
+  });
+  nota('postos com mudança: ' + nomes.join(' · '));
+
+  // TODO card de mudança tem de ter a faixa, não só o do ARAPONGA.
+  var semFaixa = cards.filter(function (c) { return !c.querySelector('.cmpf-fotos'); });
+  eh(semFaixa.length === 0, 'TODOS os cards de mudança têm .cmpf-fotos',
+     (cards.length - semFaixa.length) + ' de ' + cards.length, cards.length + ' de ' + cards.length);
+  // E a faixa está DENTRO do card, não solta entre cards.
+  var soltas = [...document.querySelectorAll('#cmp-regions > .cmpf-fotos')];
+  eh(soltas.length === 0, 'nenhuma faixa solta fora de um .region-card',
+     soltas.length + '', '0');
+
+  h3('3. P. ARAPONGA');
+  var arap = cards.filter(function (c) { return /ARAPONGA/i.test(c.textContent); })[0];
+  if (!arap) {
+    // O card só existe se o posto mudou de preço desde ontem — é dado, não
+    // código. Dizer isso é melhor que reprovar a implementação por causa do
+    // movimento do dia.
+    linhas.push('<span class="bad">SEM CARD</span> o P. ARAPONGA não teve mudança nesta coleta ' +
+      '(12–15/09) — a asserção específica dele não pôde ser feita. As dos outros cards valem.');
+    falhas++;
+  } else {
+    var faixa = arap.querySelector('.cmpf-fotos');
+    eh(!!faixa, 'tem .cmpf-fotos');
+    eh(!!faixa && !faixa.classList.contains('cmpf-vazia'),
+       'e não é a faixa vazia ("Sem fotos nesta coleta")',
+       faixa ? faixa.className : '(nenhuma)', 'cmpf-fotos');
+    var meu = faixa ? faixa.querySelectorAll('figure.meu') : [];
+    var conc = faixa ? faixa.querySelectorAll('figure.conc') : [];
+    nota('figuras: ' + meu.length + ' própria(s) + ' + conc.length + ' concorrente(s)');
+    eh(meu.length === 1, 'a foto PRÓPRIA está lá', meu.length + '', '1');
+    eh(conc.length > 0, 'e as dos CONCORRENTES', conc.length + '', '> 0');
+    // A faixa é filha do card, e o card é o de mudanças (.cmpc-card).
+    eh(faixa && faixa.closest('.region-card') === arap, 'a faixa está DENTRO do card do ARAPONGA');
+    eh(arap.classList.contains('cmpc-card'), 'e o card é o de MUDANÇAS (.cmpc-card)',
+       arap.className, 'contém cmpc-card');
+    // O último elemento do card é a faixa: entrou antes do </div> final.
+    nota('último filho do card: .' + (arap.lastElementChild ? arap.lastElementChild.className : '?'));
+    // As imagens têm src assinado e onclick do lightbox.
+    var img = faixa ? faixa.querySelector('img') : null;
+    eh(!!img && /^https?:/.test(img.getAttribute('src')), 'a imagem tem src http(s)',
+       img ? String(img.getAttribute('src')).slice(0, 48) + '…' : '(nenhuma)');
+    eh(!!img && String(img.getAttribute('onclick')).indexOf('cmpAbrirFoto') >= 0,
+       'e o onclick do lightbox', img ? img.getAttribute('onclick').slice(0, 30) + '…' : '');
+  }
+
+  h3('4. Larguras intocadas');
+  // A faixa não pode alargar o card: ela é filha dele e o card manda.
+  var todos = [...document.querySelectorAll('#cmp-regions .region-card')];
+  var larguras = {};
+  todos.forEach(function (c) { var w = Math.round(c.getBoundingClientRect().width); larguras[w] = (larguras[w] || 0) + 1; });
+  nota('larguras dos cards: ' + JSON.stringify(larguras));
+  eh(Object.keys(larguras).length === 1, 'todos os cards com a MESMA largura',
+     Object.keys(larguras).join(', ') + 'px', 'uma só');
+  var fx = document.querySelector('#cmp-regions .region-card .cmpf-fotos');
+  if (fx) {
+    var card = fx.closest('.region-card');
+    var lc = Math.round(card.getBoundingClientRect().width);
+    var lf = Math.round(fx.getBoundingClientRect().width);
+    nota('card ' + lc + 'px · faixa ' + lf + 'px');
+    eh(lf <= lc, 'a faixa não é mais larga que o card', lf + 'px', '<= ' + lc + 'px');
+  }
+
+  h3(falhas === 0 ? '<span class="ok">TUDO PASSOU</span>'
+                  : '<span class="bad">' + falhas + ' FALHA(S)</span>');
+  pintar();
+}
+
+rodar().catch(function (e) {
+  linhas.push('<span class="bad">ERRO: ' + hesc(e.message) + '</span>');
+  linhas.push(hesc(String(e.stack || '').split('\n').slice(0, 8).join('\n')));
+  pintar();
+});
+</script>

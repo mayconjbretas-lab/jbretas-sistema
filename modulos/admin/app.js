@@ -958,7 +958,14 @@ function renderComparar() {
       totMudancas += r.mudancas; totOmitidas += r.omitidas;   // omitidas conta mesmo se o card sumir
       if (!r.html) return;
       posOrd += 1;
-      cardsHtml += r.html;
+      // Faixa de fotos DENTRO do mesmo .region-card, igual ao ramo da matriz
+      // logo abaixo: o cmpCardMudancas devolve o card já fechado, então a
+      // faixa entra antes do último </div>. Concatenar depois a deixaria
+      // solta entre dois cards, com a largura do contêiner e não a do card.
+      const corteMud = r.html.lastIndexOf('</div>');
+      cardsHtml += (corteMud < 0)
+        ? r.html + cmpFotosHtml(posto, dado)
+        : r.html.slice(0, corteMud) + cmpFotosHtml(posto, dado) + r.html.slice(corteMud);
     } else {
       // Filtro desligado: comportamento atual, intacto.
       if (!cmpPostoPassaFiltros(dado)) return;
