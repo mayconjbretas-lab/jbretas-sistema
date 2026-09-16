@@ -43,6 +43,8 @@
 // 11. O layout: wrap com teto de 1400px e centrado, linhas que param nele,
 //     padding de 10px nas linhas (14 embaixo na REDE), gaps de 12 e 16, e o
 //     detalhe indentado 20px. A seção segue display:block.
+// 12. Os vãos VERTICAIS entre os três blocos, medidos em pixels de tela:
+//     20px dos filtros aos cards, 20px dos cards ao cabeçalho da lista.
 // ════════════════════════════════════════════════════════════════
 var linhas = [], falhas = 0;
 function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
@@ -98,6 +100,16 @@ function colsDe(sel) {
   var m = /^repeat\((\d+),\s*([\d.]+px)\)$/.exec(v);
   if (m) { var o = []; for (var i = 0; i < Number(m[1]); i++) o.push(m[2]); return o; }
   return v.split(/\s+/);
+}
+// VÃO REAL entre dois blocos: o topo do de baixo menos a base do de cima.
+// É o que se mede aqui, e não o valor declarado de gap/margin — foi
+// exatamente essa a falha que deixou passar um `gap:16px` no .ap-wrap que
+// não separava nada (o wrap tem um filho só, o #ap-corpo). Valor declarado
+// prova que o CSS foi escrito; vão prova que ele produziu espaço.
+function vao(a, b) {
+  var ea = document.querySelector('#palco ' + a), eb = document.querySelector('#palco ' + b);
+  if (!ea || !eb) return null;
+  return Math.round(eb.getBoundingClientRect().top - ea.getBoundingClientRect().bottom);
 }
 function chip(t) {
   return [].slice.call(document.querySelectorAll('#palco .ap-chip'))
@@ -436,7 +448,26 @@ async function rodar() {
      'margens laterais iguais (margin:0 auto centrando)', cw.marginLeft + ' / ' + cw.marginRight);
   eh(getComputedStyle(sec).display === 'block', 'a seção segue display:block (não flex)',
      getComputedStyle(sec).display, 'block');
-  eh(cw.rowGap === '16px', 'gap de 16px entre filtros, cards e lista', cw.rowGap, '16px');
+  // O .ap-wrap tem UM filho (o #ap-corpo); barra, cards e lista são filhos
+  // dele. Gap no wrap não separa os três — por isso a medição é de vão.
+  eh([].slice.call(wrap.children).length === 1, 'o wrap tem um filho só (o #ap-corpo)',
+     [].slice.call(wrap.children).map(function (c) { return c.id || c.className; }).join(' '), '#ap-corpo');
+  nota('vãos medidos: barra→cards ' + vao('.ap-barra', '.ap-cards') + 'px · ' +
+       'cards→cabeçalho ' + vao('.ap-cards', '.ap-cab') + 'px · ' +
+       'cabeçalho→REDE ' + vao('.ap-cab', '.ap-rede') + 'px');
+  eh(vao('.ap-barra', '.ap-cards') === 20, 'vão de 20px entre os filtros e os cards',
+     vao('.ap-barra', '.ap-cards') + 'px', '20px');
+  eh(vao('.ap-cards', '.ap-cab') === 20, 'vão de 20px entre os cards e o cabeçalho da lista',
+     vao('.ap-cards', '.ap-cab') + 'px', '20px');
+  eh(getComputedStyle(document.querySelector('#palco .ap-rede')).paddingTop === '8px',
+     'REDE com padding-top de 8px',
+     getComputedStyle(document.querySelector('#palco .ap-rede')).paddingTop, '8px');
+  // O padding-top de 8 substitui os 10px da regra compartilhada, então o vão
+  // do cabeçalho até o TEXTO da REDE encolheu de 15px para 13px. Medido e
+  // registrado aqui de propósito: se a intenção era 8px A MAIS, o número no
+  // CSS é 18px e esta linha é que acusa.
+  var cabPb = parseFloat(getComputedStyle(document.querySelector('#palco .ap-cab')).paddingBottom);
+  nota('cabeçalho→texto da REDE: ' + (cabPb + 8) + 'px (era ' + (cabPb + 10) + 'px)');
   // O teto morde de verdade: numa janela mais larga que 1400 o wrap para nele
   // e sobra faixa vazia dos dois lados.
   var larguraPalco = document.getElementById('palco').clientWidth;

@@ -115,11 +115,17 @@
       // de cada linha atravessava a tela inteira e deixava os números
       // ilhados à esquerda de um metro de vazio. Com o teto, a faixa branca
       // fica nas DUAS laterais e a lista para onde o conteúdo para.
-      // O gap de 16px vale para os três blocos do wrap — barra de filtros,
-      // cards e lista —, que é o respiro pedido entre eles.
-      '.ap-wrap{display:flex;flex-direction:column;gap:16px;max-width:1400px;margin:0 auto}' +
+      // SEM GAP AQUI, e a razão importa: o .ap-wrap tem UM filho só, o
+      // #ap-corpo. Barra, cards e lista são filhos DELE, não do wrap, então um
+      // gap no wrap não separa nada — media 0px entre a barra e os cards com
+      // `gap:16px` declarado. O espaçamento dos três blocos vive nas margens
+      // de cada um, logo abaixo, e é lá que se mexe.
+      '.ap-wrap{display:flex;flex-direction:column;max-width:1400px;margin:0 auto}' +
       // Barra de controles: sub-canal, datas, atalhos e chips.
-      '.ap-barra{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem}' +
+      // 20px até os cards. O gap interno de .5rem continua sendo o espaço
+      // ENTRE os controles da barra; o margin-bottom é o que a separa do
+      // bloco de baixo.
+      '.ap-barra{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:20px}' +
       '.ap-cbtn{flex:0 0 auto;border:1px solid var(--bd);border-radius:8px;padding:.35rem .9rem;' +
         'font:700 .74rem var(--mono);letter-spacing:.04em;cursor:pointer;background:var(--sf2);color:var(--tx2)}' +
       '.ap-cbtn.on{border-color:transparent}' +
@@ -148,7 +154,7 @@
       // Movimentação), só o espaço entre eles aumentou. Ver o mobile abaixo:
       // o calc() de "dois por linha" desconta METADE deste gap, e os dois
       // números têm de andar juntos.
-      '.ap-cards{display:flex;flex-wrap:wrap;justify-content:flex-start;gap:12px}' +
+      '.ap-cards{display:flex;flex-wrap:wrap;justify-content:flex-start;gap:12px;margin-bottom:20px}' +
       '.ap-card{flex:0 0 auto;box-sizing:border-box;width:150px;height:96px;display:flex;' +
         'flex-direction:column;justify-content:center;gap:2px;padding:.5rem .6rem;text-align:left;' +
         'background:var(--sf2);border:1px solid var(--bd);border-radius:10px;cursor:pointer;' +
@@ -161,7 +167,10 @@
       // LISTA — SETE colunas fixas de 150px, gap 8: 7×150 + 6×8 = 1098px.
       // NADA DE 1fr, mesma razão da Movimentação: com fração a lista espalha
       // os números até a borda do monitor, longe do nome do posto.
-      '.ap-lista{display:flex;flex-direction:column;margin-top:.2rem}' +
+      // margin-top ZERO: os .2rem que havia aqui somavam 3,2px aos 20px do
+      // margin-bottom dos cards e o vão media 23,2px. Quem manda no
+      // espaçamento é o bloco de cima, um lugar só.
+      '.ap-lista{display:flex;flex-direction:column;margin-top:0}' +
       // 10px em cima e embaixo (era 7): a lista tem 30+ linhas de números
       // monoespaçados, e o respiro é o que separa uma leitura de linha da
       // vizinha sem precisar de zebra.
@@ -175,7 +184,12 @@
       // 4px a mais embaixo que as linhas de posto. A borda de 2px já separa;
       // o respiro extra é o que faz a REDE ler como cabeçalho de totais em
       // vez de como o primeiro posto da lista.
-      '.ap-rede{border-bottom:2px solid var(--bd);font-weight:700;padding-bottom:14px}' +
+      // padding-top de 8px, como pedido. ATENÇÃO AO NÚMERO: a regra
+      // compartilhada acima dá 10px a todas as linhas, então isto ENCOLHE o
+      // topo da REDE de 10 para 8 — o vão entre o cabeçalho e ela sai de 15px
+      // (5 do cabeçalho + 10) para 13px. Se a intenção era 8px A MAIS, o
+      // número aqui é 18px.
+      '.ap-rede{border-bottom:2px solid var(--bd);font-weight:700;padding-top:8px;padding-bottom:14px}' +
       '.ap-rede span{font:700 .74rem var(--mono)}' +
       '.ap-nome{font-size:.78rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       // Numéricas à direita, como na Movimentação.
