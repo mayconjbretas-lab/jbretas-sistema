@@ -1,0 +1,2296 @@
+{
+ "postos": {
+  "success": true,
+  "postos": [
+   {
+    "id": "f24b7fcc-3e17-43a6-956e-f69468603c49",
+    "nome": "P. ALEX",
+    "cnpj": "17176561000149"
+   },
+   {
+    "id": "3488cdf8-1d87-4ba3-902e-baffa854e1d1",
+    "nome": "P. ANA LUCIA",
+    "cnpj": "21901350000107"
+   },
+   {
+    "id": "937bec35-50a5-4707-94d3-bd09be256d26",
+    "nome": "P. ARAPONGA",
+    "cnpj": "20093167000151"
+   },
+   {
+    "id": "eb06b557-8611-48f4-a959-cb3e9dafb032",
+    "nome": "P. AVIVA",
+    "cnpj": "31737181000167"
+   },
+   {
+    "id": "94e2284e-cdb8-443a-a4ae-220b06696be8",
+    "nome": "P. BAHAMAS",
+    "cnpj": "17438508000179"
+   },
+   {
+    "id": "08f892ef-2534-40a1-966e-d2ec2e2ac515",
+    "nome": "P. BEATRIZ",
+    "cnpj": "07304262000199"
+   },
+   {
+    "id": "b55eacd7-f0d5-4f72-821a-12136fe02cd0",
+    "nome": "P. BERNARDO",
+    "cnpj": "60592275000193"
+   },
+   {
+    "id": "7021e917-66d7-473c-989a-cfe5815e5086",
+    "nome": "P. BIANCA",
+    "cnpj": "26751499000162"
+   },
+   {
+    "id": "2c984381-2097-41bc-bdf8-4ac7f2904d4f",
+    "nome": "P. BOMBOM FILIAL",
+    "cnpj": "19902337000384"
+   },
+   {
+    "id": "ca05768f-37eb-48a5-928f-68e6a82a6abe",
+    "nome": "P. BOMBOM MATRIZ",
+    "cnpj": "19902337000112"
+   },
+   {
+    "id": "313ce861-36c0-4ea4-afb8-9553a9fe63c6",
+    "nome": "P. BRUNA",
+    "cnpj": "00247861000179"
+   },
+   {
+    "id": "6d1f9416-ae4d-4385-9bd6-38f8c17ea94e",
+    "nome": "P. DIFERENCIAL",
+    "cnpj": "25362955000110"
+   },
+   {
+    "id": "3ff49ecb-08ee-4982-bb5b-ad2ff9330171",
+    "nome": "P. DUDU",
+    "cnpj": "17160094000169"
+   },
+   {
+    "id": "b68a1d67-cf61-483c-aef4-beba1ee05957",
+    "nome": "P. ESPAÇO REAL",
+    "cnpj": "12252711000132"
+   },
+   {
+    "id": "b411fa91-85bb-481a-9dfe-9c4531b03823",
+    "nome": "P. FELIPAO",
+    "cnpj": "13300002000148"
+   },
+   {
+    "id": "c9c4c58a-6d2d-4f8b-9d64-9fca7dd06dba",
+    "nome": "P. GLORIA",
+    "cnpj": "16682296000108"
+   },
+   {
+    "id": "634d3cb4-d6dc-4d6b-8c72-ec0a09b6d281",
+    "nome": "P. ITAPOA",
+    "cnpj": "17488693000106"
+   },
+   {
+    "id": "1a3b8dc8-874b-4931-a8a5-cb41e058e55d",
+    "nome": "P. JA",
+    "cnpj": "18699439000209"
+   },
+   {
+    "id": "eaf5f137-3f91-4d55-8409-21dff2d9623e",
+    "nome": "P. JOCA",
+    "cnpj": "21648605000163"
+   },
+   {
+    "id": "0e9e9f48-b108-4f38-b7db-49f55fdb44a0",
+    "nome": "P. LEANDRO",
+    "cnpj": "42318106000188"
+   },
+   {
+    "id": "100a8539-1f94-4fbc-8935-76855f1bad5d",
+    "nome": "P. LOURA EMPREENDIMENTOS",
+    "cnpj": "42814020000146"
+   },
+   {
+    "id": "62155149-2f31-4b67-b73e-0b96a8ab5722",
+    "nome": "P. MANGABEIRAS",
+    "cnpj": "42969048000152"
+   },
+   {
+    "id": "e9d62aa1-3919-4bd0-a059-b20cf6303cfb",
+    "nome": "P. MIRAGEM JBRETAS",
+    "cnpj": "05821725000164"
+   },
+   {
+    "id": "ba9d5886-bad8-4be9-b51c-1254f3fdb5bd",
+    "nome": "P. OURO BRANCO",
+    "cnpj": "51884261000152"
+   },
+   {
+    "id": "f5092f8d-e54d-4fbd-8146-e4161949717b",
+    "nome": "P. PLANALTO",
+    "cnpj": "21546429000159"
+   },
+   {
+    "id": "80365714-4cd9-4183-9dcf-5fc863a7207a",
+    "nome": "P. QUATRO RODAS",
+    "cnpj": "16696445000198"
+   },
+   {
+    "id": "9c664170-5d77-4b44-b2d1-fa3a95ca0f05",
+    "nome": "P. RODRIGO",
+    "cnpj": "04134973000174"
+   },
+   {
+    "id": "bb45b857-8a43-47f6-95e0-d47cedf2f676",
+    "nome": "P. SANTA INES - JOAQUIM",
+    "cnpj": "21662242000200"
+   },
+   {
+    "id": "58b3f267-8207-4298-b51c-b46da29ed563",
+    "nome": "P. SANTA INES MINAS",
+    "cnpj": "21662242000110"
+   },
+   {
+    "id": "c99631fa-a08c-433c-861e-6d15812ad921",
+    "nome": "P. SANTA MARIA",
+    "cnpj": "36879000000150"
+   },
+   {
+    "id": "c9f661a6-9b23-4247-854e-b911bc7326d5",
+    "nome": "P. SAO BERNARDO",
+    "cnpj": "10673246000188"
+   },
+   {
+    "id": "bf9c866f-8264-4ea7-8d7d-833d723dc3d6",
+    "nome": "P. SAO LUIZ RL",
+    "cnpj": "52965037000158"
+   },
+   {
+    "id": "2e6497a5-228e-43e9-8361-3cdbaa45987a",
+    "nome": "P. SERENA COLIBRI",
+    "cnpj": "46899832000192"
+   },
+   {
+    "id": "c09961e1-7c86-42fd-8109-9e6693d2aa47",
+    "nome": "P. TOPAZIO",
+    "cnpj": "25289506000193"
+   },
+   {
+    "id": "76592d18-79ca-45a4-be6d-13e7ad5f1f12",
+    "nome": "P. TRANCOSO",
+    "cnpj": "03911603000133"
+   },
+   {
+    "id": "cb65b058-6ee1-4db8-a0ca-693ac248612b",
+    "nome": "P. TUNEL",
+    "cnpj": "08160834000176"
+   },
+   {
+    "id": "4a22963b-edaf-4f95-a060-32ebfd55fc0b",
+    "nome": "P. URBANO FERRAZ",
+    "cnpj": "21981287000158"
+   }
+  ]
+ },
+ "movimentacao": {
+  "success": true,
+  "consulta": {
+   "posto_id": "ca05768f-37eb-48a5-928f-68e6a82a6abe",
+   "posto_nome": "P. BOMBOM MATRIZ",
+   "modo": "dia",
+   "de": "2026-09-14",
+   "ate": "2026-09-14",
+   "data": "2026-09-14"
+  },
+  "tem_dado": true,
+  "pagamento_disponivel": true,
+  "periodo": {
+   "dias_com_dado": 1,
+   "primeiro": "2026-09-14",
+   "ultimo": "2026-09-14"
+  },
+  "sinais": {
+   "total": 1,
+   "vermelhos": 0,
+   "amarelos": 1,
+   "itens": [
+    {
+     "tipo": "PAGAMENTO",
+     "nivel": "amarelo",
+     "escopo": null,
+     "titulo": "Pagamentos somam MENOS que a venda",
+     "titulo_curto": "pagamento menor que a venda",
+     "unidade": "pct",
+     "medido": 0,
+     "medido_rs": 0,
+     "esperado": 0,
+     "esperado_min": 0,
+     "esperado_max": 2,
+     "esperado_rotulo": "teto do rollup",
+     "base_dias": null,
+     "detalhe": "o troco só explica sobra para cima; para baixo não há explicação conhecida"
+    }
+   ],
+   "nao_avaliados": []
+  },
+  "dia": {
+   "litros": 4650.014,
+   "bruto": 24742.77,
+   "desconto": 274.84,
+   "liquido_combustivel": 24467.93,
+   "produtos_rs": 112.7,
+   "lubrificante_rs": 0,
+   "produtos_itens": 3,
+   "venda_total": 24580.63,
+   "abastecimentos": 255,
+   "rs_por_abastecimento": 95.95,
+   "litros_por_abastecimento": 18.235,
+   "cupons_aprox": 196,
+   "combustiveis": 3
+  },
+  "por_combustivel": [
+   {
+    "codigo": "GC",
+    "rotulo": "Gasolina comum",
+    "litros": 2151.537,
+    "bruto": 13485.93,
+    "desconto": 70.8,
+    "liquido": 13415.13,
+    "itens": 124,
+    "cupons": 104,
+    "rs_litro": 6.2351,
+    "pct_liquido": 54.8274
+   },
+   {
+    "codigo": "ET",
+    "rotulo": "Etanol",
+    "litros": 2157.583,
+    "bruto": 9010.41,
+    "desconto": 173.31,
+    "liquido": 8837.1,
+    "itens": 110,
+    "cupons": 103,
+    "rs_litro": 4.0958,
+    "pct_liquido": 36.1171
+   },
+   {
+    "codigo": "GA",
+    "rotulo": "Gasolina aditivada",
+    "litros": 340.894,
+    "bruto": 2246.43,
+    "desconto": 30.73,
+    "liquido": 2215.7,
+    "itens": 21,
+    "cupons": 19,
+    "rs_litro": 6.4997,
+    "pct_liquido": 9.0555
+   }
+  ],
+  "por_turno": [
+   {
+    "chave": "1",
+    "rotulo": "1",
+    "litros": 2421.528,
+    "liquido": 12856.96,
+    "itens": 122,
+    "cupons_aprox": 93,
+    "cupons_exato": false,
+    "pct_liquido": 52.5462
+   },
+   {
+    "chave": "2",
+    "rotulo": "2",
+    "litros": 2228.486,
+    "liquido": 11610.97,
+    "itens": 133,
+    "cupons_aprox": 133,
+    "cupons_exato": false,
+    "pct_liquido": 47.4538
+   }
+  ],
+  "por_pagamento": {
+   "formas": [
+    {
+     "ind_tipo": "DI",
+     "cod": "1",
+     "desc": "DINHEIRO",
+     "rotulo": "DINHEIRO",
+     "sem_adquirente": false,
+     "sem_forma": false,
+     "valor": 17179.17,
+     "cupons": 117,
+     "pernas": 117,
+     "pct_valor": 69.8891
+    },
+    {
+     "ind_tipo": "CD",
+     "cod": "108",
+     "desc": "GETNET MASTER DEBITO",
+     "rotulo": "GETNET MASTER DEBITO",
+     "sem_adquirente": false,
+     "sem_forma": false,
+     "valor": 1400.41,
+     "cupons": 19,
+     "pernas": 19,
+     "pct_valor": 5.6972
+    },
+    {
+     "ind_tipo": "CD",
+     "cod": "179",
+     "desc": "SOUTAG",
+     "rotulo": "SOUTAG",
+     "sem_adquirente": false,
+     "sem_forma": false,
+     "valor": 1268.46,
+     "cupons": 11,
+     "pernas": 11,
+     "pct_valor": 5.1604
+    },
+    {
+     "ind_tipo": "CC",
+     "cod": "109",
+     "desc": "GETNET VISA CREDITO",
+     "rotulo": "GETNET VISA CREDITO",
+     "sem_adquirente": false,
+     "sem_forma": false,
+     "valor": 1254.72,
+     "cupons": 10,
+     "pernas": 10,
+     "pct_valor": 5.1045
+    },
+    {
+     "ind_tipo": "CD",
+     "cod": "160",
+     "desc": "GETNET PIX",
+     "rotulo": "GETNET PIX",
+     "sem_adquirente": false,
+     "sem_forma": false,
+     "valor": 957.57,
+     "cupons": 13,
+     "pernas": 13,
+     "pct_valor": 3.8956
+    },
+    {
+     "ind_tipo": "CC",
+     "cod": "107",
+     "desc": "GETNET MASTER CREDITO",
+     "rotulo": "GETNET MASTER CREDITO",
+     "sem_adquirente": false,
+     "sem_forma": false,
+     "valor": 937.87,
+     "cupons": 13,
+     "pernas": 13,
+     "pct_valor": 3.8155
+    },
+    {
+     "ind_tipo": "CC",
+     "cod": "116",
+     "desc": "NOVO ABASTECE AI",
+     "rotulo": "NOVO ABASTECE AI",
+     "sem_adquirente": false,
+     "sem_forma": false,
+     "valor": 797.08,
+     "cupons": 4,
+     "pernas": 4,
+     "pct_valor": 3.2427
+    },
+    {
+     "ind_tipo": "CD",
+     "cod": "110",
+     "desc": "GETNET VISA DEBITO",
+     "rotulo": "GETNET VISA DEBITO",
+     "sem_adquirente": false,
+     "sem_forma": false,
+     "valor": 350,
+     "cupons": 6,
+     "pernas": 6,
+     "pct_valor": 1.4239
+    },
+    {
+     "ind_tipo": "NP",
+     "cod": "2",
+     "desc": "NOTA A PRAZO",
+     "rotulo": "NOTA A PRAZO",
+     "sem_adquirente": false,
+     "sem_forma": false,
+     "valor": 254.93,
+     "cupons": 1,
+     "pernas": 1,
+     "pct_valor": 1.0371
+    },
+    {
+     "ind_tipo": "CC",
+     "cod": "114",
+     "desc": "PROFROTAS",
+     "rotulo": "PROFROTAS",
+     "sem_adquirente": false,
+     "sem_forma": false,
+     "valor": 150.42,
+     "cupons": 1,
+     "pernas": 1,
+     "pct_valor": 0.6119
+    },
+    {
+     "ind_tipo": "CD",
+     "cod": "111",
+     "desc": "GETNET ELO DEBITO",
+     "rotulo": "GETNET ELO DEBITO",
+     "sem_adquirente": false,
+     "sem_forma": false,
+     "valor": 30,
+     "cupons": 1,
+     "pernas": 1,
+     "pct_valor": 0.122
+    }
+   ],
+   "tipos": [
+    {
+     "ind_tipo": "DI",
+     "rotulo": "Dinheiro",
+     "valor": 17179.17,
+     "cupons_aprox": 117,
+     "pernas": 117,
+     "formas": 1,
+     "pct_valor": 69.8891
+    },
+    {
+     "ind_tipo": "CD",
+     "rotulo": "Débito",
+     "valor": 4006.44,
+     "cupons_aprox": 50,
+     "pernas": 50,
+     "formas": 5,
+     "pct_valor": 16.2992
+    },
+    {
+     "ind_tipo": "CC",
+     "rotulo": "Crédito / frota",
+     "valor": 3140.09,
+     "cupons_aprox": 28,
+     "pernas": 28,
+     "formas": 4,
+     "pct_valor": 12.7747
+    },
+    {
+     "ind_tipo": "NP",
+     "rotulo": "A prazo",
+     "valor": 254.93,
+     "cupons_aprox": 1,
+     "pernas": 1,
+     "formas": 1,
+     "pct_valor": 1.0371
+    }
+   ],
+   "total_valor": 24580.63,
+   "total_pernas": 196
+  },
+  "por_frentista": [
+   {
+    "chave": "F BB CLISLEY APARECIDO DE CASTRO",
+    "rotulo": "F BB CLISLEY APARECIDO DE CASTRO",
+    "litros": 1720.079,
+    "liquido": 9329.95,
+    "itens": 99,
+    "cupons_aprox": 92,
+    "cupons_exato": false,
+    "pct_liquido": 38.1313
+   },
+   {
+    "chave": "JOSE FLAVIO DAMASCENO",
+    "rotulo": "JOSE FLAVIO DAMASCENO",
+    "litros": 1142.769,
+    "liquido": 6127.61,
+    "itens": 61,
+    "cupons_aprox": 61,
+    "cupons_exato": false,
+    "pct_liquido": 25.0434
+   },
+   {
+    "chave": "F BM CHRISTIAN FERNANDO SILVESTRE LUCIO",
+    "rotulo": "F BM CHRISTIAN FERNANDO SILVESTRE LUCIO",
+    "litros": 1147.623,
+    "liquido": 6025.24,
+    "itens": 56,
+    "cupons_aprox": 48,
+    "cupons_exato": false,
+    "pct_liquido": 24.6251
+   },
+   {
+    "chave": "F TN SILAS ALEXANDRE DOS SANTOS",
+    "rotulo": "F TN SILAS ALEXANDRE DOS SANTOS",
+    "litros": 618.166,
+    "liquido": 2900.05,
+    "itens": 38,
+    "cupons_aprox": 38,
+    "cupons_exato": false,
+    "pct_liquido": 11.8525
+   },
+   {
+    "chave": "F BBL PEDRO HENRIQUE DE SOUZA MARTINS",
+    "rotulo": "F BBL PEDRO HENRIQUE DE SOUZA MARTINS",
+    "litros": 21.377,
+    "liquido": 85.08,
+    "itens": 1,
+    "cupons_aprox": 1,
+    "cupons_exato": true,
+    "pct_liquido": 0.3477
+   }
+  ],
+  "por_canal": [
+   {
+    "chave": "NORMAL",
+    "rotulo": "Pista (sem app)",
+    "litros": 3670.661,
+    "liquido": 19859.19,
+    "itens": 217,
+    "cupons_aprox": 188,
+    "cupons_exato": false,
+    "pct_liquido": 81.1642
+   },
+   {
+    "chave": "99",
+    "rotulo": "App 99",
+    "litros": 713.147,
+    "liquido": 3255.2,
+    "itens": 26,
+    "cupons_aprox": 26,
+    "cupons_exato": false,
+    "pct_liquido": 13.3039
+   },
+   {
+    "chave": "SOUTAG",
+    "rotulo": "Soutag",
+    "litros": 266.206,
+    "liquido": 1353.54,
+    "itens": 12,
+    "cupons_aprox": 12,
+    "cupons_exato": false,
+    "pct_liquido": 5.5319
+   }
+  ]
+ },
+ "sondas": {
+  "success": true,
+  "cnpj": "20093167000151",
+  "tipo": "vendas",
+  "sondas": [
+   {
+    "id": "a19949d5-5b4e-4a0a-940e-d1da3541623a",
+    "tipo": "vendas",
+    "cnpj": "20093167000151",
+    "data_ini": "2026-09-14",
+    "data_fim": "2026-09-14",
+    "duracao_ms": 28299,
+    "registros": 575,
+    "campos": {
+     "capa": [
+      {
+       "campo": "cnpj",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "20.093.167/0001-51",
+       "valores": [
+        "20.093.167/0001-51"
+       ],
+       "distintos": 1,
+       "preenchidos": 575
+      },
+      {
+       "max": 19,
+       "min": 19,
+       "campo": "codEmpresa",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 19,
+       "valores": [
+        19
+       ],
+       "distintos": 1,
+       "preenchidos": 575
+      },
+      {
+       "max": 10475,
+       "min": 1,
+       "campo": "codEntidadeCliente",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 1,
+       "valores": [
+        1,
+        10429,
+        10471,
+        10474,
+        10475,
+        10457
+       ],
+       "distintos": 6,
+       "preenchidos": 575
+      },
+      {
+       "campo": "dataCaixa",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "2026-09-14",
+       "valores": [
+        "2026-09-14"
+       ],
+       "distintos": 1,
+       "preenchidos": 575
+      },
+      {
+       "campo": "dataCupom",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "2026-09-14",
+       "valores": [
+        "2026-09-14"
+       ],
+       "distintos": 1,
+       "preenchidos": 575
+      },
+      {
+       "max": 27089511,
+       "min": 27073087,
+       "campo": "idCupom",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 27073087,
+       "valores": null,
+       "distintos": 575,
+       "preenchidos": 575
+      },
+      {
+       "campo": "itens",
+       "nulos": 0,
+       "tipos": [
+        "object"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": [
+        {
+         "tipo": "Combustível",
+         "codBico": 581,
+         "codItem": 1,
+         "numBico": 13,
+         "qtd_item": 14.53,
+         "funcionario": "F AR GILBERTO COSTA",
+         "descricaoItem": "GASOLINA COMUM",
+         "valorDesconto": 0,
+         "valorAcrescimo": 0,
+         "valorBrutoItem": 86.74,
+         "valorTotalItem": 86.74,
+         "codEntidadeFuncionario": 19912
+        }
+       ],
+       "valores": null,
+       "distintos": 562,
+       "preenchidos": 575
+      },
+      {
+       "campo": "nomeCliente",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 554,
+       "exemplo": "SALUM CONSTRUCOES LTDA",
+       "valores": null,
+       "distintos": 16,
+       "preenchidos": 21
+      },
+      {
+       "campo": "nomeFantasia",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "POSTO ARAPONGA",
+       "valores": [
+        "POSTO ARAPONGA"
+       ],
+       "distintos": 1,
+       "preenchidos": 575
+      },
+      {
+       "campo": "nomeOperador",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "F AR FABIANA CARDOSO DE OLIVEIRA",
+       "valores": [
+        "F AR FABIANA CARDOSO DE OLIVEIRA",
+        "F AR SARAH MARA S.NASCIMENTO"
+       ],
+       "distintos": 2,
+       "preenchidos": 575
+      },
+      {
+       "max": 998412,
+       "min": 153,
+       "campo": "numeroCupom",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 997844,
+       "valores": null,
+       "distintos": 575,
+       "preenchidos": 575
+      },
+      {
+       "max": 2,
+       "min": 1,
+       "campo": "numTurno",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 1,
+       "valores": [
+        1,
+        2
+       ],
+       "distintos": 2,
+       "preenchidos": 575
+      },
+      {
+       "campo": "pagamentos",
+       "nulos": 0,
+       "tipos": [
+        "object"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": [
+        {
+         "ind_tipo": "CD",
+         "val_pagamento": 86.74,
+         "cod_forma_pgto": 179,
+         "desc_forma_pgto": "SOUTAG"
+        }
+       ],
+       "valores": null,
+       "distintos": 422,
+       "preenchidos": 575
+      },
+      {
+       "max": 137746,
+       "min": 137709,
+       "campo": "seqFechamento",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 137709,
+       "valores": [
+        137709,
+        137746
+       ],
+       "distintos": 2,
+       "preenchidos": 575
+      },
+      {
+       "max": 0,
+       "min": 0,
+       "campo": "valorAcrescimoCupom",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 575,
+       "zeros": 575,
+       "vazios": 0,
+       "exemplo": null,
+       "valores": [
+        0
+       ],
+       "distintos": 1,
+       "preenchidos": 0
+      },
+      {
+       "max": 967.03,
+       "min": 4.15,
+       "campo": "valorBrutoCupom",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 86.74,
+       "valores": null,
+       "distintos": 329,
+       "preenchidos": 575
+      },
+      {
+       "max": 22.39,
+       "min": 0,
+       "campo": "valorDescontoCupom",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 575,
+       "zeros": 477,
+       "vazios": 0,
+       "exemplo": 4.29,
+       "valores": null,
+       "distintos": 56,
+       "preenchidos": 98
+      },
+      {
+       "max": 967.03,
+       "min": 4.15,
+       "campo": "valorTotalCupom",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 86.74,
+       "valores": null,
+       "distintos": 367,
+       "preenchidos": 575
+      },
+      {
+       "campo": "venda_99",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "Não",
+       "valores": [
+        "Não",
+        "Sim"
+       ],
+       "distintos": 2,
+       "preenchidos": 575
+      },
+      {
+       "campo": "venda_soutag",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 575,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "Sim",
+       "valores": [
+        "Sim",
+        "Não"
+       ],
+       "distintos": 2,
+       "preenchidos": 575
+      }
+     ],
+     "itens": [
+      {
+       "max": 930,
+       "min": 414,
+       "campo": "codBico",
+       "nulos": 13,
+       "tipos": [
+        "number",
+        "null"
+       ],
+       "total": 694,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 581,
+       "valores": null,
+       "distintos": 24,
+       "preenchidos": 681
+      },
+      {
+       "max": 22375,
+       "min": 10422,
+       "campo": "codEntidadeFuncionario",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 694,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 19912,
+       "valores": [
+        19912,
+        18895,
+        10802,
+        20773,
+        10427,
+        22375,
+        19902,
+        10422,
+        13467
+       ],
+       "distintos": 9,
+       "preenchidos": 694
+      },
+      {
+       "max": 10877,
+       "min": 1,
+       "campo": "codItem",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 694,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 1,
+       "valores": null,
+       "distintos": 16,
+       "preenchidos": 694
+      },
+      {
+       "campo": "descricaoItem",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 694,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "GASOLINA COMUM",
+       "valores": null,
+       "distintos": 16,
+       "preenchidos": 694
+      },
+      {
+       "campo": "funcionario",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 694,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "F AR GILBERTO COSTA",
+       "valores": [
+        "F AR GILBERTO COSTA",
+        "F AR KEVEN RODRIGO SIMIM CARVALHO",
+        "F AR RONILDO BARBOSA SANTOS",
+        "F AR KENIA ROBERTA SEVERIANO CANDIDO IGNACIO",
+        "F AR FABIANA CARDOSO DE OLIVEIRA",
+        "F AR LEANDRO GERALDO DE SOUZA",
+        "F AR ISAQUE EMANUEL FREITAS SOUZA",
+        "F AR SARAH MARA S.NASCIMENTO",
+        "F AR MATEUS GOMES DE ALMEIDA"
+       ],
+       "distintos": 9,
+       "preenchidos": 694
+      },
+      {
+       "max": 24,
+       "min": 1,
+       "campo": "numBico",
+       "nulos": 13,
+       "tipos": [
+        "number",
+        "null"
+       ],
+       "total": 694,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 13,
+       "valores": null,
+       "distintos": 24,
+       "preenchidos": 681
+      },
+      {
+       "max": 100,
+       "min": 0.39,
+       "campo": "qtd_item",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 694,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 14.53,
+       "valores": null,
+       "distintos": 378,
+       "preenchidos": 694
+      },
+      {
+       "campo": "tipo",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 694,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "Combustível",
+       "valores": [
+        "Combustível",
+        "Produto"
+       ],
+       "distintos": 2,
+       "preenchidos": 694
+      },
+      {
+       "max": 0,
+       "min": 0,
+       "campo": "valorAcrescimo",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 694,
+       "zeros": 694,
+       "vazios": 0,
+       "exemplo": null,
+       "valores": [
+        0
+       ],
+       "distintos": 1,
+       "preenchidos": 0
+      },
+      {
+       "max": 689,
+       "min": 2.57,
+       "campo": "valorBrutoItem",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 694,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 86.74,
+       "valores": null,
+       "distintos": 345,
+       "preenchidos": 694
+      },
+      {
+       "max": 22.39,
+       "min": 0,
+       "campo": "valorDesconto",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 694,
+       "zeros": 596,
+       "vazios": 0,
+       "exemplo": 4.29,
+       "valores": null,
+       "distintos": 56,
+       "preenchidos": 98
+      },
+      {
+       "max": 689,
+       "min": 2.57,
+       "campo": "valorTotalItem",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 694,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 86.74,
+       "valores": null,
+       "distintos": 383,
+       "preenchidos": 694
+      }
+     ]
+    },
+    "soma_por_item": [
+     {
+      "qtd": 6637.132000000002,
+      "tipo": "Combustível",
+      "bruto": 41422.67,
+      "itens": 325,
+      "valor": 41179.85,
+      "desconto": 242.82,
+      "descricao": "GASOLINA COMUM"
+     },
+     {
+      "qtd": 7139.979000000009,
+      "tipo": "Combustível",
+      "bruto": 29471.19,
+      "itens": 305,
+      "valor": 28896.75,
+      "desconto": 574.44,
+      "descricao": "ETANOL COMUM"
+     },
+     {
+      "qtd": 802.637,
+      "tipo": "Combustível",
+      "bruto": 5269.3,
+      "itens": 36,
+      "valor": 5181.29,
+      "desconto": 88.01,
+      "descricao": "GASOLINA ADITIVADA"
+     },
+     {
+      "qtd": 555.58,
+      "tipo": "Combustível",
+      "bruto": 3819.46,
+      "itens": 15,
+      "valor": 3819.46,
+      "desconto": 0,
+      "descricao": "OLEO DIESEL S-10"
+     },
+     {
+      "qtd": 3,
+      "tipo": "Produto",
+      "bruto": 146.7,
+      "itens": 1,
+      "valor": 146.7,
+      "desconto": 0,
+      "descricao": "IPI F1 MASTER PERF. 15W40 SL LT"
+     },
+     {
+      "qtd": 2,
+      "tipo": "Produto",
+      "bruto": 99.8,
+      "itens": 1,
+      "valor": 99.8,
+      "desconto": 0,
+      "descricao": "ARLA 32 - 5 LTS"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 76.9,
+      "itens": 1,
+      "valor": 76.9,
+      "desconto": 0,
+      "descricao": "HAVOLINE PRODS SP 0W20"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 69.9,
+      "itens": 1,
+      "valor": 69.9,
+      "desconto": 0,
+      "descricao": "IPI F1 MASTER SINT. 5W40 SN LT"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 59.9,
+      "itens": 1,
+      "valor": 59.9,
+      "desconto": 0,
+      "descricao": "AUTOIMPACT A14"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 59.9,
+      "itens": 1,
+      "valor": 59.9,
+      "desconto": 0,
+      "descricao": "AUTOIMPACT A23"
+     },
+     {
+      "qtd": 2,
+      "tipo": "Produto",
+      "bruto": 59.8,
+      "itens": 2,
+      "valor": 59.8,
+      "desconto": 0,
+      "descricao": "TECH COOLANT ROSA"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 59,
+      "itens": 1,
+      "valor": 59,
+      "desconto": 0,
+      "descricao": "TECFIL ARL 4152"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 38,
+      "itens": 1,
+      "valor": 38,
+      "desconto": 0,
+      "descricao": "TECFIL GI 04/7"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 37.9,
+      "itens": 1,
+      "valor": 37.9,
+      "desconto": 0,
+      "descricao": "TECFIL TM5"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 22,
+      "itens": 1,
+      "valor": 22,
+      "desconto": 0,
+      "descricao": "GALAO DE EMERG. INMETRO 5 LTS"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 14,
+      "itens": 1,
+      "valor": 14,
+      "desconto": 0,
+      "descricao": "LIMPA PARABRISA 100 ML"
+     }
+    ],
+    "erro": null,
+    "posto_id": "937bec35-50a5-4707-94d3-bd09be256d26",
+    "usuario_id": "2c105551-b221-4d0f-a562-1ca8a04dafd2",
+    "executado_em": "2026-09-16T15:34:40.515+00:00"
+   },
+   {
+    "id": "b6156d9a-01a8-4eff-a5a8-2f15c9b556b6",
+    "tipo": "vendas",
+    "cnpj": "20093167000151",
+    "data_ini": "2026-09-03",
+    "data_fim": "2026-09-03",
+    "duracao_ms": 36719,
+    "registros": 617,
+    "campos": {
+     "capa": [
+      {
+       "campo": "cnpj",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "20.093.167/0001-51",
+       "valores": [
+        "20.093.167/0001-51"
+       ],
+       "distintos": 1,
+       "preenchidos": 617
+      },
+      {
+       "max": 19,
+       "min": 19,
+       "campo": "codEmpresa",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 19,
+       "valores": [
+        19
+       ],
+       "distintos": 1,
+       "preenchidos": 617
+      },
+      {
+       "max": 12593,
+       "min": 1,
+       "campo": "codEntidadeCliente",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 1,
+       "valores": [
+        1,
+        10474,
+        12593,
+        10457
+       ],
+       "distintos": 4,
+       "preenchidos": 617
+      },
+      {
+       "campo": "dataCaixa",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "2026-09-03",
+       "valores": [
+        "2026-09-03"
+       ],
+       "distintos": 1,
+       "preenchidos": 617
+      },
+      {
+       "campo": "dataCupom",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "2026-09-03",
+       "valores": [
+        "2026-09-03"
+       ],
+       "distintos": 1,
+       "preenchidos": 617
+      },
+      {
+       "max": 26907566,
+       "min": 26889652,
+       "campo": "idCupom",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 26889652,
+       "valores": null,
+       "distintos": 617,
+       "preenchidos": 617
+      },
+      {
+       "campo": "itens",
+       "nulos": 0,
+       "tipos": [
+        "object"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": [
+        {
+         "tipo": "Combustível",
+         "codBico": 573,
+         "codItem": 2,
+         "numBico": 2,
+         "qtd_item": 42.54,
+         "funcionario": "F AR SANDRA RODRIGUES DOS REIS",
+         "descricaoItem": "ETANOL COMUM",
+         "valorDesconto": 0,
+         "valorAcrescimo": 0,
+         "valorBrutoItem": 168.03,
+         "valorTotalItem": 168.03,
+         "codEntidadeFuncionario": 22142
+        }
+       ],
+       "valores": null,
+       "distintos": 592,
+       "preenchidos": 617
+      },
+      {
+       "campo": "nomeCliente",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 598,
+       "exemplo": "SALUM CONSTRUCOES LTDA",
+       "valores": null,
+       "distintos": 16,
+       "preenchidos": 19
+      },
+      {
+       "campo": "nomeFantasia",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "POSTO ARAPONGA",
+       "valores": [
+        "POSTO ARAPONGA"
+       ],
+       "distintos": 1,
+       "preenchidos": 617
+      },
+      {
+       "campo": "nomeOperador",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "F AR KENIA ROBERTA SEVERIANO CANDIDO IGNACIO",
+       "valores": [
+        "F AR KENIA ROBERTA SEVERIANO CANDIDO IGNACIO",
+        "F AR ISAQUE EMANUEL FREITAS SOUZA"
+       ],
+       "distintos": 2,
+       "preenchidos": 617
+      },
+      {
+       "max": 993509,
+       "min": 992887,
+       "campo": "numeroCupom",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 992887,
+       "valores": null,
+       "distintos": 617,
+       "preenchidos": 617
+      },
+      {
+       "max": 2,
+       "min": 1,
+       "campo": "numTurno",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 1,
+       "valores": [
+        1,
+        2
+       ],
+       "distintos": 2,
+       "preenchidos": 617
+      },
+      {
+       "campo": "pagamentos",
+       "nulos": 0,
+       "tipos": [
+        "object"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": [
+        {
+         "ind_tipo": "DI",
+         "val_pagamento": 25.03,
+         "cod_forma_pgto": 1,
+         "desc_forma_pgto": "DINHEIRO"
+        },
+        {
+         "ind_tipo": "CD",
+         "val_pagamento": 143,
+         "cod_forma_pgto": 128,
+         "desc_forma_pgto": "SAFRA PIX"
+        }
+       ],
+       "valores": null,
+       "distintos": 453,
+       "preenchidos": 617
+      },
+      {
+       "max": 136778,
+       "min": 136718,
+       "campo": "seqFechamento",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 136718,
+       "valores": [
+        136718,
+        136778
+       ],
+       "distintos": 2,
+       "preenchidos": 617
+      },
+      {
+       "max": 0,
+       "min": 0,
+       "campo": "valorAcrescimoCupom",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 617,
+       "zeros": 617,
+       "vazios": 0,
+       "exemplo": null,
+       "valores": [
+        0
+       ],
+       "distintos": 1,
+       "preenchidos": 0
+      },
+      {
+       "max": 815.76,
+       "min": 10,
+       "campo": "valorBrutoCupom",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 168.03,
+       "valores": null,
+       "distintos": 367,
+       "preenchidos": 617
+      },
+      {
+       "max": 24.87,
+       "min": 0,
+       "campo": "valorDescontoCupom",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 617,
+       "zeros": 526,
+       "vazios": 0,
+       "exemplo": 4.99,
+       "valores": null,
+       "distintos": 79,
+       "preenchidos": 91
+      },
+      {
+       "max": 815.76,
+       "min": 10,
+       "campo": "valorTotalCupom",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 168.03,
+       "valores": null,
+       "distintos": 400,
+       "preenchidos": 617
+      },
+      {
+       "campo": "venda_99",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "Não",
+       "valores": [
+        "Não",
+        "Sim"
+       ],
+       "distintos": 2,
+       "preenchidos": 617
+      },
+      {
+       "campo": "venda_soutag",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 617,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "Sim",
+       "valores": [
+        "Sim",
+        "Não"
+       ],
+       "distintos": 2,
+       "preenchidos": 617
+      }
+     ],
+     "itens": [
+      {
+       "max": 930,
+       "min": 415,
+       "campo": "codBico",
+       "nulos": 13,
+       "tipos": [
+        "number",
+        "null"
+       ],
+       "total": 709,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 573,
+       "valores": null,
+       "distintos": 23,
+       "preenchidos": 696
+      },
+      {
+       "max": 22375,
+       "min": 19902,
+       "campo": "codEntidadeFuncionario",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 709,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 22142,
+       "valores": [
+        22142,
+        21670,
+        21008,
+        20773,
+        22375,
+        20081,
+        19902,
+        20435
+       ],
+       "distintos": 8,
+       "preenchidos": 709
+      },
+      {
+       "max": 11209,
+       "min": 1,
+       "campo": "codItem",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 709,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 2,
+       "valores": null,
+       "distintos": 16,
+       "preenchidos": 709
+      },
+      {
+       "campo": "descricaoItem",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 709,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "ETANOL COMUM",
+       "valores": null,
+       "distintos": 16,
+       "preenchidos": 709
+      },
+      {
+       "campo": "funcionario",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 709,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "F AR SANDRA RODRIGUES DOS REIS",
+       "valores": [
+        "F AR SANDRA RODRIGUES DOS REIS",
+        "F AR JANDERSON SILVA DE JESUS ROCHA",
+        "F AR RODRIGO GOMES COSTA",
+        "F AR KENIA ROBERTA SEVERIANO CANDIDO IGNACIO",
+        "F AR LEANDRO GERALDO DE SOUZA",
+        "F AR VICTOR DA SILVA MARTINS LOURENCO",
+        "F AR ISAQUE EMANUEL FREITAS SOUZA",
+        "F AR MARCOS JULIO ISMAR DA SILVA"
+       ],
+       "distintos": 8,
+       "preenchidos": 709
+      },
+      {
+       "max": 24,
+       "min": 1,
+       "campo": "numBico",
+       "nulos": 13,
+       "tipos": [
+        "number",
+        "null"
+       ],
+       "total": 709,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 2,
+       "valores": null,
+       "distintos": 23,
+       "preenchidos": 696
+      },
+      {
+       "max": 81.278,
+       "min": 0.318,
+       "campo": "qtd_item",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 709,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 42.54,
+       "valores": null,
+       "distintos": 405,
+       "preenchidos": 709
+      },
+      {
+       "campo": "tipo",
+       "nulos": 0,
+       "tipos": [
+        "string"
+       ],
+       "total": 709,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": "Combustível",
+       "valores": [
+        "Combustível",
+        "Produto"
+       ],
+       "distintos": 2,
+       "preenchidos": 709
+      },
+      {
+       "max": 0,
+       "min": 0,
+       "campo": "valorAcrescimo",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 709,
+       "zeros": 709,
+       "vazios": 0,
+       "exemplo": null,
+       "valores": [
+        0
+       ],
+       "distintos": 1,
+       "preenchidos": 0
+      },
+      {
+       "max": 560,
+       "min": 2,
+       "campo": "valorBrutoItem",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 709,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 168.03,
+       "valores": null,
+       "distintos": 377,
+       "preenchidos": 709
+      },
+      {
+       "max": 24.87,
+       "min": 0,
+       "campo": "valorDesconto",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 709,
+       "zeros": 618,
+       "vazios": 0,
+       "exemplo": 4.99,
+       "valores": null,
+       "distintos": 79,
+       "preenchidos": 91
+      },
+      {
+       "max": 560,
+       "min": 2,
+       "campo": "valorTotalItem",
+       "nulos": 0,
+       "tipos": [
+        "number"
+       ],
+       "total": 709,
+       "zeros": 0,
+       "vazios": 0,
+       "exemplo": 168.03,
+       "valores": null,
+       "distintos": 410,
+       "preenchidos": 709
+      }
+     ]
+    },
+    "soma_por_item": [
+     {
+      "qtd": 7835,
+      "tipo": "Combustível",
+      "bruto": 48851.35,
+      "itens": 367,
+      "valor": 48609.54,
+      "desconto": 241.81,
+      "descricao": "GASOLINA COMUM"
+     },
+     {
+      "qtd": 6273.479000000007,
+      "tipo": "Combustível",
+      "bruto": 25860.92,
+      "itens": 279,
+      "valor": 25191.51,
+      "desconto": 669.41,
+      "descricao": "ETANOL COMUM"
+     },
+     {
+      "qtd": 749.741,
+      "tipo": "Combustível",
+      "bruto": 4914.64,
+      "itens": 34,
+      "valor": 4854.57,
+      "desconto": 60.07,
+      "descricao": "GASOLINA ADITIVADA"
+     },
+     {
+      "qtd": 502.5180000000001,
+      "tipo": "Combustível",
+      "bruto": 3451.69,
+      "itens": 16,
+      "valor": 3451.69,
+      "desconto": 0,
+      "descricao": "OLEO DIESEL S-10"
+     },
+     {
+      "qtd": 4,
+      "tipo": "Produto",
+      "bruto": 307.6,
+      "itens": 2,
+      "valor": 307.6,
+      "desconto": 0,
+      "descricao": "HAVOLINE PRODS SP 0W20"
+     },
+     {
+      "qtd": 4,
+      "tipo": "Produto",
+      "bruto": 299.6,
+      "itens": 1,
+      "valor": 299.6,
+      "desconto": 0,
+      "descricao": "IPI BRUTUS SINT C2/C3 5W30 LT"
+     },
+     {
+      "qtd": 4,
+      "tipo": "Produto",
+      "bruto": 279.6,
+      "itens": 1,
+      "valor": 279.6,
+      "desconto": 0,
+      "descricao": "IPI F1 MASTER SINT. 5W40 SN LT"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 79.9,
+      "itens": 1,
+      "valor": 79.9,
+      "desconto": 0,
+      "descricao": "IPIRANGA F1 MASTER SINTETICO C2 0W30"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 64.9,
+      "itens": 1,
+      "valor": 64.9,
+      "desconto": 0,
+      "descricao": "HAVOLINE PRODS SP 5W30"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 49.9,
+      "itens": 1,
+      "valor": 49.9,
+      "desconto": 0,
+      "descricao": "ARLA 32 - 5 LTS"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 48,
+      "itens": 1,
+      "valor": 48,
+      "desconto": 0,
+      "descricao": "TECFIL PSL 77"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 39.9,
+      "itens": 1,
+      "valor": 39.9,
+      "desconto": 0,
+      "descricao": "TECFIL TM4"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 37.9,
+      "itens": 1,
+      "valor": 37.9,
+      "desconto": 0,
+      "descricao": "TECFIL TM5"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 31.9,
+      "itens": 1,
+      "valor": 31.9,
+      "desconto": 0,
+      "descricao": "TECH FLEX"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 31.9,
+      "itens": 1,
+      "valor": 31.9,
+      "desconto": 0,
+      "descricao": "TECH FUEL INJECTOR"
+     },
+     {
+      "qtd": 1,
+      "tipo": "Produto",
+      "bruto": 14,
+      "itens": 1,
+      "valor": 14,
+      "desconto": 0,
+      "descricao": "LIMPA PARABRISA 100 ML"
+     }
+    ],
+    "erro": null,
+    "posto_id": "937bec35-50a5-4707-94d3-bd09be256d26",
+    "usuario_id": "2c105551-b221-4d0f-a562-1ca8a04dafd2",
+    "executado_em": "2026-09-04T17:34:05.362+00:00"
+   },
+   {
+    "id": "f76d358a-ca40-4ffb-a275-87fe782a408c",
+    "tipo": "vendas",
+    "cnpj": "20093167000151",
+    "data_ini": "2026-09-03",
+    "data_fim": "2026-09-03",
+    "duracao_ms": 60003,
+    "registros": 0,
+    "campos": {},
+    "soma_por_item": null,
+    "erro": "timeout na API TecnoX (60s)",
+    "posto_id": "937bec35-50a5-4707-94d3-bd09be256d26",
+    "usuario_id": "2c105551-b221-4d0f-a562-1ca8a04dafd2",
+    "executado_em": "2026-09-04T17:33:24.224+00:00"
+   }
+  ]
+ },
+ "execucoes": {
+  "success": true,
+  "saude": {
+   "estado": "alerta",
+   "horas_desde_ultima": 0.5,
+   "motivo": "A ultima rodada comecou e nao fechou: o job morreu no meio (container derrubado, OOM ou kill)."
+  },
+  "reincidentes": [],
+  "execucoes": [
+   {
+    "id": 64,
+    "inicio": "2026-09-16T15:26:51.443435+00:00",
+    "fim": null,
+    "data_de": "2026-01-01",
+    "data_ate": "2026-01-15",
+    "pares_alvo": 555,
+    "pares_ok": 0,
+    "pares_falha": 0,
+    "pares_sem_dado": 0,
+    "pares_recuperados": 0,
+    "postos_ativos": 37,
+    "falhas": null,
+    "exit_code": null,
+    "duracao_ms": null
+   },
+   {
+    "id": 63,
+    "inicio": "2026-09-16T14:50:58.106004+00:00",
+    "fim": "2026-09-16T14:57:12.834+00:00",
+    "data_de": "2026-09-14",
+    "data_ate": "2026-09-14",
+    "pares_alvo": 37,
+    "pares_ok": 37,
+    "pares_falha": 0,
+    "pares_sem_dado": 0,
+    "pares_recuperados": 0,
+    "postos_ativos": 37,
+    "falhas": null,
+    "exit_code": 0,
+    "duracao_ms": 375359
+   },
+   {
+    "id": 62,
+    "inicio": "2026-09-16T11:48:04.907105+00:00",
+    "fim": "2026-09-16T12:59:35.908+00:00",
+    "data_de": "2026-06-13",
+    "data_ate": "2026-06-24",
+    "pares_alvo": 444,
+    "pares_ok": 444,
+    "pares_falha": 0,
+    "pares_sem_dado": 4,
+    "pares_recuperados": 403,
+    "postos_ativos": 37,
+    "falhas": null,
+    "exit_code": 0,
+    "duracao_ms": 4291106
+   },
+   {
+    "id": 61,
+    "inicio": "2026-09-16T06:01:43.2799+00:00",
+    "fim": "2026-09-16T06:07:54.498+00:00",
+    "data_de": "2026-09-13",
+    "data_ate": "2026-09-15",
+    "pares_alvo": 39,
+    "pares_ok": 39,
+    "pares_falha": 0,
+    "pares_sem_dado": 2,
+    "pares_recuperados": 0,
+    "postos_ativos": 37,
+    "falhas": null,
+    "exit_code": 0,
+    "duracao_ms": 371899
+   },
+   {
+    "id": 60,
+    "inicio": "2026-09-16T01:35:21.497501+00:00",
+    "fim": "2026-09-16T03:05:57.239+00:00",
+    "data_de": "2026-01-16",
+    "data_ate": "2026-01-31",
+    "pares_alvo": 592,
+    "pares_ok": 592,
+    "pares_falha": 0,
+    "pares_sem_dado": 80,
+    "pares_recuperados": 480,
+    "postos_ativos": 37,
+    "falhas": null,
+    "exit_code": 0,
+    "duracao_ms": 5435694
+   },
+   {
+    "id": 59,
+    "inicio": "2026-09-16T01:24:34.102734+00:00",
+    "fim": "2026-09-16T01:35:20.583+00:00",
+    "data_de": "2026-01-01",
+    "data_ate": "2026-01-15",
+    "pares_alvo": 120,
+    "pares_ok": 120,
+    "pares_falha": 0,
+    "pares_sem_dado": 75,
+    "pares_recuperados": 13,
+    "postos_ativos": 37,
+    "falhas": null,
+    "exit_code": 0,
+    "duracao_ms": 646632
+   },
+   {
+    "id": 58,
+    "inicio": "2026-09-16T01:24:22.906704+00:00",
+    "fim": "2026-09-16T01:24:32.962+00:00",
+    "data_de": "2026-02-16",
+    "data_ate": "2026-02-28",
+    "pares_alvo": 67,
+    "pares_ok": 5,
+    "pares_falha": 0,
+    "pares_sem_dado": 5,
+    "pares_recuperados": 0,
+    "postos_ativos": 37,
+    "falhas": null,
+    "exit_code": 1,
+    "duracao_ms": 10358
+   },
+   {
+    "id": 57,
+    "inicio": "2026-09-16T01:23:30.800116+00:00",
+    "fim": "2026-09-16T01:24:21.644+00:00",
+    "data_de": "2026-02-01",
+    "data_ate": "2026-02-15",
+    "pares_alvo": 75,
+    "pares_ok": 39,
+    "pares_falha": 0,
+    "pares_sem_dado": 39,
+    "pares_recuperados": 0,
+    "postos_ativos": 37,
+    "falhas": null,
+    "exit_code": 1,
+    "duracao_ms": 50985
+   },
+   {
+    "id": 56,
+    "inicio": "2026-09-16T01:23:08.409919+00:00",
+    "fim": "2026-09-16T01:23:29.851+00:00",
+    "data_de": "2026-03-16",
+    "data_ate": "2026-03-31",
+    "pares_alvo": 87,
+    "pares_ok": 15,
+    "pares_falha": 0,
+    "pares_sem_dado": 15,
+    "pares_recuperados": 0,
+    "postos_ativos": 37,
+    "falhas": null,
+    "exit_code": 1,
+    "duracao_ms": 21689
+   },
+   {
+    "id": 55,
+    "inicio": "2026-09-16T01:22:58.307029+00:00",
+    "fim": "2026-09-16T01:23:07.258+00:00",
+    "data_de": "2026-03-01",
+    "data_ate": "2026-03-15",
+    "pares_alvo": 75,
+    "pares_ok": 6,
+    "pares_falha": 0,
+    "pares_sem_dado": 6,
+    "pares_recuperados": 0,
+    "postos_ativos": 37,
+    "falhas": null,
+    "exit_code": 1,
+    "duracao_ms": 9176
+   },
+   {
+    "id": 54,
+    "inicio": "2026-09-16T01:22:47.934568+00:00",
+    "fim": "2026-09-16T01:22:57.256+00:00",
+    "data_de": "2026-04-16",
+    "data_ate": "2026-04-30",
+    "pares_alvo": 60,
+    "pares_ok": 6,
+    "pares_falha": 0,
+    "pares_sem_dado": 6,
+    "pares_recuperados": 0,
+    "postos_ativos": 37,
+    "falhas": null,
+    "exit_code": 1,
+    "duracao_ms": 9485
+   },
+   {
+    "id": 53,
+    "inicio": "2026-09-16T01:22:26.445638+00:00",
+    "fim": "2026-09-16T01:22:46.812+00:00",
+    "data_de": "2026-04-01",
+    "data_ate": "2026-04-15",
+    "pares_alvo": 75,
+    "pares_ok": 15,
+    "pares_falha": 0,
+    "pares_sem_dado": 15,
+    "pares_recuperados": 0,
+    "postos_ativos": 37,
+    "falhas": null,
+    "exit_code": 1,
+    "duracao_ms": 20452
+   },
+   {
+    "id": 52,
+    "inicio": "2026-09-16T01:22:16.345981+00:00",
+    "fim": "2026-09-16T01:22:24.932+00:00",
+    "data_de": "2026-05-16",
+    "data_ate": "2026-05-31",
+    "pares_alvo": 6,
+    "pares_ok": 6,
+    "pares_falha": 0,
+    "pares_sem_dado": 6,
+    "pares_recuperados": 0,
+    "postos_ativos": 37,
+    "falhas": null,
+    "exit_code": 0,
+    "duracao_ms": 8493
+   },
+   {
+    "id": 51,
+    "inicio": "2026-09-16T01:21:49.86342+00:00",
+    "fim": "2026-09-16T01:22:15.696+00:00",
+    "data_de": "2026-05-01",
+    "data_ate": "2026-05-15",
+    "pares_alvo": 16,
+    "pares_ok": 16,
+    "pares_falha": 0,
+    "pares_sem_dado": 16,
+    "pares_recuperados": 0,
+    "postos_ativos": 37,
+    "falhas": null,
+    "exit_code": 0,
+    "duracao_ms": 26394
+   }
+  ]
+ }
+}

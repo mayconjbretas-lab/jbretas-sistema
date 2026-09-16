@@ -195,6 +195,13 @@
               <input type="date" id="mv-de" class="tx-inp"></label>
             <label class="tx-f" id="mv-f-ate" hidden><span>Até</span>
               <input type="date" id="mv-ate" class="tx-inp"></label>
+            <!-- Refaz a coleta deste posto x dia AGORA, em vez de esperar o
+                 cron da madrugada: e o unico ponto da tela que chama a
+                 TecnoX para a Movimentacao (o resto le o rollup ja gravado).
+                 Fica junto do campo de DATA e desaparece com ele no recorte
+                 Intervalo — a rota atualiza UM dia, e no intervalo nao existe
+                 "data selecionada" para mandar. -->
+            <button id="mv-rollup" class="tx-btn" type="button">Atualizar rollup</button>
           </div>
           <div id="mv-msg" class="tx-msg" style="display:none"></div>
           <div id="mv-corpo"><div class="empty-state">Selecione posto e data.</div></div>

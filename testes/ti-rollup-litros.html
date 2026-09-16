@@ -1,0 +1,321 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API TecnoX — Atualizar rollup + coluna de litros</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+<link rel="stylesheet" href="/modulos/painel-ti/painel-ti.css">
+
+<div id="res">rodando…</div>
+<!-- A #tab-tecnox REAL do index.html é injetada aqui. Copiar os ids à mão
+     esconderia justamente o que se quer provar: que o botão novo está DENTRO
+     do .tx-controls, ao lado do campo de data de produção. -->
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// 1. FATURAMENTO POR COMBUSTÍVEL ganhou a coluna de LITROS, alimentada pelo
+//    campo que sempre veio na sonda e nunca era exibido (soma_por_item[].qtd).
+//    Produto vem na mesma lista e em UNIDADE, então leva a marca "un" e fica
+//    fora do total em litros.
+//
+// 2. MOVIMENTAÇÃO DO DIA ganhou o botão "Atualizar rollup": manda
+//    { data, posto_id } para POST /tecnox/rollup-dia, mostra spinner enquanto
+//    espera e recarrega os cards ao terminar.
+//
+// Os dados são RESPOSTAS REAIS das rotas (testes/fixtures-painel-ti.json,
+// capturado chamando os handlers do server.js contra o banco de produção).
+//
+// ATENÇÃO AO LER OS NÚMEROS: a sonda do fixture é do P. ARAPONGA (o CNPJ
+// 20093167000151) e a movimentação é do P. BOMBOM MATRIZ — postos diferentes
+// no mesmo dia. Os dois números não têm de bater entre si.
+//
+// O TOTAL DA COLUNA NOVA, ISSO SIM, FOI CONFERIDO CONTRA O BANCO: 15.135,328 L
+// e 681 itens é exatamente o que tecnox_venda_dia guarda para o P. ARAPONGA em
+// 14/09/2026 — dois caminhos independentes (a soma de qtd_item feita na rota da
+// sonda e o agregar() do rollup) chegando ao mesmo mililitro.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+// ── dublês ───────────────────────────────────────────────────────
+var CNPJ_SONDA = '20093167000151';     // P. ARAPONGA
+var DIA = '2026-09-14';
+var FIX = null;
+var CHAMADAS = [];                     // tudo que a tela pediu à API
+var POST_ROLLUP = null;                // o body do POST /tecnox/rollup-dia
+var soltarRollup = null;               // resolve manual: congela o "durante"
+var RESP_ROLLUP = { ok: true, data: DIA, parcial: false, postos_pedidos: 1,
+  postos_ok: 1, cupons: 196, litros: 4650.014, veiculos: 194, itens: 255,
+  liquido_comb: 24467.93, linhas: 50, ms: 27402, detalhe: [] };
+
+window.exigirSessao = function () { return { id: 'h', nome: 'H', perfil: 'ADM', ti: true }; };
+window.getUsuarioLogado = window.exigirSessao;
+window.redirecionarPorPerfil = function () {};
+window.caminhoRaiz = function () { return '/'; };
+window.abrirPainelDesktop = function () {};
+
+window.apiFetch = function (url, opts) {
+  CHAMADAS.push(String(url));
+  var u = String(url);
+  if (u.indexOf('/tecnox/rollup-dia') === 0) {
+    POST_ROLLUP = { metodo: (opts || {}).method, body: JSON.parse((opts || {}).body || '{}') };
+    // Fica PENDENTE de propósito: é o único jeito de olhar o botão no meio da
+    // espera. Quem chama solta com soltarRollup().
+    return new Promise(function (r) { soltarRollup = function () { r(RESP_ROLLUP); }; });
+  }
+  if (u.indexOf('/postos') === 0) return Promise.resolve(FIX.postos);
+  if (u.indexOf('/tecnox/movimentacao') === 0) return Promise.resolve(FIX.movimentacao);
+  if (u.indexOf('/tecnox/sondas') === 0) return Promise.resolve(FIX.sondas);
+  if (u.indexOf('/rollup/execucoes') === 0) return Promise.resolve(FIX.execucoes);
+  return Promise.resolve({ success: true, usuarios: [], itens: [] });
+};
+
+function js(src) {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { erro(new Error(src + ' não carregou')); };
+    document.body.appendChild(s);
+  });
+}
+function baixar(url) {
+  return new Promise(function (ok, er) {
+    var x = new XMLHttpRequest();
+    x.open('GET', url);
+    x.onload = function () { ok(x.responseText); };
+    x.onerror = function () { er(new Error(url + ' não carregou')); };
+    x.send();
+  });
+}
+function contar(pedaco) {
+  return CHAMADAS.filter(function (u) { return u.indexOf(pedaco) === 0; }).length;
+}
+
+// ════════════════════════════════════════════════════════════════
+async function rodar() {
+  FIX = JSON.parse(await baixar('/testes/fixtures-painel-ti.json'));
+  nota('fixture: ' + FIX.postos.postos.length + ' postos · ' +
+       FIX.sondas.sondas.length + ' sonda(s) · movimentação tem_dado=' + FIX.movimentacao.tem_dado);
+
+  var doc = new DOMParser().parseFromString(
+    await baixar('/modulos/painel-ti/index.html'), 'text/html');
+  var sec = doc.getElementById('tab-tecnox');
+  if (!sec) throw new Error('não achei #tab-tecnox no index.html');
+  sec.classList.add('active');
+  document.getElementById('palco').appendChild(document.importNode(sec, true));
+
+  await js('/modulos/painel-ti/app.js');
+  await esperar(50);
+  // O DOMContentLoaded já passou quando o script carrega, então a ligação dos
+  // controles é chamada à mão — as MESMAS funções de produção.
+  ligarControlesTecnox();
+  ligarControlesMov();
+  await txCarregarPostos();
+  await esperar(120);
+
+  // ══════════════════════════════════════════════════════════════
+  h3('1. O botão existe ao lado do campo de DATA');
+  var btn = document.getElementById('mv-rollup');
+  eh(!!btn, 'o botão #mv-rollup existe');
+  if (!btn) { pintar(); return; }
+  var fData = document.getElementById('mv-f-data');
+  eh(btn.parentElement === fData.parentElement,
+     'está no mesmo .tx-controls do campo de data',
+     btn.parentElement.className, fData.parentElement.className);
+  eh(btn.previousElementSibling && btn.previousElementSibling.id === 'mv-f-ate',
+     'vem depois dos três campos de data',
+     btn.previousElementSibling ? btn.previousElementSibling.id : '(nada)', 'mv-f-ate');
+  eh(btn.className === 'tx-btn', 'mesmo estilo do botão da sonda', btn.className, 'tx-btn');
+  var bs = getComputedStyle(btn), os = getComputedStyle(document.getElementById('tx-btn'));
+  eh(bs.height === os.height && bs.fontSize === os.fontSize,
+     'mesma altura e corpo do "Consultar e salvar"',
+     bs.height + ' / ' + bs.fontSize, os.height + ' / ' + os.fontSize);
+  eh(btn.textContent.trim() === 'Atualizar rollup', 'rótulo', btn.textContent.trim(), 'Atualizar rollup');
+
+  h3('2. Aparece no Dia único e sai no Intervalo (junto do campo de data)');
+  document.getElementById('mv-modo').value = 'dia';
+  mvAplicarModo(false);
+  eh(!btn.hidden && btn.offsetParent !== null, 'visível no recorte Dia único',
+     btn.hidden ? 'hidden' : 'visível');
+  document.getElementById('mv-modo').value = 'periodo';
+  mvAplicarModo(false);
+  eh(btn.hidden && btn.offsetParent === null, 'escondido no recorte Intervalo',
+     btn.hidden ? 'hidden' : 'VISÍVEL');
+  eh(btn.hidden === fData.hidden, 'entra e sai junto com o campo Data',
+     'botão ' + btn.hidden + ' / campo ' + fData.hidden, 'iguais');
+  document.getElementById('mv-modo').value = 'dia';
+  mvAplicarModo(false);
+
+  // ══════════════════════════════════════════════════════════════
+  h3('3. O clique manda { data, posto_id } e recarrega os cards');
+  document.getElementById('mv-data').value = DIA;
+  var postoId = document.getElementById('mv-posto').value;
+  var nomePosto = document.getElementById('mv-posto').selectedOptions[0].textContent;
+  nota('posto selecionado: ' + nomePosto + ' (' + postoId + ') · data ' + DIA);
+  var movAntes = contar('/tecnox/movimentacao');
+
+  btn.click();
+  await esperar(60);
+
+  eh(!!POST_ROLLUP, 'chamou POST /tecnox/rollup-dia');
+  if (!POST_ROLLUP) { pintar(); return; }
+  eh(POST_ROLLUP.metodo === 'POST', 'método', POST_ROLLUP.metodo, 'POST');
+  eh(POST_ROLLUP.body.data === DIA, 'body.data = a data escolhida', POST_ROLLUP.body.data, DIA);
+  eh(POST_ROLLUP.body.posto_id === postoId, 'body.posto_id = o posto escolhido',
+     POST_ROLLUP.body.posto_id, postoId);
+  eh(Object.keys(POST_ROLLUP.body).sort().join(',') === 'data,posto_id',
+     'manda só os dois campos', Object.keys(POST_ROLLUP.body).sort().join(','), 'data,posto_id');
+
+  h3('4. Durante a espera: spinner, botão travado e aviso do tempo');
+  eh(btn.disabled, 'botão desabilitado', btn.disabled ? 'sim' : 'NÃO');
+  var spin = btn.querySelector('.tx-spin');
+  eh(!!spin, 'tem o .tx-spin dentro do botão');
+  if (spin) {
+    var cs = getComputedStyle(spin);
+    eh(cs.animationName === 'tx-girar' && parseFloat(cs.animationDuration) > 0,
+       'o spinner está animando (CSS carregado)',
+       cs.animationName + ' ' + cs.animationDuration, 'tx-girar, > 0s');
+    eh(cs.borderTopColor !== cs.borderRightColor,
+       'a borda de cima destaca (é o que faz parecer girando)',
+       cs.borderTopColor + ' vs ' + cs.borderRightColor, 'diferentes');
+  }
+  var msg = document.getElementById('mv-msg');
+  eh(msg.style.display !== 'none' && /30s/.test(msg.textContent),
+     'a mensagem avisa quanto tempo leva ANTES de começar', msg.textContent);
+  eh(msg.textContent.indexOf('14/09') >= 0, 'a mensagem cita o dia em dd/mm',
+     msg.textContent.indexOf('14/09') >= 0 ? '14/09 presente' : msg.textContent);
+  // Segundo clique no meio da espera não pode disparar outra coleta.
+  var qtdAntes = contar('/tecnox/rollup-dia');
+  btn.click();
+  await esperar(30);
+  eh(contar('/tecnox/rollup-dia') === qtdAntes, 'clicar de novo durante a espera não repete a chamada',
+     contar('/tecnox/rollup-dia') + ' chamada(s)', qtdAntes + '');
+
+  h3('5. Ao terminar: botão volta, resultado na mensagem, cards recarregados');
+  soltarRollup();
+  await esperar(120);
+  eh(!btn.disabled, 'botão liberado', btn.disabled ? 'AINDA travado' : 'liberado');
+  eh(btn.textContent.trim() === 'Atualizar rollup' && !btn.querySelector('.tx-spin'),
+     'voltou ao rótulo, sem spinner', btn.innerHTML);
+  eh(/196 cupons/.test(msg.textContent) && /4\.650,014 L/.test(msg.textContent),
+     'a mensagem traz cupons e litros do retorno', msg.textContent);
+  eh(/194 ve/.test(msg.textContent), 'e os veículos', msg.textContent);
+  eh(contar('/tecnox/movimentacao') === movAntes + 1,
+     'recarregou a movimentação UMA vez', contar('/tecnox/movimentacao') - movAntes + '', '1');
+  eh(document.querySelectorAll('#mv-corpo .mv-bloco').length > 0,
+     'os cards foram redesenhados',
+     document.querySelectorAll('#mv-corpo .mv-bloco').length + ' bloco(s)', '> 0');
+
+  h3('6. Dia parcial e falha aparecem como tal');
+  RESP_ROLLUP = { ok: true, data: DIA, parcial: true, postos_pedidos: 1, postos_ok: 1,
+    cupons: 10, litros: 100, veiculos: 9, itens: 12, linhas: 3, ms: 1 };
+  btn.click(); await esperar(40); soltarRollup(); await esperar(120);
+  eh(/parcial/.test(msg.textContent), 'dia em andamento avisa que o número é parcial', msg.textContent);
+  RESP_ROLLUP = { ok: false, data: DIA, postos_pedidos: 1, postos_ok: 0, cupons: 0, litros: 0,
+    veiculos: 0, linhas: 0, detalhe: [{ posto: 'P. TESTE', ok: false, erro: 'timeout 180s' }] };
+  btn.click(); await esperar(40); soltarRollup(); await esperar(120);
+  eh(/timeout 180s/.test(msg.textContent) && /erro/.test(msg.className),
+     'falha mostra o motivo, em vermelho', msg.textContent + '  [' + msg.className + ']');
+
+  // ══════════════════════════════════════════════════════════════
+  h3('7. FATURAMENTO POR COMBUSTÍVEL — a coluna de litros');
+  document.getElementById('tx-posto').value = CNPJ_SONDA;
+  await txCarregarHistorico();
+  await esperar(120);
+  var tbl = document.querySelector('#tx-soma .tx-tbl');
+  eh(!!tbl, 'a tabela foi renderizada');
+  if (!tbl) { pintar(); return; }
+  var ths = [].slice.call(tbl.querySelectorAll('thead th'));
+  var cab = ths.map(function (t) { return t.textContent.trim(); });
+  nota('cabeçalho: ' + cab.join(' | '));
+  eh(cab.join('|') === 'Combustível|Itens|Litros|Bruto|Desconto|Líquido',
+     'seis colunas, litros entre Itens e Bruto', cab.join('|'),
+     'Combustível|Itens|Litros|Bruto|Desconto|Líquido');
+  eh(getComputedStyle(ths[2]).textTransform === 'uppercase',
+     'o título sai em caixa alta, como os vizinhos', getComputedStyle(ths[2]).textTransform, 'uppercase');
+
+  var trs = [].slice.call(tbl.querySelectorAll('tbody tr'));
+  eh(trs.length === 16, 'as 16 descrições da sonda', trs.length + '', '16');
+  var todasCom6 = trs.every(function (r) { return r.querySelectorAll('td').length === 6; });
+  eh(todasCom6, 'toda linha tem 6 células', todasCom6 ? 'sim' : 'NÃO');
+
+  function celula(desc, i) {
+    var r = trs.filter(function (x) { return x.cells[0].textContent.trim() === desc; })[0];
+    return r ? r.cells[i].textContent.trim() : '(linha não achada)';
+  }
+  h3('8. Combustível em litros, produto em unidade');
+  eh(celula('GASOLINA COMUM', 2) === '6.637,132', 'GASOLINA COMUM · 3 casas, sem unidade',
+     celula('GASOLINA COMUM', 2), '6.637,132');
+  eh(celula('ETANOL COMUM', 2) === '7.139,979', 'ETANOL COMUM', celula('ETANOL COMUM', 2), '7.139,979');
+  eh(celula('OLEO DIESEL S-10', 2) === '555,580', 'OLEO DIESEL S-10 (a 3a casa é zero e aparece)',
+     celula('OLEO DIESEL S-10', 2), '555,580');
+  eh(celula('ARLA 32 - 5 LTS', 2) === '2 un', 'ARLA 32 · 2 frascos, marcados como unidade',
+     celula('ARLA 32 - 5 LTS', 2), '2 un');
+  eh(celula('IPI F1 MASTER PERF. 15W40 SL LT', 2) === '3 un', 'óleo · unidade',
+     celula('IPI F1 MASTER PERF. 15W40 SL LT', 2), '3 un');
+  eh(/un/.test(document.querySelector('#tx-soma').textContent) === true,
+     'a nota explica que o total ignora as unidades',
+     (document.querySelectorAll('#tx-soma .tx-nota')[0] || {}).textContent || '(sem nota)');
+
+  h3('9. TOTAL DO POSTO — e ele bate com o que o rollup gravou');
+  var tf = tbl.querySelector('tfoot tr');
+  eh(!!tf, 'existe a linha de total');
+  if (tf) {
+    var tc = [].slice.call(tf.cells).map(function (c) { return c.textContent.trim(); });
+    nota('total: ' + tc.join(' | '));
+    eh(tf.cells.length === 6, 'seis células, como o cabeçalho', tf.cells.length + '', '6');
+    eh(tc[0] === 'TOTAL DO POSTO', 'rótulo', tc[0], 'TOTAL DO POSTO');
+    eh(tc[1] === '694', 'itens = 681 de combustível + 13 de produto', tc[1], '694');
+    // O NÚMERO QUE IMPORTA: idêntico à soma de litros de tecnox_venda_dia para
+    // P. ARAPONGA em 14/09/2026, conferido no banco. Se a coluna estivesse
+    // lendo outro campo, ou somando produto, isto não fecharia.
+    eh(tc[2] === '15.135,328 L', 'litros = os 4 combustíveis, e só eles', tc[2], '15.135,328 L');
+    eh(tc[5] === 'R$ 79.821,15', 'líquido = tudo, combustível + produto', tc[5], 'R$ 79.821,15');
+    var somaComb = 6637.132 + 7139.979 + 802.637 + 555.58;
+    nota('conferência aritmética: ' + somaComb.toFixed(3) + ' L  ·  no banco: 15135.328 L');
+  }
+
+  h3('10. A tabela de campos da sonda não mudou');
+  var campos = document.querySelectorAll('#tx-campos .tx-tbl');
+  eh(campos.length === 2, 'seguem as duas tabelas (capa e itens)', campos.length + '', '2');
+  var cabC = [].slice.call(campos[0].querySelectorAll('thead th')).map(function (t) { return t.textContent.trim(); });
+  eh(cabC.join('|') === 'Campo|Preench.|Zeros|Exemplo|Status', 'com o cabeçalho antigo', cabC.join('|'),
+     'Campo|Preench.|Zeros|Exemplo|Status');
+  eh(campos[0].querySelectorAll('tfoot').length === 0, 'e sem linha de total (só o faturamento ganhou uma)',
+     campos[0].querySelectorAll('tfoot').length + '', '0');
+
+  h3(falhas === 0 ? '<span class="ok">TUDO PASSOU</span>'
+                  : '<span class="bad">' + falhas + ' FALHA(S)</span>');
+  pintar();
+}
+
+rodar().catch(function (e) {
+  linhas.push('<span class="bad">ERRO: ' + hesc(e.message) + '</span>');
+  linhas.push(hesc(String(e.stack || '').split('\n').slice(0, 8).join('\n')));
+  pintar();
+});
+</script>

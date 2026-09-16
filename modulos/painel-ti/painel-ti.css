@@ -309,6 +309,15 @@
 .tx-btn { background: var(--accent); color: #1a1206; border: none; border-radius: 8px;
   font-family: var(--mono); font-size: .78rem; font-weight: 700; padding: .6rem 1rem; cursor: pointer; white-space: nowrap; }
 .tx-btn:hover:not(:disabled) { opacity: .9; }
+/* Spinner do "Atualizar rollup". DENTRO do botao, nao overlay na tela: os
+   ~30s de espera da TecnoX nao impedem de ler o resto da aba, e um veu por
+   cima do painel inteiro daria a entender que tudo parou. As duas cores sao
+   o #1a1206 do TEXTO do botao — sobre o amarelo do --accent, uma borda em
+   --text3 desapareceria. */
+.tx-spin { display: inline-block; width: .7rem; height: .7rem; margin-right: .45rem;
+  vertical-align: -.08rem; border: 2px solid color-mix(in srgb, #1a1206 30%, transparent);
+  border-top-color: #1a1206; border-radius: 50%; animation: tx-girar .8s linear infinite; }
+'keyframes tx-girar { to { transform: rotate(360deg); } }
 .tx-btn:disabled { opacity: .55; cursor: not-allowed; }
 .tx-msg { margin-top: .7rem; font-family: var(--mono); font-size: .74rem; padding: .5rem .7rem; border-radius: 8px; }
 .tx-msg-ok  { color: var(--ok);     background: color-mix(in srgb, var(--ok) 12%, transparent); }
@@ -328,6 +337,10 @@
 .tx-tbl th { font-family: var(--mono); font-size: .62rem; color: var(--text3); text-transform: uppercase;
   letter-spacing: .05em; background: var(--surface2); position: sticky; top: 0; }
 .tx-tbl tbody tr:hover { background: var(--surface2); }
+/* Linha de total. Sem :hover e com fundo proprio: ela nao e um item da
+   lista, e destacar por peso tambem no ultimo <td> evitaria confundi-la
+   com a maior venda do dia. */
+.tx-tbl tfoot td { background: var(--surface2); font-weight: 700; border-bottom: none; }
 .tx-num { text-align: right !important; font-family: var(--mono); }
 .tx-campo { font-family: var(--mono); color: var(--text); }
 .tx-ex { color: var(--text2); max-width: 320px; overflow: hidden; text-overflow: ellipsis; }

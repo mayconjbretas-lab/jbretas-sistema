@@ -950,20 +950,50 @@ function txRenderSoma() {
   const soma = Array.isArray(s.soma_por_item) ? s.soma_por_item : [];
   if (!soma.length) { el.innerHTML = ''; return; }
   const semLitros = soma.every(x => !(Number(x.qtd) > 0));
+  // COMBUSTIVEL x PRODUTO na MESMA coluna, e por isso ela precisa da marca
+  // de unidade. `soma_por_item` e por DESCRICAO DE ITEM, e a TecnoX manda
+  // produto junto: "ARLA 32 - 5 LTS" com qtd 2 sao DOIS FRASCOS, nao dois
+  // litros. Sem o "un" a coluna leria 2 L, e o total do posto somaria frasco
+  // com litro — por isso o total soma SO as linhas de combustivel.
+  // O tipo vem da API (item.tipo === "Combustível"); e o mesmo teste que o
+  // rollup-vendas.js usa para separar as duas metades do cupom.
+  const ehComb = (x) => String(x.tipo == null ? '' : x.tipo).trim() === 'Combustível';
+  // Tres casas: e a precisao com que a bomba mede e com que o rollup grava.
+  // Esta tela existe para conferir contra a TecnoX ao centesimo de litro —
+  // arredondar aqui seria esconder justamente a diferenca que se procura.
+  const txL = (n, casas) => Number(n || 0).toLocaleString('pt-BR',
+    { minimumFractionDigits: casas, maximumFractionDigits: casas });
   const linhas = soma.map(x =>
     '<tr><td class="tx-campo">' + escapeHtml(x.descricao) + '</td>' +
     '<td class="tx-num">' + (x.itens || 0) + '</td>' +
+    '<td class="tx-num">' + (ehComb(x) ? txL(x.qtd, 3) : txL(x.qtd, 0) + ' un') + '</td>' +
     '<td class="tx-num">' + txBRL(x.bruto) + '</td>' +
     '<td class="tx-num">' + txBRL(x.desconto) + '</td>' +
     '<td class="tx-num">' + txBRL(x.valor) + '</td></tr>').join('');
+  const tot = soma.reduce((a, x) => ({
+    itens: a.itens + (Number(x.itens) || 0),
+    litros: a.litros + (ehComb(x) ? (Number(x.qtd) || 0) : 0),
+    bruto: a.bruto + (Number(x.bruto) || 0),
+    desconto: a.desconto + (Number(x.desconto) || 0),
+    valor: a.valor + (Number(x.valor) || 0),
+  }), { itens: 0, litros: 0, bruto: 0, desconto: 0, valor: 0 });
+  const temProduto = soma.some(x => !ehComb(x));
+  const rodape = '<tfoot><tr><td class="tx-campo">TOTAL DO POSTO</td>' +
+    '<td class="tx-num">' + tot.itens + '</td>' +
+    '<td class="tx-num">' + txL(tot.litros, 3) + ' L</td>' +
+    '<td class="tx-num">' + txBRL(tot.bruto) + '</td>' +
+    '<td class="tx-num">' + txBRL(tot.desconto) + '</td>' +
+    '<td class="tx-num">' + txBRL(tot.valor) + '</td></tr></tfoot>';
   el.innerHTML =
     '<div class="section"><div class="section-header"><span class="section-icon">⛽</span>' +
       '<span class="section-title">Faturamento por combustível</span></div>' +
       '<div class="section-body"><div class="tx-tbl-wrap"><table class="tx-tbl"><thead><tr>' +
-        '<th>Combustível</th><th class="tx-num">Itens</th><th class="tx-num">Bruto</th>' +
+        '<th>Combustível</th><th class="tx-num">Itens</th><th class="tx-num">Litros</th>' +
+        '<th class="tx-num">Bruto</th>' +
         '<th class="tx-num">Desconto</th><th class="tx-num">Líquido</th>' +
-      '</tr></thead><tbody>' + linhas + '</tbody></table></div>' +
+      '</tr></thead><tbody>' + linhas + '</tbody>' + rodape + '</table></div>' +
       (semLitros ? '<div class="tx-nota">litros indisponíveis — a API não devolve quantidade</div>' : '') +
+      (!semLitros && temProduto ? '<div class="tx-nota">o total em litros soma só as linhas de combustível — produto vem em unidade (un)</div>' : '') +
     '</div></div>';
 }
 
@@ -1051,6 +1081,11 @@ function mvAplicarModo(semear) {
   const fDe = document.getElementById('mv-f-de');
   const fAte = document.getElementById('mv-f-ate');
   if (fData) fData.hidden = modo !== 'dia';
+  // O botao acompanha o campo de DATA: a rota atualiza um dia, e no recorte
+  // Intervalo nao ha data unica para mandar. Esconder (em vez de desabilitar)
+  // segue o que os proprios campos fazem ali.
+  const btnRoll = document.getElementById('mv-rollup');
+  if (btnRoll) btnRoll.hidden = modo !== 'dia';
   if (fDe) fDe.hidden = modo !== 'periodo';
   if (fAte) fAte.hidden = modo !== 'periodo';
   if (modo === 'periodo' && semear) {
@@ -1073,6 +1108,8 @@ function ligarControlesMov() {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => { _mvFrentTodos = false; mvCarregar(); });
   });
+  const btnRoll = document.getElementById('mv-rollup');
+  if (btnRoll) btnRoll.addEventListener('click', mvAtualizarRollup);
   const selModo = document.getElementById('mv-modo');
   if (selModo) selModo.addEventListener('change', () => {
     _mvFrentTodos = false;
@@ -1100,6 +1137,80 @@ function ligarControlesMov() {
       mvCarregar();
     }
   });
+}
+
+// ATUALIZAR ROLLUP — o unico ponto desta secao que chama a TecnoX.
+//
+// A Movimentacao le o rollup ja gravado, e por isso responde em
+// milissegundos; quando o numero de um posto-dia esta errado ou faltando, o
+// conserto era esperar o cron da madrugada ou pedir para alguem rodar o
+// script. Este botao faz a coleta do par na hora, pela POST
+// /tecnox/rollup-dia — que roda a MESMA funcao do cron, nao uma segunda
+// implementacao.
+//
+// DEMORA ~30s por posto, quase tudo esperando a TecnoX paginar. O aviso do
+// tempo vai na mensagem ANTES de comecar: um spinner sem prazo em cima de
+// meio minuto de espera parece travado, e a pessoa clica de novo.
+//
+// RECARREGA OS CARDS NO `finally`, tenha dado certo ou errado. Se deu certo,
+// o numero novo aparece; se falhou no meio, a leitura do banco e a unica
+// forma honesta de mostrar em que estado o dia ficou — a rota pode ter
+// gravado antes de falhar em outro ponto.
+let _mvRollando = false;
+
+async function mvAtualizarRollup() {
+  if (_mvRollando) return;
+  const posto_id = (document.getElementById('mv-posto') || {}).value || '';
+  const data = (document.getElementById('mv-data') || {}).value || '';
+  if (!posto_id) { mvMsg('Selecione um posto.', 'erro'); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) { mvMsg('Selecione uma data.', 'erro'); return; }
+  const btn = document.getElementById('mv-rollup');
+  const sel = document.getElementById('mv-posto');
+  const nome = (sel && sel.options[sel.selectedIndex]) ? sel.options[sel.selectedIndex].textContent : 'o posto';
+  _mvRollando = true;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="tx-spin"></span>Atualizando…'; }
+  mvMsg('Consultando a TecnoX e regravando ' + nome + ' em ' + diaBR(data) + '… leva cerca de 30s.', 'ok');
+  // O RESULTADO E GUARDADO E MOSTRADO SO NO FIM, depois do mvCarregar():
+  // aquela funcao comeca limpando a faixa de mensagem (mvMsg('', '')), entao
+  // escrever o resultado antes dela era escrever e apagar no mesmo instante —
+  // a pessoa esperava 30s e nao via numero nenhum.
+  let fim = null;
+  try {
+    const r = await apiFetch('/tecnox/rollup-dia', {
+      method: 'POST',
+      body: JSON.stringify({ data: data, posto_id: posto_id }),
+    });
+    const litros = Number(r.litros || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+    if (r.ok) {
+      fim = { tipo: 'ok', txt: 'Rollup atualizado: ' + mvInt(r.cupons) + ' cupons · ' + litros + ' L · ' +
+        mvInt(r.veiculos) + ' veículos · ' + mvInt(r.linhas) + ' linhas gravadas' +
+        // O dia de hoje volta pela metade porque a operacao ainda esta
+        // acontecendo. Dizer isso aqui evita comparar um dia aberto com um
+        // fechado e concluir que o posto caiu.
+        (r.parcial ? ' — dia em andamento, número parcial' : '') };
+    } else {
+      const falhou = (r.detalhe || []).filter(function (d) { return !d.ok; });
+      fim = { tipo: 'erro', txt: 'O rollup não fechou: ' +
+        (falhou.map(function (d) { return d.posto + ' — ' + d.erro; }).join(' | ') || 'motivo não informado') };
+    }
+  } catch (err) {
+    fim = { tipo: 'erro', txt: 'Falha ao atualizar o rollup: ' + (err.message || err) };
+  } finally {
+    _mvRollando = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Atualizar rollup'; }
+    _mvFrentTodos = false;
+    // Recarrega tenha dado certo ou errado: se falhou no meio, a leitura do
+    // banco e a unica forma honesta de mostrar em que estado o dia ficou.
+    await mvCarregar();
+    if (fim) mvMsg(fim.txt, fim.tipo);
+  }
+}
+
+// dd/mm a partir do ISO, para a mensagem. Sem `new Date(iso)`: aquilo le a
+// string como UTC e devolve o dia anterior em Brasilia.
+function diaBR(iso) {
+  const p = String(iso || '').split('-');
+  return p.length === 3 ? p[2] + '/' + p[1] : String(iso || '');
 }
 
 async function mvCarregar() {
