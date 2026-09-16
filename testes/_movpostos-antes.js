@@ -51,9 +51,6 @@
   var _filtro = { SOUTAG: false, '99': false };   // nenhum ligado = modo pista
   var _cardAberto = null;    // 'total' | 'abast' | 'SOUTAG' | '99' | null
   var _postoAberto = null;   // posto_id
-  // null = botao parado. { fase, i, n, nome, ok, falhas } enquanto roda e
-  // nos 5s do ✓ depois. Ver __mpRollup().
-  var _roll = null;
 
   // ════════ PROJEÇÃO ════════
   // Regra de três e nada mais: o que o mês já vendeu, dividido pelos dias
@@ -145,14 +142,6 @@
   }
   // dd/mm, sem o ano. A frase vive dentro de um período que o usuário
   // acabou de escolher no filtro; repetir o ano ali não informa nada.
-  // A POST /tecnox/rollup-dia e ehAdm no servidor. Guarda propria aqui para
-  // o botao nao aparecer para quem levaria 403 — este arquivo tambem serve o
-  // painel de LOGISTICA, que le a mesma rota de movimentacao.
-  function ehAdmAqui() {
-    var u = (typeof getUsuarioLogado === 'function') ? getUsuarioLogado() : null;
-    return !!(u && u.perfil === 'ADM');
-  }
-
   function diaMes(iso) {
     if (!iso || String(iso).length < 10) return '';
     return String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7);
@@ -543,62 +532,6 @@
     _cardAberto = null; _postoAberto = null;
     carregar();
   };
-  // UM POSTO POR CHAMADA, em serie. A rota aceita posto_id nulo para varrer
-  // a rede inteira numa requisicao so, mas aquilo sao ~17min de HTTP aberto:
-  // morre no proxy antes de responder e ninguem sabe quanto andou. Em serie,
-  // cada chamada dura ~27s, o progresso e real e um posto que falha nao leva
-  // os outros.
-  //
-  // NAO ESPACA entre chamadas: a exigencia da TecnoX e de ritmo, e uma
-  // requisicao a cada 27s ja e mais lenta que os 3s do cron.
-  //
-  // A LISTA E A QUE A TELA JA TEM (_dados.postos): os postos com venda no
-  // periodo, na ordem que a tela mostra. Buscar /postos de novo traria
-  // tambem os sem movimentacao e a contagem do botao nao casaria com a lista
-  // logo abaixo dele.
-  window.__mpRollup = async function () {
-    if (_roll) return;                       // rodando, ou nos 5s do ✓
-    if (!ehAdmAqui()) return;
-    var postos = (_dados && _dados.postos) ? _dados.postos.slice() : [];
-    var n = postos.length;
-    if (!n) return;
-    // 27s medidos por posto x dia na rota (P. BOMBOM MATRIZ, 14/09/2026, 196
-    // cupons) — quase tudo esperando a TecnoX paginar. Com 37 postos da ~17
-    // min. O numero sai da CONTA e nao cravado: com meia rede no filtro, um
-    // aviso de 17 min estaria errado por duas vezes.
-    var min = Math.max(1, Math.round(n * 27 / 60));
-    if (!window.confirm('Atualizar dados de ' + diaMes(_fim) + '? Demora ~' + min +
-                        ' min para ' + n + ' postos.')) return;
-    _roll = { fase: 'rodando', i: 0, n: n, nome: '', ok: 0, falhas: [] };
-    rollPintar();
-    for (var k = 0; k < n; k++) {
-      _roll.i = k + 1;
-      _roll.nome = postos[k].posto_nome || '';
-      rollPintar();
-      try {
-        var r = await apiFetch('/tecnox/rollup-dia', {
-          method: 'POST',
-          body: JSON.stringify({ data: _fim, posto_id: postos[k].posto_id }),
-        });
-        // A rota responde 200 com ok:false quando o posto nao reconcilia:
-        // isso e falha daquele posto, nao da varredura.
-        if (r && r.ok) _roll.ok++;
-        else _roll.falhas.push(rollQuem(postos[k]) + ': ' +
-          ((((r || {}).detalhe || [])[0] || {}).erro || 'não fechou'));
-      } catch (e) {
-        _roll.falhas.push(rollQuem(postos[k]) + ': ' + ((e && e.message) ? e.message : 'falhou'));
-      }
-    }
-    _roll.fase = 'fim';
-    rollPintar();
-    // O MOTIVO de cada falha vai para o title do botao e para o console: a
-    // tela nao ganha area nova, e "35/37" sem o porque nao serve para agir.
-    if (_roll.falhas.length && window.console) console.warn('Atualizar rollup — falhas:\n' + _roll.falhas.join('\n'));
-    carregar();     // o pintar() dele redesenha a barra com o ✓ ainda de pe
-    setTimeout(function () { _roll = null; pintar(); }, 5000);
-  };
-  function rollQuem(p) { return p.posto_nome || p.posto_id; }
-
   window.__mpCard = function (id) {
     _cardAberto = (_cardAberto === id) ? null : id;
     pintar();
@@ -635,69 +568,8 @@
         '<button type="button" class="mp-atalho' + (_projecao ? ' on' : '') + '"' +
           ' aria-pressed="' + (_projecao ? 'true' : 'false') + '"' +
           ' onclick="__mpProjecao()">Projeção</button>' +
-        htmlRoll() +
       '</div>' +
     '</div>';
-  }
-
-  // ════════ ATUALIZAR ROLLUP ════════
-  // O unico controle da barra que ESCREVE. Os outros tres atalhos trocam
-  // recorte do que ja veio e desfazem-se num clique; este chama a TecnoX
-  // posto a posto e regrava o dia no banco. Por isso pede confirmacao, tem
-  // cor propria (nao e .mp-atalho) e diz o prazo antes de comecar.
-  //
-  // A BARRA DE PROGRESSO E O PROPRIO BOTAO: um gradiente inline cuja parada
-  // anda com os postos concluidos, e o rotulo virando "Atualizando 3/37…".
-  // Nenhuma area nova na tela — e nenhum pintar() no meio do laco, senao a
-  // tela inteira se redesenharia 37 vezes e fecharia o card que estivesse
-  // aberto. O laco escreve direto no no do botao (rollPintar).
-  //
-  // O verde e cravado em hex, sem variavel de tema, de proposito: e o unico
-  // elemento da barra que nao e filtro, e a cor e o que diz isso nos dois
-  // temas. O tom do preenchimento e a propria cor da borda com alfa — nao ha
-  // quarta cor inventada aqui.
-  var ROLL_PREENCHE = 'rgba(15, 110, 86, .22)';
-
-  function cortarNome(s, n) {
-    s = String(s === null || s === undefined ? '' : s);
-    return s.length > n ? s.slice(0, n - 1) + '…' : s;
-  }
-  function rollTexto() {
-    if (!_roll) return '⟳ Atualizar rollup';
-    if (_roll.fase === 'fim') return 'Atualizado ✓ ' + _roll.ok + '/' + _roll.n;
-    // O nome cortado em 16: "P. LOURA EMPREENDIMENTOS" dobrava a largura do
-    // botao no meio do laco e empurrava a barra de filtros.
-    return 'Atualizando ' + _roll.i + '/' + _roll.n + '… ' + cortarNome(_roll.nome, 16);
-  }
-  // Concluidos, nao o que esta em curso: no posto 3 de 37, dois terminaram.
-  function rollGradiente() {
-    if (!_roll) return '';
-    var pct = (_roll.fase === 'fim') ? 100
-            : Math.max(0, Math.min(100, Math.round((_roll.i - 1) / _roll.n * 100)));
-    return 'linear-gradient(to right, ' + ROLL_PREENCHE + ' ' + pct + '%, ' +
-           'rgba(0,0,0,0) ' + pct + '%)';
-  }
-  function htmlRoll() {
-    if (!ehAdmAqui()) return '';
-    var g = rollGradiente();
-    return '<button type="button" id="mp-roll" class="mp-roll' + (_roll ? ' mp-roll-on' : '') + '"' +
-      (_roll ? ' disabled aria-busy="true"' : '') +
-      ((_roll && _roll.falhas.length) ? ' title="' + esc(_roll.falhas.join(' | ')) + '"' : '') +
-      (g ? ' style="background-image:' + g + '"' : '') +
-      ' onclick="__mpRollup()">' + esc(rollTexto()) + '</button>';
-  }
-  // Escreve no no que ja esta na tela. MESMAS funcoes do htmlRoll acima —
-  // duas copias do rotulo divergiriam no primeiro ajuste de texto.
-  function rollPintar() {
-    var btn = _sec ? _sec.querySelector('#mp-roll') : null;
-    if (!btn) return;
-    btn.textContent = rollTexto();
-    btn.className = 'mp-roll' + (_roll ? ' mp-roll-on' : '');
-    btn.disabled = !!_roll;
-    if (_roll) btn.setAttribute('aria-busy', 'true'); else btn.removeAttribute('aria-busy');
-    if (_roll && _roll.falhas.length) btn.title = _roll.falhas.join(' | ');
-    else btn.removeAttribute('title');
-    btn.style.backgroundImage = rollGradiente();
   }
 
   // O MÊS PROJETADO E A BASE DO LUCRO, e mais nada. A régra de três da venda

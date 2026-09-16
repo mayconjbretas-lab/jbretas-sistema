@@ -1,0 +1,89 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>palco do movimentacao-postos (uso interno do harness)</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+<div id="palco"></div>
+<script>
+// ════════════════════════════════════════════════════════════════
+// PALCO MÍNIMO. Renderiza UMA versão do movimentacao-postos.js e deixa o
+// HTML do corpo disponível em window.corpoHtml().
+//
+// Existe por uma razão só: dois arquivos que declaram o mesmo IIFE não podem
+// dividir escopo. Para comparar o render ANTES e DEPOIS byte a byte, a versão
+// anterior precisa de um documento próprio — este, dentro de um iframe do
+// testes/mp-atualizar-rollup.html.
+//
+// #v=antes  → testes/_movpostos-antes.js (cópia do HEAD anterior)
+// #v=agora  → o arquivo de produção
+// Só esses dois: o parâmetro escolhe entre caminhos fixos, não carrega um
+// script arbitrário da URL.
+//
+// OS PARÂMETROS VÃO NO HASH, e não na query, por causa do servidor estático:
+// o `npx serve` faz clean URLs e redireciona /x.html?v=antes para /x,
+// DESCARTANDO a query. Os três iframes caíam no padrão e o teste comparava a
+// versão nova consigo mesma. O fragmento nunca chega ao servidor.
+// ════════════════════════════════════════════════════════════════
+var ARQS = {
+  antes: '/testes/_movpostos-antes.js',
+  agora: '/modulos/painel-adm/movimentacao-postos.js',
+};
+var PARAM = new URLSearchParams(String(location.hash || '').replace(/^#/, ''));
+var QUAL = PARAM.get('v') === 'antes' ? 'antes' : 'agora';
+var PERFIL = PARAM.get('perfil') || 'ADM';
+var INICIO = '2026-09-01', FIM = '2026-09-14';
+
+window.getUsuarioLogado = function () {
+  return { id: 'h', nome: 'H', perfil: PERFIL, ti: PERFIL === 'ADM' };
+};
+window.exigirSessao = window.getUsuarioLogado;
+
+var FIX = null;
+window.CHAMADAS = [];
+window.RESPOSTA_ROLLUP = { ok: true, cupons: 1, litros: 1, veiculos: 1, linhas: 1 };
+window.apiFetch = function (url, opts) {
+  var u = String(url);
+  window.CHAMADAS.push({ url: u, opts: opts || null });
+  if (u.indexOf('/tecnox/movimentacao-postos') === 0) return Promise.resolve(FIX);
+  if (u.indexOf('/tecnox/rollup-dia') === 0) {
+    var body = JSON.parse((opts || {}).body || '{}');
+    var r = window.RESPOSTA_ROLLUP;
+    if (typeof r === 'function') return r(body);
+    return Promise.resolve(r);
+  }
+  if (u.indexOf('/despesas/meses') === 0) return Promise.resolve({ success: true, meses: [] });
+  return Promise.resolve({ success: true });
+};
+
+window.corpoHtml = function () {
+  var el = document.querySelector('#palco #mp-corpo');
+  return el ? el.innerHTML : '';
+};
+
+window.pronto = (async function () {
+  FIX = await new Promise(function (ok, er) {
+    var x = new XMLHttpRequest();
+    x.open('GET', '/testes/fixtures-movpostos-01-14-09.json');
+    x.onload = function () { try { ok(JSON.parse(x.responseText)); } catch (e) { er(e); } };
+    x.onerror = function () { er(new Error('fixture não carregou')); };
+    x.send();
+  });
+  await new Promise(function (ok, er) {
+    var s = document.createElement('script');
+    s.src = ARQS[QUAL];
+    s.onload = ok;
+    s.onerror = function () { er(new Error(ARQS[QUAL] + ' não carregou')); };
+    document.body.appendChild(s);
+  });
+  var sec = document.getElementById('palco');
+  window.renderMovPostos(sec);
+  // Período CRAVADO nos dois lados: o padrão do módulo é "ontem", que muda com
+  // o relógio de quem roda o teste, e a comparação byte a byte precisa dos dois
+  // lados pedindo o mesmo dia.
+  await new Promise(function (r) { setTimeout(r, 80); });
+  window.__mpPeriodo('inicio', INICIO);
+  window.__mpPeriodo('fim', FIM);
+  await new Promise(function (r) { setTimeout(r, 120); });
+  return true;
+})();
+</script>

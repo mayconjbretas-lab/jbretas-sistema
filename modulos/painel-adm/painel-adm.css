@@ -382,6 +382,20 @@ html, body { height: 100%; overflow: hidden; }
    que liga um MODO em vez de só trocar o período. Mesmas medidas do
    .mp-atalho: muda cor, nada de caixa. */
 .mp-atalho.on { background: var(--acd); border-color: var(--ac); color: var(--ac); }
+/* "Atualizar rollup". NÃO é .mp-atalho de propósito: os atalhos trocam o
+   recorte do que já veio e se desfazem num clique; este chama a TecnoX posto
+   a posto e REGRAVA o dia. Cor cravada em hex, igual nos dois temas, porque
+   é o que separa o único controle que age dos três que filtram. */
+.mp-roll { background-color: #E1F5EE; color: #085041; border: 1px solid #0F6E56;
+  border-radius: 7px; font-family: var(--mono); font-size: .68rem; font-weight: 700;
+  padding: 5px 11px; cursor: pointer; }
+.mp-roll:hover:not(:disabled) { background-color: #CFEDE1; }
+/* Em progresso o próprio botão é a barra: o gradiente vem por style inline
+   (a parada anda 37 vezes) e o rótulo vira "Atualizando 3/37… P. ITAPOA".
+   O min-width é o que impede o botão de encolher e crescer a cada posto,
+   empurrando os vizinhos da barra a cada 27 segundos. */
+.mp-roll-on { min-width: 205px; }
+.mp-roll:disabled { cursor: progress; }
 /* A régra de três embaixo dos filtros. Ocupa uma linha de texto e empurra
    os cards para baixo só quando a projeção está ligada. */
 .mp-proj { font-family: var(--mono); font-size: .64rem; font-weight: 700;

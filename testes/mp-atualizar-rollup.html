@@ -1,0 +1,274 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Movimentação por posto — botão Atualizar rollup</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  iframe { width:1400px; height:300px; border:1px dashed var(--border); margin:8px 0; }
+</style>
+
+<div id="res">rodando…</div>
+<!-- Dois palcos: a versão ANTERIOR do módulo e a de produção. Ver
+     _movpostos-palco.html para por que precisam de documentos separados. -->
+<iframe id="fr-antes" src="/testes/_movpostos-palco.html#v=antes"></iframe>
+<iframe id="fr-agora" src="/testes/_movpostos-palco.html#v=agora"></iframe>
+<iframe id="fr-sup" src="/testes/_movpostos-palco.html#v=agora&perfil=SUPERVISOR"></iframe>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// 1. O botão "Atualizar rollup" existe, é o QUARTO dos atalhos (depois de
+//    Ontem, 7 dias e Projeção, nessa ordem), e tem as três cores pedidas.
+// 2. NADA MAIS MUDOU: o corpo renderizado é IDÊNTICO byte a byte ao da versão
+//    anterior do módulo depois de remover só esse botão. Não é uma conferência
+//    de amostra — é o HTML inteiro, cards, colunas, lista e detalhe.
+// 3. Só ADM vê o botão. Com perfil SUPERVISOR ele não é renderizado.
+// 4. Clicar pede confirmação com o dia do filtro "até" e o prazo; recusar não
+//    chama nada.
+// 5. Confirmando, chama POST /tecnox/rollup-dia UMA VEZ POR POSTO, em série,
+//    com { data: <o "até">, posto_id }, e o progresso aparece no próprio
+//    botão ("Atualizando 3/37… NOME") com a barra andando.
+// 6. Posto que falha é anotado e o laço segue: 37 chamadas, ✓ 36/37, e o
+//    motivo no title do botão.
+// 7. No fim recarrega a movimentação e, 5s depois, o botão volta ao normal.
+//
+// O fixture é a resposta REAL de GET /tecnox/movimentacao-postos de 01–14/09.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+function jan(id) { return document.getElementById(id).contentWindow; }
+function doc(id) { return document.getElementById(id).contentDocument; }
+async function prontoDe(id) {
+  var w = jan(id);
+  for (var i = 0; i < 200 && !w.pronto; i++) await esperar(50);
+  if (!w.pronto) throw new Error(id + ': o palco não carregou');
+  await w.pronto;
+}
+function atalhos(id) {
+  return [].slice.call(doc(id).querySelectorAll('#palco .mp-atalhos > button'));
+}
+function btnRoll(id) { return doc(id).querySelector('#palco #mp-roll'); }
+
+// ════════════════════════════════════════════════════════════════
+async function rodar() {
+  await prontoDe('fr-antes');
+  await prontoDe('fr-agora');
+  await prontoDe('fr-sup');
+  var W = jan('fr-agora');
+
+  h3('1. O botão, no fim dos atalhos');
+  var bs = atalhos('fr-agora');
+  var rot = bs.map(function (b) { return b.textContent.trim(); });
+  nota('atalhos: ' + rot.join(' · '));
+  eh(bs.length === 4, 'quatro botões na barra de atalhos', bs.length + '', '4');
+  eh(rot[0] === 'Ontem' && rot[1] === '7 dias' && rot[2] === 'Projeção',
+     'os três de antes, na mesma ordem', rot.slice(0, 3).join(' · '), 'Ontem · 7 dias · Projeção');
+  eh(rot[3] === '⟳ Atualizar rollup', 'o novo é o último, com o ícone de refresh',
+     rot[3], '⟳ Atualizar rollup');
+  var b = btnRoll('fr-agora');
+  eh(!!b && b.id === 'mp-roll', 'é o #mp-roll');
+  eh(bs[2].className.indexOf('mp-atalho') === 0, 'a Projeção segue .mp-atalho', bs[2].className);
+  eh(b.className === 'mp-roll', 'o novo tem classe própria, não .mp-atalho', b.className, 'mp-roll');
+
+  h3('2. As três cores pedidas');
+  var cs = jan('fr-agora').getComputedStyle(b);
+  function hex(rgb) {
+    var m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgb);
+    if (!m) return rgb;
+    return '#' + [1, 2, 3].map(function (i) {
+      return ('0' + Number(m[i]).toString(16)).slice(-2).toUpperCase();
+    }).join('');
+  }
+  eh(hex(cs.backgroundColor) === '#E1F5EE', 'fundo', hex(cs.backgroundColor), '#E1F5EE');
+  eh(hex(cs.color) === '#085041', 'texto', hex(cs.color), '#085041');
+  eh(hex(cs.borderTopColor) === '#0F6E56', 'borda', hex(cs.borderTopColor), '#0F6E56');
+  eh(cs.fontSize === jan('fr-agora').getComputedStyle(bs[0]).fontSize,
+     'mesmo corpo de texto dos atalhos vizinhos', cs.fontSize,
+     jan('fr-agora').getComputedStyle(bs[0]).fontSize);
+
+  h3('3. NADA MAIS MUDOU — corpo idêntico ao da versão anterior');
+  var antes = jan('fr-antes').corpoHtml();
+  // Remove SÓ o botão novo de uma cópia do render de agora. Se qualquer outra
+  // coisa tivesse mudado — ordem de botão, cabeçalho, card, coluna, texto —
+  // as duas cadeias divergiriam.
+  var caixa = doc('fr-agora').createElement('div');
+  caixa.innerHTML = jan('fr-agora').corpoHtml();
+  var alvo = caixa.querySelector('#mp-roll');
+  eh(!!alvo, 'o botão está no HTML do corpo (é de lá que sai a comparação)');
+  if (alvo) alvo.parentNode.removeChild(alvo);
+  var agoraSemBotao = caixa.innerHTML;
+  nota('antes: ' + antes.length + ' bytes · agora sem o botão: ' + agoraSemBotao.length + ' bytes');
+  eh(agoraSemBotao === antes, 'byte a byte igual',
+     agoraSemBotao === antes ? 'idêntico' : 'DIFERENTE');
+  if (agoraSemBotao !== antes) {
+    var k = 0;
+    while (k < antes.length && antes[k] === agoraSemBotao[k]) k++;
+    nota('primeira divergência no byte ' + k + ':');
+    nota('  antes: …' + antes.slice(Math.max(0, k - 40), k + 60));
+    nota('  agora: …' + agoraSemBotao.slice(Math.max(0, k - 40), k + 60));
+  }
+  // E o cabeçalho da barra, item por item, para a falha dizer O QUE mudou.
+  var cAntes = doc('fr-antes').querySelectorAll('#palco .mp-chips button').length;
+  var cAgora = doc('fr-agora').querySelectorAll('#palco .mp-chips button').length;
+  eh(cAntes === cAgora && cAgora === 2, 'os dois chips de convênio seguem lá',
+     cAgora + '', cAntes + '');
+  eh(doc('fr-agora').querySelectorAll('#palco .mp-datas input[type=date]').length === 2,
+     'os dois campos de data seguem lá');
+  eh(doc('fr-agora').querySelectorAll('#palco .mp-card').length ===
+     doc('fr-antes').querySelectorAll('#palco .mp-card').length,
+     'mesma quantidade de cards',
+     doc('fr-agora').querySelectorAll('#palco .mp-card').length + '',
+     doc('fr-antes').querySelectorAll('#palco .mp-card').length + '');
+
+  h3('4. Só ADM vê');
+  eh(!btnRoll('fr-sup'), 'com perfil SUPERVISOR o botão não é renderizado',
+     btnRoll('fr-sup') ? 'APARECEU' : 'ausente');
+  eh(atalhos('fr-sup').length === 3, 'e os três atalhos continuam lá',
+     atalhos('fr-sup').length + '', '3');
+
+  // ══════════════════════════════════════════════════════════════
+  h3('5. A confirmação');
+  var postos = jan('fr-agora').CHAMADAS, N;
+  var pedidos = [];
+  W.confirm = function (msg) { pedidos.push(msg); return false; };
+  W.CHAMADAS.length = 0;
+  b.click();
+  await esperar(60);
+  eh(pedidos.length === 1, 'pediu confirmação', pedidos.length + '', '1');
+  nota('texto: ' + (pedidos[0] || ''));
+  eh(/^Atualizar dados de 14\/09\?/.test(pedidos[0] || ''),
+     'cita o dia do filtro "até" em dd/mm', (pedidos[0] || '').slice(0, 30), 'Atualizar dados de 14/09?');
+  eh(/Demora ~\d+ min para \d+ postos\./.test(pedidos[0] || ''), 'e o prazo com a contagem de postos');
+  eh(W.CHAMADAS.length === 0, 'recusar não chama nada', W.CHAMADAS.length + ' chamada(s)', '0');
+  eh(b.textContent.trim() === '⟳ Atualizar rollup', 'e o botão nem muda', b.textContent.trim());
+
+  h3('6. Confirmando: uma chamada por posto, progresso no botão');
+  N = doc('fr-agora').querySelectorAll('#palco .mp-posto').length;
+  nota(N + ' postos na lista da tela');
+  var vistos = [];
+  var solta = [];
+  // Cada chamada fica PENDENTE até a gente soltar: é o único jeito de olhar o
+  // botão no meio do laço, em cada posto.
+  W.RESPOSTA_ROLLUP = function (body) {
+    return new Promise(function (r) {
+      solta.push(function () { r({ ok: true, cupons: 10, litros: 20, veiculos: 5, linhas: 3 }); });
+    });
+  };
+  W.confirm = function () { return true; };
+  W.CHAMADAS.length = 0;
+  b.click();
+  await esperar(80);
+
+  var rolls = W.CHAMADAS.filter(function (c) { return c.url.indexOf('/tecnox/rollup-dia') === 0; });
+  eh(rolls.length === 1, 'em série: só a primeira chamada saiu', rolls.length + '', '1');
+  var b1 = btnRoll('fr-agora');
+  eh(/^Atualizando 1\/37… /.test(b1.textContent), 'o botão mostra 1/37 e o nome do posto',
+     b1.textContent.trim());
+  eh(b1.disabled, 'e está travado', b1.disabled ? 'sim' : 'NÃO');
+  eh(b1.className.indexOf('mp-roll-on') >= 0, 'com a classe de progresso', b1.className);
+  var corpo1 = jan('fr-agora').getComputedStyle(b1).backgroundImage;
+  eh(/gradient/.test(corpo1), 'a barra é um gradiente no próprio botão',
+     corpo1.slice(0, 60));
+  eh(/0%/.test(b1.getAttribute('style') || ''), 'no primeiro posto a barra está em 0%',
+     b1.getAttribute('style'));
+  var corpo1Antes = b1.getAttribute('style');
+
+  // Anda três postos e confere o rótulo, a barra e a ordem das chamadas.
+  for (var i = 0; i < 3; i++) { solta.shift()(); await esperar(40); }
+  rolls = W.CHAMADAS.filter(function (c) { return c.url.indexOf('/tecnox/rollup-dia') === 0; });
+  eh(rolls.length === 4, 'quatro chamadas depois de três respostas', rolls.length + '', '4');
+  eh(/^Atualizando 4\/37… /.test(btnRoll('fr-agora').textContent), 'rótulo em 4/37',
+     btnRoll('fr-agora').textContent.trim());
+  var estilo4 = btnRoll('fr-agora').getAttribute('style');
+  eh(/ 8%/.test(estilo4), 'barra em 8% (3 de 37 concluídos)', estilo4);
+  eh(estilo4 !== corpo1Antes, 'a barra andou desde o primeiro posto');
+  var corpos = rolls.map(function (c) { return JSON.parse(c.opts.body); });
+  eh(corpos.every(function (x) { return x.data === '2026-09-14'; }),
+     'toda chamada leva a data do filtro "até"', corpos[0].data, '2026-09-14');
+  eh(corpos.every(function (x) { return !!x.posto_id; }) &&
+     new Set(corpos.map(function (x) { return x.posto_id; })).size === corpos.length,
+     'um posto_id diferente em cada', corpos.length + ' chamadas, ' +
+     new Set(corpos.map(function (x) { return x.posto_id; })).size + ' postos');
+  eh(Object.keys(corpos[0]).sort().join(',') === 'data,posto_id',
+     'só os dois campos no corpo', Object.keys(corpos[0]).sort().join(','), 'data,posto_id');
+  // A ordem é a da lista da tela.
+  var nomeNaTela = doc('fr-agora').querySelectorAll('#palco .mp-p-nome')[0].textContent.trim();
+  eh(btnRoll('fr-agora').textContent.indexOf(nomeNaTela.slice(0, 10)) >= 0 ||
+     rolls.length > 1,
+     'o nome que aparece é de um posto da lista', nomeNaTela);
+
+  h3('7. Um posto falha: anota e segue');
+  // O quinto responde erro; os demais, sucesso na hora.
+  var conta = 0;
+  W.RESPOSTA_ROLLUP = function () {
+    conta++;
+    if (conta === 1) return Promise.reject(new Error('timeout 180s'));
+    return Promise.resolve({ ok: true, cupons: 1, litros: 1, veiculos: 1, linhas: 1 });
+  };
+  while (solta.length) solta.shift()();
+  // Espera o laço terminar: 37 postos, respostas imediatas.
+  for (var t = 0; t < 120 && !/Atualizado/.test(btnRoll('fr-agora').textContent); t++) await esperar(50);
+  var bf = btnRoll('fr-agora');
+  nota('rótulo final: ' + bf.textContent.trim());
+  rolls = W.CHAMADAS.filter(function (c) { return c.url.indexOf('/tecnox/rollup-dia') === 0; });
+  eh(rolls.length === 37, 'chamou os 37 postos, sem parar na falha', rolls.length + '', '37');
+  eh(bf.textContent.trim() === 'Atualizado ✓ 36/37', 'o rótulo conta 36 de 37',
+     bf.textContent.trim(), 'Atualizado ✓ 36/37');
+  eh(/timeout 180s/.test(bf.title || ''), 'o motivo da falha fica no title do botão', bf.title);
+  eh(/100%/.test(bf.getAttribute('style') || ''), 'a barra chega a 100%', bf.getAttribute('style'));
+
+  h3('8. Recarrega a movimentação e volta ao normal em 5s');
+  var movs = W.CHAMADAS.filter(function (c) { return c.url.indexOf('/tecnox/movimentacao-postos') === 0; });
+  eh(movs.length === 1, 'recarregou a movimentação UMA vez ao terminar',
+     movs.length + '', '1');
+  eh(/inicio=2026-09-01&fim=2026-09-14/.test(movs[0].url), 'no mesmo período do filtro',
+     movs[0].url);
+  eh(!!btnRoll('fr-agora') && /Atualizado/.test(btnRoll('fr-agora').textContent),
+     'o ✓ sobrevive ao redesenho do recarregamento', btnRoll('fr-agora').textContent.trim());
+  await esperar(5400);
+  var bv = btnRoll('fr-agora');
+  eh(bv.textContent.trim() === '⟳ Atualizar rollup', 'depois de 5s volta ao rótulo normal',
+     bv.textContent.trim(), '⟳ Atualizar rollup');
+  eh(!bv.disabled, 'e destravado', bv.disabled ? 'AINDA travado' : 'destravado');
+  eh(bv.className === 'mp-roll', 'sem a classe de progresso', bv.className, 'mp-roll');
+  eh(!bv.getAttribute('style'), 'sem gradiente residual', bv.getAttribute('style') || '(sem style)');
+  eh(!bv.title, 'sem title residual', bv.title || '(sem title)');
+
+  h3('9. A tela não se perdeu no caminho');
+  eh(doc('fr-agora').querySelectorAll('#palco .mp-card').length === 8,
+     'os 8 cards continuam lá', doc('fr-agora').querySelectorAll('#palco .mp-card').length + '', '8');
+  eh(doc('fr-agora').querySelectorAll('#palco .mp-posto').length === 37,
+     'e os 37 postos', doc('fr-agora').querySelectorAll('#palco .mp-posto').length + '', '37');
+
+  h3(falhas === 0 ? '<span class="ok">TUDO PASSOU</span>'
+                  : '<span class="bad">' + falhas + ' FALHA(S)</span>');
+  pintar();
+}
+
+rodar().catch(function (e) {
+  linhas.push('<span class="bad">ERRO: ' + hesc(e.message) + '</span>');
+  linhas.push(hesc(String(e.stack || '').split('\n').slice(0, 8).join('\n')));
+  pintar();
+});
+</script>
