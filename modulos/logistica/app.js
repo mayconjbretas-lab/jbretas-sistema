@@ -179,6 +179,9 @@ function popularSelPosto() {
     lista.map(p => '<option value="' + esc(p.nome) + '">' + esc(p.nome) + '</option>').join('');
   sel.value = '';
   POSTO_ATUAL = '';
+  // A lista acabou de ser (re)montada — é aqui, e só aqui, que a busca
+  // guarda a cópia íntegra dela. Ver pbCapturar().
+  pbCapturar();
 }
 
 // Trocar a bandeira: refiltra os postos e volta pra "Todos os postos".
@@ -216,133 +219,104 @@ function onPostoChange() {
 // nome — digitar "ana" não leva a "P. ANA LUCIA" porque todos começam com
 // "P. ". O campo filtra por TRECHO, que é como alguém lembra de um posto.
 //
-// O <select> segue sendo a fonte de verdade. Este bloco só escreve nele e
-// dispara o change; quem carrega a matriz, atualiza a faixa e grava o hash
-// continua sendo o onPostoChange, chamado pelo onchange do próprio select.
-// Chamar onPostoChange direto daqui criaria um segundo caminho para o
-// mesmo efeito — e um deles acabaria esquecido numa mudança futura.
+// O CAMPO NÃO SUBSTITUI O SELECT. São dois controles empilhados e visíveis
+// ao mesmo tempo: busca em cima, lista embaixo. O campo só ENCURTA as
+// opções do select — quem não digitar nada usa a lista como sempre usou.
+// (A versão anterior cobria o select com o input e desenhava uma lista
+// própria em <ul>; virava um controle novo para uma tarefa que o select
+// já fazia, e escondia de quem só queria abrir e rolar.)
+//
+// O <select> segue sendo a fonte de verdade: é o value dele que o app lê
+// (POSTO_ATUAL) e o onchange dele que aciona a carga da matriz, a faixa e o
+// hash. Este bloco NUNCA chama onPostoChange nem dispara change — ele só
+// reescreve as <option>. Sem segundo caminho para o mesmo efeito.
 function pbSemAcento(v) {
   return String(v == null ? '' : v).normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    .replace(/[̀-ͯ]/g, '').toUpperCase();
 }
-let _pbIdx = -1;          // opção sob a seta; -1 = nenhuma
-let _pbFiltrados = [];    // [{valor, texto}] do render atual
+// Cópia ÍNTEGRA das opções, tirada quando o select é populado. Filtrar
+// lendo o próprio select não funcionaria: a primeira filtragem já teria
+// jogado fora as opções que a segunda precisa de volta.
+let _pbTodas = [];
 function pbEl() {
   return {
-    inp: document.getElementById('pb-input'),
-    lst: document.getElementById('pb-lista'),
-    sel: document.getElementById('sel-posto'),
+    inp:   document.getElementById('pb-input'),
+    sel:   document.getElementById('sel-posto'),
+    x:     document.getElementById('pb-x'),
+    conta: document.getElementById('pb-conta'),
   };
 }
-// O texto do campo é o rótulo da opção selecionada — "Todos os postos"
-// quando o value é vazio. Fica em branco só enquanto o select não foi
-// populado, para o placeholder aparecer em vez de "Carregando postos...".
-function pbSincronizar() {
-  const { inp, sel } = pbEl();
-  if (!inp || !sel) return;
-  const op = sel.options[sel.selectedIndex];
-  const pronto = [...sel.options].some(o => o.value !== '');
-  inp.value = (pronto && op) ? op.textContent : '';
+// Chamado pelo popularSelPosto, que é quem monta a lista (no boot e a cada
+// troca de bandeira). ZERA o termo de propósito: a lista mudou debaixo do
+// campo, e um termo velho que não casa com a bandeira nova deixaria o
+// select vazio sem explicação.
+function pbCapturar() {
+  const { sel, inp } = pbEl();
+  if (!sel) return;
+  _pbTodas = [...sel.options].map(o => ({ valor: o.value, texto: o.textContent }));
+  if (inp) inp.value = '';
+  pbAplicar();
 }
-// Filtra por TRECHO, sem acento e sem caixa. "Todos os postos" (value "")
-// fica SEMPRE primeiro e nunca é filtrado: é a saída para desfazer a
-// escolha, e escondê-la atrás de um termo deixaria o usuário sem volta.
-function pbFiltrar(termo) {
-  const { sel } = pbEl();
-  if (!sel) return [];
-  const t = pbSemAcento(termo).trim();
-  const todas = [...sel.options].map(o => ({ valor: o.value, texto: o.textContent }));
-  const todos = todas.filter(o => o.valor === '');
-  const resto = todas
-    .filter(o => o.valor !== '')
-    .filter(o => !t || pbSemAcento(o.texto).indexOf(t) >= 0);
-  return todos.concat(resto);
-}
-function pbRender(termo) {
-  const { inp, lst } = pbEl();
-  if (!lst) return;
-  _pbFiltrados = pbFiltrar(termo);
-  if (!_pbFiltrados.length) {
-    lst.innerHTML = '<li class="pb-vazio">Nenhum posto com esse trecho</li>';
-  } else {
-    lst.innerHTML = _pbFiltrados.map((o, i) =>
-      '<li class="pb-op' + (i === _pbIdx ? ' pb-on' : '') + '" role="option"' +
-      ' aria-selected="' + (i === _pbIdx ? 'true' : 'false') + '"' +
-      ' data-i="' + i + '">' + esc(o.texto) + '</li>').join('');
+// Reescreve as <option> do select com o que casa com o termo.
+//
+// DUAS OPÇÕES NUNCA SOMEM, e as duas por motivo de não deixar o usuário sem
+// saída:
+//   • "Todos os postos" (value "") é como se desfaz a escolha. Escondê-la
+//     atrás de um termo tiraria a volta.
+//   • A opção SELECIONADA. Sem ela o select perderia o value ao filtrar, e
+//     o posto em tela mudaria sozinho por causa de uma letra digitada.
+function pbAplicar() {
+  const { inp, sel, x, conta } = pbEl();
+  if (!inp || !sel || !_pbTodas.length) return;
+  const termo = inp.value.trim();
+  const t = pbSemAcento(termo);
+  const atual = sel.value;
+  const casa = (o) => o.valor === '' || o.valor === atual ||
+                      !t || pbSemAcento(o.texto).indexOf(t) >= 0;
+  const visiveis = _pbTodas.filter(casa);
+  sel.innerHTML = visiveis.map(o =>
+    '<option value="' + esc(o.valor) + '">' + esc(o.texto) + '</option>').join('');
+  // Reposto DEPOIS do innerHTML: trocar as opções zera o value do select.
+  // Não dispara change (atribuição programática não dispara), então a
+  // matriz não recarrega por causa de uma busca.
+  sel.value = atual;
+  if (x) x.hidden = !termo;
+  // Quantos sobraram, e só quando há termo. "37 postos" o tempo todo vira
+  // ruído; "nenhum posto" é o único caso em que a lista curta precisa se
+  // explicar.
+  if (conta) {
+    const n = visiveis.filter(o => o.valor !== '').length;
+    conta.hidden = !termo;
+    conta.textContent = !termo ? ''
+      : (n === 0 ? 'nenhum posto com esse trecho'
+                 : n + (n === 1 ? ' posto' : ' postos') + ' com esse trecho');
+    conta.classList.toggle('pb-conta-zero', !!termo && n === 0);
   }
-  lst.hidden = false;
-  if (inp) inp.setAttribute('aria-expanded', 'true');
 }
-function pbFechar(restaurar) {
-  const { inp, lst } = pbEl();
-  if (lst) { lst.hidden = true; lst.innerHTML = ''; }
-  if (inp) inp.setAttribute('aria-expanded', 'false');
-  _pbIdx = -1; _pbFiltrados = [];
-  if (restaurar) pbSincronizar();
-}
-// Move a seta e ROLA a opção para dentro da caixa: com 37 postos a
-// terceira seta já sai da área visível, e navegar às cegas é pior que não
-// navegar.
-function pbMover(passo) {
-  if (!_pbFiltrados.length) return;
-  _pbIdx = (_pbIdx + passo + _pbFiltrados.length) % _pbFiltrados.length;
-  const { lst } = pbEl();
-  [...lst.querySelectorAll('.pb-op')].forEach((li, i) => {
-    li.classList.toggle('pb-on', i === _pbIdx);
-    li.setAttribute('aria-selected', i === _pbIdx ? 'true' : 'false');
-    if (i === _pbIdx) li.scrollIntoView({ block: 'nearest' });
-  });
-}
-function pbEscolher(i) {
-  const o = _pbFiltrados[i];
-  if (!o) return;
-  const { sel } = pbEl();
-  sel.value = o.valor;
-  pbFechar(false);
-  pbSincronizar();
-  // O CHANGE É DISPARADO, o onPostoChange NÃO é chamado. Ver o comentário
-  // do topo: é o onchange do select que aciona carga, faixa e hash, e
-  // duplicar a chamada carregaria a matriz duas vezes.
-  sel.dispatchEvent(new Event('change', { bubbles: true }));
-}
+// Nome mantido: é por ele que o onPostoChange avisa a busca de que a
+// seleção mudou (pelo hash, pelo boot ou pela própria lista). Reaplicar o
+// filtro aqui é o que mantém a opção selecionada visível quando ela só
+// entrou na lista por ser a selecionada.
+function pbSincronizar() { pbAplicar(); }
 function pbMontar() {
-  const { inp, lst } = pbEl();
-  if (!inp || !lst) return;
-  // FOCAR SELECIONA O TEXTO. Sem isto, o campo chega com "P. BERNARDO"
-  // dentro e a primeira letra digitada vira "P. BERNARDOa" — zero
-  // resultados, e o usuário tendo de apagar o nome antes de buscar.
-  inp.addEventListener('focus', () => { _pbIdx = -1; inp.select(); pbRender(''); });
-  // Ao digitar, a seta volta para o começo: manter o índice antigo faria o
-  // Enter escolher uma opção que saiu da lista.
-  inp.addEventListener('input', () => { _pbIdx = -1; pbRender(inp.value); });
+  const { inp, x } = pbEl();
+  if (!inp) return;
+  inp.addEventListener('input', pbAplicar);
+  // Esc limpa em vez de fechar coisa nenhuma — não há mais lista flutuante
+  // para fechar, e limpar é o que sobra de útil na tecla.
   inp.addEventListener('keydown', (e) => {
-    const aberta = !lst.hidden;
-    if (e.key === 'ArrowDown') { e.preventDefault(); if (!aberta) pbRender(inp.value); pbMover(1); return; }
-    if (e.key === 'ArrowUp') { e.preventDefault(); if (!aberta) pbRender(inp.value); pbMover(-1); return; }
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (!aberta) return;
-      // Enter sem seta escolhe a PRIMEIRA da lista: é a que está à vista e
-      // a que o filtro elegeu.
-      pbEscolher(_pbIdx >= 0 ? _pbIdx : 0);
-      return;
-    }
-    if (e.key === 'Escape') { e.preventDefault(); pbFechar(true); inp.blur(); }
+    if (e.key === 'Escape') { e.preventDefault(); pbLimpar(); }
   });
-  lst.addEventListener('mousedown', (e) => {
-    // mousedown, e não click: o blur do campo chegaria antes do click e
-    // fecharia a lista debaixo do dedo.
-    const li = e.target.closest('.pb-op');
-    if (!li) return;
-    e.preventDefault();
-    pbEscolher(Number(li.dataset.i));
-  });
-  // Clicar fora fecha e devolve o valor atual — sem isto o campo ficaria
-  // com um termo digitado que não corresponde ao posto em tela.
-  document.addEventListener('mousedown', (e) => {
-    if (lst.hidden) return;
-    if (!e.target.closest('#pb-wrap')) pbFechar(true);
-  });
+  if (x) x.addEventListener('click', pbLimpar);
+}
+// O foco volta para o campo: quem limpou vai digitar outro trecho, e
+// mandar o foco para o nada obrigaria a clicar de novo.
+function pbLimpar() {
+  const { inp } = pbEl();
+  if (!inp) return;
+  inp.value = '';
+  pbAplicar();
+  inp.focus();
 }
 
 // ── Faixa de total de PEDIDO FINAL do dia (GET /medicao/pedido-dia) ──
