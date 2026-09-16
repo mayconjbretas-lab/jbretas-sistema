@@ -1,0 +1,374 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logística — card dividido pedido/medição + comentários</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/shared/css/matriz.css">
+<link rel="stylesheet" href="/modulos/logistica/logistica.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:10px; margin:12px 0; }
+</style>
+
+<div id="res">rodando…</div>
+<!-- Os dois hosts que o renderGrade usa. #matriz-vazio é o host da grade. -->
+<div id="palco">
+  <div id="faixa-pedido"></div>
+  <div id="matriz-vazio"></div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// O card de posto da Logística com o app.js DE PRODUÇÃO e o payload REAL de
+// GET /medicao/pedido-dia de 15/09/2026 (37 postos, 32 com pedido, 5 com
+// medição e SEM pedido).
+//
+// 1. Cada card tem duas metades (grid 1fr 1fr) com os rótulos "PEDIDO FINAL"
+//    e "MEDIÇÃO DO DIA", e o lápis segue no canto do header.
+// 2. Totais: pedido em verde #0F6E56, medição em azul #185FA5.
+// 3. Linha "Dif." com pedido − medição, vermelha quando negativa.
+// 4. Posto sem pedido mostra "sem pedido" na esquerda e a medição na direita.
+// 5. Comentário: triângulo de 5px #E24B4A no canto da célula, clique mostra o
+//    texto, botão direito abre menu próprio (sem o do navegador) com Inserir
+//    ou Editar+Excluir, e salvar/excluir chama a rota e acerta a célula sem
+//    re-renderizar a grade.
+// 6. Mobile (≤560px): as metades empilham e a medição troca a borda da
+//    esquerda pela de cima.
+//
+// O fixture veio da rota ANTES da migração, então `comentarios_disponiveis` é
+// false nele. As seções de comentário injetam um payload COM comentário e com
+// a flag ligada — é o estado de depois do SQL.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function hex(rgb) {
+  var m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgb);
+  if (!m) return rgb;
+  return '#' + [1, 2, 3].map(function (i) {
+    return ('0' + Number(m[i]).toString(16)).slice(-2).toUpperCase();
+  }).join('');
+}
+
+// ── dublês ───────────────────────────────────────────────────────
+var FIX = null;
+var CHAMADAS = [];
+var RESP_COMENT = { success: true };
+window.exigirSessao = function () { return { id: 'h', nome: 'H', perfil: 'LOGISTICA' }; };
+window.getUsuarioLogado = window.exigirSessao;
+window.aplicarTema = function () {};
+window.caminhoRaiz = function () { return '/'; };
+window.apiFetch = function (url, opts) {
+  CHAMADAS.push({ url: String(url), opts: opts || null });
+  var u = String(url);
+  if (u.indexOf('/logistica/comentario-medicao') === 0) {
+    if (RESP_COMENT instanceof Error) return Promise.reject(RESP_COMENT);
+    return Promise.resolve(RESP_COMENT);
+  }
+  if (u.indexOf('/medicao/pedido-dia') === 0) return Promise.resolve(FIX);
+  if (u.indexOf('/postos') === 0) return Promise.resolve({ success: true, postos: [] });
+  return Promise.resolve({ success: true });
+};
+function js(src) {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { erro(new Error(src + ' não carregou')); };
+    document.body.appendChild(s);
+  });
+}
+function baixar(u) {
+  return new Promise(function (ok, er) {
+    var x = new XMLHttpRequest();
+    x.open('GET', u);
+    x.onload = function () { try { ok(JSON.parse(x.responseText)); } catch (e) { er(e); } };
+    x.onerror = function () { er(new Error(u + ' não carregou')); };
+    x.send();
+  });
+}
+function cards() { return [].slice.call(document.querySelectorAll('#palco .grade-card')); }
+function cardDe(nome) {
+  return cards().filter(function (c) { return c.getAttribute('data-nome') === nome; })[0];
+}
+// Evento de mouse de verdade: o handler lê clientX/clientY e chama preventDefault.
+function disparar(el, tipo, x, y) {
+  var ev = new MouseEvent(tipo, { bubbles: true, cancelable: true, clientX: x || 0, clientY: y || 0 });
+  var cancelado = !el.dispatchEvent(ev);
+  return cancelado;
+}
+
+// ════════════════════════════════════════════════════════════════
+async function rodar() {
+  FIX = await baixar('/testes/fixtures-logi-pedido-dia.json');
+  nota('fixture: ' + FIX.data + ' · ' + FIX.postos.length + ' postos · ' +
+       FIX.postos_com_pedido + ' com pedido · comentarios_disponiveis=' + FIX.comentarios_disponiveis);
+
+  await js('/modulos/logistica/app.js');
+  await esperar(80);
+  // renderGrade direto: é a função de produção que monta a grade de cards.
+  renderGrade(FIX, FIX.data);
+  await esperar(150);
+
+  h3('1. Card dividido em duas metades');
+  eh(cards().length === FIX.postos.length, 'um card por posto', cards().length + '', FIX.postos.length + '');
+  var c0 = cards()[0];
+  eh(c0.className.indexOf('grade-card--split') >= 0, 'o card tem a classe do desenho novo', c0.className);
+  var split = c0.querySelector('.grade-split');
+  eh(!!split, 'tem o .grade-split');
+  // Abaixo de 560px a media query empilha de propósito — a forma de desktop
+  // só é afirmada no desktop, e a seção 12 cuida do mobile.
+  var DESKTOP = window.innerWidth > 560;
+  nota(DESKTOP ? 'largura ' + window.innerWidth + 'px: conferindo a forma DESKTOP'
+              : 'largura ' + window.innerWidth + 'px: forma mobile — seções 1 e 12 se ajustam');
+  if (DESKTOP) {
+    eh(getComputedStyle(split).gridTemplateColumns.split(' ').length === 2,
+       'duas colunas (1fr 1fr)', getComputedStyle(split).gridTemplateColumns);
+  }
+  var rots = [].slice.call(c0.querySelectorAll('.grade-meia-rot')).map(function (e) { return e.textContent.trim(); });
+  eh(rots.join('|') === 'Pedido final|Medição do dia', 'os dois rótulos, nessa ordem',
+     rots.join('|'), 'Pedido final|Medição do dia');
+  var cr = getComputedStyle(c0.querySelector('.grade-meia-rot'));
+  eh(cr.fontSize === '10px' && cr.letterSpacing === '0.5px' && cr.textTransform === 'uppercase',
+     'rótulo 10px / 0.5px / uppercase', cr.fontSize + ' · ' + cr.letterSpacing + ' · ' + cr.textTransform);
+  if (DESKTOP) {
+    eh(parseFloat(getComputedStyle(c0.querySelector('.grade-meia--med')).borderLeftWidth) > 0,
+       'a metade da medição tem borda à esquerda',
+       getComputedStyle(c0.querySelector('.grade-meia--med')).borderLeftWidth);
+  }
+
+  h3('2. O lápis não saiu do lugar');
+  var lapis = c0.querySelector('.grade-card-top .grade-lapis');
+  eh(!!lapis, 'o lápis está no header do card');
+  eh(lapis.closest('.grade-top-r') === c0.querySelector('.grade-top-r'),
+     'no canto superior direito, com o badge da bandeira');
+  eh(!!c0.querySelector('.grade-card-top .grade-band') || !FIX.postos[0].bandeira,
+     'e a bandeira segue no header');
+
+  h3('3. Totais e cores');
+  var tPed = c0.querySelector('.grade-meia--ped .grade-total');
+  var tMed = c0.querySelector('.grade-meia--med .grade-total--med');
+  var p0 = FIX.postos[0];
+  nota(p0.posto_nome + ': pedido ' + tPed.textContent.trim() +
+       ' · medição ' + (tMed ? tMed.textContent.trim() : '(sem)'));
+  eh(!!tMed, 'a medição tem total próprio');
+  eh(hex(getComputedStyle(tMed).color) === '#185FA5', 'total da medição em azul',
+     hex(getComputedStyle(tMed).color), '#185FA5');
+  // O primeiro card do fixture é SEM pedido (a rota ordena assim), e ali o
+  // "0 L" apagado vence o verde de propósito.
+  var comPedido = cards().filter(function (c) {
+    return c.className.indexOf('grade-card--sem-pedido') < 0;
+  })[0];
+  eh(!!comPedido, 'há card COM pedido no fixture');
+  var tPed2 = comPedido.querySelector('.grade-meia--ped .grade-total');
+  eh(hex(getComputedStyle(tPed2).color) === '#0F6E56', 'total do pedido em verde',
+     hex(getComputedStyle(tPed2).color), '#0F6E56');
+
+  h3('4. Linha "Dif."');
+  var dif = comPedido.querySelector('.grade-dif');
+  eh(!!dif, 'a linha existe');
+  var nomeCP = comPedido.getAttribute('data-nome');
+  var pCP = FIX.postos.filter(function (p) { return p.posto_nome === nomeCP; })[0];
+  var esperado = Number(pCP.total) - Number(pCP.medicao_total);
+  nota(nomeCP + ': pedido ' + pCP.total + ' − medição ' + pCP.medicao_total + ' = ' + esperado);
+  nota('na tela: ' + dif.textContent.replace(/\s+/g, ' ').trim());
+  // fmtNum é o formatador do módulo (toLocaleString, 0 casas). Comparar com
+  // Math.round reprovaria um card CERTO: Math.round(-1059.5) dá -1059 (empate
+  // arredonda para +infinito) e o toLocaleString dá -1.060, afastando do zero.
+  eh(dif.textContent.indexOf(fmtNum(esperado)) >= 0,
+     'traz pedido − medição', dif.textContent.trim(),
+     fmtNum(esperado) + ' (de ' + esperado + ')');
+  eh(dif.className.indexOf(esperado < 0 ? 'grade-dif--baixo' : 'grade-dif--alto') >= 0,
+     'com a classe do sinal', dif.className);
+  var corDif = hex(getComputedStyle(dif.querySelector('span:last-child')).color);
+  var corEsp = hex(getComputedStyle(document.documentElement).getPropertyValue('--danger').trim() || '#000');
+  eh(esperado < 0, 'o sinal desta amostra é negativo', esperado + '');
+  nota('cor do valor: ' + corDif + ' (--danger = ' + corEsp + ')');
+  // TODOS negativos: é a medida que motiva a ressalva no comentário do código.
+  var sinais = FIX.postos.filter(function (p) { return p.medicao_total !== null; })
+    .map(function (p) { return Number(p.total) - Number(p.medicao_total); });
+  var negs = sinais.filter(function (d) { return d < 0; }).length;
+  nota('no fixture: ' + negs + ' de ' + sinais.length + ' postos com Dif. negativa');
+  eh(negs === sinais.length, 'e são TODOS negativos — ver a ressalva no código',
+     negs + '/' + sinais.length);
+
+  h3('5. Sem pedido / sem medição');
+  var semPed = cards().filter(function (c) {
+    return c.className.indexOf('grade-card--sem-pedido') >= 0;
+  })[0];
+  eh(!!semPed, 'há card sem pedido no fixture');
+  eh(!!semPed.querySelector('.grade-meia--ped .grade-sem-tag'),
+     'esquerda diz "sem pedido"',
+     (semPed.querySelector('.grade-meia--ped .grade-sem-tag') || {}).textContent);
+  eh(semPed.querySelectorAll('.grade-meia--med .gm-cel').length > 0,
+     'e a direita mostra a medição normalmente',
+     semPed.querySelectorAll('.grade-meia--med .gm-cel').length + ' célula(s)');
+  // Posto SEM medição: o fixture de 15/09 não tem nenhum, então se monta um.
+  var semMed = JSON.parse(JSON.stringify(FIX));
+  semMed.postos = [Object.assign({}, FIX.postos[0], { medicao_total: null, medicao_por_combustivel: {}, comentarios: {} })];
+  renderGrade(semMed, semMed.data);
+  await esperar(120);
+  var cSM = cards()[0];
+  eh(!!cSM.querySelector('.grade-meia--med .grade-sem-tag'), 'com medicao_total null, direita diz "sem medição"',
+     (cSM.querySelector('.grade-meia--med .grade-sem-tag') || {}).textContent);
+  eh(!cSM.querySelector('.grade-dif'), 'e não desenha a linha Dif.');
+
+  // ══════════════════════════════════════════════════════════════
+  h3('6. Comentário: triângulo na célula');
+  // Estado de DEPOIS do SQL: flag ligada e um comentário gravado.
+  var comFix = JSON.parse(JSON.stringify(FIX));
+  comFix.comentarios_disponiveis = true;
+  var alvoPosto = comFix.postos.filter(function (p) { return Object.keys(p.medicao_por_combustivel).length >= 2; })[0];
+  var combs = Object.keys(alvoPosto.medicao_por_combustivel);
+  var COMB = combs[0], TEXTO = 'Bomba 3 travada desde terça — medição pelo régua.';
+  alvoPosto.comentarios = {}; alvoPosto.comentarios[COMB] = TEXTO;
+  renderGrade(comFix, comFix.data);
+  await esperar(150);
+  var card = cardDe(alvoPosto.posto_nome);
+  eh(!!card, 'o card do ' + alvoPosto.posto_nome + ' existe');
+  var cel = card.querySelector('.gm-cel[data-comb="' + COMB + '"]');
+  var celSem = card.querySelector('.gm-cel:not(.gm-cel--com)');
+  eh(!!cel, 'a célula de ' + COMB + ' existe');
+  eh(cel.className.indexOf('gm-cel--com') >= 0, 'marcada como comentada', cel.className);
+  var tri = cel.querySelector('.gm-tri');
+  eh(!!tri, 'tem o triângulo');
+  var ct = getComputedStyle(tri);
+  eh(hex(ct.borderTopColor) === '#E24B4A', 'na cor pedida', hex(ct.borderTopColor), '#E24B4A');
+  eh(ct.borderTopWidth === '5px', 'com 5px', ct.borderTopWidth, '5px');
+  eh(ct.position === 'absolute' && ct.top === '0px' && ct.right === '0px',
+     'no canto superior direito', ct.top + ' / ' + ct.right);
+  eh(!celSem || !celSem.querySelector('.gm-tri'), 'célula sem comentário não tem triângulo');
+  eh(cel.getAttribute('title') === TEXTO, 'o texto vai no title (tooltip do desktop)', cel.getAttribute('title'));
+
+  h3('7. Clique mostra o comentário');
+  var antes7 = CHAMADAS.length;
+  disparar(cel, 'click', 100, 100);
+  await esperar(120);
+  var pop = document.querySelector('.gm-pop');
+  eh(!!pop, 'abriu o popover');
+  eh(pop && pop.textContent === TEXTO, 'com o texto do comentário', pop ? pop.textContent : '(nada)', TEXTO);
+  eh(CHAMADAS.length === antes7, 'sem chamar a API', (CHAMADAS.length - antes7) + '', '0');
+  eh(!card.className.match(/grade-card--montado/), 'e o card NÃO virou "montado" (stopPropagation)');
+  document.body.click();
+  await esperar(120);
+  eh(!document.querySelector('.gm-pop'), 'clicar fora fecha');
+
+  h3('8. Botão direito: menu próprio');
+  var cancelado = disparar(cel, 'contextmenu', 200, 150);
+  await esperar(120);
+  eh(cancelado, 'o menu NATIVO foi cancelado (preventDefault)', cancelado ? 'sim' : 'NÃO');
+  var menu = document.querySelector('.gm-menu');
+  eh(!!menu, 'abriu o menu próprio');
+  var itens = menu ? [].slice.call(menu.querySelectorAll('.gm-menu-item')).map(function (b) { return b.textContent.trim(); }) : [];
+  nota('itens: ' + itens.join(' | '));
+  eh(itens.join('|') === 'Editar comentário|Excluir comentário',
+     'célula COM comentário: editar e excluir', itens.join('|'), 'Editar comentário|Excluir comentário');
+  document.body.click(); await esperar(100);
+  // Célula SEM comentário: uma opção só.
+  disparar(celSem, 'contextmenu', 210, 160);
+  await esperar(120);
+  var itens2 = [].slice.call(document.querySelectorAll('.gm-menu .gm-menu-item')).map(function (b) { return b.textContent.trim(); });
+  eh(itens2.join('|') === 'Inserir comentário', 'célula SEM comentário: inserir', itens2.join('|'), 'Inserir comentário');
+
+  h3('9. Inserir: textarea → rota → triângulo');
+  document.querySelector('.gm-menu .gm-menu-item').click();
+  await esperar(150);
+  var ed = document.querySelector('.gm-editor');
+  eh(!!ed, 'abriu o editor');
+  var ta = ed && ed.querySelector('textarea.gm-ta');
+  eh(!!ta, 'com textarea');
+  eh(ta && ta.maxLength === 500, 'limitado a 500 caracteres', ta ? ta.maxLength + '' : '—', '500');
+  var NOVO = 'Tanque 2 em manutenção.';
+  ta.value = NOVO;
+  var antes9 = CHAMADAS.length;
+  ed.querySelector('.gm-salvar').click();
+  await esperar(200);
+  var envio = CHAMADAS.filter(function (c) { return c.url.indexOf('/logistica/comentario-medicao') === 0; }).pop();
+  eh(!!envio, 'chamou POST /logistica/comentario-medicao');
+  if (envio) {
+    var corpo = JSON.parse(envio.opts.body);
+    nota('corpo: ' + envio.opts.body);
+    eh(envio.opts.method === 'POST', 'método POST', envio.opts.method);
+    eh(corpo.posto_id === String(alvoPosto.posto_id) && corpo.data === comFix.data &&
+       corpo.combustivel === celSem.getAttribute('data-comb') && corpo.comentario === NOVO,
+       'com posto_id, data, combustivel e comentario',
+       Object.keys(corpo).sort().join(','), 'combustivel,comentario,data,posto_id');
+  }
+  eh(!!celSem.querySelector('.gm-tri'), 'o triângulo apareceu na célula');
+  eh(celSem.getAttribute('data-com') === NOVO, 'e o texto ficou nela', celSem.getAttribute('data-com'));
+  eh(cards().length === comFix.postos.length, 'a grade NÃO foi re-renderizada (cards intactos)',
+     cards().length + '', comFix.postos.length + '');
+
+  h3('10. Excluir: mesma rota com comentario null');
+  disparar(celSem, 'contextmenu', 220, 170);
+  await esperar(120);
+  var del = [].slice.call(document.querySelectorAll('.gm-menu .gm-menu-item'))
+    .filter(function (b) { return /Excluir/.test(b.textContent); })[0];
+  eh(!!del, 'a opção Excluir aparece agora');
+  del.click();
+  await esperar(200);
+  var envio2 = CHAMADAS.filter(function (c) { return c.url.indexOf('/logistica/comentario-medicao') === 0; }).pop();
+  var corpo2 = JSON.parse(envio2.opts.body);
+  eh(corpo2.comentario === null, 'manda comentario: null', JSON.stringify(corpo2.comentario), 'null');
+  eh(!celSem.querySelector('.gm-tri'), 'e o triângulo sumiu');
+  eh(!celSem.getAttribute('data-com'), 'sem texto residual na célula');
+
+  h3('11. Sem a coluna no banco, o menu não promete');
+  var semCol = JSON.parse(JSON.stringify(FIX));   // comentarios_disponiveis = false
+  renderGrade(semCol, semCol.data);
+  await esperar(150);
+  var celS = document.querySelector('#palco .gm-cel');
+  disparar(celS, 'contextmenu', 230, 180);
+  await esperar(120);
+  eh(!document.querySelector('.gm-menu'), 'não abre o menu de comentário');
+  var aviso = document.querySelector('.gm-pop--erro');
+  eh(!!aviso && /medicao_comentario\.sql/.test(aviso.textContent),
+     'e diz qual SQL falta', aviso ? aviso.textContent : '(nada)');
+  document.body.click(); await esperar(100);
+
+  h3('12. Mobile (≤560px): metades empilhadas');
+  if (window.innerWidth > 560) {
+    nota('janela com ' + window.innerWidth + 'px — a media query de 560px não vale aqui;');
+    nota('a verificação mobile roda no navegador a 375px (ver o relatório).');
+  } else {
+    var sp = document.querySelector('#palco .grade-split');
+    eh(getComputedStyle(sp).gridTemplateColumns.split(' ').length === 1,
+       'uma coluna só', getComputedStyle(sp).gridTemplateColumns);
+    var med = document.querySelector('#palco .grade-meia--med');
+    eh(parseFloat(getComputedStyle(med).borderTopWidth) > 0 &&
+       parseFloat(getComputedStyle(med).borderLeftWidth) === 0,
+       'borda em cima, não à esquerda',
+       getComputedStyle(med).borderTopWidth + ' / ' + getComputedStyle(med).borderLeftWidth);
+  }
+
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">TUDO PASSOU</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — card dividido';
+}
+
+rodar().catch(function (e) {
+  linhas.push('\n<span class="bad">ERRO: ' + hesc(e.message) + '</span>');
+  linhas.push(hesc(String(e.stack || '').split('\n').slice(0, 6).join('\n')));
+  pintar();
+  document.title = 'ERRO — card dividido';
+});
+</script>

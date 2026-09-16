@@ -441,6 +441,7 @@ async function atualizarFaixa() {
 let _gradePostos = [];
 let _gradeData = '';
 let _reduzidaNome = '';   // posto aberto na matriz reduzida (p/ o lápis re-renderizar)
+let _gradeComentarios = false;   // a coluna medicao.comentario existe?
 
 // Marcação "montado" POR DATA em localStorage (jb_logi_montado_<data>) — é
 // marcação de trabalho, não dado de negócio (sem tabela/rota). Trocar a data usa
@@ -459,11 +460,101 @@ function salvarMontado(dataISO, set) {
 // (sem pedido primeiro, depois por volume desc) e recortado pela bandeira. Posto
 // específico não passa por aqui. Quem não tem pedido vira card "sem pedido"
 // (total 0, sem linhas de combustível) — à espera do lápis.
+// ════════ CARD DIVIDIDO: PEDIDO | MEDIÇÃO ════════
+// A metade esquerda é o card de antes (pedido do dia, uma linha por
+// combustível pedido). A direita é a MEDIÇÃO que o gerente lançou no mesmo
+// dia, que vem na mesma resposta de /medicao/pedido-dia — a rota passou a
+// ler a coluna `medicao` da mesma linha de onde já lia o `pedido`, sem
+// chamada nova.
+//
+// ════════ A DIFERENÇA É pedido − medição, COMO PEDIDO, E ELA É SEMPRE
+// NEGATIVA ════════
+// Medido em 15/09/2026: 37 postos de 37 com diferença negativa, nenhum
+// positivo. Não é acaso — são grandezas de naturezas diferentes. A medição é
+// o ESTOQUE de TODOS os combustíveis do posto; o pedido é o volume de
+// reposição, e só dos combustíveis que estão sendo repostos. P. BERNARDO
+// pediu 30.000 L (S10+S500) e tinha 31.060 L medidos em quatro combustíveis:
+// a subtração mistura conjuntos diferentes e dá -1.060 sem que nada esteja
+// baixo. Com o sinal sempre negativo, "tanque baixo" acende em todo card,
+// todo dia, e para de informar.
+// Fica como pedido — é uma linha só. Se o sinal importar, duas saídas:
+//   · por COMBUSTÍVEL, só nos que têm pedido (compara o que é comparável);
+//   · contra a CAPACIDADE do tanque (tabela `tanques`, que a
+//     GET /sugestao-pedido já soma) — aí "baixo" passa a ser medição sobre
+//     capacidade, que é o que a frase quer dizer.
+var COR_PEDIDO = '#0F6E56', COR_MEDICAO = '#185FA5';
+
+// Uma célula de medição. Ela é o alvo do comentário, então carrega posto e
+// combustível no próprio nó: o menu de contexto e o editor leem de lá em vez
+// de procurar o card pai.
+function celulaMedicao(p, cod, valor, comentario) {
+  var tem = !!comentario;
+  return '<div class="gm-cel' + (tem ? ' gm-cel--com' : '') + '"' +
+    ' data-pid="' + esc(String(p.posto_id)) + '"' +
+    ' data-comb="' + esc(cod) + '"' +
+    (tem ? ' data-com="' + esc(comentario) + '" title="' + esc(comentario) + '"' : '') +
+    ' oncontextmenu="__gmMenu(event, this)" onclick="__gmClique(event, this)">' +
+    '<span class="grade-cl-cod">' + esc(cod) + '</span>' +
+    '<span class="grade-cl-val">' + fmtNum(valor) + '</span>' +
+    // O triângulo é irmão do valor, não pseudo-elemento: assim o harness o
+    // encontra por seletor e o leitor de tela o ignora (aria-hidden).
+    (tem ? '<span class="gm-tri" aria-hidden="true"></span>' : '') +
+    '<span class="gm-add" title="Comentar" aria-hidden="true">🗨</span>' +
+  '</div>';
+}
+
+function montarCard(p, montado) {
+  var pc = p.por_combustivel || {};
+  var mpc = p.medicao_por_combustivel || {};
+  var com = p.comentarios || {};
+  var linhas = Object.keys(pc).filter(function (k) { return Number(pc[k]) > 0; }).map(function (k) {
+    return '<div class="grade-cl"><span class="grade-cl-cod">' + esc(k) + '</span>' +
+      '<span class="grade-cl-val">' + fmtNum(pc[k]) + '</span></div>';
+  }).join('');
+  var medLinhas = Object.keys(mpc).map(function (k) {
+    return celulaMedicao(p, k, mpc[k], com[k]);
+  }).join('');
+  var temMed = p.medicao_total !== null && p.medicao_total !== undefined;
+  var dif = temMed ? (Number(p.total) - Number(p.medicao_total)) : null;
+  var band = p.bandeira ? '<span class="grade-band">' + esc(p.bandeira) + '</span>' : '';
+  var on = montado.has(String(p.posto_id)) ? ' grade-card--montado' : '';
+  var semPed = (Number(p.total) || 0) <= 0 ? ' grade-card--sem-pedido' : '';
+  // Card inteiro alterna "montado"; o NOME abre a matriz reduzida; o lápis edita.
+  return '<div class="grade-card grade-card--split' + on + semPed + '" data-pid="' + esc(String(p.posto_id)) + '" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeToggle(this)">' +
+    '<div class="grade-card-top">' +
+      '<span class="grade-posto" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeAbrir(event, this)">' + esc(p.posto_nome || '—') + '</span>' +
+      '<span class="grade-top-r"><span class="grade-check">✓</span>' + band +
+        '<span class="grade-lapis" title="Editar pedido" onclick="__gradeLapis(event, this)">✏️</span></span>' +
+    '</div>' +
+    '<div class="grade-split">' +
+      '<div class="grade-meia grade-meia--ped">' +
+        '<div class="grade-meia-rot">Pedido final</div>' +
+        '<div class="grade-total">' + fmtNum(p.total) + ' L</div>' +
+        '<div class="grade-cls">' + (linhas || '<span class="grade-sem-tag">sem pedido</span>') + '</div>' +
+      '</div>' +
+      '<div class="grade-meia grade-meia--med">' +
+        '<div class="grade-meia-rot">Medição do dia</div>' +
+        (temMed
+          ? '<div class="grade-total grade-total--med">' + fmtNum(p.medicao_total) + ' L</div>' +
+            '<div class="grade-cls">' + medLinhas + '</div>' +
+            '<div class="grade-dif' + (dif < 0 ? ' grade-dif--baixo' : (dif > 0 ? ' grade-dif--alto' : '')) + '">' +
+              '<span>Dif.</span><span>' + (dif > 0 ? '+' : '') + fmtNum(dif) + ' L' +
+              (dif < 0 ? ' · tanque baixo' : (dif > 0 ? ' · tanque alto' : '')) + '</span>' +
+            '</div>'
+          : '<span class="grade-sem-tag">sem medição</span>') +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
 function renderGrade(resp, dataISO) {
   const grade = document.getElementById('matriz-vazio');
   if (!grade) return;
   _gradePostos = (resp && resp.postos) || [];
   _gradeData = dataISO;
+  // Sem a coluna no banco a rota avisa por aqui, e o menu de comentário
+  // simplesmente não aparece — melhor que prometer e falhar no salvar.
+  if (resp && resp.comentarios_disponiveis !== undefined) _gradeComentarios = !!resp.comentarios_disponiveis;
   if (!_gradePostos.length) {
     grade.classList.remove('grade-host');   // mensagem centralizada (host original)
     grade.innerHTML = '<div class="grade-vazia">Nenhum posto ativo neste escopo.</div>';
@@ -471,25 +562,7 @@ function renderGrade(resp, dataISO) {
   }
   grade.classList.add('grade-host');   // reseta margin:auto/center do .matriz-vazio → grade full-width
   const montado = lerMontado(dataISO);
-  const cards = _gradePostos.map(p => {
-    const pc = p.por_combustivel || {};
-    const linhas = Object.keys(pc).filter(k => Number(pc[k]) > 0).map(k =>
-      '<div class="grade-cl"><span class="grade-cl-cod">' + esc(k) + '</span>' +
-      '<span class="grade-cl-val">' + fmtNum(pc[k]) + '</span></div>').join('');
-    const band = p.bandeira ? '<span class="grade-band">' + esc(p.bandeira) + '</span>' : '';
-    const on = montado.has(String(p.posto_id)) ? ' grade-card--montado' : '';
-    const semPed = (Number(p.total) || 0) <= 0 ? ' grade-card--sem-pedido' : '';   // borda tracejada/apagado
-    // Card inteiro alterna "montado"; o NOME abre a matriz reduzida; o lápis edita.
-    return '<div class="grade-card' + on + semPed + '" data-pid="' + esc(String(p.posto_id)) + '" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeToggle(this)">' +
-      '<div class="grade-card-top">' +
-        '<span class="grade-posto" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeAbrir(event, this)">' + esc(p.posto_nome || '—') + '</span>' +
-        '<span class="grade-top-r"><span class="grade-check">✓</span>' + band +
-          '<span class="grade-lapis" title="Editar pedido" onclick="__gradeLapis(event, this)">✏️</span></span>' +
-      '</div>' +
-      '<div class="grade-total">' + fmtNum(p.total) + ' L</div>' +
-      '<div class="grade-cls">' + (linhas || '<span class="grade-sem-tag">sem pedido</span>') + '</div>' +
-    '</div>';
-  }).join('');
+  const cards = _gradePostos.map(p => montarCard(p, montado)).join('');
   const head =
     '<div class="grade-head">' +
       '<div class="grade-head-data">Pedido do dia · ' + fmtDataBR(dataISO) + '</div>' +
@@ -761,3 +834,170 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('tela-escolha').style.display = 'flex';
   }
 });
+
+// ════════ COMENTÁRIO DE CÉLULA (estilo Excel) ════════
+// Triângulo vermelho no canto = a célula tem comentário. Clique mostra;
+// botão direito abre o menu (inserir / editar / excluir). O texto vive em
+// medicao.comentario — a mesma linha do número, ver o cabeçalho da
+// POST /logistica/comentario-medicao.
+//
+// TUDO PARA stopPropagation: o card inteiro tem onclick que alterna
+// "montado". Sem isso, comentar uma célula marcaria o posto como montado.
+var _gmMenuEl = null, _gmPopEl = null;
+
+function gmFechar() {
+  if (_gmMenuEl && _gmMenuEl.parentNode) _gmMenuEl.parentNode.removeChild(_gmMenuEl);
+  if (_gmPopEl && _gmPopEl.parentNode) _gmPopEl.parentNode.removeChild(_gmPopEl);
+  _gmMenuEl = null; _gmPopEl = null;
+}
+// Fecha ao clicar fora, ao rolar e no Esc. Os três: o menu é flutuante e
+// posicionado em coordenada de tela, então rolar o deixaria órfão no lugar.
+document.addEventListener('click', function (e) {
+  if (_gmMenuEl && !_gmMenuEl.contains(e.target)) gmFechar();
+  else if (_gmPopEl && !_gmPopEl.contains(e.target) && !(e.target.closest && e.target.closest('.gm-cel'))) gmFechar();
+}, true);
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') gmFechar(); });
+window.addEventListener('scroll', function () { gmFechar(); }, true);
+
+function gmFlutuante(cls, x, y) {
+  var el = document.createElement('div');
+  el.className = cls;
+  // Preso ao body e em position:fixed: dentro do card ele seria cortado pelo
+  // overflow do .grade-scroll.
+  el.style.left = Math.round(x) + 'px';
+  el.style.top = Math.round(y) + 'px';
+  document.body.appendChild(el);
+  return el;
+}
+
+// Clique na célula: mostra o comentário, se houver. Sem comentário o clique
+// não faz nada (e não alterna o card).
+function __gmClique(ev, cel) {
+  ev.stopPropagation();
+  var txt = cel.getAttribute('data-com');
+  gmFechar();
+  if (!txt) return;
+  var r = cel.getBoundingClientRect();
+  _gmPopEl = gmFlutuante('gm-pop', r.left, r.bottom + 4);
+  _gmPopEl.textContent = txt;
+}
+
+// Botão direito: menu próprio, sem o do navegador.
+function __gmMenu(ev, cel) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  gmFechar();
+  if (!_gradeComentarios) {
+    var r0 = cel.getBoundingClientRect();
+    _gmPopEl = gmFlutuante('gm-pop gm-pop--erro', r0.left, r0.bottom + 4);
+    _gmPopEl.textContent = 'comentário indisponível: falta aplicar sql/medicao_comentario.sql';
+    return;
+  }
+  var tem = !!cel.getAttribute('data-com');
+  _gmMenuEl = gmFlutuante('gm-menu', ev.clientX, ev.clientY);
+  var opcoes = tem
+    ? [['Editar comentário', 'editar'], ['Excluir comentário', 'excluir']]
+    : [['Inserir comentário', 'editar']];
+  opcoes.forEach(function (o) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'gm-menu-item' + (o[1] === 'excluir' ? ' gm-menu-item--del' : '');
+    b.textContent = o[0];
+    b.onclick = function (e) {
+      e.stopPropagation();
+      gmFechar();
+      if (o[1] === 'excluir') gmSalvar(cel, null);
+      else gmEditor(cel);
+    };
+    _gmMenuEl.appendChild(b);
+  });
+}
+
+// Ícone 🗨 que aparece no hover: o mesmo caminho do "Inserir/Editar".
+document.addEventListener('click', function (e) {
+  var add = e.target.closest && e.target.closest('.gm-add');
+  if (!add) return;
+  e.stopPropagation();
+  e.preventDefault();
+  var cel = add.closest('.gm-cel');
+  if (!cel) return;
+  if (!_gradeComentarios) { __gmMenu(e, cel); return; }
+  gmFechar();
+  gmEditor(cel);
+}, true);
+
+// Textarea flutuante. Ctrl+Enter salva, Esc cancela — as duas teclas que
+// alguém tenta num campo de comentário.
+function gmEditor(cel) {
+  var r = cel.getBoundingClientRect();
+  _gmPopEl = gmFlutuante('gm-editor', r.left, r.bottom + 4);
+  var ta = document.createElement('textarea');
+  ta.className = 'gm-ta';
+  ta.value = cel.getAttribute('data-com') || '';
+  ta.maxLength = 500;
+  ta.placeholder = 'Comentário desta célula…';
+  var acoes = document.createElement('div');
+  acoes.className = 'gm-acoes';
+  var bc = document.createElement('button');
+  bc.type = 'button'; bc.className = 'gm-cancelar'; bc.textContent = 'Cancelar';
+  bc.onclick = function (e) { e.stopPropagation(); gmFechar(); };
+  var bs = document.createElement('button');
+  bs.type = 'button'; bs.className = 'gm-salvar'; bs.textContent = 'Salvar';
+  bs.onclick = function (e) { e.stopPropagation(); gmSalvar(cel, ta.value); };
+  acoes.appendChild(bc); acoes.appendChild(bs);
+  _gmPopEl.appendChild(ta); _gmPopEl.appendChild(acoes);
+  _gmPopEl.onclick = function (e) { e.stopPropagation(); };
+  ta.onkeydown = function (e) {
+    if (e.key === 'Escape') { e.stopPropagation(); gmFechar(); }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); gmSalvar(cel, ta.value); }
+  };
+  ta.focus();
+}
+
+// Grava e atualiza a célula NO LUGAR: re-renderizar a grade fecharia todos
+// os cards e perderia a rolagem por causa de um comentário.
+async function gmSalvar(cel, texto) {
+  var pid = cel.getAttribute('data-pid');
+  var comb = cel.getAttribute('data-comb');
+  var txt = (texto === null || texto === undefined) ? null : String(texto).trim();
+  if (txt === '') txt = null;
+  gmFechar();
+  cel.classList.add('gm-cel--salvando');
+  try {
+    await apiFetch('/logistica/comentario-medicao', {
+      method: 'POST',
+      body: JSON.stringify({ posto_id: pid, data: _gradeData, combustivel: comb, comentario: txt }),
+    });
+    gmPintarCelula(cel, txt);
+    // O cache também, senão o próximo render da grade ressuscita o antigo.
+    var p = _gradePostos.filter(function (x) { return String(x.posto_id) === String(pid); })[0];
+    if (p) {
+      if (!p.comentarios) p.comentarios = {};
+      if (txt) p.comentarios[comb] = txt; else delete p.comentarios[comb];
+    }
+  } catch (err) {
+    window.alert('Não foi possível salvar o comentário: ' + ((err && err.message) ? err.message : err));
+  } finally {
+    cel.classList.remove('gm-cel--salvando');
+  }
+}
+
+function gmPintarCelula(cel, txt) {
+  var tri = cel.querySelector('.gm-tri');
+  if (txt) {
+    cel.setAttribute('data-com', txt);
+    cel.setAttribute('title', txt);
+    cel.classList.add('gm-cel--com');
+    if (!tri) {
+      var t = document.createElement('span');
+      t.className = 'gm-tri';
+      t.setAttribute('aria-hidden', 'true');
+      cel.insertBefore(t, cel.querySelector('.gm-add'));
+    }
+  } else {
+    cel.removeAttribute('data-com');
+    cel.removeAttribute('title');
+    cel.classList.remove('gm-cel--com');
+    if (tri && tri.parentNode) tri.parentNode.removeChild(tri);
+  }
+}
