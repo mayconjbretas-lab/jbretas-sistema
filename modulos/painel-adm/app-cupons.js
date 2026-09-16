@@ -36,10 +36,15 @@
     SOUTAG: { rot: 'Soutag', cor: '#3C3489', fundo: '#EEEDFE' },
     '99':   { rot: '99',     cor: '#633806', fundo: '#FAEEDA' },
   };
-  // Os quatro do pedido. A resposta traz mais (S500, ETAD, POD, GNV) — eles
-  // aparecem no DETALHE do posto, que mostra tudo que o posto teve; nos
-  // chips ficam de fora de propósito, porque a barra é de escolha rápida.
-  var COMBS = ['GC', 'GA', 'ET', 'S10'];
+  // Os cinco da barra. A resposta traz mais (S500, ETAD, POD) — esses
+  // aparecem no DETALHE do posto, que mostra tudo que o posto teve; na barra
+  // ficam de fora de propósito, porque ela é de escolha rápida.
+  //
+  // GNV ENTROU em 16/09/2026: ele existe na tecnox_cupom_app e tem volume de
+  // convênio (14/09, Soutag: 53 itens, 30 deles no preço de app), e três
+  // postos da rede o vendem. Sem o chip, o único jeito de ver o preço de GNV
+  // era abrir posto por posto no detalhe.
+  var COMBS = ['GC', 'GA', 'ET', 'S10', 'GNV'];
 
   var _sec = null;
   var _pronto = false;
@@ -101,8 +106,18 @@
     var st = document.createElement('style');
     st.id = 'app-cupons-style';
     st.textContent =
+      // display:block e NÃO flex na seção: a .scr do painel é flex com
+      // height:100% no desktop, e nesta aba o conteúdo tem altura própria.
+      // Quem centraliza é o .ap-wrap, com margin auto.
       '#s-app.active{display:block}' +
-      '.ap-wrap{display:flex;flex-direction:column;gap:.7rem}' +
+      // TETO DE 1400px E CENTRADO. A lista tem sete colunas fixas de 150px
+      // (1.098px de conteúdo): num monitor largo, sem teto, a borda inferior
+      // de cada linha atravessava a tela inteira e deixava os números
+      // ilhados à esquerda de um metro de vazio. Com o teto, a faixa branca
+      // fica nas DUAS laterais e a lista para onde o conteúdo para.
+      // O gap de 16px vale para os três blocos do wrap — barra de filtros,
+      // cards e lista —, que é o respiro pedido entre eles.
+      '.ap-wrap{display:flex;flex-direction:column;gap:16px;max-width:1400px;margin:0 auto}' +
       // Barra de controles: sub-canal, datas, atalhos e chips.
       '.ap-barra{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem}' +
       '.ap-cbtn{flex:0 0 auto;border:1px solid var(--bd);border-radius:8px;padding:.35rem .9rem;' +
@@ -118,7 +133,7 @@
       // prometer clique. O title explica por quê.
       '.ap-atalho[disabled],.ap-cbtn[disabled]{opacity:.45;cursor:not-allowed}' +
       '.ap-atalho[disabled]:hover{color:var(--tx2);border-color:var(--bd)}' +
-      '.ap-chips{display:flex;gap:.3rem;flex-wrap:wrap}' +
+      '.ap-chips{display:flex;gap:12px;flex-wrap:wrap}' +
       '.ap-chip{background:var(--sf2);border:1px solid var(--bd);border-radius:6px;color:var(--tx2);' +
         'padding:.25rem .6rem;font:700 .68rem var(--mono);cursor:pointer}' +
       '.ap-chip.on{background:var(--ac);border-color:var(--ac);color:#0a0d0f}' +
@@ -129,7 +144,11 @@
       '.ap-so.on{background:#E1F5EE;border-color:#0F6E56;color:#085041}' +
       '.ap-so[disabled]{opacity:.45;cursor:not-allowed}' +
       // CARDS — 150×96 e gap 8, as medidas da Movimentação.
-      '.ap-cards{display:flex;flex-wrap:wrap;justify-content:flex-start;gap:8px}' +
+      // gap 12: o card segue 150×96 (a medida compartilhada com a
+      // Movimentação), só o espaço entre eles aumentou. Ver o mobile abaixo:
+      // o calc() de "dois por linha" desconta METADE deste gap, e os dois
+      // números têm de andar juntos.
+      '.ap-cards{display:flex;flex-wrap:wrap;justify-content:flex-start;gap:12px}' +
       '.ap-card{flex:0 0 auto;box-sizing:border-box;width:150px;height:96px;display:flex;' +
         'flex-direction:column;justify-content:center;gap:2px;padding:.5rem .6rem;text-align:left;' +
         'background:var(--sf2);border:1px solid var(--bd);border-radius:10px;cursor:pointer;' +
@@ -143,20 +162,28 @@
       // NADA DE 1fr, mesma razão da Movimentação: com fração a lista espalha
       // os números até a borda do monitor, longe do nome do posto.
       '.ap-lista{display:flex;flex-direction:column;margin-top:.2rem}' +
+      // 10px em cima e embaixo (era 7): a lista tem 30+ linhas de números
+      // monoespaçados, e o respiro é o que separa uma leitura de linha da
+      // vizinha sem precisar de zebra.
       '.ap-cab,.ap-linha,.ap-rede{display:grid;grid-template-columns:repeat(7,150px);' +
-        'justify-content:start;align-items:center;gap:.7rem 8px;width:100%;padding:7px 0;' +
+        'justify-content:start;align-items:center;gap:.7rem 8px;width:100%;padding:10px 0;' +
         'background:transparent;border:0;text-align:left;font:inherit;color:var(--tx)}' +
       '.ap-cab{padding:0 0 5px;border-bottom:1px solid var(--bd)}' +
       '.ap-cab span{font:700 .58rem var(--mono);letter-spacing:.05em;color:var(--tx3);text-transform:uppercase}' +
       '.ap-linha{cursor:pointer;border-bottom:1px solid var(--bd)}' +
       '.ap-linha:hover{background:color-mix(in srgb,var(--ac) 7%,transparent)}' +
-      '.ap-rede{border-bottom:2px solid var(--bd);font-weight:700}' +
+      // 4px a mais embaixo que as linhas de posto. A borda de 2px já separa;
+      // o respiro extra é o que faz a REDE ler como cabeçalho de totais em
+      // vez de como o primeiro posto da lista.
+      '.ap-rede{border-bottom:2px solid var(--bd);font-weight:700;padding-bottom:14px}' +
       '.ap-rede span{font:700 .74rem var(--mono)}' +
       '.ap-nome{font-size:.78rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       // Numéricas à direita, como na Movimentação.
       '.ap-n{text-align:right;font:.74rem var(--mono)}' +
       '.ap-mini{display:block;font:.6rem var(--mono);color:var(--tx3)}' +
-      '.ap-det{padding:.4rem 0 .8rem;border-bottom:1px solid var(--bd)}' +
+      // Indentado 20px: o detalhe pertence à linha de cima, e alinhado com
+      // ela parecia mais uma linha da lista.
+      '.ap-det{padding:.4rem 0 .8rem 20px;border-bottom:1px solid var(--bd)}' +
       '.ap-det table{border-collapse:collapse;width:auto}' +
       '.ap-det th{font:700 .58rem var(--mono);letter-spacing:.05em;color:var(--tx3);' +
         'text-transform:uppercase;padding:.3rem .7rem .3rem 0;text-align:right}' +
@@ -168,7 +195,10 @@
       // MOBILE: cards 2 por linha e as colunas de preço saem da linha — elas
       // vivem no detalhe do posto, que no celular é a visão completa.
       '@media (max-width:699px){' +
-        '.ap-card{width:calc(50% - 4px)}' +
+        // METADE do gap de 12 do .ap-cards. Com o 4px de quando o gap era 8,
+        // os dois cards somavam 100% + 4px e o segundo caía para a linha de
+        // baixo, um por linha.
+        '.ap-card{width:calc(50% - 6px)}' +
         '.ap-cab{display:none}' +
         '.ap-linha,.ap-rede{grid-template-columns:1fr auto;gap:4px .7rem}' +
         '.ap-c-med,.ap-c-min,.ap-c-max,.ap-c-valor{display:none}' +

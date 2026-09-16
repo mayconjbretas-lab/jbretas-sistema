@@ -39,6 +39,10 @@
 //    preço da placa (GC de 14/09: 1.390 itens → 832), derruba o preço médio
 //    e o máximo, NÃO chama a API, e desligado devolve os números cheios.
 //    Posto cujos cupons foram todos de placa fica na lista com travessão.
+// 10. O chip GNV existe, é o quinto, e recorta sem chamar a API.
+// 11. O layout: wrap com teto de 1400px e centrado, linhas que param nele,
+//     padding de 10px nas linhas (14 embaixo na REDE), gaps de 12 e 16, e o
+//     detalhe indentado 20px. A seção segue display:block.
 // ════════════════════════════════════════════════════════════════
 var linhas = [], falhas = 0;
 function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
@@ -384,6 +388,88 @@ async function rodar() {
   eh(/aguardando dados do convênio/.test(pm.title), 'com o tooltip', pm.title);
 
   h3('10. Estreito (375px)');
+  h3('10. O chip de GNV');
+  var chipsComb = [].slice.call(document.querySelectorAll('#palco .ap-chips .ap-chip'))
+    .map(function (c) { return c.textContent.trim(); });
+  nota('chips: ' + chipsComb.join(' · '));
+  eh(chipsComb.join('|') === 'GC|GA|ET|S10|GNV', 'cinco chips, GNV depois de S10',
+     chipsComb.join('|'), 'GC|GA|ET|S10|GNV');
+  var gnvFix = (FIX.soutag.rede.por_combustivel || [])
+    .filter(function (c) { return c.combustivel === 'GNV'; })[0];
+  eh(!!gnvFix, 'a resposta traz GNV na rede',
+     gnvFix ? gnvFix.itens + ' itens · ' + gnvFix.cupons + ' cupons' : '(ausente)');
+  var antesGnv = CHAMADAS.length;
+  chip('GNV').click();
+  await esperar(150);
+  eh(CHAMADAS.length === antesGnv, 'clicar não chama a API', (CHAMADAS.length - antesGnv) + '', '0');
+  eh(chip('GNV').getAttribute('aria-pressed') === 'true', 'o chip fica marcado');
+  if (gnvFix) {
+    eh(val(0).indexOf(p3(gnvFix.preco_medio)) >= 0, 'os cards passam a mostrar o GNV',
+       val(0), 'R$ ' + p3(gnvFix.preco_medio));
+    eh(cards()[0].querySelector('.ap-sub').textContent.indexOf('GNV') >= 0,
+       'e a sublinha diz GNV', cards()[0].querySelector('.ap-sub').textContent.trim());
+    var redeGnv = nums(document.querySelector('#palco .ap-rede'));
+    eh(redeGnv[0] === gnvFix.cupons.toLocaleString('pt-BR'), 'a REDE conta os cupons de GNV',
+       redeGnv[0], gnvFix.cupons.toLocaleString('pt-BR'));
+  }
+  // Só os postos que venderam GNV têm número; os outros ficam com travessão,
+  // que é a regra que já valia para qualquer combustível.
+  var comGnv = (FIX.soutag.postos || []).filter(function (p) {
+    return (p.por_combustivel || []).some(function (c) { return c.combustivel === 'GNV'; });
+  });
+  nota('postos com GNV: ' + comGnv.length + ' — ' + comGnv.map(function (p) { return p.nome; }).join(', '));
+  var comNumero = linhasP().filter(function (l) {
+    return nums(l)[0] !== '—';
+  }).length;
+  eh(comNumero === comGnv.length, 'e só eles têm número na lista',
+     comNumero + '', comGnv.length + '');
+  chip('GC').click();
+  await esperar(150);
+
+  h3('11. Layout centralizado e com respiro');
+  var wrap = document.querySelector('#palco .ap-wrap');
+  var sec = document.querySelector('#palco #s-app');
+  var cw = getComputedStyle(wrap);
+  eh(!!wrap, 'o .ap-wrap existe');
+  eh(cw.maxWidth === '1400px', 'teto de 1400px', cw.maxWidth, '1400px');
+  eh(cw.marginLeft === cw.marginRight && cw.marginLeft !== '0px',
+     'margens laterais iguais (margin:0 auto centrando)', cw.marginLeft + ' / ' + cw.marginRight);
+  eh(getComputedStyle(sec).display === 'block', 'a seção segue display:block (não flex)',
+     getComputedStyle(sec).display, 'block');
+  eh(cw.rowGap === '16px', 'gap de 16px entre filtros, cards e lista', cw.rowGap, '16px');
+  // O teto morde de verdade: numa janela mais larga que 1400 o wrap para nele
+  // e sobra faixa vazia dos dois lados.
+  var larguraPalco = document.getElementById('palco').clientWidth;
+  var larguraWrap = wrap.getBoundingClientRect().width;
+  nota('palco ' + Math.round(larguraPalco) + 'px · wrap ' + Math.round(larguraWrap) + 'px');
+  eh(larguraWrap <= 1400.5, 'o wrap não passa de 1400px', Math.round(larguraWrap) + 'px');
+  var linha0 = linhasP()[0];
+  eh(linha0.getBoundingClientRect().width <= 1400.5, 'e as linhas da lista param nele também',
+     Math.round(linha0.getBoundingClientRect().width) + 'px', '<= 1400px');
+
+  var cl = getComputedStyle(linha0);
+  eh(cl.paddingTop === '10px' && cl.paddingBottom === '10px', 'linha da lista: padding 10px 0',
+     cl.paddingTop + ' / ' + cl.paddingBottom, '10px / 10px');
+  var cr = getComputedStyle(document.querySelector('#palco .ap-rede'));
+  eh(cr.paddingBottom === '14px', 'REDE: 4px a mais embaixo', cr.paddingBottom, '14px');
+  eh(parseFloat(cr.paddingBottom) - parseFloat(cl.paddingBottom) === 4,
+     'que é exatamente 4px de diferença',
+     (parseFloat(cr.paddingBottom) - parseFloat(cl.paddingBottom)) + 'px', '4px');
+  eh(getComputedStyle(document.querySelector('#palco .ap-cards')).gap === '12px',
+     'gap de 12px entre os cards', getComputedStyle(document.querySelector('#palco .ap-cards')).gap, '12px');
+  eh(getComputedStyle(document.querySelector('#palco .ap-chips')).gap === '12px',
+     'e entre os chips', getComputedStyle(document.querySelector('#palco .ap-chips')).gap, '12px');
+  // Os cards seguem 150×96: o gap mudou, a medida do card não.
+  eh(cards().every(function (c) { return c.offsetWidth === 150 && c.offsetHeight === 96; }),
+     'e os cards continuam 150×96', cards()[0].offsetWidth + '×' + cards()[0].offsetHeight);
+  // Detalhe indentado.
+  linhasP()[0].click();
+  await esperar(150);
+  var det2 = document.querySelector('#palco .ap-det');
+  eh(!!det2 && getComputedStyle(det2).paddingLeft === '20px', 'detalhe indentado 20px',
+     det2 ? getComputedStyle(det2).paddingLeft : '(sem detalhe)', '20px');
+  if (det2) { linhasP()[0].click(); await esperar(120); }
+
   var palco = document.getElementById('palco');
   palco.style.width = '375px';
   await esperar(200);
