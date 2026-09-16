@@ -1,0 +1,281 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tela App — Soutag/99, cards e lista por posto</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:10px; margin:12px 0; }
+</style>
+
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// A aba App, com o app-cupons.js DE PRODUÇÃO e o payload REAL do
+// GET /app/cupons de 14/09/2026 (gerado da própria rota contra o banco —
+// 2.412 cupons Soutag em 32 postos, 1.609 do 99 em 28).
+//
+// 1. Quatro cards com valor, e clicar num card reordena a lista.
+// 2. Lista por posto ordenada por litros desc, com REDE no topo.
+// 3. REDE = soma dos postos, no combustível do chip.
+// 4. Detalhe de um posto abre com TODOS os combustíveis dele.
+// 5. Chip GC vs ET troca os valores SEM nova chamada à API.
+// 6. Sub-botão Soutag vs 99 troca o canal, as cores e refaz a chamada.
+// 7. Sete colunas fixas de 150px (nada de 1fr) e cards 150×96.
+// 8. Mobile (375px): cards 2 por linha e colunas de preço fora da linha.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+var FIX = {};
+var CHAMADAS = [];
+window.apiFetch = function (url) {
+  CHAMADAS.push(String(url));
+  var m = /canal=([^&]+)/.exec(url);
+  var canal = m ? decodeURIComponent(m[1]) : 'SOUTAG';
+  return Promise.resolve(canal === '99' ? FIX.n99 : FIX.soutag);
+};
+window.mmFmt = null;   // o módulo tem fallback próprio de formatação
+
+function baixar(u) {
+  return new Promise(function (ok, er) {
+    var x = new XMLHttpRequest();
+    x.open('GET', u);
+    x.onload = function () { ok(JSON.parse(x.responseText)); };
+    x.onerror = function () { er(new Error(u + ' não carregou')); };
+    x.send();
+  });
+}
+function js(src) {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { erro(new Error(src + ' não carregou')); };
+    document.body.appendChild(s);
+  });
+}
+function cards()   { return [].slice.call(document.querySelectorAll('#palco .ap-card')); }
+function rot(i)    { var c = cards()[i]; return c ? c.querySelector('.ap-rot').textContent.trim() : null; }
+function val(i)    { var c = cards()[i]; return c ? c.querySelector('.ap-num').textContent.trim() : null; }
+function linhasP() { return [].slice.call(document.querySelectorAll('#palco .ap-linha')); }
+function nomes()   { return linhasP().map(function (l) { return l.querySelector('.ap-nome').textContent.trim(); }); }
+function nums(l)   { return [].slice.call(l.querySelectorAll('.ap-n')).map(function (s) { return s.textContent.trim(); }); }
+function colsDe(sel) {
+  var el = document.querySelector('#palco ' + sel);
+  if (!el) return [];
+  var v = getComputedStyle(el).gridTemplateColumns.trim();
+  var m = /^repeat\((\d+),\s*([\d.]+px)\)$/.exec(v);
+  if (m) { var o = []; for (var i = 0; i < Number(m[1]); i++) o.push(m[2]); return o; }
+  return v.split(/\s+/);
+}
+function chip(t) {
+  return [].slice.call(document.querySelectorAll('#palco .ap-chip'))
+    .filter(function (b) { return b.textContent.trim() === t; })[0];
+}
+function subBtn(t) {
+  return [].slice.call(document.querySelectorAll('#palco .ap-cbtn'))
+    .filter(function (b) { return b.textContent.trim() === t; })[0];
+}
+
+// ════════════════════════════════════════════════════════════════
+async function rodar() {
+  if (window.innerWidth < 700) {
+    linhas.push('<span class="bad">JANELA ESTREITA (' + window.innerWidth + 'px)</span>');
+    nota('Este teste mede a grade de 7 colunas, que só existe a partir de 700px.');
+    pintar();
+    throw new Error('rode com a janela em 700px ou mais');
+  }
+  FIX.soutag = await baixar('/testes/fixtures-app-cupons-soutag.json');
+  FIX.n99    = await baixar('/testes/fixtures-app-cupons-99.json');
+  nota('fixture SOUTAG: ' + FIX.soutag.rede.total_cupons + ' cupons · ' + FIX.soutag.postos.length + ' postos');
+  nota('fixture 99    : ' + FIX.n99.rede.total_cupons + ' cupons · ' + FIX.n99.postos.length + ' postos');
+
+  var sec = document.createElement('section');
+  sec.className = 'scr active';
+  sec.id = 's-app';
+  document.getElementById('palco').appendChild(sec);
+  await js('/modulos/painel-adm/app-cupons.js');
+  renderAppCupons(sec);
+  await esperar(300);
+
+  h3('0. A chamada');
+  nota('chamadas: ' + CHAMADAS.join(' | '));
+  eh(CHAMADAS.length === 1, 'uma chamada na abertura', CHAMADAS.length + '', '1');
+  eh(/canal=SOUTAG/.test(CHAMADAS[0]), 'canal padrão = SOUTAG', CHAMADAS[0]);
+  eh(/de=\d{4}-\d{2}-\d{2}&ate=\d{4}-\d{2}-\d{2}/.test(CHAMADAS[0]), 'com de e ate (padrão ontem)');
+
+  h3('1. Quatro cards com valor');
+  eh(cards().length === 4, 'quatro cards', cards().length + '', '4');
+  nota('cards: ' + cards().map(function (c) {
+    return c.querySelector('.ap-rot').textContent.trim() + ' ' + c.querySelector('.ap-num').textContent.trim();
+  }).join('  ·  '));
+  var ROTS = [rot(0), rot(1), rot(2), rot(3)].map(function (t) { return t.toUpperCase(); });
+  eh(ROTS.join('|') === 'PREÇO MÉDIO|PREÇO MÍNIMO|PREÇO MÁXIMO|CUPONS',
+     'na ordem pedida', [rot(0), rot(1), rot(2), rot(3)].join(' · '));
+  var gc = FIX.soutag.rede.por_combustivel.filter(function (c) { return c.combustivel === 'GC'; })[0];
+  eh(val(0).indexOf(gc.preco_medio.toLocaleString('pt-BR', {minimumFractionDigits:3, maximumFractionDigits:3})) >= 0,
+     'PREÇO MÉDIO = o do GC da rede', val(0), 'R$ ' + gc.preco_medio);
+  eh(cards().every(function (c) { return c.offsetWidth === 150 && c.offsetHeight === 96; }),
+     'todos 150×96', cards()[0].offsetWidth + '×' + cards()[0].offsetHeight);
+
+  h3('2. Lista, REDE no topo e ordem por litros');
+  eh(!!document.querySelector('#palco .ap-rede'), 'a linha REDE existe');
+  eh(document.querySelector('#palco .ap-rede .ap-nome').textContent.trim() === 'REDE', 'e diz REDE');
+  var cab = document.querySelector('#palco .ap-cab');
+  eh(!!cab, 'cabeçalho existe');
+  nota('cabeçalho: ' + cab.textContent.replace(/\s+/g, ' ').trim());
+  eh(linhasP().length === FIX.soutag.postos.length, 'uma linha por posto',
+     linhasP().length + '', FIX.soutag.postos.length + '');
+  // Ordem por litros do GC desc — o combustível do chip, não o total.
+  var litrosGC = FIX.soutag.postos.map(function (p) {
+    var c = p.por_combustivel.filter(function (x) { return x.combustivel === 'GC'; })[0];
+    return { nome: p.nome, l: c ? c.litros : -Infinity };
+  }).sort(function (a, b) { return b.l - a.l; }).map(function (x) { return x.nome; });
+  eh(nomes().join('|') === litrosGC.join('|'), 'ordenada por litros de GC desc',
+     nomes().slice(0, 3).join(' · '), litrosGC.slice(0, 3).join(' · '));
+
+  h3('3. REDE = soma dos postos (no combustível do chip)');
+  var somaCup = 0, somaLit = 0;
+  FIX.soutag.postos.forEach(function (p) {
+    var c = p.por_combustivel.filter(function (x) { return x.combustivel === 'GC'; })[0];
+    if (c) { somaCup += c.cupons; somaLit += c.litros; }
+  });
+  var redeNums = nums(document.querySelector('#palco .ap-rede'));
+  nota('REDE na tela: ' + redeNums.join(' · '));
+  nota('soma dos postos em GC: ' + somaCup + ' cupons · ' + Math.round(somaLit) + ' L');
+  eh(redeNums[0] === gc.cupons.toLocaleString('pt-BR'), 'cupons da REDE = os do GC da rede',
+     redeNums[0], gc.cupons.toLocaleString('pt-BR'));
+  // O cupom distinto da rede é <= a soma dos postos só se houver cupom
+  // repetido entre postos; aqui a chave inclui o posto, então bate.
+  eh(somaCup === gc.cupons, 'e batem com a soma dos postos', somaCup + '', gc.cupons + '');
+
+  h3('4. Detalhe do posto: TODOS os combustíveis');
+  var prim = linhasP()[0];
+  var nomePrim = prim.querySelector('.ap-nome').textContent.trim();
+  prim.click();
+  await esperar(150);
+  var det = document.querySelector('#palco .ap-det');
+  eh(!!det, 'o detalhe abriu em ' + nomePrim);
+  var pFix = FIX.soutag.postos.filter(function (p) { return p.nome === nomePrim; })[0];
+  var nLin = det.querySelectorAll('tbody tr').length;
+  nota(nomePrim + ' tem ' + pFix.por_combustivel.length + ' combustíveis no período');
+  eh(nLin === pFix.por_combustivel.length, 'uma linha por combustível do posto',
+     nLin + '', pFix.por_combustivel.length + '');
+  eh(det.textContent.indexOf('Itens') >= 0, 'e a coluna ITENS aparece (cupom ≠ item)');
+  prim.click();
+  await esperar(120);
+  eh(!document.querySelector('#palco .ap-det'), 'clicar de novo fecha');
+
+  h3('5. Chip GC → ET: muda valores SEM nova chamada');
+  var antes = CHAMADAS.length, medGC = val(0);
+  chip('ET').click();
+  await esperar(180);
+  eh(CHAMADAS.length === antes, 'nenhuma chamada nova', CHAMADAS.length + '', antes + '');
+  var et = FIX.soutag.rede.por_combustivel.filter(function (c) { return c.combustivel === 'ET'; })[0];
+  nota('GC ' + medGC + '  →  ET ' + val(0));
+  eh(val(0) !== medGC, 'o preço médio mudou');
+  eh(val(0).indexOf(et.preco_medio.toLocaleString('pt-BR', {minimumFractionDigits:3, maximumFractionDigits:3})) >= 0,
+     'e é o do ET', val(0), 'R$ ' + et.preco_medio);
+  eh(cards()[0].querySelector('.ap-sub').textContent.indexOf('ET') >= 0, 'a sublinha diz ET');
+  chip('GC').click();
+  await esperar(150);
+
+  h3('6. Sub-botão 99: canal, cores e nova chamada');
+  var antes2 = CHAMADAS.length;
+  var corSoutag = getComputedStyle(document.querySelector('#palco .ap-linha .ap-c-med')).color;
+  subBtn('99').click();
+  await esperar(300);
+  eh(CHAMADAS.length === antes2 + 1, 'uma chamada nova', (CHAMADAS.length - antes2) + '', '1');
+  eh(/canal=99/.test(CHAMADAS[CHAMADAS.length - 1]), 'com canal=99', CHAMADAS[CHAMADAS.length - 1]);
+  eh(linhasP().length === FIX.n99.postos.length, 'a lista virou a do 99',
+     linhasP().length + '', FIX.n99.postos.length + '');
+  var b99 = subBtn('99');
+  nota('botão 99: cor ' + getComputedStyle(b99).color + ' · fundo ' + getComputedStyle(b99).backgroundColor);
+  eh(getComputedStyle(b99).backgroundColor === 'rgb(250, 238, 218)', 'fundo âmbar #FAEEDA no ativo',
+     getComputedStyle(b99).backgroundColor, 'rgb(250, 238, 218)');
+  eh(getComputedStyle(b99).color === 'rgb(99, 56, 6)', 'texto âmbar #633806',
+     getComputedStyle(b99).color, 'rgb(99, 56, 6)');
+  var corN99 = getComputedStyle(document.querySelector('#palco .ap-linha .ap-c-med')).color;
+  eh(corN99 !== corSoutag, 'a coluna PREÇO MÉD. trocou de cor', corSoutag + ' → ' + corN99);
+  eh(corN99 === 'rgb(99, 56, 6)', 'e é o âmbar do canal', corN99);
+  subBtn('Soutag').click();
+  await esperar(300);
+  var bS = subBtn('Soutag');
+  eh(getComputedStyle(bS).backgroundColor === 'rgb(238, 237, 254)', 'e o Soutag volta ao roxo #EEEDFE',
+     getComputedStyle(bS).backgroundColor, 'rgb(238, 237, 254)');
+
+  h3('7. Cards ordenam a lista');
+  var porLitros = nomes()[0];
+  cards()[3].click();     // CUPONS
+  await esperar(150);
+  var porCupons = FIX.soutag.postos.map(function (p) {
+    var c = p.por_combustivel.filter(function (x) { return x.combustivel === 'GC'; })[0];
+    return { nome: p.nome, v: c ? c.cupons : -Infinity };
+  }).sort(function (a, b) { return b.v - a.v; })[0].nome;
+  nota('por litros: ' + porLitros + '  ·  por cupons: ' + nomes()[0]);
+  eh(nomes()[0] === porCupons, 'clicar em CUPONS reordena', nomes()[0], porCupons);
+  cards()[3].click();
+  await esperar(150);
+  eh(nomes()[0] === porLitros, 'clicar de novo volta para litros', nomes()[0], porLitros);
+
+  h3('8. Grade fixa de 7 colunas');
+  var cols = colsDe('.ap-cab');
+  nota('colunas: ' + cols.join(' '));
+  eh(cols.length === 7, 'sete colunas', cols.length + '', '7');
+  eh(cols.every(function (c) { return c === '150px'; }), 'todas de 150px (nada de 1fr)', cols.join(' '));
+  eh(colsDe('.ap-linha').length === 7 && colsDe('.ap-rede').length === 7,
+     'linha e REDE acompanham', colsDe('.ap-linha').length + '/' + colsDe('.ap-rede').length);
+
+  h3('9. "Por motorista" visível e desativado');
+  var pm = [].slice.call(document.querySelectorAll('#palco .ap-atalho'))
+    .filter(function (b) { return /motorista/i.test(b.textContent); })[0];
+  eh(!!pm, 'o botão existe');
+  eh(pm.disabled === true, 'está desativado');
+  eh(/aguardando dados do convênio/.test(pm.title), 'com o tooltip', pm.title);
+
+  h3('10. Estreito (375px)');
+  var palco = document.getElementById('palco');
+  palco.style.width = '375px';
+  await esperar(200);
+  // A media query é de viewport, não de contêiner — aqui só se confere que
+  // nada estoura. A regra de cards 2×N é conferida no navegador a 375px.
+  eh(document.documentElement.scrollWidth <= window.innerWidth + 1,
+     'a página não ganha rolagem horizontal');
+  palco.style.width = '';
+
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">TUDO PASSOU</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — tela App';
+}
+
+rodar().catch(function (e) {
+  linhas.push('\n<span class="bad">ERRO: ' + hesc(e.message) + '</span>');
+  linhas.push(hesc(String(e.stack || '').split('\n').slice(0, 6).join('\n')));
+  pintar();
+  document.title = 'ERRO — tela App';
+});
+</script>

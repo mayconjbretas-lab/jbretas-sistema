@@ -209,14 +209,25 @@
            antes era o estado "nada aberto" e nao tinha nenhum. -->
       <div class="fueltab-row" id="rel-seletor">
         <button class="fueltab" type="button" id="rel-btn-postos" onclick="relAbrir('postos')">Movimentação do dia</button>
+        <button class="fueltab" type="button" id="rel-btn-app" onclick="relAbrir('app')">App</button>
         <button class="fueltab" type="button" id="rel-btn-dre" onclick="relAbrir('dre')">DRE</button>
-        <button class="fueltab" type="button" id="rel-btn-mercado" onclick="relAbrir('mercado')">Mercado</button>
+        <!-- Coligadas: só o botão, sem vista por trás ainda. DESATIVADO de
+             verdade (disabled + aria-disabled), não só cinza: botão que
+             parece clicável e não faz nada é pior que botão apagado. -->
+        <button class="fueltab" type="button" id="rel-btn-coligadas" disabled aria-disabled="true"
+                title="em breve">Coligadas</button>
         <button class="fueltab" type="button" id="rel-btn-lista" onclick="relAbrir('lista')">Relatório</button>
+        <button class="fueltab" type="button" id="rel-btn-mercado" onclick="relAbrir('mercado')">Mercado</button>
       </div>
       <div id="s-relat-lista"></div>
       <section class="scr" id="s-dre"></section>
       <section class="scr" id="s-movmes"></section>
       <section class="scr" id="s-movpostos"></section>
+      <!-- App — preço por litro dos convênios Soutag e 99, por posto. Bloco
+           NOVO; nada das vistas vizinhas foi tocado. O #s-app.active vira
+           display:block pelo CSS que o próprio app-cupons.js injeta, mesmo
+           arranjo do #s-mercado. -->
+      <section class="scr" id="s-app"></section>
       <!-- Mercado — custo de compra. MESMO mercado.js dos dois módulos, sem
            fork; ele escolhe o shell pela largura (completo >= 800px, só-painel
            abaixo). Aninhado aqui, e não solto na main, pelo mesmo motivo do
@@ -281,6 +292,9 @@
 <script src="dre.js?v=202609161527"></script>
 <script src="movimentacao-mes.js?v=202609161527"></script>
 <script src="movimentacao-postos.js?v=202609161527"></script>
+<!-- Aba App (convênios Soutag/99). Depois do movimentacao-postos porque
+     reusa o window.mmFmt que o movimentacao-mes.js publica. -->
+<script src="app-cupons.js?v=202609161527"></script>
 <script src="solicitacoes-adm.js?v=202609161527"></script>
 <script src="../../shared/js/push-inscricao.js?v=202609161527"></script>
 <!-- Custo & Margem — mesmo JS da Logística (renderCustoMargem em window), sem fork; ADM = só leitura -->

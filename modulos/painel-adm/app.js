@@ -115,6 +115,7 @@ function setTab(btn, tab) {
 // como já estava: a vista existe, a entrada visível não.
 const REL_VISTAS = {
   postos: { sec: 's-movpostos', botao: 'rel-btn-postos', render: (el) => renderMovPostos(el) },
+  app: { sec: 's-app', botao: 'rel-btn-app', render: (el) => renderAppCupons(el) },
   dre: { sec: 's-dre', botao: 'rel-btn-dre', render: (el) => renderDre(el) },
   mercado: { sec: 's-mercado', botao: 'rel-btn-mercado', render: (el) => renderMercado(el) },
   lista: { sec: 's-relat-lista', botao: 'rel-btn-lista', plano: true,
@@ -196,9 +197,21 @@ function botaoDaAba(tab) {
   if (!tab || !/^[a-z]+$/.test(tab)) return null;
   return document.querySelector('.nbtn[onclick*="\'' + tab + '\'"]');
 }
+// A aba App tem hash PRÓPRIO — '#app' e '#app/soutag' — em vez de
+// '#relat/app'. É a única vista de Relatórios com sub-estado (o canal) que
+// precisa sobreviver ao F5, e '#relat/app/soutag' seria um terceiro nível
+// num esquema de dois. Nada do esquema antigo mudou: '#relat/postos',
+// '#relat/dre' e os demais continuam idênticos.
 function hashDaAba(tab) {
+  if (tab === 'relat' && _relatVista === 'app') {
+    const canal = (typeof window.__apCanalAtual === 'function') ? window.__apCanalAtual() : '';
+    return '#app' + (canal ? '/' + String(canal).toLowerCase() : '');
+  }
   return '#' + tab + (tab === 'relat' ? '/' + _relatVista : '');
 }
+// O app-cupons.js chama isto ao trocar de canal, para a URL acompanhar sem
+// que ele precise conhecer o roteador.
+window.__apHash = function () { gravarHash('relat'); };
 function gravarHash(tab) {
   const novo = hashDaAba(tab);
   // Reescrever o mesmo hash não muda nada e ainda assim mexe na URL.
@@ -209,6 +222,18 @@ function gravarHash(tab) {
 // do HTML fica como está, sem mensagem e sem tela em branco.
 function aplicarHash() {
   const partes = String(location.hash || '').replace(/^#/, '').split('/');
+  // '#app' e '#app/soutag' abrem a aba Relatórios na vista App. Traduzido
+  // aqui, antes do resto, para o roteador continuar tendo um caminho só.
+  if (partes[0] === 'app') {
+    const bt = botaoDaAba('relat');
+    if (!bt) return false;
+    _relatVista = 'app';
+    if (partes[1] && typeof window.__apSetCanal === 'function') {
+      window.__apSetCanal(partes[1].toUpperCase() === '99' ? '99' : 'SOUTAG');
+    }
+    setTab(bt, 'relat');
+    return true;
+  }
   const btn = botaoDaAba(partes[0]);
   if (!btn) return false;
   // A sub-vista só é aceita se existir no mapa. "#relat/inventada" abre a
