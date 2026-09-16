@@ -213,27 +213,26 @@
     (d.postos || []).forEach(function (p) { mp[p.posto_id] = p.valor; });
     return mp;
   }
-  // Opções do seletor "Provisão de:". Um mês T entra quando:
-  //   • a movimentação cobre ele INTEIRO (primeiro dia >= PRIMEIRO_DIA) — o
-  //     rollup TecnoX começa em 25/06/2026, então jun/2026 sairia com seis
-  //     dias e uma "provisão" de seis dias contra despesa de mês cheio é um
-  //     número que não quer dizer nada;
-  //   • não passa do mês corrente;
-  //   • e M = T−1 tem despesa importada — OU T é o próprio mês corrente, que
-  //     entra sempre, porque é a projeção que a tela já fazia antes desta
-  //     mudança e ela não pode sumir por falta de despesa.
-  // Com jan–jun importado e set/2026 corrente, isto dá JUL/2026 e SET/2026:
-  // ago fica de fora porque jul não tem despesa e ago não é o mês corrente.
+  // Opções do seletor "Provisão de:". TODO mês T cujo M = T−1 tem despesa
+  // importada, mais o mês corrente — que entra sempre, porque é a projeção
+  // que a tela já fazia antes desta mudança e ela não pode sumir por falta de
+  // despesa. Nada é filtrado por cobertura de movimentação: o mês da DESPESA
+  // é quem manda na lista, e escolher um mês sem venda no rollup mostra a
+  // despesa com a venda zerada — que é informação, não defeito.
+  // Com jan–jun importado e set/2026 corrente: FEV, MAR, ABR, MAI, JUN, JUL
+  // (de jan…jun) e SET (corrente). AGO fica de fora porque jul não tem
+  // despesa e ago não é o mês corrente.
   function mesesProvisao() {
     var corr = mesCorrente();
-    var min = PRIMEIRO_DIA.slice(0, 7);
-    if (PRIMEIRO_DIA.slice(8) !== '01') min = mesSoma(min, 1);   // mês parcial não conta
-    var out = [];
-    var t = min;
-    while (t <= corr) {
-      if (t === corr || despesaDe(mesBase(t))) out.push(t);
-      t = mesSoma(t, 1);
-    }
+    var vistos = {}, out = [];
+    ((_despMeses && _despMeses.meses) || []).forEach(function (m) {
+      var t = mesSoma(m.mes, 1);
+      if (t <= corr && !vistos[t]) { vistos[t] = 1; out.push(t); }
+    });
+    if (!vistos[corr]) out.push(corr);
+    // A resposta vem do mais recente para o mais antigo; o seletor lê de cima
+    // para baixo em ordem de calendário.
+    out.sort();
     return out;
   }
   function temAlgumaDespesa() {

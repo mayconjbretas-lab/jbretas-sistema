@@ -69,9 +69,17 @@ window.apiFetch = function (url) {
   CHAMADAS.push(u);
   if (u.indexOf('/despesas/meses') === 0) return Promise.resolve(FIX.desp);
   if (u.indexOf('/tecnox/movimentacao-postos') === 0) {
-    // Serve o mês pedido, como a rota faria.
-    var m = /inicio=(\d{4}-\d{2})/.exec(u);
-    return Promise.resolve((m && m[1] === '2026-07') ? FIX.jul : FIX.set);
+    // Serve o mês pedido, como a rota faria. Mês corrente tem o arquivo real
+    // de 01–14/09; qualquer mês fechado recebe o de julho com o período
+    // trocado — a FORMA é a mesma, e o que está sob teste aqui é a data que
+    // a tela pede, não a magnitude do mês.
+    var mi = /inicio=(\d{4}-\d{2}-\d{2})/.exec(u);
+    var mf = /fim=(\d{4}-\d{2}-\d{2})/.exec(u);
+    var ini = mi ? mi[1] : '', fim = mf ? mf[1] : '';
+    if (ini.slice(0, 7) === '2026-09') return Promise.resolve(FIX.set);
+    var c = JSON.parse(JSON.stringify(FIX.jul));
+    c.consulta = { inicio: ini, fim: fim, dias: 31 };
+    return Promise.resolve(c);
   }
   return Promise.resolve({ success: true });
 };
@@ -173,8 +181,14 @@ async function rodar() {
   eh(!!s, 'o seletor "Provisão de:" apareceu');
   var opts = s ? [].slice.call(s.options).map(function (o) { return o.text; }) : [];
   nota('opções: ' + opts.join(' · '));
-  eh(opts.length === 2, 'duas opções', opts.length + '', '2');
-  eh(opts.join('|') === 'JUL/2026|SET/2026', 'JUL/2026 e SET/2026', opts.join('|'), 'JUL/2026|SET/2026');
+  // TODO mês T cujo M = T−1 tem despesa, mais o corrente. Com jan–jun
+  // importado: FEV…JUL (de jan…jun) e SET. AGO fica fora — jul não tem
+  // despesa e ago não é o mês corrente.
+  var ESPERADAS = 'FEV/2026|MAR/2026|ABR/2026|MAI/2026|JUN/2026|JUL/2026|SET/2026';
+  eh(opts.length === 7, 'sete opções', opts.length + '', '7');
+  eh(opts.join('|') === ESPERADAS, 'todos os meses com despesa, mais o corrente',
+     opts.join('|'), ESPERADAS);
+  eh(opts.indexOf('AGO/2026') < 0, 'e AGO NÃO entra (jul sem despesa, ago não é o corrente)');
   eh(s && s.value === '2026-07', 'padrão = o T mais recente com despesa (JUL)', s && s.value, '2026-07');
 
   // ══════════════════════════════════════════════════════════════
@@ -232,6 +246,34 @@ async function rodar() {
   eh(/Lucro líquido/.test(det), 'e mostra a subtração');
   __mpCard('lucroliq');
   await esperar(100);
+
+  // ══════════════════════════════════════════════════════════════
+  h3('4b. MAR/2026 — um mês do meio da lista');
+  CHAMADAS = [];
+  __mpProvisao('2026-03');
+  await esperar(400);
+  var perMar = CHAMADAS.filter(function (u) { return u.indexOf('/tecnox') === 0; }).pop();
+  nota('período: ' + perMar);
+  eh(/inicio=2026-03-01&fim=2026-03-31/.test(perMar || ''), 'período 01→31/03', perMar);
+  nota('linha: ' + txtProj());
+  eh(/PROVISÃO MAR\/2026/.test(txtProj()), 'PROVISÃO MAR/2026', txtProj().slice(0, 40));
+  eh(/venda real/.test(txtProj()), 'venda real (março é mês fechado)');
+  eh(/despesa base FEV\/2026/.test(txtProj()), 'despesa base FEV/2026');
+  var fev = FIX.desp.meses.filter(function (m) { return m.mes === '2026-02'; })[0];
+  var fevFmt = fev.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  var cdM = valCard('PROJ. DESPESA');
+  nota('PROJ. DESPESA: ' + cdM.valor + ' | ' + cdM.sub + '  (FEV na fixture = ' + fevFmt + ')');
+  eh(cdM.valor.indexOf(fevFmt) >= 0, 'o card mostra a despesa de FEV', cdM.valor, fevFmt);
+  eh(cdM.sub === 'base FEV/2026', 'sublinha "base FEV/2026"', cdM.sub);
+  eh(cards().length === 10, 'os dez cards seguem lá', cards().length + '', '10');
+
+  h3('4c. Voltar para JUL — nada mudou lá');
+  __mpProvisao('2026-07');
+  await esperar(400);
+  eh(/PROVISÃO JUL\/2026 · venda real · despesa base JUN\/2026/.test(txtProj()),
+     'a linha de JUL segue idêntica', txtProj().slice(0, 60));
+  eh(valCard('PROJ. DESPESA').valor.indexOf('8.139.535,74') >= 0,
+     'e a despesa de JUN continua 8.139.535,74', valCard('PROJ. DESPESA').valor);
 
   // ══════════════════════════════════════════════════════════════
   h3('5. SET/2026 — mês corrente, sem despesa de AGO');
