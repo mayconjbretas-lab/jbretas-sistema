@@ -1,0 +1,282 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Movimentação por posto — provisão de despesa</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+<link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// 1) FORA da Projeção nada mudou: 8 cards, 8 colunas, grade 1256px.
+// 2) Ligada, o seletor "Provisão de:" lista JUL/2026 e SET/2026 — e só.
+//    AGO fica fora porque JUL não tem despesa e AGO não é o mês corrente;
+//    JUN fica fora porque o rollup TecnoX começa em 25/06 e o mês sairia
+//    com seis dias contra uma despesa de mês cheio.
+// 3) JUL (mês fechado) → período 01→31/07, venda REAL (fator 1), despesa da
+//    rede = 8.139.535,74 (base JUN) e lucro líquido = lucro − despesa.
+// 4) SET (mês corrente) → projeção de sempre, e como AGO não foi importado
+//    os dois cards mostram "—" e a linha diz "sem despesa de AGO importada".
+// 5) Desligar devolve 8 cards e a grade de 1256px.
+//
+// FIXTURES. O movimentacao-postos de julho é o arquivo REAL de 01–13/09
+// escalado para mês cheio (×31/13) — a forma dos dados é de produção, a
+// magnitude é de um mês. O 01–14/09 é o real, com o período até 14 e o
+// arquivo até 13 (é assim que ele anda). Na despesa, o TOTAL DE JUNHO é o
+// número real informado (8.139.535,74); o rateio entre os 37 postos é
+// sintético, proporcional à litragem, e fecha EXATO no total.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+var HOJE = '2026-09-16';
+var TOTAL_JUN = 8139535.74;
+
+// ── dublês ───────────────────────────────────────────────────────
+window.exigirSessao = function () { return { id: 'h', nome: 'H', perfil: 'ADM', ti: true }; };
+window.getUsuarioLogado = window.exigirSessao;
+
+var FIX = {};
+var CHAMADAS = [];
+window.apiFetch = function (url) {
+  var u = String(url);
+  CHAMADAS.push(u);
+  if (u.indexOf('/despesas/meses') === 0) return Promise.resolve(FIX.desp);
+  if (u.indexOf('/tecnox/movimentacao-postos') === 0) {
+    // Serve o mês pedido, como a rota faria.
+    var m = /inicio=(\d{4}-\d{2})/.exec(u);
+    return Promise.resolve((m && m[1] === '2026-07') ? FIX.jul : FIX.set);
+  }
+  return Promise.resolve({ success: true });
+};
+
+function js(src) {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { erro(new Error(src + ' não carregou')); };
+    document.body.appendChild(s);
+  });
+}
+function baixar(url) {
+  return new Promise(function (ok, er) {
+    var x = new XMLHttpRequest();
+    x.open('GET', url);
+    x.onload = function () { ok(JSON.parse(x.responseText)); };
+    x.onerror = function () { er(new Error(url + ' não carregou')); };
+    x.send();
+  });
+}
+function cards()   { return [].slice.call(document.querySelectorAll('#palco .mp-card')); }
+// Em elemento com display:none o getComputedStyle devolve o valor ESPECIFICADO
+// ("repeat(10, 150px)"), não as trilhas resolvidas. A .mp-cab some no mobile,
+// então sem expandir essa forma a contagem daria 2 (o split do texto cru) e o
+// teste reprovaria a medição, não o CSS.
+function colsDe(sel) {
+  var el = document.querySelector('#palco ' + sel);
+  if (!el) return [];
+  var v = getComputedStyle(el).gridTemplateColumns.trim();
+  var m = /^repeat\((\d+),\s*([\d.]+px)\)$/.exec(v);
+  if (m) { var out = []; for (var i = 0; i < Number(m[1]); i++) out.push(m[2]); return out; }
+  return v.split(/\s+/);
+}
+function larguraGrade(sel) {
+  var c = colsDe(sel);
+  if (!c.length) return 0;
+  var soma = c.reduce(function (s, v) { return s + parseFloat(v); }, 0);
+  return Math.round(soma + (c.length - 1) * 8);   // gap 8px
+}
+function txtProj() {
+  var el = document.querySelector('#palco .mp-proj');
+  return el ? el.textContent.replace(/\s+/g, ' ').trim() : '(sem linha)';
+}
+function selProv() { return document.querySelector('#palco .mp-prov-sel select'); }
+function rotCard(i) { var c = cards()[i]; return c ? c.querySelector('.mp-rot').textContent.trim() : null; }
+function valCard(rot) {
+  var c = cards().filter(function (x) { return x.querySelector('.mp-rot').textContent.trim() === rot; })[0];
+  if (!c) return null;
+  return { valor: c.querySelector('.mp-card-valor').textContent.trim(),
+           sub: c.querySelector('.mp-sub') ? c.querySelector('.mp-sub').textContent.trim() : '' };
+}
+
+// ════════════════════════════════════════════════════════════════
+async function rodar() {
+  // As asserções de grade (1256/1572px) só valem no DESKTOP: abaixo de 700px
+  // o CSS troca a linha por "1fr auto" de propósito, e rodar estreito
+  // reprovaria o layout mobile CORRETO. Aviso em vez de falha silenciosa.
+  if (window.innerWidth < 700) {
+    linhas.push('<span class="bad">JANELA ESTREITA (' + window.innerWidth + 'px)</span>');
+    nota('Este teste mede a grade de colunas, que só existe a partir de 700px.');
+    nota('Alargue a janela e recarregue. O layout mobile é conferido à parte.');
+    pintar();
+    throw new Error('rode com a janela em 700px ou mais');
+  }
+  FIX.desp = await baixar('/testes/fixtures-despesas-meses.json');
+  FIX.jul  = await baixar('/testes/fixtures-movpostos-07-2026.json');
+  FIX.set  = await baixar('/testes/fixtures-movpostos-01-14-09.json');
+  nota('despesa: ' + FIX.desp.meses.map(function (m) { return m.mes; }).join(', ') +
+       ' · JUN total ' + FIX.desp.meses[0].total);
+  nota('movpostos jul: lucro ' + FIX.jul.rede.dre.lucro + ' · set: lucro ' + FIX.set.rede.dre.lucro);
+
+  var sec = document.createElement('div');
+  document.getElementById('palco').appendChild(sec);
+  await js('/modulos/painel-adm/movimentacao-mes.js');
+  await js('/modulos/painel-adm/movimentacao-postos.js');
+  renderMovPostos(sec);
+  await esperar(250);
+
+  // ══════════════════════════════════════════════════════════════
+  h3('0. FORA da Projeção: nada mudou');
+  eh(cards().length === 8, 'oito cards', cards().length + '', '8');
+  nota('cards: ' + cards().map(function (c) { return c.querySelector('.mp-rot').textContent.trim(); }).join(' · '));
+  eh(colsDe('.mp-cab').length === 8, 'cabeçalho com 8 colunas', colsDe('.mp-cab').length + '', '8');
+  eh(larguraGrade('.mp-cab') === 1256, 'grade de 1256px', larguraGrade('.mp-cab') + 'px', '1256px');
+  eh(!document.querySelector('#palco .mp-p-desp'), 'nenhuma coluna DESPESA na lista');
+  eh(!document.querySelector('#palco .mp-proj'), 'sem linha de projeção');
+  eh(CHAMADAS.filter(function (u) { return u.indexOf('/despesas') === 0; }).length === 0,
+     'e NENHUMA chamada a /despesas (a tela não sabe que despesa existe)');
+
+  // ══════════════════════════════════════════════════════════════
+  h3('1. Ligar Projeção: o seletor');
+  CHAMADAS = [];
+  await __mpProjecao();
+  await esperar(350);
+  eh(CHAMADAS.filter(function (u) { return u.indexOf('/despesas/meses') === 0; }).length === 1,
+     'buscou /despesas/meses uma vez', CHAMADAS.filter(function (u) { return u.indexOf('/despesas') === 0; }).join(' '));
+  var s = selProv();
+  eh(!!s, 'o seletor "Provisão de:" apareceu');
+  var opts = s ? [].slice.call(s.options).map(function (o) { return o.text; }) : [];
+  nota('opções: ' + opts.join(' · '));
+  eh(opts.length === 2, 'duas opções', opts.length + '', '2');
+  eh(opts.join('|') === 'JUL/2026|SET/2026', 'JUL/2026 e SET/2026', opts.join('|'), 'JUL/2026|SET/2026');
+  eh(s && s.value === '2026-07', 'padrão = o T mais recente com despesa (JUL)', s && s.value, '2026-07');
+
+  // ══════════════════════════════════════════════════════════════
+  h3('2. JUL/2026 — mês fechado, venda real');
+  nota('linha: ' + txtProj());
+  eh(/PROVISÃO JUL\/2026/.test(txtProj()), 'diz PROVISÃO JUL/2026 (não "projeção")', txtProj().slice(0, 40));
+  eh(/venda real/.test(txtProj()), 'e "venda real"');
+  eh(/despesa base JUN\/2026/.test(txtProj()), 'e "despesa base JUN/2026"');
+  var perAtual = CHAMADAS.filter(function (u) { return u.indexOf('/tecnox') === 0; }).pop();
+  nota('período: ' + perAtual);
+  eh(/inicio=2026-07-01&fim=2026-07-31/.test(perAtual || ''), 'período 01→31/07', perAtual);
+
+  eh(cards().length === 10, 'dez cards', cards().length + '', '10');
+  eh(rotCard(8) === 'PROJ. DESPESA', 'o 9º card é PROJ. DESPESA (à direita de LUCRO BRUTO)', rotCard(8));
+  eh(rotCard(9) === 'PROJ. LUCRO LÍQUIDO', 'e o 10º é PROJ. LUCRO LÍQUIDO', rotCard(9));
+  eh(rotCard(7) === 'LUCRO BRUTO', 'LUCRO BRUTO segue sendo o 8º', rotCard(7));
+
+  var cd = valCard('PROJ. DESPESA');
+  nota('PROJ. DESPESA: ' + cd.valor + ' | ' + cd.sub);
+  eh(cd.valor.indexOf('8.139.535,74') >= 0, 'despesa da rede = 8.139.535,74 (JUN)', cd.valor, '8.139.535,74');
+  eh(cd.sub === 'base JUN/2026', 'sublinha "base JUN/2026"', cd.sub);
+
+  var lucroJul = FIX.jul.rede.dre.lucro;
+  var liqEsp = lucroJul - TOTAL_JUN;
+  var margEsp = (liqEsp / FIX.jul.rede.dre.venda_liquida * 100).toFixed(2).replace('.', ',');
+  var cl = valCard('PROJ. LUCRO LÍQUIDO');
+  nota('PROJ. LUCRO LÍQUIDO: ' + cl.valor + ' | ' + cl.sub);
+  nota('esperado: ' + lucroJul + ' − ' + TOTAL_JUN + ' = ' + liqEsp.toFixed(2));
+  var liqFmt = liqEsp.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  eh(cl.valor.indexOf(liqFmt) >= 0, 'lucro líquido = lucro de julho − despesa de junho', cl.valor, liqFmt);
+  eh(cl.sub === 'margem líq. ' + margEsp + '%', 'sublinha com a margem líquida', cl.sub, 'margem líq. ' + margEsp + '%');
+
+  h3('3. JUL — colunas e grade');
+  eh(colsDe('.mp-cab').length === 10, 'cabeçalho com 10 colunas', colsDe('.mp-cab').length + '', '10');
+  eh(larguraGrade('.mp-cab') === 1572, 'grade de 1572px', larguraGrade('.mp-cab') + 'px', '1572px');
+  eh(colsDe('.mp-p-linha').length === 10, 'a linha do posto acompanha', colsDe('.mp-p-linha').length + '');
+  eh(colsDe('.mp-rede').length === 10, 'e a linha REDE também', colsDe('.mp-rede').length + '');
+  var cab = document.querySelector('#palco .mp-cab').textContent.replace(/\s+/g, ' ').trim();
+  nota('cabeçalho: ' + cab);
+  eh(/DESPESA/.test(cab) && /LUCRO LÍQ\./.test(cab), 'DESPESA e LUCRO LÍQ. no cabeçalho');
+  var linha1 = document.querySelector('#palco .mp-p-linha');
+  eh(!!linha1.querySelector('.mp-p-desp') && !!linha1.querySelector('.mp-p-liq'),
+     'e as duas células na linha do posto');
+  // REDE bate com o card: é o total, e não a soma das colunas.
+  var redeDesp = document.querySelector('#palco .mp-rede .mp-p-desp').textContent;
+  eh(redeDesp.indexOf('8.139.535,74') >= 0, 'a linha REDE mostra o mesmo total do card', redeDesp.slice(0, 20));
+
+  h3('4. JUL — a conta aberta');
+  __mpCard('lucroliq');
+  await esperar(150);
+  var det = document.querySelector('#palco .mp-detalhe').textContent.replace(/\s+/g, ' ');
+  nota(det.slice(0, 200));
+  eh(/Lucro real de JUL\/2026/.test(det), 'a conta nomeia o lucro como REAL (mês fechado)');
+  eh(/Despesa de JUN\/2026/.test(det), 'e a despesa como de JUN/2026');
+  eh(/Lucro líquido/.test(det), 'e mostra a subtração');
+  __mpCard('lucroliq');
+  await esperar(100);
+
+  // ══════════════════════════════════════════════════════════════
+  h3('5. SET/2026 — mês corrente, sem despesa de AGO');
+  __mpProvisao('2026-09');
+  await esperar(350);
+  nota('linha: ' + txtProj());
+  eh(/PROJEÇÃO SET\/2026/.test(txtProj()), 'volta a dizer PROJEÇÃO SET/2026', txtProj().slice(0, 40));
+  eh(/sem despesa de AGO importada/.test(txtProj()), 'e "sem despesa de AGO importada"');
+  eh(/lucro base 13 dias/.test(txtProj()), 'com a base de lucro de sempre', txtProj());
+  var cd2 = valCard('PROJ. DESPESA');
+  var cl2 = valCard('PROJ. LUCRO LÍQUIDO');
+  eh(cd2.valor === '—', 'PROJ. DESPESA mostra "—"', cd2.valor, '—');
+  eh(cl2.valor === '—', 'PROJ. LUCRO LÍQUIDO mostra "—"', cl2.valor, '—');
+  var pd = document.querySelector('#palco .mp-p-linha .mp-p-desp').textContent;
+  eh(pd.indexOf('—') === 0, 'e a coluna do posto também', pd.slice(0, 10), '—');
+  eh(colsDe('.mp-cab').length === 10, 'a grade continua em 10 (a Projeção segue ligada)', colsDe('.mp-cab').length + '');
+
+  // ══════════════════════════════════════════════════════════════
+  h3('6. Desligar a Projeção');
+  await __mpProjecao();
+  await esperar(250);
+  eh(cards().length === 8, 'voltou a 8 cards', cards().length + '', '8');
+  eh(colsDe('.mp-cab').length === 8, 'e a 8 colunas', colsDe('.mp-cab').length + '', '8');
+  eh(larguraGrade('.mp-cab') === 1256, 'grade de volta a 1256px', larguraGrade('.mp-cab') + 'px', '1256px');
+  eh(!document.querySelector('#palco .mp-proj'), 'sem linha de projeção');
+  eh(!document.querySelector('#palco .mp-p-desp'), 'e sem as colunas novas');
+
+  h3('7. Religar não rebusca a despesa (cache)');
+  CHAMADAS = [];
+  await __mpProjecao();
+  await esperar(350);
+  eh(CHAMADAS.filter(function (u) { return u.indexOf('/despesas') === 0; }).length === 0,
+     '/despesas/meses não foi chamado de novo', CHAMADAS.filter(function (u) { return u.indexOf('/despesas') === 0; }).join(' '));
+  eh(!!selProv(), 'e o seletor voltou normalmente');
+}
+
+rodar().then(function () {
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">TUDO PASSOU</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — provisão';
+}).catch(function (e) {
+  linhas.push('\n<span class="bad">ERRO NO HARNESS: ' + hesc(e.message) + '</span>');
+  linhas.push(hesc(e.stack || ''));
+  pintar();
+  document.title = 'ERRO — provisão';
+});
+</script>

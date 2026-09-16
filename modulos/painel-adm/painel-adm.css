@@ -386,6 +386,41 @@ html, body { height: 100%; overflow: hidden; }
    os cards para baixo só quando a projeção está ligada. */
 .mp-proj { font-family: var(--mono); font-size: .64rem; font-weight: 700;
   letter-spacing: .04em; color: var(--ac); margin: -.4rem 0 .8rem; }
+/* .mp-proj vira flex para o seletor poder ir ao fim da linha. A regra so
+   existe em modo Projecao: o htmlProjInfo devolve string vazia sem _proj. */
+.mp-proj { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+/* ── Provisão (SÓ em modo Projeção) ──────────────────────────────
+   DEZ colunas: as oito de sempre + DESPESA + LUCRO LÍQ. 10×150 + 9×8 =
+   1572px, e a fila de cards cresce junto (dez cards, mesmo gap), então a
+   régua card↔coluna continua fechando — PROJ. DESPESA sobre DESPESA,
+   PROJ. LUCRO LÍQUIDO sobre LUCRO LÍQ.
+
+   O gatilho é a classe .proj na .mp-lista, posta pelo JS só quando a
+   Projeção está ligada. Sem ela nada aqui se aplica e a grade volta às
+   1256px de 8 colunas — é essa a garantia de "fora da Projeção nada muda".
+   Escopado em .mp-lista.proj de propósito: uma regra solta em .proj
+   pegaria qualquer elemento que ganhasse essa classe depois. */
+/* DENTRO do @media de desktop, e nao solto: a regra mobile que devolve a
+   linha para `1fr auto` e .mp-p-linha (uma classe), enquanto esta e
+   .mp-lista.proj .mp-p-linha (duas). Media query NAO soma especificidade,
+   entao solta ela venceria o mobile e o celular ficaria com dez colunas de
+   150px numa tela de 375. Medido antes de descobrir: a linha saia com
+   1500px de grade no telefone. */
+@media (min-width: 700px) {
+  .mp-lista.proj .mp-cab,
+  .mp-lista.proj .mp-p-linha,
+  .mp-lista.proj .mp-rede { grid-template-columns: repeat(10, 150px); }
+}
+.mp-cab .mp-p-desp, .mp-cab .mp-p-liq { text-align: right; }
+.mp-p-desp, .mp-p-liq { text-align: right; font-family: var(--mono); font-size: .72rem;
+  display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; }
+/* Seletor de mês na linha de projeção. Empurrado para a direita com
+   margin-left auto para não grudar no texto quando ele encurta. */
+.mp-prov-sel { display: inline-flex; align-items: center; gap: .35rem; margin-left: auto;
+  font-family: var(--mono); font-size: .62rem; letter-spacing: .04em; color: var(--tx2); }
+.mp-prov-sel select { font-family: var(--mono); font-size: .66rem; padding: 1px 4px;
+  background: var(--sf2); color: var(--tx); border: 1px solid var(--bd); border-radius: 5px; }
+
 
 /* CARDS COM LARGURA DE CONTEÚDO, nunca 1fr. Com grid de frações os oito
    esticavam para ocupar a tela toda e cada card virava um retângulo enorme
@@ -556,7 +591,10 @@ html, body { height: 100%; overflow: hidden; }
      encostaria 2px mais a esquerda — mudanca que ninguem pediu. */
   .mp-p-linha { grid-template-columns: 1fr auto; grid-template-areas: "nome pct" "barra litros"; row-gap: 4px; column-gap: .7rem; padding: 7px 2px; }
   .mp-cab, .mp-rede { display: none; }
-  .mp-p-comb, .mp-p-mix, .mp-p-prod, .mp-p-lucro { display: none; }
+  /* As duas da provisao seguem as outras quatro: somem da linha e aparecem
+     no detalhe do posto (mp-p-det), que e onde o mobile le tudo. A grade de
+     10 colunas tambem nao se aplica aqui — .mp-p-linha vira 1fr auto. */
+  .mp-p-comb, .mp-p-mix, .mp-p-prod, .mp-p-lucro, .mp-p-desp, .mp-p-liq { display: none; }
   .mp-p-nome { grid-area: nome; }
   /* No mobile os dois percentuais podem quebrar em duas linhas. */
   .mp-p-pct { grid-area: pct; white-space: normal; text-align: right; }

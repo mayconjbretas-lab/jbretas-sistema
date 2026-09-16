@@ -513,9 +513,14 @@ async function rodar() {
   eh(!!info, 'a linha de projeção aparece');
   nota('linha: ' + txt(info));
   eh(txt(info).indexOf('PROJEÇÃO SET/2026') === 0, 'rótulo do mês', txt(info).slice(0, 18), 'PROJEÇÃO SET/2026');
-  eh(txt(info) === 'PROJEÇÃO SET/2026 · lucro base 13 dias',
+  // A CLÁUSULA DA DESPESA É NOVA e entra sempre que a Projeção está ligada,
+  // inclusive para dizer que ela falta — é o que evita o card de provisão
+  // mostrar "—" sem explicação ao lado. Este dublê não serve
+  // /despesas/meses, então a linha cai no caso "sem despesa importada". O
+  // resto da frase segue palavra por palavra como estava.
+  eh(txt(info) === 'PROJEÇÃO SET/2026 · lucro base 13 dias · sem despesa importada',
      'a linha inteira, palavra por palavra', txt(info),
-     'PROJEÇÃO SET/2026 · lucro base 13 dias');
+     'PROJEÇÃO SET/2026 · lucro base 13 dias · sem despesa importada');
   // A régra de três da venda saiu da linha e continua na conta do card —
   // afirmado nos dois sentidos para ninguém a apagar de lá também.
   eh(txt(info).indexOf('×') < 0 && txt(info).indexOf('base 01') < 0,

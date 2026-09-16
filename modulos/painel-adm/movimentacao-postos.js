@@ -70,6 +70,29 @@
   var _proj = null;     // {diasMes, diasVenda, diasLucro, fator, fatorLucro, mes}
   var _vista = null;    // _dados, ou a cópia projetada dele
 
+  // ════════ PROVISÃO DE DESPESA ════════
+  // SÓ EM PROJEÇÃO. Fora dela esta tela não sabe que despesa existe: cards,
+  // colunas e grade continuam os de sempre, byte por byte.
+  //
+  // A DESPESA É DE UM MÊS, O LUCRO É DE OUTRO, e isso é regra do negócio, não
+  // atalho: a despesa de um mês só fecha depois que ele fecha, então o mês T é
+  // provisionado com a despesa do mês M = T−1. A tela escreve os dois meses
+  // lado a lado ("PROVISÃO JUL/2026 · despesa base JUN/2026") para ninguém ler
+  // os dois números como sendo do mesmo mês.
+  //
+  // DOIS REGIMES, e o seletor é que escolhe:
+  //   T < mês corrente → o mês JÁ FECHOU: venda e lucro são reais, fator 1.
+  //                      Não há o que projetar, e chamar de "projeção" um mês
+  //                      fechado multiplicado por 1 seria mentira de rótulo.
+  //   T = mês corrente → o de sempre: 01→ontem com a regra de três.
+  //
+  // O GET /despesas/meses só devolve mês FECHADO (o corrente está sempre pela
+  // metade) e uma vez por sessão basta — despesa importada não muda no meio da
+  // tarde. Cache em memória, sem revalidar.
+  var _despMeses = null;      // resposta do GET /despesas/meses (só mês fechado)
+  var _despErro = '';
+  var _provT = null;          // mês provisionado (YYYY-MM)
+
   // ── Formatação ───────────────────────────────────────────────────
   // nf e esc vêm do movimentacao-mes.js (window.mmFmt). O fallback existe
   // porque a ordem dos <script> é do HTML, e uma tela não pode quebrar por
@@ -160,6 +183,62 @@
   function mesRotulo(iso) {
     return MES_ABREV[Number(iso.slice(5, 7)) - 1] + '/' + iso.slice(0, 4);
   }
+  // Mês ± n, em YYYY-MM. Aritmética de componentes, não de Date somado em
+  // dias: "31/01 + 1 mês" com Date daria 03/03.
+  function mesSoma(ym, n) {
+    var a = Number(ym.slice(0, 4)), m = Number(ym.slice(5, 7)) - 1 + n;
+    a += Math.floor(m / 12); m = ((m % 12) + 12) % 12;
+    return a + '-' + String(m + 1).padStart(2, '0');
+  }
+  function mesCorrente() { return hojeISO().slice(0, 7); }
+  function ultimoDiaDoMes(ym) { return ym + '-' + String(diasNoMes(ym + '-01')).padStart(2, '0'); }
+
+  // ── Provisão: meses, totais e mapa por posto ─────────────────────
+  // O mês do lucro é T; o da despesa é sempre M = T−1.
+  function mesBase(t) { return t ? mesSoma(t, -1) : null; }
+  function despesaDe(m) {
+    if (!m || !_despMeses || !_despMeses.meses) return null;
+    for (var i = 0; i < _despMeses.meses.length; i++) {
+      if (_despMeses.meses[i].mes === m) return _despMeses.meses[i];
+    }
+    return null;
+  }
+  // Mapa posto_id → valor do mês M. Posto que não está na lista NÃO entra:
+  // ausência é "não sei", e um zero aqui viraria "despesa zero" na coluna e
+  // um lucro líquido igual ao bruto — que lê como posto sem custo nenhum.
+  function despesaPorPosto(m) {
+    var mp = {};
+    var d = despesaDe(m);
+    if (!d) return mp;
+    (d.postos || []).forEach(function (p) { mp[p.posto_id] = p.valor; });
+    return mp;
+  }
+  // Opções do seletor "Provisão de:". Um mês T entra quando:
+  //   • a movimentação cobre ele INTEIRO (primeiro dia >= PRIMEIRO_DIA) — o
+  //     rollup TecnoX começa em 25/06/2026, então jun/2026 sairia com seis
+  //     dias e uma "provisão" de seis dias contra despesa de mês cheio é um
+  //     número que não quer dizer nada;
+  //   • não passa do mês corrente;
+  //   • e M = T−1 tem despesa importada — OU T é o próprio mês corrente, que
+  //     entra sempre, porque é a projeção que a tela já fazia antes desta
+  //     mudança e ela não pode sumir por falta de despesa.
+  // Com jan–jun importado e set/2026 corrente, isto dá JUL/2026 e SET/2026:
+  // ago fica de fora porque jul não tem despesa e ago não é o mês corrente.
+  function mesesProvisao() {
+    var corr = mesCorrente();
+    var min = PRIMEIRO_DIA.slice(0, 7);
+    if (PRIMEIRO_DIA.slice(8) !== '01') min = mesSoma(min, 1);   // mês parcial não conta
+    var out = [];
+    var t = min;
+    while (t <= corr) {
+      if (t === corr || despesaDe(mesBase(t))) out.push(t);
+      t = mesSoma(t, 1);
+    }
+    return out;
+  }
+  function temAlgumaDespesa() {
+    return !!(_despMeses && _despMeses.meses && _despMeses.meses.length);
+  }
 
   // ── Seleção do filtro ────────────────────────────────────────────
   // Um lugar só decide o que a tela está mostrando. Sem isto, "modo pista"
@@ -179,7 +258,9 @@
   // Abastecimentos e Ticket abrem a conta mas NÃO ordenam: os dois são
   // médias da rede, e ranquear posto por média de abastecimento responde uma
   // pergunta que ninguém fez nesta tela.
-  var ORDENAVEIS = ['total', 'SOUTAG', '99', 'produto', 'mix', 'lucro'];
+  // 'despesa' e 'lucroliq' só existem em Projeção — os cards que os disparam
+  // não são renderizados fora dela, então _cardAberto nunca os assume.
+  var ORDENAVEIS = ['total', 'SOUTAG', '99', 'produto', 'mix', 'lucro', 'despesa', 'lucroliq'];
   function ordemAtiva() {
     return ORDENAVEIS.indexOf(_cardAberto) >= 0 ? _cardAberto : null;
   }
@@ -220,7 +301,27 @@
     // -Infinity, e não -1: lucro pode ser NEGATIVO, e -1 poria o posto sem
     // dado acima de quem teve prejuízo de verdade.
     if (qual === 'lucro') { var lv = lucroDe(p); return lv === null ? -Infinity : lv; }
+    // Mesma regra do lucro bruto: sem dado afunda, porque despesa e lucro
+    // líquido também podem ser negativos e um -1 poria o posto sem despesa
+    // importada acima de quem teve prejuízo real.
+    if (qual === 'despesa') { var dv = despesaDoPosto(p); return dv === null ? -Infinity : dv; }
+    if (qual === 'lucroliq') { var nv = lucroLiqDe(p); return nv === null ? -Infinity : nv; }
     return (p.por_canal[qual] && p.por_canal[qual].litros) || 0;
+  }
+  // ── Despesa e lucro líquido do posto (só valem em Projeção) ──────
+  // null, e não zero: posto fora da lista do mês M é "não sei quanto gastou",
+  // e um zero viraria lucro líquido igual ao bruto — posto sem custo nenhum.
+  function despesaDoPosto(p) {
+    if (!_projecao) return null;
+    var mp = despesaPorPosto(mesBase(_provT));
+    var v = mp[p.posto_id];
+    return (v === undefined || v === null) ? null : v;
+  }
+  function lucroLiqDe(p) {
+    var d = despesaDoPosto(p);
+    var l = lucroDe(p);
+    if (d === null || l === null) return null;
+    return l - d;
   }
   // Valor que ordena a lista e que a linha mostra: litros do(s) convênio(s)
   // ligado(s), ou o total do posto quando nenhum está.
@@ -282,6 +383,16 @@
   function prepararVista() {
     _vista = _dados; _proj = null;
     if (!_projecao || !_dados || !_dados.postos || !_dados.postos.length) return;
+
+    // MÊS FECHADO: os números JÁ SÃO os do mês. Sai sem escalar nada — não
+    // por economia, mas porque `_vista === _dados` é o que garante que o
+    // valor exibido é o medido, sem passar por multiplicação nenhuma.
+    if (_provT && _provT < mesCorrente()) {
+      _proj = { real: true, mes: mesRotulo(_provT + '-01'), t: _provT,
+                diasMes: diasNoMes(_provT + '-01'), fator: 1, fatorLucro: 1 };
+      return;
+    }
+
     var diasV = diasComVenda(_dados);
     if (!diasV) return;
     var dreRede = _dados.rede.dre || {};
@@ -289,7 +400,8 @@
     var diasM = diasNoMes(_inicio);
     var f = diasM / diasV;
     var fL = diasL > 0 ? diasM / diasL : null;
-    _proj = { diasMes: diasM, diasVenda: diasV, diasLucro: diasL,
+    _proj = { real: false, t: _inicio.slice(0, 7),
+              diasMes: diasM, diasVenda: diasV, diasLucro: diasL,
               fator: f, fatorLucro: fL, mes: mesRotulo(_inicio) };
     _vista = {
       success: _dados.success, consulta: _dados.consulta,
@@ -302,6 +414,20 @@
     _vista.rede.por_combustivel = (_dados.rede.por_combustivel || []).map(function (k) {
       return { codigo: k.codigo, rotulo: k.rotulo, litros: k.litros * f };
     });
+  }
+
+  // ── Carga da despesa (uma vez por sessão) ────────────────────────
+  // NÃO É FATAL: se a rota falhar, a Projeção continua funcionando como antes
+  // — sem seletor, sem os dois cards e sem as duas colunas. Perder a provisão
+  // é melhor que perder a tela.
+  async function carregarDespesas() {
+    if (_despMeses || _despErro) return;
+    try {
+      _despMeses = await apiFetch('/despesas/meses');
+    } catch (e) {
+      _despMeses = null;
+      _despErro = (e && e.message) ? e.message : 'falha ao carregar despesas';
+    }
   }
 
   // ── Carga ────────────────────────────────────────────────────────
@@ -359,13 +485,45 @@
   // Liga a projeção E amarra o período ao mês corrente: projetar "os
   // últimos 7 dias" para 30 seria multiplicar uma semana por quatro e
   // chamar de mês. Se o fim já está dentro do mês corrente, é respeitado.
-  window.__mpProjecao = function () {
+  // Ajusta o período ao mês T escolhido. Mês corrente: 01→ontem (a projeção
+  // de sempre). Mês fechado: 01→último dia, o mês inteiro e real.
+  function periodoDoT(t) {
+    if (t === mesCorrente()) {
+      var ontem = somaDias(hojeISO(), -1);
+      _inicio = t + '-01';
+      _fim = (_fim && _fim.slice(0, 7) === t && _fim <= ontem) ? _fim : ontem;
+    } else {
+      _inicio = t + '-01';
+      _fim = ultimoDiaDoMes(t);
+    }
+  }
+  window.__mpProjecao = async function () {
     if (_projecao) { _projecao = false; _cardAberto = null; pintar(); return; }
-    var ontem = somaDias(hojeISO(), -1);
-    var mesCorr = hojeISO().slice(0, 7);
-    _fim = (_fim && _fim.slice(0, 7) === mesCorr && _fim <= ontem) ? _fim : ontem;
-    _inicio = mesCorr + '-01';
+    // A despesa vem ANTES de escolher o T: o padrão é o T mais recente da
+    // lista, e a lista depende de quais meses têm despesa importada.
+    _carregando = true; pintar();
+    await carregarDespesas();
+    // PADRÃO = o T mais recente QUE TEM DESPESA BASE, e não simplesmente o
+    // último da lista. O mês corrente entra na lista sempre, mesmo sem M
+    // importado; abrir nele mostraria dois cards com "—" logo de cara, que é
+    // a tela vazia justamente no clique que pede a provisão. Com jan–jun
+    // importado e set corrente, isto abre em JUL/2026.
+    var opcoes = mesesProvisao();
+    var comBase = opcoes.filter(function (t) { return !!despesaDe(mesBase(t)); });
+    _provT = comBase.length ? comBase[comBase.length - 1]
+           : (opcoes.length ? opcoes[opcoes.length - 1] : mesCorrente());
+    periodoDoT(_provT);
     _projecao = true;
+    _cardAberto = null; _postoAberto = null;
+    carregar();
+  };
+  // Troca só o mês provisionado. NÃO desliga a projeção — é o único controle
+  // da tela que mexe no período sem desfazer a amarração, porque é ele quem
+  // define qual amarração vale.
+  window.__mpProvisao = function (t) {
+    if (!t || t === _provT) return;
+    _provT = t;
+    periodoDoT(t);
     _cardAberto = null; _postoAberto = null;
     carregar();
   };
@@ -420,15 +578,53 @@
   // tecnox_categoria_dia, que anda dessincronizada da venda. Sem esta linha,
   // um lucro projetado sobre 11 dias apareceria do lado de uma litragem
   // projetada sobre 13 sem nada avisando.
+  // O seletor fica NESTA linha, ao lado do texto, e não na barra de filtros
+  // lá em cima: a barra é dos controles que existem sempre, e este só existe
+  // com a Projeção ligada. Posto entre os chips e as datas, ele apareceria e
+  // sumiria empurrando os vizinhos.
+  function htmlSeletorProv() {
+    if (!temAlgumaDespesa()) return '';
+    var opcoes = mesesProvisao();
+    if (!opcoes.length) return '';
+    return '<label class="mp-prov-sel">Provisão de:' +
+      '<select onchange="__mpProvisao(this.value)">' +
+        opcoes.map(function (t) {
+          return '<option value="' + esc(t) + '"' + (t === _provT ? ' selected' : '') + '>' +
+            esc(mesRotulo(t + '-01')) + '</option>';
+        }).join('') +
+      '</select></label>';
+  }
+
   function htmlProjInfo() {
     if (!_proj) return '';
-    var txt = 'PROJEÇÃO ' + _proj.mes;
-    if (_proj.fatorLucro === null) {
-      txt += ' · sem lucro no arquivo, sem projeção de lucro';
+    var txt;
+    if (_proj.real) {
+      // Mês fechado: NÃO diz "projeção". O número é o que aconteceu.
+      txt = 'PROVISÃO ' + _proj.mes + ' · venda real';
     } else {
-      txt += ' · lucro base ' + _proj.diasLucro + ' dia' + (_proj.diasLucro === 1 ? '' : 's');
+      txt = 'PROJEÇÃO ' + _proj.mes;
+      if (_proj.fatorLucro === null) {
+        txt += ' · sem lucro no arquivo, sem projeção de lucro';
+      } else {
+        txt += ' · lucro base ' + _proj.diasLucro + ' dia' + (_proj.diasLucro === 1 ? '' : 's');
+      }
     }
-    return '<div class="mp-proj">' + esc(txt) + '</div>';
+    // O mês da despesa entra SEMPRE que a projeção está ligada, inclusive
+    // para dizer que ele falta: o card mostrando "—" sem explicação faria
+    // procurar defeito na tela em vez de importação faltando.
+    var m = mesBase(_provT || _proj.t);
+    if (_despErro) {
+      // "não carregou" NÃO é "não existe": dizer "sem despesa importada" numa
+      // falha de rede mandaria alguém importar de novo o que já está lá.
+      txt += ' · despesa indisponível';
+    } else if (!temAlgumaDespesa()) {
+      txt += ' · sem despesa importada';
+    } else if (despesaDe(m)) {
+      txt += ' · despesa base ' + mesRotulo(m + '-01');
+    } else {
+      txt += ' · sem despesa de ' + MES_ABREV[Number(m.slice(5, 7)) - 1] + ' importada';
+    }
+    return '<div class="mp-proj">' + esc(txt) + htmlSeletorProv() + '</div>';
   }
 
   // ── Cards da rede ────────────────────────────────────────────────
@@ -549,6 +745,42 @@
       '</div>' +
     '</button>';
 
+    // ── Provisão: dois cards, SÓ em Projeção ──────────────────────
+    // Mesmos 150×96 dos outros — nada de card destacado, porque eles entram
+    // na mesma régua que alinha card com coluna lá embaixo.
+    //
+    // A DESPESA NÃO É PROJETADA. Ela é o total FECHADO do mês M, um número
+    // que já aconteceu; multiplicá-lo por fator nenhum é o certo. Quem é
+    // projetado (ou real, conforme o T) é só o lucro do outro lado da conta.
+    var mBase = mesBase(_provT);
+    var dMes = despesaDe(mBase);
+    var despRede = dMes ? dMes.total : null;
+    var luLiq = (despRede !== null && temLu) ? (lu.lucro - despRede) : null;
+    var cardsProv = '';
+    if (_projecao) {
+      cardsProv =
+        '<button type="button" class="mp-card mp-card-desp' +
+          (_cardAberto === 'despesa' ? ' aberto' : '') + '"' +
+          ' aria-expanded="' + (_cardAberto === 'despesa' ? 'true' : 'false') + '"' +
+          ' onclick="__mpCard(\'despesa\')">' + setaOrd('despesa') +
+          '<div class="mp-rot">PROJ. DESPESA</div>' +
+          '<div class="mp-num mp-card-valor">' + (despRede !== null ? reaisCard(despRede) : '—') + '</div>' +
+          '<div class="mp-sub">' + (mBase ? 'base ' + esc(mesRotulo(mBase + '-01')) : '—') + '</div>' +
+        '</button>' +
+        '<button type="button" class="mp-card mp-card-liq' +
+          (_cardAberto === 'lucroliq' ? ' aberto' : '') + '"' +
+          ' aria-expanded="' + (_cardAberto === 'lucroliq' ? 'true' : 'false') + '"' +
+          ' onclick="__mpCard(\'lucroliq\')">' + setaOrd('lucroliq') +
+          '<div class="mp-rot">PROJ. LUCRO LÍQUIDO</div>' +
+          '<div class="mp-num mp-card-valor">' + (luLiq !== null ? reaisCard(luLiq) : '—') + '</div>' +
+          // Margem LÍQUIDA sobre a venda líquida, o mesmo denominador da
+          // margem bruta do card ao lado: trocar a base faria as duas
+          // margens ficarem lado a lado sem serem comparáveis.
+          '<div class="mp-sub">' + ((luLiq !== null && lu && lu.venda_liquida > 0)
+            ? 'margem líq. ' + nf(luLiq / lu.venda_liquida * 100, 2) + '%' : '—') + '</div>' +
+        '</button>';
+    }
+
     return '<div class="mp-cards">' +
       cardTotal + cardAbast + cardConvenio('SOUTAG') + cardConvenio('99') +
       // ORDEM = A DAS COLUNAS DA LISTA, nao a de criacao. A grade embaixo e
@@ -557,7 +789,7 @@
       // sobre a coluna 6. Com Produto antes de Mix, a coluna MIX caia sob o
       // card VENDA DE PRODUTO: alinhado ao pixel e trocado no rotulo, que e
       // pior do que nao alinhar nada.
-      cardTicket + cardMix + cardProduto + cardLucro +
+      cardTicket + cardMix + cardProduto + cardLucro + cardsProv +
     '</div>' + htmlDetalheCard();
   }
 
@@ -597,6 +829,9 @@
       else if (_cardAberto === 'ticket' || _cardAberto === 'mix') {
         return linha('Projeção', 'não muda: é razão, e as duas partes sobem juntas');
       }
+      // A despesa é mês fechado: não passa por fator. Dizer isso é o que
+      // impede alguém de procurar a regra de três que não existe aqui.
+      else if (_cardAberto === 'despesa' || _cardAberto === 'lucroliq') return '';
       else return '';
       return linha('Projeção', fmt(base) + ' ÷ ' + dias + ' × ' + _proj.diasMes +
         ' = ' + fmt(base * f));
@@ -664,6 +899,38 @@
         }
         corpo += linha('Fonte', 'tecnox_categoria_dia — a mesma conta do DRE');
       }
+    } else if (_cardAberto === 'despesa' || _cardAberto === 'lucroliq') {
+      // A SUBTRAÇÃO ESCRITA, com os dois meses nomeados em cada parcela: é
+      // o ponto onde alguém confere se o que está sendo subtraído é mesmo o
+      // que ele acha que é.
+      var mB = mesBase(_provT);
+      var dM = despesaDe(mB);
+      var uL = r.dre || null;
+      var temL = !!(uL && uL.lucro !== null && uL.lucro !== undefined);
+      if (!dM) {
+        corpo += linha('Sem despesa', 'o mês ' + (mB ? mesRotulo(mB + '-01') : '—') +
+          ' não tem despesa importada — sem base para a provisão');
+      } else if (!temL) {
+        corpo += linha('Despesa da rede em ' + mesRotulo(mB + '-01'), reais(dM.total)) +
+                 linha('Sem lucro', 'o arquivo TecnoX não cobre este período');
+      } else {
+        var liq = uL.lucro - dM.total;
+        corpo +=
+          linha('Lucro ' + (_proj && _proj.real ? 'real' : 'projetado') + ' de ' + _proj.mes, reais(uL.lucro)) +
+          linha('Despesa de ' + mesRotulo(mB + '-01'), '− ' + reais(dM.total)) +
+          linha('Lucro líquido', reais(liq)) +
+          linha('Margem líquida', uL.venda_liquida > 0
+            ? nf(liq / uL.venda_liquida * 100, 2) + '%  (sobre a venda líquida)' : '—') +
+          linha('Lançamentos', nf(dM.lancamentos, 0) + ' na despesa de ' + mesRotulo(mB + '-01'));
+        // O buraco NOMEADO: empresa sem posto no cadastro entra no total da
+        // rede mas não em posto nenhum, então a soma das 37 colunas não
+        // fecha com o card. Sem esta linha, a diferença vira erro aparente.
+        if (dM.sem_posto) {
+          corpo += linha('Sem posto no cadastro', reais(dM.sem_posto.valor) + ' em ' +
+            nf(dM.sem_posto.lancamentos, 0) + ' lançamento(s) — entra na rede, não nas colunas');
+        }
+        corpo += linha('Fonte', 'despesas_lancamento, mês pela emissão — a mesma do Importar despesas');
+      }
     } else if (_cardAberto === 'mix') {
       var g = r.gasolina || { litros_total: 0, litros_aditivada: 0 };
       corpo +=
@@ -721,6 +988,10 @@
       h('mp-p-mix', 'MIX', 'mix') +
       h('mp-p-prod', 'PRODUTO', 'produto') +
       h('mp-p-lucro', 'LUCRO', 'lucro') +
+      // As duas só existem em Projeção — fora dela o cabeçalho tem 8 colunas,
+      // como sempre teve.
+      (_projecao ? h('mp-p-desp', 'DESPESA', 'despesa') +
+                   h('mp-p-liq', 'LUCRO LÍQ.', 'lucroliq') : '') +
     '</div>';
   }
 
@@ -778,6 +1049,23 @@
             '<div class="mp-det-linha"><span>Lucro</span><b>' + reais(ul.lucro) + '</b></div>' +
             '<div class="mp-det-linha"><span>Margem</span><b>' + pctDec(ul.margem_pct) + '</b></div>'
           : '<div class="mp-det-linha"><span>Lucro</span><b>—</b></div>') +
+        // No MOBILE as duas colunas não entram na linha — é aqui que elas
+        // aparecem. No desktop repetem a coluna de propósito, como já fazem
+        // Mix, Produto e Ticket logo acima.
+        (_projecao ? (function () {
+          var mB = mesBase(_provT);
+          var dv = despesaDoPosto(p);
+          var lq = lucroLiqDe(p);
+          var vl = (ul && ul.venda_liquida) || 0;
+          return '<div class="mp-det-sep">Provisão</div>' +
+            '<div class="mp-det-linha"><span>Despesa (base ' +
+              esc(mB ? MES_ABREV[Number(mB.slice(5, 7)) - 1] : '—') + ')</span><b>' +
+              (dv !== null ? reais(dv) + (vl > 0 ? '  ·  ' + nf(dv / vl * 100, 2) + '% da venda líquida' : '') : '—') +
+            '</b></div>' +
+            '<div class="mp-det-linha"><span>Lucro líquido</span><b>' +
+              (lq !== null ? reais(lq) + (vl > 0 ? '  ·  margem líq. ' + nf(lq / vl * 100, 2) + '%' : '') : '—') +
+            '</b></div>';
+        })() : '') +
       '</div>';
     }
 
@@ -797,8 +1085,24 @@
         '<span class="mp-p-lucro">' +
           (ul ? reaisSemPrefixo(ul.lucro) : '—') +
           '<span class="mp-p-mini">' + (ul ? pctDec(ul.margem_pct) : '—') + '</span></span>' +
+        (_projecao ? colunasProv(p, ul) : '') +
       '</button>' + det +
     '</div>';
+  }
+
+  // As duas colunas da provisão, na linha do posto. Sublinha da DESPESA é o
+  // peso dela sobre a venda líquida do posto — é o número que diz se uma
+  // despesa grande é grande de verdade ou só acompanha um posto grande.
+  function colunasProv(p, ul) {
+    var d = despesaDoPosto(p);
+    var liq = lucroLiqDe(p);
+    var vl = (ul && ul.venda_liquida) || 0;
+    return '<span class="mp-p-desp">' + (d !== null ? reaisSemPrefixo(d) : '—') +
+        '<span class="mp-p-mini">' + ((d !== null && vl > 0)
+          ? nf(d / vl * 100, 2) + '% da venda' : '—') + '</span></span>' +
+      '<span class="mp-p-liq">' + (liq !== null ? reaisSemPrefixo(liq) : '—') +
+        '<span class="mp-p-mini">' + ((liq !== null && vl > 0)
+          ? nf(liq / vl * 100, 2) + '%' : '—') + '</span></span>';
   }
 
   // ── Linha REDE, no rodapé da lista (o CSS a esconde no mobile) ──
@@ -820,6 +1124,19 @@
       '<span class="mp-p-prod">' + reais((r.produto && r.produto.faturamento) || 0) + '</span>' +
       '<span class="mp-p-lucro">' + (ul ? reaisSemPrefixo(ul.lucro) : '—') +
         '<span class="mp-p-mini">' + (ul ? pctDec(ul.margem_pct) : '—') + '</span></span>' +
+      // REDE usa o TOTAL da rede (que inclui a despesa sem posto no
+      // cadastro), não a soma das 37 colunas: a linha REDE tem de bater com
+      // o card, e é o card que o pessoal confere contra o relatório.
+      (_projecao ? (function () {
+        var dM = despesaDe(mesBase(_provT));
+        var dv = dM ? dM.total : null;
+        var lq = (dv !== null && ul) ? ul.lucro - dv : null;
+        var vl = (ul && ul.venda_liquida) || 0;
+        return '<span class="mp-p-desp">' + (dv !== null ? reaisSemPrefixo(dv) : '—') +
+            '<span class="mp-p-mini">' + ((dv !== null && vl > 0) ? nf(dv / vl * 100, 2) + '% da venda' : '—') + '</span></span>' +
+          '<span class="mp-p-liq">' + (lq !== null ? reaisSemPrefixo(lq) : '—') +
+            '<span class="mp-p-mini">' + ((lq !== null && vl > 0) ? nf(lq / vl * 100, 2) + '%' : '—') + '</span></span>';
+      })() : '') +
     '</div>';
   }
 
@@ -834,7 +1151,10 @@
     // Régua da barra = maior TOTAL da lista, qualquer que seja a ordenação: a
     // barra mede venda total, então a referência não pode mudar com o sort.
     var maior = lista.reduce(function (m, p) { return Math.max(m, p.litros || 0); }, 0);
-    return '<div class="mp-lista">' + htmlCabecalho() +
+    // A classe `proj` é o ÚNICO gatilho da grade de 10 colunas no CSS. Sem
+    // ela a lista fica nas 8 de sempre — é o que garante que desligar a
+    // Projeção devolve a largura de 1256px sem nenhuma outra regra.
+    return '<div class="mp-lista' + (_projecao ? ' proj' : '') + '">' + htmlCabecalho() +
       lista.map(function (p) { return htmlPosto(p, maior); }).join('') +
       htmlRede() + '</div>';
   }
