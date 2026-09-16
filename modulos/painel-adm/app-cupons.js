@@ -53,6 +53,21 @@
   var _seq = 0;
   var _postoAberto = null;
   var _ordem = 'litros';      // litros | cupons | medio | min | max | valor
+  // ════════ SÓ PREÇO DE APP ════════
+  // LIGADO POR PADRÃO, como pedido. Parte dos cupons do convênio é cobrada
+  // no PREÇO DA PLACA — o mesmo da pista, sem desconto nenhum. Medido em
+  // 14/09/2026, Soutag/GC: 558 dos 1.390 itens, 40%. Eles puxam a média para
+  // cima e mandam o preço MÁXIMO para o preço de bomba, que é justamente o
+  // número que a tela não deveria estar mostrando como "preço de app".
+  //
+  // O FILTRO NÃO É FEITO AQUI, e não por preguiça: esta tela recebe o
+  // AGREGADO (média, mínimo, máximo, distinto de cupom por nível), e de uma
+  // média não se subtrai um subconjunto nem se recupera o mínimo que saiu com
+  // ele. A rota manda a conta PRONTA nas duas versões, calculada pela mesma
+  // função; aqui se troca de bloco na memória. O clique é instantâneo e NÃO
+  // refaz chamada, que era o ponto do pedido — ver o bloco "POR QUE A
+  // AGREGAÇÃO VEM DUAS VEZES" na GET /app/cupons.
+  var _soApp = true;
 
   // ── Formatação (reusa o mmFmt, como o movimentacao-postos) ──────
   function nf(v, casas) {
@@ -107,6 +122,12 @@
       '.ap-chip{background:var(--sf2);border:1px solid var(--bd);border-radius:6px;color:var(--tx2);' +
         'padding:.25rem .6rem;font:700 .68rem var(--mono);cursor:pointer}' +
       '.ap-chip.on{background:var(--ac);border-color:var(--ac);color:#0a0d0f}' +
+      // O toggle: verde quando ligado, para não ser confundido com um chip de
+      // combustível selecionado (amarelo do --ac). Desativado quando a
+      // resposta não traz o bloco filtrado.
+      '.ap-so{margin-left:.3rem}' +
+      '.ap-so.on{background:#E1F5EE;border-color:#0F6E56;color:#085041}' +
+      '.ap-so[disabled]{opacity:.45;cursor:not-allowed}' +
       // CARDS — 150×96 e gap 8, as medidas da Movimentação.
       '.ap-cards{display:flex;flex-wrap:wrap;justify-content:flex-start;gap:8px}' +
       '.ap-card{flex:0 0 auto;box-sizing:border-box;width:150px;height:96px;display:flex;' +
@@ -177,6 +198,24 @@
     }
   }
 
+  // O bloco que a tela está mostrando: o filtrado ou o cheio. Tolera resposta
+  // SEM so_app (API antiga no ar por alguns minutos depois do deploy do
+  // front): cai no cheio e o toggle fica desativado, em vez de a tela zerar.
+  function vista() {
+    if (!_dados) return null;
+    return (_soApp && _dados.so_app) ? _dados.so_app : _dados;
+  }
+  function temFiltro() { return !!(_dados && _dados.so_app); }
+  // posto_id -> o posto NA VISTA. A lista percorre os postos do bloco CHEIO
+  // (para o posto não desaparecer quando todos os cupons dele são de placa) e
+  // lê os números daqui.
+  function idxVista() {
+    var m = {}, v = vista();
+    ((v && v.postos) || []).forEach(function (p) { m[p.posto_id] = p; });
+    return m;
+  }
+  var _idx = {};
+
   // O bloco do combustível escolhido dentro de um nível (rede ou posto).
   // null quando o posto não vendeu aquele combustível no período — e null
   // vira travessão na tela, não zero: não vender não é vender zero.
@@ -214,6 +253,13 @@
     if (qual === '30') { _ate = ontem; _de = somaDias(ontem, -29); }
     _postoAberto = null;
     carregar();
+  };
+  // Recorte LOCAL, como o chip de combustível: o JSON já tem os dois blocos.
+  window.__apSoApp = function () {
+    if (!temFiltro()) return;
+    _soApp = !_soApp;
+    _postoAberto = null;
+    pintar();
   };
   window.__apCard = function (id) {
     _ordem = (_ordem === id) ? 'litros' : id;   // clicar de novo volta ao padrão
@@ -268,13 +314,34 @@
         '<button type="button" class="ap-atalho" disabled aria-disabled="true"' +
           ' title="em breve — aguardando dados do convênio">Por motorista</button>' +
         '<div class="ap-chips">' + COMBS.map(chip).join('') + '</div>' +
+        htmlSoApp() +
       '</div>';
+  }
+
+  // O toggle. Estilo do .ap-chip — é um recorte local como eles —, mas fora
+  // do .ap-chips: aquele grupo é de escolha ÚNICA (um combustível), e este é
+  // um liga/desliga. Juntos, pareceria um quinto combustível.
+  function htmlSoApp() {
+    var on = _soApp && temFiltro();
+    var q = (_dados && _dados.consulta) || {};
+    // O title diz quantos itens saem e com que régua. É o que responde
+    // "por que o número mudou" sem gastar uma linha da tela.
+    var tit = temFiltro()
+      ? (q.itens_placa || 0) + ' item(ns) no preço da placa, de ' + (q.linhas || 0) +
+        ' — tolerância de ' + nf((q.tolerancia_placa || 0) * 100, 0) +
+        ' centavo(s) contra o preço de pista do próprio posto no período'
+      : 'a API ainda não manda o bloco filtrado';
+    return '<button type="button" class="ap-chip ap-so' + (on ? ' on' : '') + '"' +
+      (temFiltro() ? '' : ' disabled aria-disabled="true"') +
+      ' aria-pressed="' + (on ? 'true' : 'false') + '"' +
+      ' title="' + esc(tit) + '"' +
+      ' onclick="__apSoApp()">Só preço de app</button>';
   }
 
   function seta(id) { return _ordem === id ? '<span class="ap-seta">↓</span>' : ''; }
 
   function htmlCards() {
-    var c = doComb(_dados.rede);
+    var c = doComb(vista().rede);
     var cor = CANAIS[_canal].cor;
     var card = function (id, rot, valor, sub) {
       return '<button type="button" class="ap-card' + (_ordem === id ? ' aberto' : '') + '"' +
@@ -293,8 +360,11 @@
     '</div>';
   }
 
+  // Ordena pelo que a tela MOSTRA: com o filtro ligado, ordenar pelos números
+  // cheios poria um posto grande em cupons de placa acima de um posto que
+  // realmente vendeu no app.
   function valorOrdem(p) {
-    var c = doComb(p);
+    var c = doComb(_idx[p.posto_id]);
     if (!c) return -Infinity;    // posto sem o combustível afunda, não some
     if (_ordem === 'cupons') return c.cupons;
     if (_ordem === 'medio') return c.preco_medio === null ? -Infinity : c.preco_medio;
@@ -337,7 +407,14 @@
 
   // Detalhe: TODOS os combustíveis do posto, não só o do chip — é o que o
   // clique na linha promete.
-  function htmlDetalhe(p) {
+  function htmlDetalhe(pCheio) {
+    var p = _idx[pCheio.posto_id];
+    // Com o filtro ligado e o posto inteiro a preço de placa não há tabela a
+    // desenhar — e "sem cupom no período" seria falso, porque houve cupom.
+    if (!p) {
+      return '<div class="ap-det"><div class="ap-vazio">Todos os cupons deste posto no período saíram no preço da placa. ' +
+        'Desligue "Só preço de app" para vê-los.</div></div>';
+    }
     var lin = (p.por_combustivel || []).map(function (c) {
       return '<tr>' +
         '<td>' + esc(c.combustivel) + '</td>' +
@@ -369,17 +446,22 @@
 
   function htmlLista() {
     var cor = CANAIS[_canal].cor;
+    // PERCORRE OS POSTOS DO BLOCO CHEIO, sempre. Com o filtro ligado, um
+    // posto cujos cupons foram TODOS a preço de placa não existe no bloco
+    // filtrado; percorrer aquele bloco faria a linha desaparecer, e o pedido é
+    // que ela fique com travessão. Sumir com a linha leria como "este posto
+    // não vendeu no convênio", que é outra coisa.
     var postos = (_dados.postos || []).slice().sort(function (a, b) {
       return valorOrdem(b) - valorOrdem(a);
     });
     if (!postos.length) return '<div class="ap-vazio">Sem cupom de ' + esc(CANAIS[_canal].rot) + ' no período.</div>';
-    var redeC = doComb(_dados.rede);
+    var redeC = doComb(vista().rede);
     var linhas = postos.map(function (p) {
       var aberto = (_postoAberto === p.posto_id);
       return '<button type="button" class="ap-linha" aria-expanded="' + (aberto ? 'true' : 'false') + '"' +
           ' onclick="__apPosto(\'' + esc(p.posto_id) + '\')">' +
           '<span class="ap-nome">' + esc(p.nome || '—') + '</span>' +
-          celulas(doComb(p), cor) +
+          celulas(doComb(_idx[p.posto_id]), cor) +
         '</button>' + (aberto ? htmlDetalhe(p) : '');
     }).join('');
     return '<div class="ap-lista">' + htmlCab() +
@@ -393,6 +475,9 @@
     if (!_sec) return;
     var alvo = _sec.querySelector('#ap-corpo');
     if (!alvo) return;
+    // Uma vez por pintura, antes de qualquer html*(): é o índice que a lista,
+    // a ordenação e o detalhe leem.
+    _idx = idxVista();
     var cab = htmlBarra();
     if (_carregando) { alvo.innerHTML = cab + '<div class="ap-estado">Carregando…</div>'; return; }
     if (_erro) { alvo.innerHTML = cab + '<div class="ap-erro">' + esc(_erro) + '</div>'; return; }

@@ -35,6 +35,10 @@
 // 6. Sub-botão Soutag vs 99 troca o canal, as cores e refaz a chamada.
 // 7. Sete colunas fixas de 150px (nada de 1fr) e cards 150×96.
 // 8. Mobile (375px): cards 2 por linha e colunas de preço fora da linha.
+// 9. O toggle "Só preço de app" vem LIGADO, tira os cupons cobrados no
+//    preço da placa (GC de 14/09: 1.390 itens → 832), derruba o preço médio
+//    e o máximo, NÃO chama a API, e desligado devolve os números cheios.
+//    Posto cujos cupons foram todos de placa fica na lista com travessão.
 // ════════════════════════════════════════════════════════════════
 var linhas = [], falhas = 0;
 function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
@@ -126,6 +130,129 @@ async function rodar() {
   eh(CHAMADAS.length === 1, 'uma chamada na abertura', CHAMADAS.length + '', '1');
   eh(/canal=SOUTAG/.test(CHAMADAS[0]), 'canal padrão = SOUTAG', CHAMADAS[0]);
   eh(/de=\d{4}-\d{2}-\d{2}&ate=\d{4}-\d{2}-\d{2}/.test(CHAMADAS[0]), 'com de e ate (padrão ontem)');
+
+  h3('0b. O toggle "Só preço de app"');
+  // Os dois blocos que a rota manda: o cheio e o filtrado, mesma forma.
+  var gcDe = function (n) {
+    return ((n && n.por_combustivel) || []).filter(function (c) { return c.combustivel === 'GC'; })[0] || null;
+  };
+  var p3 = function (v) {
+    return v == null ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  };
+  var gcAll = gcDe(FIX.soutag.rede);
+  var gcApp = gcDe(FIX.soutag.so_app && FIX.soutag.so_app.rede);
+  eh(!!FIX.soutag.so_app, 'a resposta traz o bloco so_app');
+  eh(!!FIX.soutag.preco_placa, 'e o mapa preco_placa',
+     FIX.soutag.preco_placa ? Object.keys(FIX.soutag.preco_placa).length + ' chaves' : '(ausente)');
+  nota('GC no fixture: ' + gcAll.itens + ' itens / ' + gcAll.cupons + ' cupons no total · ' +
+       gcApp.itens + ' itens / ' + gcApp.cupons + ' cupons com preço de app');
+  // A MEDIÇÃO DO PEDIDO. 1.390 e 832 são itens (linha de cupom); o cartão da
+  // tela mostra CUPONS, que é o distinto — 1.042 e 830. Os dois vão aqui para
+  // a diferença não ser confundida com erro de conta.
+  eh(gcAll.itens === 1390, '14/09 SOUTAG GC: 1.390 itens sem filtro', gcAll.itens + '', '1390');
+  eh(gcApp.itens === 832, 'e 832 com o filtro', gcApp.itens + '', '832');
+
+  var tg = chip('Só preço de app');
+  eh(!!tg, 'o botão existe');
+  if (!tg) { pintar(); throw new Error('sem o toggle não há o que testar'); }
+  eh(tg.getAttribute('aria-pressed') === 'true', 'ligado por padrão', tg.getAttribute('aria-pressed'), 'true');
+  eh(!tg.disabled, 'e habilitado', tg.disabled ? 'desabilitado' : 'habilitado');
+  // Ao lado dos chips, e FORA do grupo deles: aquele grupo é de escolha única.
+  eh(tg.parentElement.className.indexOf('ap-barra') >= 0,
+     'está na barra de controles', tg.parentElement.className);
+  eh(tg.previousElementSibling && tg.previousElementSibling.className.indexOf('ap-chips') >= 0,
+     'logo depois do grupo de chips de combustível',
+     tg.previousElementSibling ? tg.previousElementSibling.className : '(nada)');
+  eh(/tolerância/.test(tg.title) && /placa/.test(tg.title), 'o title explica a régua', tg.title);
+
+  h3('0c. Ligado: os números são os filtrados');
+  nota('card preço médio: ' + val(0));
+  eh(val(0).indexOf(p3(gcApp.preco_medio)) >= 0, 'o card mostra o preço médio FILTRADO',
+     val(0), 'R$ ' + p3(gcApp.preco_medio));
+  eh(gcApp.preco_medio < gcAll.preco_medio, 'que é menor que o cheio',
+     p3(gcApp.preco_medio) + ' < ' + p3(gcAll.preco_medio));
+  eh(val(2).indexOf(p3(gcApp.preco_max)) >= 0, 'o preço MÁXIMO também é o filtrado', val(2), 'R$ ' + p3(gcApp.preco_max));
+  eh(gcApp.preco_max < gcAll.preco_max, 'e cai: o máximo cheio era preço de bomba',
+     p3(gcApp.preco_max) + ' < ' + p3(gcAll.preco_max));
+  var redeLig = nums(document.querySelector('#palco .ap-rede'));
+  eh(redeLig[0] === gcApp.cupons.toLocaleString('pt-BR'), 'a linha REDE conta os cupons filtrados',
+     redeLig[0], gcApp.cupons.toLocaleString('pt-BR'));
+  eh(linhasP().length === FIX.soutag.postos.length,
+     'e a lista segue com todos os postos, nenhum sumiu',
+     linhasP().length + '', FIX.soutag.postos.length + '');
+
+  h3('0d. Posto com tudo no preço de placa mostra travessão');
+  // Em GC nenhum posto zera; em GA, sete zeram. O chip é trocado para GA de
+  // propósito — é onde o caso existe nos dados reais de 14/09.
+  chip('GA').click();
+  await esperar(150);
+  var soPostos = {};
+  (FIX.soutag.so_app.postos || []).forEach(function (p) { soPostos[p.posto_id] = p; });
+  var zerados = (FIX.soutag.postos || []).filter(function (p) {
+    var a = ((p.por_combustivel || []).filter(function (c) { return c.combustivel === 'GA'; })[0]);
+    var f = soPostos[p.posto_id] ? ((soPostos[p.posto_id].por_combustivel || []).filter(function (c) { return c.combustivel === 'GA'; })[0]) : null;
+    return a && !f;
+  });
+  nota('postos com GA só no preço de placa: ' + zerados.length + ' — ' +
+       zerados.map(function (p) { return p.nome; }).join(', '));
+  eh(zerados.length > 0, 'o caso existe nos dados', zerados.length + '', '> 0');
+  var alvo = zerados[0];
+  var linhaAlvo = linhasP().filter(function (l) {
+    return l.querySelector('.ap-nome').textContent.trim() === alvo.nome;
+  })[0];
+  eh(!!linhaAlvo, 'a linha do ' + alvo.nome + ' continua na lista');
+  if (linhaAlvo) {
+    var cel = nums(linhaAlvo);
+    nota(alvo.nome + ': ' + cel.join(' · '));
+    eh(cel.every(function (t) { return t === '—'; }), 'com travessão em todas as células',
+       cel.join(' '), 'todas —');
+  }
+  // O DETALHE DESSE POSTO NÃO FICA VAZIO, e é importante que não fique: ele
+  // zerou em GA, mas segue vendendo no preço de app em OUTROS combustíveis.
+  // O detalhe mostra os que sobraram e simplesmente não traz a linha de GA —
+  // que é a leitura certa de "este posto não teve GA com desconto".
+  if (linhaAlvo) {
+    linhaAlvo.click();
+    await esperar(150);
+    var det = document.querySelector('#palco .ap-det');
+    eh(!!det, 'o detalhe do ' + alvo.nome + ' abre');
+    if (det) {
+      var combs = [].slice.call(det.querySelectorAll('tbody tr td:first-child'))
+        .map(function (td) { return td.textContent.trim(); });
+      nota('combustíveis no detalhe, com o filtro ligado: ' + combs.join(' · '));
+      eh(combs.indexOf('GA') < 0, 'sem a linha de GA — era toda a preço de placa',
+         combs.join(' '), 'sem GA');
+      eh(combs.length > 0, 'mas com os combustíveis que sobraram', combs.length + ' linha(s)', '> 0');
+      // A frase "tudo no preço da placa" é para o posto que zera INTEIRO.
+      // Em 14/09 nenhum posto zera inteiro (37 de 37 sobrevivem ao filtro nos
+      // dois canais), então ela não tem como ser exercitada com este fixture —
+      // fica como caminho defensivo, e é o que esta nota registra.
+      linhaAlvo.click(); await esperar(120);
+    }
+  }
+  var inteiros = (FIX.soutag.postos || []).filter(function (p) { return !soPostos[p.posto_id]; });
+  eh(inteiros.length === 0, 'nenhum posto desaparece INTEIRO do bloco filtrado em 14/09',
+     inteiros.length + '', '0');
+  chip('GC').click();
+  await esperar(150);
+
+  h3('0e. Desligado: volta aos números cheios, sem chamar a API');
+  var antesTg = CHAMADAS.length;
+  chip('Só preço de app').click();
+  await esperar(150);
+  var tg2 = chip('Só preço de app');
+  eh(tg2.getAttribute('aria-pressed') === 'false', 'desligou', tg2.getAttribute('aria-pressed'), 'false');
+  eh(CHAMADAS.length === antesTg, 'sem nova chamada à API (o filtro é de memória)',
+     (CHAMADAS.length - antesTg) + ' chamada(s) nova(s)', '0');
+  eh(val(0).indexOf(p3(gcAll.preco_medio)) >= 0, 'o card volta ao preço médio cheio',
+     val(0), 'R$ ' + p3(gcAll.preco_medio));
+  var redeDes = nums(document.querySelector('#palco .ap-rede'));
+  eh(redeDes[0] === gcAll.cupons.toLocaleString('pt-BR'), 'e a REDE volta aos cupons cheios',
+     redeDes[0], gcAll.cupons.toLocaleString('pt-BR'));
+  // DAQUI PARA BAIXO O TOGGLE FICA DESLIGADO: as seções seguintes conferem os
+  // números CHEIOS do fixture, que é o que elas sempre conferiram. Ligado,
+  // cada uma delas passaria a comparar tela filtrada com fixture cheio.
+  nota('o toggle fica DESLIGADO nas seções seguintes (elas conferem o bloco cheio)');
 
   h3('1. Quatro cards com valor');
   eh(cards().length === 4, 'quatro cards', cards().length + '', '4');
