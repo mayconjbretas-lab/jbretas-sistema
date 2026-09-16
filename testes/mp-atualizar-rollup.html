@@ -45,6 +45,11 @@
 // 8. No fim recarrega a movimentação e, 5s depois, o botão volta ao normal.
 // 9. Com de = até (um dia só) a pergunta e o rótulo são os de antes, palavra
 //    por palavra, e são 37 chamadas.
+// 10. O detalhe do posto abre em CINCO seções rotuladas (seis com a
+//     Projeção ligada), com régua entre elas e nenhuma na última, e os
+//     valores de canal/lucro coloridos. O contraste de cada cor sobre o
+//     fundo do painel é MEDIDO — as três são escuras e o tema padrão é o
+//     escuro.
 //
 // O fixture é a resposta REAL de GET /tecnox/movimentacao-postos de 01–14/09.
 // ════════════════════════════════════════════════════════════════
@@ -298,6 +303,119 @@ async function rodar() {
   eh(btnRoll().textContent.trim() === 'Atualizado ✓ 37/37', 'e o fim conta 37/37',
      btnRoll().textContent.trim(), 'Atualizado ✓ 37/37');
   await esperar(5400);
+
+  h3('12. Detalhe do posto: cinco seções rotuladas');
+  // Abre o primeiro posto da lista. O detalhe é o mesmo nó que a lista já
+  // renderizava; o que se confere aqui é a estrutura nova dentro dele.
+  var prim = doc('fr-agora').querySelector('#palco .mp-p-linha');
+  prim.click();
+  await esperar(200);
+  var det = doc('fr-agora').querySelector('#palco .mp-p-det');
+  eh(!!det, 'o detalhe abriu');
+  if (!det) { pintar(); return; }
+  var secs = [].slice.call(det.querySelectorAll('.mp-det-sec'));
+  var rots = secs.map(function (x) { return x.querySelector('.mp-det-rot').textContent.trim(); });
+  nota('seções: ' + rots.join(' | '));
+  eh(secs.length === 5, 'cinco seções (projeção desligada)', secs.length + '', '5');
+  eh(rots.join('|') === 'Canais|Mix e produto|Ticket|Venda de combustível|Lucro bruto',
+     'na ordem pedida', rots.join('|'),
+     'Canais|Mix e produto|Ticket|Venda de combustível|Lucro bruto');
+  // Uma linha de cada assunto no lugar certo.
+  var linhasDe = function (i) {
+    return [].slice.call(secs[i].querySelectorAll('.mp-det-linha span:first-child'))
+      .map(function (e) { return e.textContent.trim(); });
+  };
+  nota('linhas por seção: ' + secs.map(function (x, i) { return linhasDe(i).length; }).join(' · '));
+  eh(linhasDe(0).join('|') === 'Soutag|App 99|Pista', 'Canais: os três', linhasDe(0).join('|'),
+     'Soutag|App 99|Pista');
+  eh(linhasDe(1).join('|') === 'Mix g. aditivada|Venda de produto', 'Mix e produto: as duas',
+     linhasDe(1).join('|'), 'Mix g. aditivada|Venda de produto');
+  eh(linhasDe(2).join('|') === 'Ticket médio', 'Ticket: uma', linhasDe(2).join('|'), 'Ticket médio');
+  eh(linhasDe(3).join('|') === 'Faturamento', 'Venda de combustível: Faturamento',
+     linhasDe(3).join('|'), 'Faturamento');
+  eh(linhasDe(4).join('|') === 'Venda bruta|Desconto|Venda líquida|Custo total|Lucro|Margem',
+     'Lucro bruto: as seis do arquivo, na ordem', linhasDe(4).join('|'),
+     'Venda bruta|Desconto|Venda líquida|Custo total|Lucro|Margem');
+  eh(det.querySelectorAll('.mp-det-sep').length === 0,
+     'a faixa antiga (.mp-det-sep) não é mais usada aqui',
+     det.querySelectorAll('.mp-det-sep').length + '', '0');
+
+  h3('13. Régua entre seções, e nenhuma na última');
+  var W2 = jan('fr-agora');
+  var cs = secs.map(function (x) { return W2.getComputedStyle(x); });
+  eh(cs.slice(0, 4).every(function (c) { return parseFloat(c.borderBottomWidth) > 0; }),
+     'as quatro primeiras têm borda embaixo',
+     cs.map(function (c) { return c.borderBottomWidth; }).join(' '));
+  eh(parseFloat(cs[4].borderBottomWidth) === 0, 'a última não tem', cs[4].borderBottomWidth, '0px');
+  eh(cs.slice(0, 4).every(function (c) { return c.marginBottom === '16px' && c.paddingBottom === '14px'; }),
+     'margin-bottom 16px e padding-bottom 14px nas que separam',
+     cs[0].marginBottom + ' / ' + cs[0].paddingBottom, '16px / 14px');
+  eh(cs[4].marginBottom === '0px' && cs[4].paddingBottom === '0px',
+     'e a última sem sobra embaixo', cs[4].marginBottom + ' / ' + cs[4].paddingBottom, '0px / 0px');
+  var cr = W2.getComputedStyle(secs[0].querySelector('.mp-det-rot'));
+  eh(cr.fontSize === '11px', 'rótulo com 11px', cr.fontSize, '11px');
+  eh(cr.letterSpacing === '0.5px', 'letter-spacing 0.5px', cr.letterSpacing, '0.5px');
+  eh(cr.textTransform === 'uppercase', 'e caixa alta', cr.textTransform, 'uppercase');
+  var cb = W2.getComputedStyle(secs[0].querySelector('.mp-det-linha b'));
+  eh(cb.fontWeight === '500', 'valor com font-weight 500', cb.fontWeight, '500');
+
+  h3('14. O bloco do detalhe');
+  var cd = W2.getComputedStyle(det);
+  eh(cd.borderRadius === '12px', 'border-radius 12px', cd.borderRadius, '12px');
+  eh(cd.paddingTop === '20px' && cd.paddingLeft === '24px', 'padding 20px 24px',
+     cd.paddingTop + ' ' + cd.paddingLeft, '20px 24px');
+  eh(cd.marginTop === '8px', 'margin-top 8px', cd.marginTop, '8px');
+  // --surface-1 não existe neste CSS; o equivalente é --sf (= --surface).
+  var fundoSf = W2.getComputedStyle(doc('fr-agora').documentElement).getPropertyValue('--surface').trim();
+  nota('fundo do painel: ' + cd.backgroundColor + '  ·  --surface = ' + fundoSf);
+  eh(cd.backgroundColor !== 'rgba(0, 0, 0, 0)', 'tem fundo próprio', cd.backgroundColor);
+  // O detalhe do CARD não foi tocado: ele dividia a regra com este.
+  eh(!doc('fr-agora').querySelector('#palco .mp-detalhe') ||
+     W2.getComputedStyle(doc('fr-agora').querySelector('#palco .mp-detalhe')).borderRadius === '10px',
+     'o detalhe do CARD segue com os 10px de antes',
+     doc('fr-agora').querySelector('#palco .mp-detalhe')
+       ? W2.getComputedStyle(doc('fr-agora').querySelector('#palco .mp-detalhe')).borderRadius : '(fechado)');
+
+  h3('15. As cores, e o contraste delas sobre o painel');
+  // Contraste WCAG: (L1+0.05)/(L2+0.05) com L = luminância relativa.
+  function lum(rgb) {
+    var m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgb);
+    if (!m) return null;
+    var c = [1, 2, 3].map(function (i) {
+      var v = Number(m[i]) / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function contraste(fg, bg) {
+    var a = lum(fg), b = lum(bg);
+    if (a === null || b === null) return null;
+    var hi = Math.max(a, b), lo = Math.min(a, b);
+    return Math.round((hi + 0.05) / (lo + 0.05) * 10) / 10;
+  }
+  var bgDet = cd.backgroundColor;
+  var alvos = [
+    ['Soutag', 'b.mp-v-so', '#3C3489'],
+    ['App 99', 'b.mp-v-99', '#854F0B'],
+    ['Lucro/Margem', 'b.mp-v-lucro', '#0F6E56'],
+  ];
+  alvos.forEach(function (a) {
+    var el = det.querySelector(a[1]);
+    eh(!!el, a[0] + ' tem a classe de cor (' + a[2] + ')');
+    if (!el) return;
+    var cor = W2.getComputedStyle(el).color;
+    var r = contraste(cor, bgDet);
+    nota('  ' + a[0] + ': ' + cor + ' sobre ' + bgDet + '  →  contraste ' + r + ':1');
+    // NÃO reprova: a cor é a pedida. A linha existe para o número aparecer.
+    if (r !== null && r < 4.5) {
+      linhas.push('     <span class="bad">contraste abaixo de 4,5:1 para texto — ' + a[0] + ' em ' + r + ':1</span>');
+    }
+  });
+  var zero = det.querySelector('b.mp-v-zero');
+  nota('Desconto zero apagado nesta amostra: ' + (zero ? 'sim (' + zero.textContent.trim() + ')' : 'não — o desconto deste posto não é zero'));
+  prim.click();
+  await esperar(150);
+  eh(!doc('fr-agora').querySelector('#palco .mp-p-det'), 'clicar de novo fecha o detalhe');
 
   h3('11. A tela não se perdeu no caminho');
   eh(doc('fr-agora').querySelectorAll('#palco .mp-card').length === 8,

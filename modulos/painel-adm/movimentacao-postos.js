@@ -1205,32 +1205,56 @@
       // Produto e Ticket não entram na linha. No desktop eles repetem a
       // coluna de propósito: o detalhe é a visão completa do posto, e quem o
       // abriu não deveria ter de voltar o olho para a linha.
-      det = '<div class="mp-p-det">' + CANAIS.map(function (c) {
-        var x = p.por_canal[c] || { litros: 0, faturamento: 0, abastecimentos: 0 };
-        return '<div class="mp-det-linha"><span>' + esc(ROTULO[c]) + '</span><b>' +
-          litros(x.litros) + '  ·  ' + pctTxt(x.litros, p.litros) + '  ·  ' +
-          nf(x.abastecimentos, 0) + ' abast.  ·  ' + reais(x.faturamento) + '</b></div>';
-      }).join('') +
-        '<div class="mp-det-linha"><span>Mix g. aditivada</span><b>' +
-          pctTxt(g.litros_aditivada, g.litros_total) + '  ·  ' + litros(g.litros_aditivada) +
-          ' de ' + litros(g.litros_total) + '</b></div>' +
-        '<div class="mp-det-linha"><span>Venda de produto</span><b>' + reais(prod) +
-          (ab > 0 ? '  ·  ' + reais(prod / ab) + ' por carro' : '') + '</b></div>' +
-        '<div class="mp-det-linha"><span>Ticket médio</span><b>' +
-          (ab > 0 ? nf(p.litros / ab, 1) + ' L  ·  ' + reais(p.faturamento / ab) : '—') + '</b></div>' +
-        '<div class="mp-det-linha"><span>Venda de combustível</span><b>' +
-          reais(p.faturamento) + (p.litros > 0 ? '  ·  ' + reais(p.faturamento / p.litros) + '/L' : '') + '</b></div>' +
+      // ════════ CINCO SEÇÕES ROTULADAS ════════
+      // Eram catorze linhas seguidas, do canal à margem, com uma faixa de
+      // "Lucro bruto" no meio. A ordem e os números são os MESMOS; o que
+      // mudou é que cada assunto ganhou rótulo e régua embaixo, porque ler
+      // "Ticket médio" logo abaixo de "Venda de produto" e logo acima de
+      // "Venda bruta" não dizia a qual pergunta cada linha responde.
+      //
+      // A COR É POR ORIGEM DO NÚMERO, não decoração: roxo é Soutag e âmbar
+      // é o 99 — as mesmas duas cores que a tela App usa para os canais, e
+      // as mesmas dos chips daqui. Verde é lucro e margem. Desconto ZERO sai
+      // apagado: "R$ 0,00" em destaque faz procurar desconto que não houve.
+      var secao = function (rot, corpo) {
+        return '<div class="mp-det-sec"><div class="mp-det-rot">' + esc(rot) + '</div>' + corpo + '</div>';
+      };
+      var lin = function (rot, val, cls) {
+        return '<div class="mp-det-linha"><span>' + esc(rot) + '</span><b' +
+          (cls ? ' class="' + cls + '"' : '') + '>' + val + '</b></div>';
+      };
+      var CORCANAL = { SOUTAG: 'mp-v-so', '99': 'mp-v-99', NORMAL: '' };
+      det = '<div class="mp-p-det">' +
+        secao('Canais', CANAIS.map(function (c) {
+          var x = p.por_canal[c] || { litros: 0, faturamento: 0, abastecimentos: 0 };
+          return lin(ROTULO[c],
+            litros(x.litros) + '  ·  ' + pctTxt(x.litros, p.litros) + '  ·  ' +
+            nf(x.abastecimentos, 0) + ' abast.  ·  ' + reais(x.faturamento),
+            CORCANAL[c]);
+        }).join('')) +
+        secao('Mix e produto',
+          lin('Mix g. aditivada', pctTxt(g.litros_aditivada, g.litros_total) + '  ·  ' +
+            litros(g.litros_aditivada) + ' de ' + litros(g.litros_total)) +
+          lin('Venda de produto', reais(prod) +
+            (ab > 0 ? '  ·  ' + reais(prod / ab) + ' por carro' : ''))) +
+        secao('Ticket',
+          lin('Ticket médio',
+            (ab > 0 ? nf(p.litros / ab, 1) + ' L  ·  ' + reais(p.faturamento / ab) : '—'))) +
+        // O rótulo da LINHA virou "Faturamento": com a seção já dizendo
+        // "Venda de combustível", repetir a frase dentro dela era eco.
+        secao('Venda de combustível',
+          lin('Faturamento', reais(p.faturamento) +
+            (p.litros > 0 ? '  ·  ' + reais(p.faturamento / p.litros) + '/L' : ''))) +
         // LUCRO BRUTO na ordem do arquivo, uma linha cada: é assim que se
         // confere contra o "Total Empresa" impresso, de cima para baixo.
-        '<div class="mp-det-sep">Lucro bruto</div>' +
-        (ul
-          ? '<div class="mp-det-linha"><span>Venda bruta</span><b>' + reais(ul.venda_bruta) + '</b></div>' +
-            '<div class="mp-det-linha"><span>Desconto</span><b>' + reais(ul.desconto) + '</b></div>' +
-            '<div class="mp-det-linha"><span>Venda líquida</span><b>' + reais(ul.venda_liquida) + '</b></div>' +
-            '<div class="mp-det-linha"><span>Custo total</span><b>' + reais(ul.custo_total) + '</b></div>' +
-            '<div class="mp-det-linha"><span>Lucro</span><b>' + reais(ul.lucro) + '</b></div>' +
-            '<div class="mp-det-linha"><span>Margem</span><b>' + pctDec(ul.margem_pct) + '</b></div>'
-          : '<div class="mp-det-linha"><span>Lucro</span><b>—</b></div>') +
+        secao('Lucro bruto', ul
+          ? lin('Venda bruta', reais(ul.venda_bruta)) +
+            lin('Desconto', reais(ul.desconto), Number(ul.desconto) ? '' : 'mp-v-zero') +
+            lin('Venda líquida', reais(ul.venda_liquida)) +
+            lin('Custo total', reais(ul.custo_total)) +
+            lin('Lucro', reais(ul.lucro), 'mp-v-lucro') +
+            lin('Margem', pctDec(ul.margem_pct), 'mp-v-lucro')
+          : lin('Lucro', '—')) +
         // No MOBILE as duas colunas não entram na linha — é aqui que elas
         // aparecem. No desktop repetem a coluna de propósito, como já fazem
         // Mix, Produto e Ticket logo acima.
@@ -1239,14 +1263,12 @@
           var dv = despesaDoPosto(p);
           var lq = lucroLiqDe(p);
           var vl = (ul && ul.venda_liquida) || 0;
-          return '<div class="mp-det-sep">Provisão</div>' +
-            '<div class="mp-det-linha"><span>Despesa (base ' +
-              esc(mB ? MES_ABREV[Number(mB.slice(5, 7)) - 1] : '—') + ')</span><b>' +
-              (dv !== null ? reais(dv) + (vl > 0 ? '  ·  ' + nf(dv / vl * 100, 2) + '% da venda líquida' : '') : '—') +
-            '</b></div>' +
-            '<div class="mp-det-linha"><span>Lucro líquido</span><b>' +
-              (lq !== null ? reais(lq) + (vl > 0 ? '  ·  margem líq. ' + nf(lq / vl * 100, 2) + '%' : '') : '—') +
-            '</b></div>';
+          return secao('Provisão',
+            lin('Despesa (base ' + (mB ? MES_ABREV[Number(mB.slice(5, 7)) - 1] : '—') + ')',
+              (dv !== null ? reais(dv) + (vl > 0 ? '  ·  ' + nf(dv / vl * 100, 2) + '% da venda líquida' : '') : '—')) +
+            lin('Lucro líquido',
+              (lq !== null ? reais(lq) + (vl > 0 ? '  ·  margem líq. ' + nf(lq / vl * 100, 2) + '%' : '') : '—'),
+              'mp-v-lucro'));
         })() : '') +
       '</div>';
     }

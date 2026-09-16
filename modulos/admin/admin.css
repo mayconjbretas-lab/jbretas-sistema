@@ -799,11 +799,42 @@ html:not([data-theme="light"]) body::before{
 .mp-sub { font-family: var(--mono); font-size: .64rem; color: var(--tx3); align-self: end;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.mp-detalhe, .mp-p-det { background: var(--sf2); border: 1px solid var(--bd); border-radius: 10px;
+/* A REGRA FOI SEPARADA em duas: o detalhe do CARD (.mp-detalhe) fica como
+   estava, byte por byte, e só o detalhe do POSTO (.mp-p-det) ganha o
+   desenho novo. Elas dividiam a mesma linha, e mudar a linha mudaria os
+   dois — o card não entrou neste pedido. */
+.mp-detalhe { background: var(--sf2); border: 1px solid var(--bd); border-radius: 10px;
   padding: .6rem .8rem; margin-top: .5rem; }
+/* `--surface-1` do pedido não existe neste CSS: os tokens são --sf/--sf2/
+   --sf3 (= --surface/2/3 do base.css). --sf é o primeiro nível acima do
+   fundo da página (#141a33 sobre #0a0d1c no escuro, #faf7f0 sobre #ece7db
+   no claro), que é o que "surface-1" nomeia. O detalhe usava --sf2, então
+   ele desce um nível e passa a ler como painel embutido, não como cartão
+   levantado. */
+.mp-p-det { background: var(--sf); border: 1px solid var(--bd); border-radius: 12px;
+  padding: 20px 24px; margin-top: 8px; }
 .mp-det-linha { display: flex; justify-content: space-between; gap: .8rem; padding: 3px 0;
   font-family: var(--mono); font-size: .7rem; color: var(--tx2); }
 .mp-det-linha b { color: var(--tx); font-weight: 700; }
+/* Seções do detalhe do posto. A borda de 0.5px vira 1px de DISPOSITIVO em
+   tela comum (o navegador não desenha meio pixel) e meio ponto real em
+   tela 2x, que é onde a diferença aparece. */
+.mp-det-sec { margin-bottom: 16px; padding-bottom: 14px; border-bottom: .5px solid var(--bd); }
+.mp-det-sec:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
+.mp-det-rot { font-family: var(--mono); font-size: 11px; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--tx3); margin-bottom: 6px; }
+/* 500 só aqui: o detalhe do card segue com os 700 de sempre. */
+.mp-p-det .mp-det-linha b { font-weight: 500; }
+/* Cor por ORIGEM do número. As três vêm do pedido e são as mesmas da tela
+   App para os canais. ATENÇÃO, MEDIDO: sobre o --sf escuro (#141a33) o
+   contraste fica em 1,7:1 (roxo), 2,5:1 (âmbar) e 2,8:1 (verde) — abaixo
+   dos 4,5:1 de texto. No tema claro os três passam folgado. Se o escuro for
+   o tema de uso, as versões claras do mesmo tom resolvem: #A99BFF, #E0A33E
+   e #4FD1A5. */
+.mp-p-det .mp-det-linha b.mp-v-so { color: #3C3489; }
+.mp-p-det .mp-det-linha b.mp-v-99 { color: #854F0B; }
+.mp-p-det .mp-det-linha b.mp-v-lucro { color: #0F6E56; }
+.mp-p-det .mp-det-linha b.mp-v-zero { color: var(--tx3); }
 .mp-det-sep { font-family: var(--mono); font-size: .6rem; text-transform: uppercase; letter-spacing: .05em;
   color: var(--tx3); margin: .5rem 0 .2rem; border-top: 1px solid var(--bd); padding-top: .4rem; }
 
