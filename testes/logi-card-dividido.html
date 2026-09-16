@@ -35,7 +35,9 @@
 // 1. Cada card tem duas metades (grid 1fr 1fr) com os rótulos "PEDIDO FINAL"
 //    e "MEDIÇÃO DO DIA", e o lápis segue no canto do header.
 // 2. Totais: pedido em verde #0F6E56, medição em azul #185FA5.
-// 3. Linha "Dif." com pedido − medição, vermelha quando negativa.
+// 3. Por combustível, "medição L / capacidade L · %" com a cor da faixa:
+//    acima de 50% verde, 25–50% âmbar, abaixo de 25% vermelho. O total da
+//    medição traz o MENOR percentual. A linha "Dif." saiu.
 // 4. Posto sem pedido mostra "sem pedido" na esquerda e a medição na direita.
 // 5. Comentário: triângulo de 5px #E24B4A no canto da célula, clique mostra o
 //    texto, botão direito abre menu próprio (sem o do navegador) com Inserir
@@ -182,34 +184,88 @@ async function rodar() {
   eh(hex(getComputedStyle(tPed2).color) === '#0F6E56', 'total do pedido em verde',
      hex(getComputedStyle(tPed2).color), '#0F6E56');
 
-  h3('4. Linha "Dif."');
-  var dif = comPedido.querySelector('.grade-dif');
-  eh(!!dif, 'a linha existe');
-  var nomeCP = comPedido.getAttribute('data-nome');
-  var pCP = FIX.postos.filter(function (p) { return p.posto_nome === nomeCP; })[0];
-  var esperado = Number(pCP.total) - Number(pCP.medicao_total);
-  nota(nomeCP + ': pedido ' + pCP.total + ' − medição ' + pCP.medicao_total + ' = ' + esperado);
-  nota('na tela: ' + dif.textContent.replace(/\s+/g, ' ').trim());
-  // fmtNum é o formatador do módulo (toLocaleString, 0 casas). Comparar com
-  // Math.round reprovaria um card CERTO: Math.round(-1059.5) dá -1059 (empate
-  // arredonda para +infinito) e o toLocaleString dá -1.060, afastando do zero.
-  eh(dif.textContent.indexOf(fmtNum(esperado)) >= 0,
-     'traz pedido − medição', dif.textContent.trim(),
-     fmtNum(esperado) + ' (de ' + esperado + ')');
-  eh(dif.className.indexOf(esperado < 0 ? 'grade-dif--baixo' : 'grade-dif--alto') >= 0,
-     'com a classe do sinal', dif.className);
-  var corDif = hex(getComputedStyle(dif.querySelector('span:last-child')).color);
-  var corEsp = hex(getComputedStyle(document.documentElement).getPropertyValue('--danger').trim() || '#000');
-  eh(esperado < 0, 'o sinal desta amostra é negativo', esperado + '');
-  nota('cor do valor: ' + corDif + ' (--danger = ' + corEsp + ')');
-  // TODOS negativos: é a medida que motiva a ressalva no comentário do código.
-  var sinais = FIX.postos.filter(function (p) { return p.medicao_total !== null; })
-    .map(function (p) { return Number(p.total) - Number(p.medicao_total); });
-  var negs = sinais.filter(function (d) { return d < 0; }).length;
-  nota('no fixture: ' + negs + ' de ' + sinais.length + ' postos com Dif. negativa');
-  eh(negs === sinais.length, 'e são TODOS negativos — ver a ressalva no código',
-     negs + '/' + sinais.length);
+  h3('4. Percentual da capacidade, por combustível');
+  eh(!document.querySelector('#palco .grade-dif'),
+     'a linha Dif. não existe mais em card nenhum',
+     document.querySelectorAll('#palco .grade-dif').length + ' encontrada(s)', '0');
+  eh(!!FIX.tanques, 'a resposta traz o mapa de capacidades',
+     FIX.tanques ? Object.keys(FIX.tanques).length + ' postos' : '(ausente)');
+  // Um posto com os cinco combustíveis, para as três faixas aparecerem juntas.
+  var alvo = FIX.postos.filter(function (p) {
+    return Object.keys(p.medicao_por_combustivel).length >= 4 && FIX.tanques[p.posto_id];
+  })[0];
+  var cardA = cardDe(alvo.posto_nome);
+  var capA = FIX.tanques[alvo.posto_id];
+  eh(!!cardA, 'o card do ' + alvo.posto_nome + ' existe');
+  // Linha por linha: o texto e a faixa saem da conta medição ÷ capacidade.
+  var faixaDe = function (pct) { return pct > 50 ? 1 : (pct >= 25 ? 2 : 3); };
+  var CORES = { 1: '#0F6E56', 2: '#BA7517', 3: '#A32D2D' };
+  var NOMES = { 1: 'verde', 2: 'âmbar', 3: 'vermelho' };
+  var vistas = {};
+  Object.keys(alvo.medicao_por_combustivel).forEach(function (cod) {
+    var med = alvo.medicao_por_combustivel[cod], cap = capA[cod];
+    var cel = cardA.querySelector('.gm-cel[data-comb="' + cod + '"]');
+    if (!cel) { eh(false, 'célula de ' + cod + ' existe'); return; }
+    if (cap == null || cap <= 0) {
+      eh(!cel.querySelector('.gm-pct'), cod + ': sem capacidade, sem percentual');
+      return;
+    }
+    var pct = med / cap * 100;
+    var fx = faixaDe(pct);
+    vistas[fx] = true;
+    var litros = cel.querySelector('.gm-litros');
+    var elPct = cel.querySelector('.gm-pct');
+    var esperadoTxt = fmtNum(med) + ' L / ' + fmtNum(cap) + ' L';
+    eh(litros && litros.textContent.trim() === esperadoTxt,
+       cod + ': mostra medição / capacidade', litros ? litros.textContent.trim() : '(nada)', esperadoTxt);
+    eh(elPct && elPct.textContent.trim() === Math.round(pct) + '%',
+       cod + ': e o percentual', elPct ? elPct.textContent.trim() : '(nada)', Math.round(pct) + '%');
+    var cor = hex(getComputedStyle(elPct).color);
+    eh(cor === CORES[fx],
+       cod + ': ' + Math.round(pct) + '% → ' + NOMES[fx], cor, CORES[fx]);
+  });
+  nota('faixas vistas neste card: ' + Object.keys(vistas).map(function (k) { return NOMES[k]; }).join(', '));
+  eh(!!vistas[3], 'há célula ABAIXO de 25% (vermelha) na amostra');
+  eh(!!vistas[1], 'há célula ACIMA de 50% (verde) na amostra');
 
+  h3('5b. O total da medição traz o MENOR percentual');
+  var menor = null, codMenor = null;
+  Object.keys(alvo.medicao_por_combustivel).forEach(function (cod) {
+    var cap = capA[cod];
+    if (cap == null || cap <= 0) return;
+    var pct = alvo.medicao_por_combustivel[cod] / cap * 100;
+    if (menor === null || pct < menor) { menor = pct; codMenor = cod; }
+  });
+  var elMenor = cardA.querySelector('.gm-menor');
+  nota('menor do ' + alvo.posto_nome + ': ' + codMenor + ' em ' + Math.round(menor) + '%');
+  eh(!!elMenor, 'o total mostra o menor');
+  eh(elMenor && elMenor.textContent.indexOf(Math.round(menor) + '%') >= 0,
+     'com o valor do combustível mais baixo', elMenor ? elMenor.textContent.trim() : '(nada)',
+     Math.round(menor) + '% no mais baixo');
+  eh(elMenor && hex(getComputedStyle(elMenor).color) === CORES[faixaDe(menor)],
+     'e na cor da faixa dele', elMenor ? hex(getComputedStyle(elMenor).color) : '—', CORES[faixaDe(menor)]);
+  // A MÉDIA seria outro número, e é por isso que o menor foi escolhido.
+  var soma = 0, n = 0;
+  Object.keys(alvo.medicao_por_combustivel).forEach(function (cod) {
+    var cap = capA[cod];
+    if (cap == null || cap <= 0) return;
+    soma += alvo.medicao_por_combustivel[cod] / cap * 100; n++;
+  });
+  nota('a média das faixas daria ' + Math.round(soma / n) + '% — o menor é ' + Math.round(menor) + '%');
+
+  h3('5c. Sem capacidade cadastrada: medição sem percentual');
+  var semTq = JSON.parse(JSON.stringify(FIX));
+  semTq.tanques = {};   // nenhum tanque cadastrado em posto nenhum
+  renderGrade(semTq, semTq.data);
+  await esperar(150);
+  var celST = document.querySelector('#palco .gm-cel');
+  eh(!!celST && !celST.querySelector('.gm-pct'), 'nenhuma célula mostra percentual',
+     document.querySelectorAll('#palco .gm-pct').length + ' percentual(is)', '0');
+  eh(!!celST.querySelector('.gm-litros'), 'mas a medição continua lá',
+     (celST.querySelector('.gm-litros') || {}).textContent);
+  eh(!document.querySelector('#palco .gm-menor'), 'e o total não mostra o menor');
+  renderGrade(FIX, FIX.data);
+  await esperar(150);
   h3('5. Sem pedido / sem medição');
   var semPed = cards().filter(function (c) {
     return c.className.indexOf('grade-card--sem-pedido') >= 0;
@@ -332,7 +388,12 @@ async function rodar() {
   eh(!celSem.getAttribute('data-com'), 'sem texto residual na célula');
 
   h3('11. Sem a coluna no banco, o menu não promete');
-  var semCol = JSON.parse(JSON.stringify(FIX));   // comentarios_disponiveis = false
+  // A FLAG É FORÇADA aqui, e não herdada do fixture: o fixture foi recapturado
+  // depois de a coluna existir no banco e veio com true, o que fez esta seção
+  // reprovar um comportamento CERTO. O estado sob teste é o de antes da
+  // migração, e quem decide isso é o teste.
+  var semCol = JSON.parse(JSON.stringify(FIX));
+  semCol.comentarios_disponiveis = false;
   renderGrade(semCol, semCol.data);
   await esperar(150);
   var celS = document.querySelector('#palco .gm-cel');

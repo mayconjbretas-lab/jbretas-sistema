@@ -349,15 +349,28 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
 .grade-card--split .grade-total--med { color: #185FA5; }
 /* Sem pedido: o "0 L" apagado continua valendo, e vence o verde. */
 .grade-card--sem-pedido.grade-card--split .grade-meia--ped .grade-total { color: var(--text3); }
-.grade-dif { display: flex; justify-content: space-between; gap: .5rem; margin-top: .45rem;
-  padding-top: .35rem; border-top: .5px solid var(--border);
-  font-family: var(--mono); font-size: .7rem; color: var(--text3); }
-.grade-dif--baixo span:last-child { color: var(--danger); font-weight: 700; }
-.grade-dif--alto span:last-child { color: var(--ok); font-weight: 700; }
+/* A .grade-dif (pedido − medição) SAIU: dava negativo em 37 postos de 37,
+   porque subtraía estoque de reposição. O que informa é o percentual do
+   tanque, célula por célula — ver o bloco de comentário no app.js. */
+/* Faixas do percentual. As três cores vêm do pedido. */
+.gm-litros { color: var(--text); }
+.gm-pct { font-weight: 700; }
+.gm-pct--alto { color: #0F6E56; }
+.gm-pct--medio { color: #BA7517; }
+.gm-pct--baixo { color: #A32D2D; }
+/* O menor percentual, colado no total da medição: menor corpo e na cor da
+   própria faixa, para o total dizer o volume e o risco na mesma linha. */
+.gm-menor { display: block; font-size: .6rem; font-weight: 700; margin-top: 1px; }
 
 /* ── Célula de medição com comentário ── */
+/* gap + align-items: o valor ficou mais longo ("11.452 L / 30.000 L · 38%")
+   e em card estreito ele quebra em duas linhas; sem o align o código subia
+   para o meio. font-size menor que o do pedido pela mesma razão: são três
+   números na mesma linha, contra um do outro lado. */
 .gm-cel { position: relative; display: flex; justify-content: space-between;
-  font-family: var(--mono); font-size: .76rem; padding-right: 10px; cursor: default; }
+  align-items: baseline; gap: .4rem;
+  font-family: var(--mono); font-size: .7rem; padding-right: 10px; cursor: default; }
+.gm-cel .grade-cl-val { text-align: right; }
 .gm-cel--com { cursor: pointer; }
 .gm-cel--salvando { opacity: .5; }
 /* Triângulo de 5px no canto superior direito, como o do Excel. Borda em L

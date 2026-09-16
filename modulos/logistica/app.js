@@ -442,6 +442,7 @@ let _gradePostos = [];
 let _gradeData = '';
 let _reduzidaNome = '';   // posto aberto na matriz reduzida (p/ o lápis re-renderizar)
 let _gradeComentarios = false;   // a coluna medicao.comentario existe?
+let _gradeTanques = {};          // { posto_id: { COD: capacidade } }
 
 // Marcação "montado" POR DATA em localStorage (jb_logi_montado_<data>) — é
 // marcação de trabalho, não dado de negócio (sem tabela/rota). Trocar a data usa
@@ -467,35 +468,59 @@ function salvarMontado(dataISO, set) {
 // ler a coluna `medicao` da mesma linha de onde já lia o `pedido`, sem
 // chamada nova.
 //
-// ════════ A DIFERENÇA É pedido − medição, COMO PEDIDO, E ELA É SEMPRE
-// NEGATIVA ════════
-// Medido em 15/09/2026: 37 postos de 37 com diferença negativa, nenhum
-// positivo. Não é acaso — são grandezas de naturezas diferentes. A medição é
-// o ESTOQUE de TODOS os combustíveis do posto; o pedido é o volume de
-// reposição, e só dos combustíveis que estão sendo repostos. P. BERNARDO
-// pediu 30.000 L (S10+S500) e tinha 31.060 L medidos em quatro combustíveis:
-// a subtração mistura conjuntos diferentes e dá -1.060 sem que nada esteja
-// baixo. Com o sinal sempre negativo, "tanque baixo" acende em todo card,
-// todo dia, e para de informar.
-// Fica como pedido — é uma linha só. Se o sinal importar, duas saídas:
-//   · por COMBUSTÍVEL, só nos que têm pedido (compara o que é comparável);
-//   · contra a CAPACIDADE do tanque (tabela `tanques`, que a
-//     GET /sugestao-pedido já soma) — aí "baixo" passa a ser medição sobre
-//     capacidade, que é o que a frase quer dizer.
+// ════════ % DA CAPACIDADE, E NÃO pedido − medição ════════
+// A linha "Dif. pedido − medição" existiu aqui e SAIU: ela dava negativo em
+// 37 postos de 37 em 15/09/2026, porque somava grandezas de naturezas
+// diferentes — a medição é o ESTOQUE de todos os combustíveis e o pedido é a
+// reposição, só dos que estão sendo repostos. O P. BAHAMAS, sem pedido e com
+// 14.673 L no tanque, aparecia como "tanque baixo".
+//
+// O que substitui é a pergunta certa: quanto do tanque está cheio. Medição ÷
+// capacidade, por combustível, com a capacidade somada dos tanques ATIVOS
+// daquele posto e combustível (a rota devolve em `tanques`, da mesma tabela e
+// com a mesma soma que a GET /sugestao-pedido usa). Em 15/09 isto separa de
+// verdade: 60 células verdes, 75 âmbares e 22 vermelhas.
+//
+// O TOTAL DO POSTO É O MENOR PERCENTUAL, não a média: o que decide a viagem
+// é o combustível que acaba primeiro. O P. ESPAÇO REAL tem S500 a 62% e
+// etanol a 19% — a média (36%) diria que está confortável, e o menor diz que
+// o etanol vai faltar.
 var COR_PEDIDO = '#0F6E56', COR_MEDICAO = '#185FA5';
+// As faixas do pedido. Acima de 50% verde, 25–50% âmbar, abaixo de 25%
+// vermelho. O limite de baixo é EXCLUSIVO em 50 e INCLUSIVO em 25, então 50%
+// cravado é âmbar e 25% cravado é âmbar — só abaixo de 25 fica vermelho.
+function faixaPct(pct) {
+  if (pct === null || pct === undefined || !isFinite(pct)) return '';
+  if (pct > 50) return 'gm-pct--alto';
+  if (pct >= 25) return 'gm-pct--medio';
+  return 'gm-pct--baixo';
+}
 
 // Uma célula de medição. Ela é o alvo do comentário, então carrega posto e
 // combustível no próprio nó: o menu de contexto e o editor leem de lá em vez
 // de procurar o card pai.
-function celulaMedicao(p, cod, valor, comentario) {
+function celulaMedicao(p, cod, valor, comentario, capacidade) {
   var tem = !!comentario;
+  // SEM CAPACIDADE CADASTRADA mostra só a medição, sem percentual: dividir
+  // por uma capacidade que não existe daria Infinity, e inventar um
+  // denominador seria pior que não responder. Em 15/09 isto não acontece —
+  // os 157 pares posto×combustível com medição têm tanque ativo —, mas um
+  // combustível novo entra sem tanque cadastrado antes de entrar com.
+  var cap = Number(capacidade);
+  var temCap = isFinite(cap) && cap > 0;
+  var pct = temCap ? (Number(valor) / cap * 100) : null;
+  var valHtml = temCap
+    ? '<span class="gm-litros">' + fmtNum(valor) + ' L / ' + fmtNum(cap) + ' L</span>' +
+      ' · <span class="gm-pct ' + faixaPct(pct) + '">' + Math.round(pct) + '%</span>'
+    : '<span class="gm-litros">' + fmtNum(valor) + ' L</span>';
   return '<div class="gm-cel' + (tem ? ' gm-cel--com' : '') + '"' +
     ' data-pid="' + esc(String(p.posto_id)) + '"' +
     ' data-comb="' + esc(cod) + '"' +
+    (temCap ? ' data-cap="' + esc(String(cap)) + '" data-pct="' + esc(String(Math.round(pct))) + '"' : '') +
     (tem ? ' data-com="' + esc(comentario) + '" title="' + esc(comentario) + '"' : '') +
     ' oncontextmenu="__gmMenu(event, this)" onclick="__gmClique(event, this)">' +
     '<span class="grade-cl-cod">' + esc(cod) + '</span>' +
-    '<span class="grade-cl-val">' + fmtNum(valor) + '</span>' +
+    '<span class="grade-cl-val">' + valHtml + '</span>' +
     // O triângulo é irmão do valor, não pseudo-elemento: assim o harness o
     // encontra por seletor e o leitor de tela o ignora (aria-hidden).
     (tem ? '<span class="gm-tri" aria-hidden="true"></span>' : '') +
@@ -511,11 +536,19 @@ function montarCard(p, montado) {
     return '<div class="grade-cl"><span class="grade-cl-cod">' + esc(k) + '</span>' +
       '<span class="grade-cl-val">' + fmtNum(pc[k]) + '</span></div>';
   }).join('');
+  var cap = (_gradeTanques && _gradeTanques[p.posto_id]) || {};
   var medLinhas = Object.keys(mpc).map(function (k) {
-    return celulaMedicao(p, k, mpc[k], com[k]);
+    return celulaMedicao(p, k, mpc[k], com[k], cap[k]);
   }).join('');
   var temMed = p.medicao_total !== null && p.medicao_total !== undefined;
-  var dif = temMed ? (Number(p.total) - Number(p.medicao_total)) : null;
+  // MENOR percentual entre os combustíveis do posto — ver o bloco de cima.
+  var menor = null;
+  Object.keys(mpc).forEach(function (k) {
+    var c = Number(cap[k]);
+    if (!isFinite(c) || c <= 0) return;
+    var pc = Number(mpc[k]) / c * 100;
+    if (menor === null || pc < menor) menor = pc;
+  });
   var band = p.bandeira ? '<span class="grade-band">' + esc(p.bandeira) + '</span>' : '';
   var on = montado.has(String(p.posto_id)) ? ' grade-card--montado' : '';
   var semPed = (Number(p.total) || 0) <= 0 ? ' grade-card--sem-pedido' : '';
@@ -535,12 +568,12 @@ function montarCard(p, montado) {
       '<div class="grade-meia grade-meia--med">' +
         '<div class="grade-meia-rot">Medição do dia</div>' +
         (temMed
-          ? '<div class="grade-total grade-total--med">' + fmtNum(p.medicao_total) + ' L</div>' +
-            '<div class="grade-cls">' + medLinhas + '</div>' +
-            '<div class="grade-dif' + (dif < 0 ? ' grade-dif--baixo' : (dif > 0 ? ' grade-dif--alto' : '')) + '">' +
-              '<span>Dif.</span><span>' + (dif > 0 ? '+' : '') + fmtNum(dif) + ' L' +
-              (dif < 0 ? ' · tanque baixo' : (dif > 0 ? ' · tanque alto' : '')) + '</span>' +
-            '</div>'
+          ? '<div class="grade-total grade-total--med">' + fmtNum(p.medicao_total) + ' L' +
+              (menor === null ? ''
+                : '<span class="gm-menor ' + faixaPct(menor) + '">' + Math.round(menor) +
+                  '% no mais baixo</span>') +
+            '</div>' +
+            '<div class="grade-cls">' + medLinhas + '</div>'
           : '<span class="grade-sem-tag">sem medição</span>') +
       '</div>' +
     '</div>' +
@@ -555,6 +588,7 @@ function renderGrade(resp, dataISO) {
   // Sem a coluna no banco a rota avisa por aqui, e o menu de comentário
   // simplesmente não aparece — melhor que prometer e falhar no salvar.
   if (resp && resp.comentarios_disponiveis !== undefined) _gradeComentarios = !!resp.comentarios_disponiveis;
+  if (resp && resp.tanques) _gradeTanques = resp.tanques;
   if (!_gradePostos.length) {
     grade.classList.remove('grade-host');   // mensagem centralizada (host original)
     grade.innerHTML = '<div class="grade-vazia">Nenhum posto ativo neste escopo.</div>';
