@@ -29,7 +29,13 @@
 (function () {
   'use strict';
 
-  var PRIMEIRO_DIA = '2026-06-25';   // início do rollup TecnoX
+  // Início REAL das duas fontes, medido no banco em 16/09/2026: a
+  // tecnox_venda_dia e a tecnox_categoria_dia começam as duas em 01/01/2026,
+  // sem buraco de mês (38.208 e 47.059 linhas, jan→15/09). O 2026-06-25 que
+  // estava aqui era do começo do rollup e ficou para trás: ele só alimenta o
+  // `min` dos dois <input type="date">, e estava barrando no seletor cinco
+  // meses e meio de dado que existe.
+  var PRIMEIRO_DIA = '2026-01-01';
   var MAX_DIAS = 62;                 // mesmo teto da rota
   var CANAIS = ['SOUTAG', '99', 'NORMAL'];
   var ROTULO = { SOUTAG: 'Soutag', '99': 'App 99', NORMAL: 'Pista' };
