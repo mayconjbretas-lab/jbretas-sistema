@@ -84,6 +84,53 @@ var BANCO_REV = {};
 var FIX = null;
 var CHAMADAS = [];   // { url, metodo, corpo }
 
+// ── o GET /coletas, simulado FIELMENTE ───────────────────────────
+// Espelha server.js:5581-5625, e o que importa é o CORTE POR QUANTIDADE:
+//   ?data=X       → só aquele dia, e IGNORA dias/limit
+//   senão         → data >= hoje-dias, ordem data desc, .limit(limit || 500)
+// Um dublê que devolvesse tudo esconderia exatamente o defeito que esta
+// correção mata: com janela+limit, dia fundo demais cai fora do .limit() e
+// volta VAZIO sem erro. Sem simular o corte, o teste passaria dos dois jeitos.
+var BANCO_COL = [];
+function backendColetas(url) {
+  var q = new URLSearchParams(url.split('?')[1] || '');
+  var dias = parseInt(q.get('dias') || '15', 10);
+  var limite = Math.min(parseInt(q.get('limit'), 10) || 500, 5000);
+  var dataParam = q.get('data');
+  var linhas = BANCO_COL.slice();
+  if (dataParam) {
+    linhas = linhas.filter(function (r) { return r.dataISO === dataParam; });
+  } else {
+    var corte = isoMenos(HOJE, dias);
+    linhas = linhas.filter(function (r) { return r.dataISO >= corte; });
+  }
+  linhas.sort(function (a, b) {
+    if (a.dataISO !== b.dataISO) return a.dataISO < b.dataISO ? 1 : -1;
+    return a.hora < b.hora ? 1 : -1;
+  });
+  return { success: true, registros: linhas.slice(0, limite) };
+}
+function isoMenos(iso, n) {
+  var p = iso.split('-').map(Number);
+  var d = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+// Clona um dia COMPLETO da fixture para outra data. Mantém os mesmos nomes de
+// posto, senão chavePostoParaK não casaria com o MAP_POSTOS e o teste mediria
+// o join, não a busca.
+function clonarDiaPara(diaOrigemBR, destinoISO) {
+  return (FIX.coletas.registros || [])
+    .filter(function (r) { return r.data === diaOrigemBR; })
+    .map(function (r, i) {
+      var c = JSON.parse(JSON.stringify(r));
+      c.id = destinoISO + '-' + i;
+      c.dataISO = destinoISO;
+      c.data = destinoISO.split('-').reverse().join('/');
+      return c;
+    });
+}
+
 window.apiFetch = function (url, opcoes) {
   var u = String(url);
   var met = (opcoes && opcoes.method) || 'GET';
@@ -91,11 +138,7 @@ window.apiFetch = function (url, opcoes) {
   try { corpo = (opcoes && opcoes.body) ? JSON.parse(opcoes.body) : null; } catch (e) {}
   CHAMADAS.push({ url: u, metodo: met, corpo: corpo });
 
-  if (u.indexOf('/coletas') === 0) {
-    // Devolve os 500 registros SEM filtrar por data de propósito: o corte por
-    // dia é do cliente (buscarComparacaoDoDia), e é ele que está sob teste.
-    return Promise.resolve(FIX.coletas);
-  }
+  if (u.indexOf('/coletas') === 0) return Promise.resolve(backendColetas(u));
   if (u.indexOf('/postos') === 0) return Promise.resolve(FIX.postos);
   if (u.indexOf('/coleta-revisao/conferir') === 0) {
     var d = (corpo && corpo.data) || '';
@@ -146,6 +189,23 @@ async function rodar() {
   (FIX.coletas.registros || []).forEach(function (r) { porData[r.data] = (porData[r.data] || 0) + 1; });
   nota('fixture: ' + (FIX.coletas.registros || []).length + ' registros · ' + JSON.stringify(porData));
 
+  // Banco do dublê = a fixture + dias FUNDOS clonados de 14/09 (dia completo,
+  // 184 registros). A fixture só tem 12 a 15/09, e sem estes dias o teste de
+  // 08/09 e 08/06 mediria "fixture vazia", não a busca.
+  BANCO_COL = (FIX.coletas.registros || []).slice();
+  ['2026-09-08','2026-09-07','2026-06-08','2026-06-07'].forEach(function (d) {
+    BANCO_COL = BANCO_COL.concat(clonarDiaPara('14/09/2026', d));
+  });
+  // Enche o intervalo para o corte por quantidade poder MORDER: sem volume
+  // entre hoje e o dia fundo, qualquer janela alcançaria 08/06 e o teste não
+  // distinguiria a correção do bug.
+  for (var k = 1; k <= 60; k++) {
+    var dd = isoMenos(HOJE, k);
+    if (BANCO_COL.some(function (r) { return r.dataISO === dd; })) continue;
+    BANCO_COL = BANCO_COL.concat(clonarDiaPara('14/09/2026', dd));
+  }
+  nota('banco do dublê: ' + BANCO_COL.length + ' registros · ~184/dia · 60 dias + 08/06');
+
   var doc = new DOMParser().parseFromString(await baixar('/modulos/painel-adm/index.html'), 'text/html');
   var sc = doc.getElementById('s-comp');
   if (!sc) throw new Error('não achei #s-comp no index.html');
@@ -188,12 +248,15 @@ async function rodar() {
   cmpSetData(ALVO);
   await esperar(350);
 
-  var col = chamadasDe('/coletas')[0];
-  nota('GET /coletas  →  ' + (col && col.url));
-  eh(!!col && /[?&]dias=18(&|$)/.test(col.url),
-     'a janela do /coletas foi ancorada em 12/09 (15 + 3 dias atrás)', col && col.url, 'dias=18');
-  eh(!!col && /[?&]limit=\d{3,}/.test(col.url),
-     'e o limit subiu junto (500 daria ~4 dias e o dia 12 sairia vazio)', col && col.url);
+  var cols = chamadasDe('/coletas');
+  nota('GET /coletas  →  ' + cols.map(function (c) { return c.url; }).join('  +  '));
+  eh(cols.length === 2, 'duas chamadas: o dia e o anterior', cols.length + '', '2');
+  eh(!!cols[0] && /[?&]data=2026-09-12(&|$)/.test(cols[0].url), 'a 1ª pede o DIA ESCOLHIDO', cols[0] && cols[0].url);
+  eh(!!cols[1] && /[?&]data=2026-09-11(&|$)/.test(cols[1].url),
+     'a 2ª pede o dia ANTERIOR (para o registroOntem)', cols[1] && cols[1].url);
+  eh(cols.every(function (c) { return c.url.indexOf('limit=') < 0; }),
+     'NENHUMA leva limit= (o ?data= não depende dele)',
+     cols.map(function (c) { return c.url; }).join(' '));
   var rev = chamadasDe('/coleta-revisao')[0];
   eh(!!rev && rev.url === '/coleta-revisao?data=' + ALVO,
      'GET /coleta-revisao com data=2026-09-12', rev && rev.url, '/coleta-revisao?data=' + ALVO);
@@ -284,6 +347,65 @@ async function rodar() {
   eh(aindaConferido === 0, 'nenhum card marcado em hoje', aindaConferido + '', '0');
 
   // ══════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
+  h3('4b. Dias FUNDOS: 08/09 e 08/06');
+  // O teto de 5000 do backend cobre ~27 dias a 185 coletas/dia. Com a janela
+  // antiga, 08/06 (99 dias atrás) caía fora do .limit() e voltava VAZIO sem
+  // erro. Com ?data= a profundidade deixa de importar.
+  var fundos = [
+    { iso: '2026-09-08', rot: '08/09 (7 dias atrás)' },
+    { iso: '2026-06-08', rot: '08/06 (99 dias atrás)' },
+  ];
+  for (var fi = 0; fi < fundos.length; fi++) {
+    var f = fundos[fi];
+    CHAMADAS = [];
+    cmpSetData(f.iso);
+    await esperar(400);
+    var cf = chamadasDe('/coletas');
+    var antes = isoMenos(f.iso, 1);
+    nota(f.rot + '  →  ' + cf.map(function (c) { return c.url; }).join('  +  '));
+    eh(cf.length === 2 &&
+       cf[0].url.indexOf('data=' + f.iso) >= 0 &&
+       cf[1].url.indexOf('data=' + antes) >= 0,
+       f.rot + ': duas chamadas ?data= (dia e anterior)',
+       cf.map(function (c) { return c.url; }).join(' '));
+    eh(cf.every(function (c) { return c.url.indexOf('limit=') < 0 && c.url.indexOf('dias=15') >= 0; }),
+       f.rot + ': sem limit= e sem janela alargada',
+       cf.map(function (c) { return c.url; }).join(' '));
+    // O que interessa: os postos daquele dia voltaram.
+    var noDia = 0, comConc = 0;
+    Object.keys(G_COMPARACAO).forEach(function (k) {
+      var d = G_COMPARACAO[k];
+      if (d.proprio && d.proprio.dataISO === f.iso) noDia++;
+      if ((d.concorrentes || []).some(function (c) { return c.registro && c.registro.dataISO === f.iso; })) comConc++;
+    });
+    nota('   ' + noDia + ' posto(s) com coleta PRÓPRIA em ' + f.iso + ' · ' +
+         comConc + ' com concorrente no dia · ' + cardsNaTela().length + ' cards');
+    eh(noDia > 0, f.rot + ': voltaram os postos com coleta própria no dia', noDia + '', '> 0');
+    eh(comConc > 0, f.rot + ': e os concorrentes do dia', comConc + '', '> 0');
+    eh(cardsNaTela().length > 0, f.rot + ': a tela renderizou cards', cardsNaTela().length + '', '> 0');
+    // Nada de DEPOIS do dia pedido pode ter entrado.
+    var maior = '';
+    Object.keys(G_COMPARACAO).forEach(function (k) {
+      var d = G_COMPARACAO[k];
+      if (d.proprio && d.proprio.dataISO > maior) maior = d.proprio.dataISO;
+      (d.concorrentes || []).forEach(function (c) {
+        if (c.registro && c.registro.dataISO > maior) maior = c.registro.dataISO;
+      });
+    });
+    eh(maior <= f.iso, f.rot + ': nada posterior ao dia pedido entrou', maior, '<= ' + f.iso);
+  }
+
+  h3('4c. Hoje continua idêntico ao de antes');
+  CHAMADAS = [];
+  cmpSetData(HOJE);
+  await esperar(400);
+  var colHoje = chamadasDe('/coletas');
+  eh(colHoje.length === 1, 'UMA chamada só em hoje (sem o par de ?data=)', colHoje.length + '', '1');
+  eh(colHoje[0].url === '/coletas?dias=15',
+     'e a URL é exatamente a de sempre', colHoje[0].url, '/coletas?dias=15');
+  eh(cardsNaTela().length === 37, 'os 37 cards de hoje', cardsNaTela().length + '', '37');
+
   h3('5. Logística NÃO ganha o botão nem a data');
   // Ela monta o card pelo MESMO cmpCardMatriz, com as opções dela.
   var OPC_LOG = { fuel: 'GC', strat: 'avg', ord: '', abaixo: false, acima: false, soMudou: false };

@@ -82,15 +82,11 @@ function ehColetaPropria(registro) {
 // Busca coletas (via GET /coletas, já autenticado) e agrupa por posto
 // normalizado: { [postoNormalizado]: { proprio: [...], concorrentes: [...] } }.
 // Cada lista mantém a ordem que a API já retorna (mais recente primeiro).
-async function buscarColetasAgrupadas({ posto = null, dias = 15, data = null, limite = null } = {}) {
+async function buscarColetasAgrupadas({ posto = null, dias = 15, data = null } = {}) {
   const params = new URLSearchParams();
   if (posto) params.set('posto', posto);
   if (data) params.set('data', data);   // data específica: backend ignora `dias`
   params.set('dias', dias);
-  // `limit` só vai quando pedido. O default do backend (500) é o que todas as
-  // telas sempre usaram — mandar o número explícito aqui mudaria nada e
-  // arriscaria divergir do dia em que esse default mudar.
-  if (limite) params.set('limit', limite);
   const resp = await apiFetch(`/coletas?${params.toString()}`);
   const registros = resp.registros || [];
 
@@ -125,10 +121,6 @@ function isoParaBRData(iso) {
   const p = String(iso || '').split('-');
   return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : '';
 }
-function brDataParaISO(br) {
-  const p = String(br || '').split('/');
-  return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : '';
-}
 // Constrói a partir dos componentes (não de Date.parse) porque 'YYYY-MM-DD'
 // solto é lido como UTC e, em GMT-3, volta um dia.
 function isoSomandoDias(iso, n) {
@@ -140,6 +132,21 @@ function isoSomandoDias(iso, n) {
 function diasEntreISO(de, ate) {
   const a = String(de).split('-').map(Number), b = String(ate).split('-').map(Number);
   return Math.round((Date.UTC(b[0], b[1] - 1, b[2]) - Date.UTC(a[0], a[1] - 1, a[2])) / 86400000);
+}
+
+// Junta N mapas de buscarColetasAgrupadas num só, NA ORDEM EM QUE VIERAM.
+// A ordem é o contrato: todo o resto do serviço lê grupo.proprio[0] como "o
+// mais recente", então o mapa do dia mais novo tem de ser o primeiro da lista.
+function fundirGrupos(grupos) {
+  const junto = {};
+  grupos.forEach(g => {
+    Object.keys(g || {}).forEach(chave => {
+      if (!junto[chave]) junto[chave] = { proprio: [], concorrentes: [] };
+      junto[chave].proprio.push(...g[chave].proprio);
+      junto[chave].concorrentes.push(...g[chave].concorrentes);
+    });
+  });
+  return junto;
 }
 
 // Comparação do dia por posto, com FALLBACK pro último dado conhecido
@@ -159,34 +166,32 @@ function diasEntreISO(de, ate) {
 async function buscarComparacaoDoDia({ dias = 15, data = null } = {}) {
   const alvoISO = data || hojeISOLocal();
   const atras   = Math.max(0, diasEntreISO(alvoISO, hojeISOLocal()));
-  // O ?data= do GET /coletas devolve UM dia só e ignora `dias` — não serve
-  // aqui: a Comparação precisa da janela para o fallback "último dado
-  // conhecido" e para o registroOntem. Então alarga a janela até alcançar a
-  // data pedida e descarta no cliente o que vier DEPOIS dela.
+  const anteriorISO = isoSomandoDias(alvoISO, -1);
+  // DIA ESCOLHIDO: duas chamadas ?data= (o dia e o anterior), e não uma janela
+  // por `dias`. A janela não serve porque o corte do backend é por QUANTIDADE:
+  // ele ordena data desc e aplica .limit() — a ~185 coletas/dia, o teto de 5000
+  // cobre 27 dias, e a partir daí o dia pedido cai fora do corte e a tela mostra
+  // VAZIO, sem erro, igual a "ninguém lançou naquele dia". Medido: 26 dias atrás
+  // devolve 37 de 37 postos, 27 dias atrás devolve 0 de 37.
   //
-  // O `limit` precisa subir junto. O default do backend é 500, e 500 dá ~4
-  // dias (37 postos mais os concorrentes de cada um) — pedir 'dias: 45' sem
-  // mexer no limite traria só os 4 dias recentes e o dia escolhido sairia
-  // vazio, em silêncio. 150/dia é folga sobre os ~125 medidos. Só entra
-  // quando há data escolhida: sem data a chamada segue byte a byte a de hoje.
-  const janela = dias + atras;
+  // O ?data= não depende de `limit`: devolve o dia inteiro em qualquer
+  // profundidade, e são ~370 registros no lugar de 3.300–5.000.
+  //
+  // DOIS dias porque é disso que o card precisa: o alvo, e o anterior para o
+  // registroOntem de cada concorrente. O alvo vem PRIMEIRO na concatenação —
+  // grupo.proprio[0] tem de continuar sendo o mais recente.
+  //
+  // O que muda: posto sem coleta no alvo NEM no dia anterior aparece vazio, em
+  // vez de cair num dia mais antigo pelo fallback. Em data retroativa é o certo
+  // — pediram AQUELE dia. O caminho de hoje não passa por aqui.
   const porPosto = atras > 0
-    ? await buscarColetasAgrupadas({ dias: janela, limite: Math.min(5000, Math.max(500, janela * 150)) })
+    ? fundirGrupos(await Promise.all([
+        buscarColetasAgrupadas({ data: alvoISO }),
+        buscarColetasAgrupadas({ data: anteriorISO }),
+      ]))
     : await buscarColetasAgrupadas({ dias });
   const hoje  = isoParaBRData(alvoISO);
-  const ontem = isoParaBRData(isoSomandoDias(alvoISO, -1));
-
-  // Corta o que for DEPOIS do dia escolhido. Sem isto o fallback pegaria
-  // `grupo.proprio[0]`, que é o registro MAIS RECENTE da janela — olhando
-  // 12/09 o card mostraria o preço de 15/09 com selo de desatualizado.
-  const ateAlvo = (r) => {
-    const iso = r.dataISO || brDataParaISO(r.data);
-    return !iso || iso <= alvoISO;   // sem data legível: mantém (não inventa corte)
-  };
-  Object.keys(porPosto).forEach(chave => {
-    porPosto[chave].proprio      = porPosto[chave].proprio.filter(ateAlvo);
-    porPosto[chave].concorrentes = porPosto[chave].concorrentes.filter(ateAlvo);
-  });
+  const ontem = isoParaBRData(anteriorISO);
 
   // Diferencial GA por posto (GA sugerido = GC + diferencial), vindo do banco via
   // GET /postos — que faz select('*'), então a coluna diferencial_ga já vem. É
