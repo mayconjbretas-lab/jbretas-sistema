@@ -543,11 +543,17 @@
     _cardAberto = null; _postoAberto = null;
     carregar();
   };
-  // UM POSTO POR CHAMADA, em serie. A rota aceita posto_id nulo para varrer
-  // a rede inteira numa requisicao so, mas aquilo sao ~17min de HTTP aberto:
-  // morre no proxy antes de responder e ninguem sabe quanto andou. Em serie,
-  // cada chamada dura ~27s, o progresso e real e um posto que falha nao leva
-  // os outros.
+  // UM PAR POSTO x DIA POR CHAMADA, em serie. A rota aceita posto_id nulo
+  // para varrer a rede inteira numa requisicao so, mas aquilo sao ~17min de
+  // HTTP aberto por dia: morre no proxy antes de responder e ninguem sabe
+  // quanto andou. Em serie, cada chamada dura ~27s, o progresso e real e um
+  // par que falha nao leva os outros.
+  //
+  // DIA POR FORA, POSTO POR DENTRO. A ordem importa para quem esta olhando:
+  // assim cada dia fica INTEIRO antes do proximo comecar, e interromper no
+  // meio (fechar a aba) deixa dias completos atras e nada pela metade a nao
+  // ser o ultimo. Com posto por fora, uma interrupcao deixaria TODOS os dias
+  // parciais.
   //
   // NAO ESPACA entre chamadas: a exigencia da TecnoX e de ritmo, e uma
   // requisicao a cada 27s ja e mais lenta que os 3s do cron.
@@ -555,49 +561,84 @@
   // A LISTA E A QUE A TELA JA TEM (_dados.postos): os postos com venda no
   // periodo, na ordem que a tela mostra. Buscar /postos de novo traria
   // tambem os sem movimentacao e a contagem do botao nao casaria com a lista
-  // logo abaixo dele.
+  // logo abaixo dele. CONSEQUENCIA ACEITA: num periodo longo, um posto que
+  // vendeu em algum dia do periodo e recoletado em TODOS eles — inclusive nos
+  // dias em que estava fechado, onde a TecnoX devolve 0 cupons e o rollup
+  // grava um dia vazio, que e o que ele ja faz no cron.
+  function rollDias(de, ate) {
+    var out = [];
+    // Comparacao de string serve para ISO, e o teto de 62 dias e o MAX_DIAS
+    // que o proprio filtro ja recusa — este `out.length` e so cinto.
+    for (var d = de; d <= ate && out.length <= MAX_DIAS; d = somaDias(d, 1)) out.push(d);
+    return out;
+  }
   window.__mpRollup = async function () {
     if (_roll) return;                       // rodando, ou nos 5s do ✓
     if (!ehAdmAqui()) return;
     var postos = (_dados && _dados.postos) ? _dados.postos.slice() : [];
     var n = postos.length;
     if (!n) return;
+    if (!_inicio || !_fim || _inicio > _fim) return;
+    var dias = rollDias(_inicio, _fim);
+    var nd = dias.length;
+    if (!nd) return;
+    var total = nd * n;
     // 27s medidos por posto x dia na rota (P. BOMBOM MATRIZ, 14/09/2026, 196
-    // cupons) — quase tudo esperando a TecnoX paginar. Com 37 postos da ~17
-    // min. O numero sai da CONTA e nao cravado: com meia rede no filtro, um
-    // aviso de 17 min estaria errado por duas vezes.
-    var min = Math.max(1, Math.round(n * 27 / 60));
-    if (!window.confirm('Atualizar dados de ' + diaMes(_fim) + '? Demora ~' + min +
-                        ' min para ' + n + ' postos.')) return;
-    _roll = { fase: 'rodando', i: 0, n: n, nome: '', ok: 0, falhas: [] };
+    // cupons) — quase tudo esperando a TecnoX paginar. O numero sai da CONTA e
+    // nao cravado: com meia rede no filtro, ou com 14 dias em vez de um, um
+    // aviso fixo estaria errado por varias vezes.
+    var min = Math.max(1, Math.round(total * 27 / 60));
+    // ACIMA DE UMA HORA E MEIA O NUMERO EM MINUTOS PARA DE INFORMAR: "~233
+    // min" nao se sente, "3,9 h" se sente. E e justamente nesse tamanho que a
+    // pessoa precisa sentir antes de confirmar.
+    var prazo = '~' + min + ' min' + (min > 90 ? ' (' + nf(min / 60, 1) + ' h)' : '');
+    var pergunta = (nd === 1)
+      // UM DIA SO: a pergunta de sempre, palavra por palavra. Com de = ate a
+      // varredura e a mesma de antes, e "de 14/09 a 14/09, 1 dias" seria uma
+      // frase pior dizendo o mesmo.
+      ? 'Atualizar dados de ' + diaMes(_fim) + '? Demora ' + prazo + ' para ' + n + ' postos.'
+      : 'Atualizar dados de ' + diaMes(_inicio) + ' a ' + diaMes(_fim) + '? São ' + nd +
+        ' dias × ' + n + ' postos, ' + prazo + '.';
+    if (!window.confirm(pergunta)) return;
+    _roll = { fase: 'rodando', di: 0, nd: nd, i: 0, n: n, nome: '',
+              feitos: 0, total: total, ok: 0, falhas: [] };
     rollPintar();
-    for (var k = 0; k < n; k++) {
-      _roll.i = k + 1;
-      _roll.nome = postos[k].posto_nome || '';
-      rollPintar();
-      try {
-        var r = await apiFetch('/tecnox/rollup-dia', {
-          method: 'POST',
-          body: JSON.stringify({ data: _fim, posto_id: postos[k].posto_id }),
-        });
-        // A rota responde 200 com ok:false quando o posto nao reconcilia:
-        // isso e falha daquele posto, nao da varredura.
-        if (r && r.ok) _roll.ok++;
-        else _roll.falhas.push(rollQuem(postos[k]) + ': ' +
-          ((((r || {}).detalhe || [])[0] || {}).erro || 'não fechou'));
-      } catch (e) {
-        _roll.falhas.push(rollQuem(postos[k]) + ': ' + ((e && e.message) ? e.message : 'falhou'));
+    for (var t = 0; t < nd; t++) {
+      _roll.di = t + 1;
+      for (var k = 0; k < n; k++) {
+        _roll.i = k + 1;
+        _roll.nome = postos[k].posto_nome || '';
+        rollPintar();
+        try {
+          var r = await apiFetch('/tecnox/rollup-dia', {
+            method: 'POST',
+            body: JSON.stringify({ data: dias[t], posto_id: postos[k].posto_id }),
+          });
+          // A rota responde 200 com ok:false quando o posto nao reconcilia:
+          // isso e falha daquele par, nao da varredura.
+          if (r && r.ok) _roll.ok++;
+          else _roll.falhas.push(rollQuem(postos[k], dias[t]) + ': ' +
+            ((((r || {}).detalhe || [])[0] || {}).erro || 'não fechou'));
+        } catch (e) {
+          _roll.falhas.push(rollQuem(postos[k], dias[t]) + ': ' + ((e && e.message) ? e.message : 'falhou'));
+        }
+        _roll.feitos++;
       }
     }
     _roll.fase = 'fim';
     rollPintar();
     // O MOTIVO de cada falha vai para o title do botao e para o console: a
-    // tela nao ganha area nova, e "35/37" sem o porque nao serve para agir.
+    // tela nao ganha area nova, e "515/518" sem o porque nao serve para agir.
     if (_roll.falhas.length && window.console) console.warn('Atualizar rollup — falhas:\n' + _roll.falhas.join('\n'));
     carregar();     // o pintar() dele redesenha a barra com o ✓ ainda de pe
     setTimeout(function () { _roll = null; pintar(); }, 5000);
   };
-  function rollQuem(p) { return p.posto_nome || p.posto_id; }
+  // O DIA ENTRA NO MOTIVO DA FALHA. Com um dia so ele era obvio; com 14, uma
+  // lista de "P. ITAPOA: timeout" repetida quatro vezes nao diria em quais
+  // dias o posto falhou — e e isso que decide o que rerrodar.
+  function rollQuem(p, dia) {
+    return (dia ? diaMes(dia) + ' ' : '') + (p.posto_nome || p.posto_id);
+  }
 
   window.__mpCard = function (id) {
     _cardAberto = (_cardAberto === id) ? null : id;
@@ -647,10 +688,11 @@
   // cor propria (nao e .mp-atalho) e diz o prazo antes de comecar.
   //
   // A BARRA DE PROGRESSO E O PROPRIO BOTAO: um gradiente inline cuja parada
-  // anda com os postos concluidos, e o rotulo virando "Atualizando 3/37…".
-  // Nenhuma area nova na tela — e nenhum pintar() no meio do laco, senao a
-  // tela inteira se redesenharia 37 vezes e fecharia o card que estivesse
-  // aberto. O laco escreve direto no no do botao (rollPintar).
+  // anda com os PARES posto x dia concluidos, e o rotulo virando
+  // "Atualizando dia 3/14… 13/37 P. ITAPOA". Nenhuma area nova na tela — e
+  // nenhum pintar() no meio do laco, senao a tela inteira se redesenharia uma
+  // vez por par e fecharia o card que estivesse aberto. O laco escreve direto
+  // no no do botao (rollPintar).
   //
   // O verde e cravado em hex, sem variavel de tema, de proposito: e o unico
   // elemento da barra que nao e filtro, e a cor e o que diz isso nos dois
@@ -664,16 +706,23 @@
   }
   function rollTexto() {
     if (!_roll) return '⟳ Atualizar rollup';
-    if (_roll.fase === 'fim') return 'Atualizado ✓ ' + _roll.ok + '/' + _roll.n;
+    if (_roll.fase === 'fim') return 'Atualizado ✓ ' + _roll.ok + '/' + _roll.total;
     // O nome cortado em 16: "P. LOURA EMPREENDIMENTOS" dobrava a largura do
     // botao no meio do laco e empurrava a barra de filtros.
-    return 'Atualizando ' + _roll.i + '/' + _roll.n + '… ' + cortarNome(_roll.nome, 16);
+    var quem = cortarNome(_roll.nome, 16);
+    // UM DIA SO: o rotulo de sempre. Com de = ate a varredura e a mesma de
+    // antes, e "dia 1/1" seria ruido dizendo que nao ha o que contar.
+    if (_roll.nd === 1) return 'Atualizando ' + _roll.i + '/' + _roll.n + '… ' + quem;
+    return 'Atualizando dia ' + _roll.di + '/' + _roll.nd + '… ' +
+           _roll.i + '/' + _roll.n + ' ' + quem;
   }
-  // Concluidos, nao o que esta em curso: no posto 3 de 37, dois terminaram.
+  // Sobre os PARES concluidos, nao sobre os dias: com 14 dias a barra andaria
+  // aos saltos de 7%, parada por 17 min a cada salto. `feitos` e incrementado
+  // ao fim de cada chamada, entao a parada nunca conta o par em curso.
   function rollGradiente() {
     if (!_roll) return '';
     var pct = (_roll.fase === 'fim') ? 100
-            : Math.max(0, Math.min(100, Math.round((_roll.i - 1) / _roll.n * 100)));
+            : Math.max(0, Math.min(100, Math.round(_roll.feitos / _roll.total * 100)));
     return 'linear-gradient(to right, ' + ROLL_PREENCHE + ' ' + pct + '%, ' +
            'rgba(0,0,0,0) ' + pct + '%)';
   }

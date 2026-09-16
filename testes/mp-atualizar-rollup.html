@@ -34,12 +34,17 @@
 // 3. Só ADM vê o botão. Com perfil SUPERVISOR ele não é renderizado.
 // 4. Clicar pede confirmação com o dia do filtro "até" e o prazo; recusar não
 //    chama nada.
-// 5. Confirmando, chama POST /tecnox/rollup-dia UMA VEZ POR POSTO, em série,
-//    com { data: <o "até">, posto_id }, e o progresso aparece no próprio
-//    botão ("Atualizando 3/37… NOME") com a barra andando.
-// 6. Posto que falha é anotado e o laço segue: 37 chamadas, ✓ 36/37, e o
-//    motivo no title do botão.
-// 7. No fim recarrega a movimentação e, 5s depois, o botão volta ao normal.
+// 5. Confirmando, chama POST /tecnox/rollup-dia UMA VEZ POR PAR posto × dia,
+//    em série, varrendo o PERÍODO do filtro: dia por fora, posto por dentro.
+//    Com 01–14/09 e 37 postos são 518 chamadas, e a primeira leva o dia
+//    01/09 — não o "até".
+// 6. O progresso aparece no próprio botão ("Atualizando dia 3/14… 13/37
+//    NOME") e a barra anda por par concluído, não por dia.
+// 7. Par que falha é anotado COM O DIA e o laço segue: 518 chamadas,
+//    ✓ 517/518, e o motivo no title do botão.
+// 8. No fim recarrega a movimentação e, 5s depois, o botão volta ao normal.
+// 9. Com de = até (um dia só) a pergunta e o rótulo são os de antes, palavra
+//    por palavra, e são 37 chamadas.
 //
 // O fixture é a resposta REAL de GET /tecnox/movimentacao-postos de 01–14/09.
 // ════════════════════════════════════════════════════════════════
@@ -68,7 +73,7 @@ async function prontoDe(id) {
 function atalhos(id) {
   return [].slice.call(doc(id).querySelectorAll('#palco .mp-atalhos > button'));
 }
-function btnRoll(id) { return doc(id).querySelector('#palco #mp-roll'); }
+function btnRoll(id) { return doc(id || 'fr-agora').querySelector('#palco #mp-roll'); }
 
 // ════════════════════════════════════════════════════════════════
 async function rodar() {
@@ -148,8 +153,7 @@ async function rodar() {
      atalhos('fr-sup').length + '', '3');
 
   // ══════════════════════════════════════════════════════════════
-  h3('5. A confirmação');
-  var postos = jan('fr-agora').CHAMADAS, N;
+  h3('5. A confirmação, com o período inteiro');
   var pedidos = [];
   W.confirm = function (msg) { pedidos.push(msg); return false; };
   W.CHAMADAS.length = 0;
@@ -157,20 +161,20 @@ async function rodar() {
   await esperar(60);
   eh(pedidos.length === 1, 'pediu confirmação', pedidos.length + '', '1');
   nota('texto: ' + (pedidos[0] || ''));
-  eh(/^Atualizar dados de 14\/09\?/.test(pedidos[0] || ''),
-     'cita o dia do filtro "até" em dd/mm', (pedidos[0] || '').slice(0, 30), 'Atualizar dados de 14/09?');
-  eh(/Demora ~\d+ min para \d+ postos\./.test(pedidos[0] || ''), 'e o prazo com a contagem de postos');
+  eh((pedidos[0] || '') === 'Atualizar dados de 01/09 a 14/09? São 14 dias × 37 postos, ~233 min (3,9 h).',
+     'a pergunta traz os dois dias, a conta e o prazo', pedidos[0],
+     'Atualizar dados de 01/09 a 14/09? São 14 dias × 37 postos, ~233 min (3,9 h).');
+  // 518 pares × 27s = 233 min. O prazo em horas aparece porque passa de 90min.
   eh(W.CHAMADAS.length === 0, 'recusar não chama nada', W.CHAMADAS.length + ' chamada(s)', '0');
   eh(b.textContent.trim() === '⟳ Atualizar rollup', 'e o botão nem muda', b.textContent.trim());
 
-  h3('6. Confirmando: uma chamada por posto, progresso no botão');
-  N = doc('fr-agora').querySelectorAll('#palco .mp-posto').length;
-  nota(N + ' postos na lista da tela');
-  var vistos = [];
+  h3('6. Dia por fora, posto por dentro');
+  var N = doc('fr-agora').querySelectorAll('#palco .mp-posto').length;
+  nota(N + ' postos na lista da tela · 14 dias no filtro → ' + (N * 14) + ' pares');
   var solta = [];
   // Cada chamada fica PENDENTE até a gente soltar: é o único jeito de olhar o
-  // botão no meio do laço, em cada posto.
-  W.RESPOSTA_ROLLUP = function (body) {
+  // botão no meio do laço, par por par.
+  W.RESPOSTA_ROLLUP = function () {
     return new Promise(function (r) {
       solta.push(function () { r({ ok: true, cupons: 10, litros: 20, veiculos: 5, linhas: 3 }); });
     });
@@ -180,46 +184,47 @@ async function rodar() {
   b.click();
   await esperar(80);
 
-  var rolls = W.CHAMADAS.filter(function (c) { return c.url.indexOf('/tecnox/rollup-dia') === 0; });
-  eh(rolls.length === 1, 'em série: só a primeira chamada saiu', rolls.length + '', '1');
-  var b1 = btnRoll('fr-agora');
-  eh(/^Atualizando 1\/37… /.test(b1.textContent), 'o botão mostra 1/37 e o nome do posto',
-     b1.textContent.trim());
+  var rolls = function () { return W.CHAMADAS.filter(function (c) { return c.url.indexOf('/tecnox/rollup-dia') === 0; }); };
+  eh(rolls().length === 1, 'em série: só a primeira chamada saiu', rolls().length + '', '1');
+  var b1 = btnRoll();
+  eh(/^Atualizando dia 1\/14… 1\/37 /.test(b1.textContent),
+     'o rótulo mostra o dia E o posto', b1.textContent.trim(), 'Atualizando dia 1/14… 1/37 NOME');
   eh(b1.disabled, 'e está travado', b1.disabled ? 'sim' : 'NÃO');
-  eh(b1.className.indexOf('mp-roll-on') >= 0, 'com a classe de progresso', b1.className);
-  var corpo1 = jan('fr-agora').getComputedStyle(b1).backgroundImage;
-  eh(/gradient/.test(corpo1), 'a barra é um gradiente no próprio botão',
-     corpo1.slice(0, 60));
-  eh(/0%/.test(b1.getAttribute('style') || ''), 'no primeiro posto a barra está em 0%',
-     b1.getAttribute('style'));
-  var corpo1Antes = b1.getAttribute('style');
+  eh(JSON.parse(rolls()[0].opts.body).data === '2026-09-01',
+     'a PRIMEIRA chamada leva o começo do período, não o fim',
+     JSON.parse(rolls()[0].opts.body).data, '2026-09-01');
+  eh(/ 0%/.test(b1.getAttribute('style') || ''), 'a barra começa em 0%', b1.getAttribute('style'));
 
-  // Anda três postos e confere o rótulo, a barra e a ordem das chamadas.
-  for (var i = 0; i < 3; i++) { solta.shift()(); await esperar(40); }
-  rolls = W.CHAMADAS.filter(function (c) { return c.url.indexOf('/tecnox/rollup-dia') === 0; });
-  eh(rolls.length === 4, 'quatro chamadas depois de três respostas', rolls.length + '', '4');
-  eh(/^Atualizando 4\/37… /.test(btnRoll('fr-agora').textContent), 'rótulo em 4/37',
-     btnRoll('fr-agora').textContent.trim());
-  var estilo4 = btnRoll('fr-agora').getAttribute('style');
-  eh(/ 8%/.test(estilo4), 'barra em 8% (3 de 37 concluídos)', estilo4);
-  eh(estilo4 !== corpo1Antes, 'a barra andou desde o primeiro posto');
-  var corpos = rolls.map(function (c) { return JSON.parse(c.opts.body); });
-  eh(corpos.every(function (x) { return x.data === '2026-09-14'; }),
-     'toda chamada leva a data do filtro "até"', corpos[0].data, '2026-09-14');
-  eh(corpos.every(function (x) { return !!x.posto_id; }) &&
-     new Set(corpos.map(function (x) { return x.posto_id; })).size === corpos.length,
-     'um posto_id diferente em cada', corpos.length + ' chamadas, ' +
-     new Set(corpos.map(function (x) { return x.posto_id; })).size + ' postos');
+  // Anda três pares e confere que o DIA não mudou e a barra andou pouco.
+  for (var i = 0; i < 3; i++) { solta.shift()(); await esperar(30); }
+  eh(rolls().length === 4, 'quatro chamadas depois de três respostas', rolls().length + '', '4');
+  eh(/^Atualizando dia 1\/14… 4\/37 /.test(btnRoll().textContent),
+     'ainda no dia 1, já no posto 4', btnRoll().textContent.trim(), 'Atualizando dia 1/14… 4/37');
+  eh(/ 1%/.test(btnRoll().getAttribute('style') || ''),
+     'barra em 1% (3 de 518 pares)', btnRoll().getAttribute('style'));
+  var corpos = rolls().map(function (c) { return JSON.parse(c.opts.body); });
+  eh(corpos.every(function (x) { return x.data === '2026-09-01'; }),
+     'os quatro primeiros pares são todos do dia 01/09',
+     corpos.map(function (x) { return x.data; }).join(' '), 'todos 2026-09-01');
+  eh(new Set(corpos.map(function (x) { return x.posto_id; })).size === 4,
+     'e de quatro postos diferentes', new Set(corpos.map(function (x) { return x.posto_id; })).size + '', '4');
   eh(Object.keys(corpos[0]).sort().join(',') === 'data,posto_id',
      'só os dois campos no corpo', Object.keys(corpos[0]).sort().join(','), 'data,posto_id');
-  // A ordem é a da lista da tela.
-  var nomeNaTela = doc('fr-agora').querySelectorAll('#palco .mp-p-nome')[0].textContent.trim();
-  eh(btnRoll('fr-agora').textContent.indexOf(nomeNaTela.slice(0, 10)) >= 0 ||
-     rolls.length > 1,
-     'o nome que aparece é de um posto da lista', nomeNaTela);
 
-  h3('7. Um posto falha: anota e segue');
-  // O quinto responde erro; os demais, sucesso na hora.
+  h3('7. O dia vira depois de fechar os 37 postos');
+  // Fecha o resto do dia 1: faltam 33 respostas para o 37º sair e o dia virar.
+  for (var q = 0; q < 34; q++) { if (solta.length) solta.shift()(); await esperar(6); }
+  eh(rolls().length === 38, 'a 38ª chamada é a primeira do dia 2', rolls().length + '', '38');
+  var c38 = JSON.parse(rolls()[37].opts.body);
+  eh(c38.data === '2026-09-02', 'e ela leva 02/09', c38.data, '2026-09-02');
+  eh(/^Atualizando dia 2\/14… 1\/37 /.test(btnRoll().textContent),
+     'o rótulo virou para o dia 2', btnRoll().textContent.trim(), 'Atualizando dia 2/14… 1/37');
+  var diasPedidos = rolls().slice(0, 37).map(function (c) { return JSON.parse(c.opts.body).data; });
+  eh(new Set(diasPedidos).size === 1,
+     'o dia 1 saiu INTEIRO antes do dia 2 começar', new Set(diasPedidos).size + ' dia(s) nos 37 primeiros', '1');
+
+  h3('8. Um par falha: anota com o dia e segue até o fim');
+  // Daqui para frente responde na hora; o primeiro a responder assim falha.
   var conta = 0;
   W.RESPOSTA_ROLLUP = function () {
     conta++;
@@ -227,35 +232,74 @@ async function rodar() {
     return Promise.resolve({ ok: true, cupons: 1, litros: 1, veiculos: 1, linhas: 1 });
   };
   while (solta.length) solta.shift()();
-  // Espera o laço terminar: 37 postos, respostas imediatas.
-  for (var t = 0; t < 120 && !/Atualizado/.test(btnRoll('fr-agora').textContent); t++) await esperar(50);
-  var bf = btnRoll('fr-agora');
+  for (var t2 = 0; t2 < 400 && !/Atualizado/.test(btnRoll().textContent); t2++) await esperar(50);
+  var bf = btnRoll();
   nota('rótulo final: ' + bf.textContent.trim());
-  rolls = W.CHAMADAS.filter(function (c) { return c.url.indexOf('/tecnox/rollup-dia') === 0; });
-  eh(rolls.length === 37, 'chamou os 37 postos, sem parar na falha', rolls.length + '', '37');
-  eh(bf.textContent.trim() === 'Atualizado ✓ 36/37', 'o rótulo conta 36 de 37',
-     bf.textContent.trim(), 'Atualizado ✓ 36/37');
-  eh(/timeout 180s/.test(bf.title || ''), 'o motivo da falha fica no title do botão', bf.title);
+  eh(rolls().length === 518, 'chamou os 518 pares (14 × 37), sem parar na falha',
+     rolls().length + '', '518');
+  eh(bf.textContent.trim() === 'Atualizado ✓ 517/518', 'o rótulo conta 517 de 518',
+     bf.textContent.trim(), 'Atualizado ✓ 517/518');
+  eh(/^\d{2}\/\d{2} .*timeout 180s/.test(bf.title || ''),
+     'o motivo vem com o DIA na frente, para saber o que rerrodar', bf.title);
   eh(/100%/.test(bf.getAttribute('style') || ''), 'a barra chega a 100%', bf.getAttribute('style'));
+  // Todos os 14 dias foram pedidos, cada um 37 vezes.
+  var porDia = {};
+  rolls().forEach(function (c) { var d = JSON.parse(c.opts.body).data; porDia[d] = (porDia[d] || 0) + 1; });
+  var chaves = Object.keys(porDia).sort();
+  eh(chaves.length === 14, 'os 14 dias do período', chaves.length + '', '14');
+  eh(chaves[0] === '2026-09-01' && chaves[13] === '2026-09-14', 'de 01/09 a 14/09',
+     chaves[0] + ' … ' + chaves[13], '2026-09-01 … 2026-09-14');
+  eh(chaves.every(function (d) { return porDia[d] === 37; }),
+     'e 37 postos em cada dia', 'mín ' + Math.min.apply(null, chaves.map(function (d) { return porDia[d]; })) +
+     ' / máx ' + Math.max.apply(null, chaves.map(function (d) { return porDia[d]; })), '37 em todos');
 
-  h3('8. Recarrega a movimentação e volta ao normal em 5s');
+  h3('9. Recarrega a movimentação e volta ao normal em 5s');
   var movs = W.CHAMADAS.filter(function (c) { return c.url.indexOf('/tecnox/movimentacao-postos') === 0; });
-  eh(movs.length === 1, 'recarregou a movimentação UMA vez ao terminar',
-     movs.length + '', '1');
-  eh(/inicio=2026-09-01&fim=2026-09-14/.test(movs[0].url), 'no mesmo período do filtro',
-     movs[0].url);
-  eh(!!btnRoll('fr-agora') && /Atualizado/.test(btnRoll('fr-agora').textContent),
-     'o ✓ sobrevive ao redesenho do recarregamento', btnRoll('fr-agora').textContent.trim());
+  eh(movs.length === 1, 'recarregou a movimentação UMA vez ao terminar', movs.length + '', '1');
+  eh(/inicio=2026-09-01&fim=2026-09-14/.test(movs[0].url), 'no mesmo período do filtro', movs[0].url);
   await esperar(5400);
-  var bv = btnRoll('fr-agora');
+  var bv = btnRoll();
   eh(bv.textContent.trim() === '⟳ Atualizar rollup', 'depois de 5s volta ao rótulo normal',
      bv.textContent.trim(), '⟳ Atualizar rollup');
-  eh(!bv.disabled, 'e destravado', bv.disabled ? 'AINDA travado' : 'destravado');
-  eh(bv.className === 'mp-roll', 'sem a classe de progresso', bv.className, 'mp-roll');
-  eh(!bv.getAttribute('style'), 'sem gradiente residual', bv.getAttribute('style') || '(sem style)');
-  eh(!bv.title, 'sem title residual', bv.title || '(sem title)');
+  eh(!bv.disabled && bv.className === 'mp-roll' && !bv.getAttribute('style') && !bv.title,
+     'destravado, sem classe de progresso, sem gradiente nem title residual',
+     bv.className + ' | ' + (bv.getAttribute('style') || '(sem style)') + ' | ' + (bv.title || '(sem title)'));
 
-  h3('9. A tela não se perdeu no caminho');
+  h3('10. Com de = até, tudo igual ao de antes');
+  W.__mpPeriodo('inicio', '2026-09-14');
+  await esperar(150);
+  pedidos = [];
+  W.confirm = function (msg) { pedidos.push(msg); return true; };
+  // A PRIMEIRA resposta fica pendente: com as 37 respondendo na hora, o laço
+  // inteiro terminava antes da leitura e o rótulo já era o do fim — foi o que
+  // esta asserção pegou na primeira rodada.
+  var vezes = 0, primeira = null;
+  var resp10 = { ok: true, cupons: 5, litros: 6, veiculos: 7, linhas: 8 };
+  W.RESPOSTA_ROLLUP = function () {
+    vezes++;
+    if (vezes === 1) return new Promise(function (r) { primeira = function () { r(resp10); }; });
+    return Promise.resolve(resp10);
+  };
+  W.CHAMADAS.length = 0;
+  btnRoll().click();
+  await esperar(60);
+  nota('texto: ' + (pedidos[0] || ''));
+  eh((pedidos[0] || '') === 'Atualizar dados de 14/09? Demora ~17 min para 37 postos.',
+     'a pergunta é a de um dia só, palavra por palavra', pedidos[0],
+     'Atualizar dados de 14/09? Demora ~17 min para 37 postos.');
+  eh(/^Atualizando \d+\/37… /.test(btnRoll().textContent) &&
+     btnRoll().textContent.indexOf('dia') < 0,
+     'e o rótulo não fala de dia', btnRoll().textContent.trim(), 'Atualizando N/37… NOME');
+  if (primeira) primeira();
+  for (var t3 = 0; t3 < 200 && !/Atualizado/.test(btnRoll().textContent); t3++) await esperar(30);
+  eh(rolls().length === 37, 'são 37 chamadas, uma por posto', rolls().length + '', '37');
+  eh(rolls().every(function (c) { return JSON.parse(c.opts.body).data === '2026-09-14'; }),
+     'todas no dia único', 'ok');
+  eh(btnRoll().textContent.trim() === 'Atualizado ✓ 37/37', 'e o fim conta 37/37',
+     btnRoll().textContent.trim(), 'Atualizado ✓ 37/37');
+  await esperar(5400);
+
+  h3('11. A tela não se perdeu no caminho');
   eh(doc('fr-agora').querySelectorAll('#palco .mp-card').length === 8,
      'os 8 cards continuam lá', doc('fr-agora').querySelectorAll('#palco .mp-card').length + '', '8');
   eh(doc('fr-agora').querySelectorAll('#palco .mp-posto').length === 37,
