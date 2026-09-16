@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Logística — busca de posto acima da lista</title>
+<title>Logística — busca dentro do dropdown</title>
 <link rel="stylesheet" href="/shared/css/base.css">
 <link rel="stylesheet" href="/modulos/logistica/logistica.css">
 <style>
@@ -26,21 +26,22 @@
 // ════════════════════════════════════════════════════════════════
 // O QUE ESTE TESTE PROVA
 //
-// O campo de busca NAO substitui o <select>: sao dois controles separados e
-// visiveis ao mesmo tempo, busca EM CIMA e lista EMBAIXO. (A versao anterior
-// cobria o select com o input e desenhava uma lista propria em <ul>; este
-// teste afirmava aquilo e foi reescrito junto com o desenho.)
+// COMBOBOX PROPRIO com a busca DENTRO do dropdown. O <select> nativo nao
+// aceita campo no painel dele (quem desenha aquilo e o navegador), entao a
+// cara fechada e um <button> com o visual do .sel-posto e o painel aberto e
+// um <div> nosso: input colado no topo, lista embaixo. Sem biblioteca.
 //
-// 1. Os dois no DOM e os dois a vista; nenhuma lista flutuante sobrou.
-// 2. O campo termina antes de o select comecar, com lupa e a mesma largura.
-// 3. Digitar filtra as <option> por TRECHO, sem acento e sem caixa.
-// 4. "Todos os postos" e sempre a primeira, com ou sem filtro.
-// 5. Filtrar NAO dispara change, NAO recarrega a matriz e NAO perde o posto
-//    selecionado — que continua na lista mesmo sem casar com o termo.
-// 6. O X (e o Esc) limpam, devolvem a lista inteira e mantem a escolha.
-// 7. Escolher pelo select dispara UM change: e ele que carrega a matriz.
-// 8. Trocar a bandeira remonta a lista e zera o termo.
-// 9. A 375px o empilhamento se mantem e nada estoura.
+// 1. Fechado, a cara tem a MESMA caixa do <select> de bandeira ao lado.
+// 2. Clicar abre; o input esta DENTRO do painel e ACIMA da lista.
+// 3. Digitar filtra as opcoes embaixo, por TRECHO e sem acento.
+// 4. "Todos os postos" sempre visivel; limpar mostra todos de novo.
+// 5. Clicar numa opcao seleciona, fecha e dispara UM change (a matriz
+//    carrega uma vez) — o <select> segue sendo quem manda.
+// 6. Reabrir vem limpo, com a escolha marcada.
+// 7. Clicar fora fecha sem trocar o posto.
+// 8. Setas, Enter e Esc.
+// 9. Trocar a bandeira remonta a lista e fecha o painel.
+// 10. A 375px o painel acompanha a largura e nada estoura.
 //
 // Com o app.js e o index.html DE VERDADE. A sessao e dublada porque a tela
 // redireciona sem ela.
@@ -139,42 +140,74 @@ async function rodar() {
   await montarPalco();
   await carregarApp();
   pbMontar();
-  var sel = document.getElementById('sel-posto');
-  var inp = document.getElementById('pb-input');
-  var bx  = document.getElementById('pb-x');
+  var sel  = document.getElementById('sel-posto');
+  var face = document.getElementById('pb-face');
+  var pnl  = document.getElementById('pb-painel');
+  var inp  = document.getElementById('pb-input');
   sel.addEventListener('change', function () { CHANGES++; });
   await carregarPostos();
   await esperar(80);
 
+  function ops() {
+    return [].slice.call(document.querySelectorAll('#palco .pb-op')).map(function (li) { return li.textContent; });
+  }
   function digitar(t) {
     inp.value = t;
     inp.dispatchEvent(new Event('input', { bubbles: true }));
   }
-  function ops() { return [...sel.options].map(function (o) { return o.textContent; }); }
+  function clicarOp(txt) {
+    var li = [].slice.call(document.querySelectorAll('#palco .pb-op'))
+      .filter(function (x) { return x.textContent === txt; })[0];
+    if (!li) return false;
+    li.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    return true;
+  }
+  function foraDoCombo() {
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+  }
 
-  h3('1. Dois controles SEPARADOS, os dois à vista');
-  eh(!!sel && !!inp, 'o #sel-posto e o #pb-input existem');
-  eh(getComputedStyle(sel).display !== 'none', 'o select está VISÍVEL (não é mais coberto)',
-     getComputedStyle(sel).display);
-  eh(!document.querySelector('#palco .pb-lista'), 'e não há mais lista flutuante própria (<ul>)');
-  eh(cx(inp).h > 0 && cx(sel).h > 0, 'os dois ocupam caixa na tela',
-     'input ' + cx(inp).h + 'px · select ' + cx(sel).h + 'px');
+  h3('1. Fechado: a cara do <select>');
+  eh(!!face && !!pnl && !!sel, 'cara, painel e select existem');
+  eh(getComputedStyle(sel).display === 'none', 'o <select> continua no DOM e ESCONDIDO',
+     getComputedStyle(sel).display, 'none');
+  eh(pnl.hidden === true, 'o painel começa fechado');
+  eh(face.classList.contains('sel-posto'), 'a cara herda .sel-posto (mesmo visual)');
+  eh(face.getAttribute('aria-expanded') === 'false', 'aria-expanded=false');
+  // Mesma caixa do <select> de bandeira logo acima — é a prova de "visual
+  // idêntico ao select atual".
+  var selB = document.getElementById('sel-bandeira');
+  var cf = cx(face), cb = cx(selB);
+  nota('cara ' + cf.w + '×' + cf.h + '  ·  select de bandeira ' + cb.w + '×' + cb.h);
+  eh(cf.w === cb.w, 'mesma largura do select de bandeira', cf.w + ' vs ' + cb.w);
+  eh(Math.abs(cf.h - cb.h) <= 1, 'e a mesma altura (±1px)', cf.h + ' vs ' + cb.h);
+  eh(face.textContent.indexOf('Todos os postos') >= 0, 'mostra o rótulo selecionado',
+     face.textContent.replace(/\s+/g, ' ').trim());
 
-  h3('2. A busca fica ACIMA da lista');
-  var rI = inp.getBoundingClientRect(), rS = sel.getBoundingClientRect();
-  nota('input top ' + Math.round(rI.top) + ' · select top ' + Math.round(rS.top));
-  eh(rI.bottom <= rS.top + 1, 'o campo termina antes de o select começar',
-     Math.round(rI.bottom) + ' <= ' + Math.round(rS.top));
+  h3('2. Clicar abre o painel com a busca NO TOPO');
+  face.click();
+  await esperar(60);
+  eh(pnl.hidden === false, 'o painel abriu');
+  eh(face.getAttribute('aria-expanded') === 'true', 'aria-expanded=true');
+  // A busca tem de estar DENTRO do painel, e ACIMA da lista.
+  eh(pnl.contains(inp), 'o input está DENTRO do painel');
+  var lst = document.getElementById('pb-lista');
+  eh(pnl.contains(lst), 'a lista também');
+  var rI = inp.getBoundingClientRect(), rL = lst.getBoundingClientRect();
+  nota('input top ' + Math.round(rI.top) + ' · lista top ' + Math.round(rL.top));
+  eh(rI.bottom <= rL.top + 1, 'e o input fica ACIMA da lista',
+     Math.round(rI.bottom) + ' <= ' + Math.round(rL.top));
+  // O painel abre POR BAIXO da cara, sem empurrar nada.
+  var rF = face.getBoundingClientRect(), rP = pnl.getBoundingClientRect();
+  eh(rP.top >= rF.bottom - 1, 'o painel abre abaixo da cara',
+     Math.round(rP.top) + ' >= ' + Math.round(rF.bottom));
+  eh(getComputedStyle(pnl).position === 'absolute', 'e por cima (position absolute)');
   eh(inp.placeholder === 'Buscar posto…', 'placeholder', inp.placeholder, 'Buscar posto…');
-  var lupa = document.querySelector('#palco .pb-lupa');
+  var lupa = pnl.querySelector('.pb-lupa');
   eh(!!lupa && lupa.textContent.trim() === '🔎', 'a lupa está no campo', lupa && lupa.textContent.trim());
-  eh(!!lupa && getComputedStyle(lupa).pointerEvents === 'none',
-     'e não rouba o clique do campo', lupa && getComputedStyle(lupa).pointerEvents);
-  eh(Math.abs(cx(inp).w - cx(sel).w) <= 1, 'campo e lista têm a mesma largura',
-     cx(inp).w + 'px vs ' + cx(sel).w + 'px');
+  eh(document.activeElement === inp, 'o foco já está no campo de busca');
+  eh(ops().length === 6, 'abre com a lista inteira ("Todos" + 5)', ops().length + '', '6');
 
-  h3('3. Filtra a LISTA por trecho, sem acento e sem caixa');
-  eh(ops().length === 6, 'sem filtro: "Todos" + 5 postos', ops().length + '', '6');
+  h3('3. Digitar filtra as opções embaixo');
   digitar('ana');
   nota('"ana" → ' + ops().join(' · '));
   eh(ops().indexOf('P. ANA LUCIA') >= 0, '"ana" acha P. ANA LUCIA');
@@ -185,93 +218,113 @@ async function rodar() {
   eh(ops().indexOf('P. ESPAÇO REAL') >= 0, '"espaco" acha "P. ESPAÇO REAL" (sem acento)', ops().join('|'));
   digitar('JOAQUIM');
   eh(ops().indexOf('P. SANTA INES - JOAQUIM') >= 0, 'casa por TRECHO, não pelo começo', ops().join('|'));
-  digitar('zzz');
-  eh(ops().join('|') === 'Todos os postos', 'termo sem resultado deixa só "Todos os postos"', ops().join('|'));
-  var conta = document.getElementById('pb-conta');
-  eh(!!conta && !conta.hidden && /nenhum posto/.test(conta.textContent),
-     'e a contagem avisa', conta && conta.textContent);
+  eh(pnl.contains(inp) && !pnl.hidden, 'o painel segue aberto enquanto se digita');
 
-  h3('4. "Todos os postos" é SEMPRE a primeira');
+  h3('4. "Todos os postos" sempre visível, e limpar mostra todos');
   ['', 'ana', 'topa', 'zzz', 'P.'].forEach(function (t) {
     digitar(t);
     eh(ops()[0] === 'Todos os postos', 'primeira opção com termo ' + JSON.stringify(t), ops()[0]);
   });
-
-  h3('5. Filtrar NÃO escolhe nem recarrega');
+  digitar('zzz');
+  eh(ops().join('|') === 'Todos os postos', 'termo sem resultado deixa só "Todos os postos"', ops().join('|'));
   digitar('');
-  sel.value = 'P. BERNARDO';
-  sel.dispatchEvent(new Event('change', { bubbles: true }));
-  await esperar(60);
-  var cargasAntes = CARGAS, changesAntes = CHANGES;
-  nota('posto em tela: ' + sel.value + ' · cargas até aqui ' + CARGAS);
-  digitar('ana');
-  await esperar(40);
-  eh(CHANGES === changesAntes, 'digitar não dispara change', CHANGES + '', changesAntes + '');
-  eh(CARGAS === cargasAntes, 'e não recarrega a matriz', CARGAS + '', cargasAntes + '');
-  // O SELECIONADO NÃO PODE SUMIR: sem isto o select perderia o value e o
-  // posto em tela mudaria sozinho por causa de uma letra digitada.
-  eh(sel.value === 'P. BERNARDO', 'o posto selecionado continua selecionado', sel.value);
-  eh(ops().indexOf('P. BERNARDO') >= 0,
-     'e continua NA LISTA mesmo não casando com "ana"', ops().join('|'));
+  eh(ops().length === 6, 'limpar o texto mostra todos de novo', ops().length + '', '6');
 
-  h3('6. O X limpa');
-  digitar('ana');
-  eh(!bx.hidden, 'o X aparece quando há texto');
-  bx.click();
-  await esperar(40);
-  eh(inp.value === '', 'clicar no X esvazia o campo', JSON.stringify(inp.value));
-  eh(bx.hidden, 'e o X some de novo');
-  eh(ops().length === 6, 'a lista volta inteira', ops().length + '', '6');
-  eh(document.activeElement === inp, 'o foco volta para o campo');
-  eh(sel.value === 'P. BERNARDO', 'e o posto escolhido segue intacto', sel.value);
-  digitar('topa');
+  h3('5. Clicar numa opção seleciona e fecha');
+  var c0 = CARGAS, ch0 = CHANGES;
+  digitar('bern');
+  eh(clicarOp('P. BERNARDO'), 'a opção está na lista filtrada');
+  await esperar(80);
+  eh(pnl.hidden === true, 'o painel fechou');
+  eh(sel.value === 'P. BERNARDO', 'o <select> recebeu o valor', sel.value);
+  eh(CHANGES === ch0 + 1, 'o change saiu UMA vez', (CHANGES - ch0) + '', '1');
+  eh(CARGAS === c0 + 1, 'e a matriz carregou UMA vez', (CARGAS - c0) + '', '1');
+  eh(POSTO_ATUAL === 'P. BERNARDO', 'o app leu o posto', POSTO_ATUAL);
+  eh(face.textContent.indexOf('P. BERNARDO') >= 0, 'a cara mostra o posto escolhido',
+     face.textContent.replace(/\s+/g, ' ').trim());
+  eh(/BERNARDO/.test(decodeURIComponent(location.hash)), 'e o hash acompanha', location.hash || '(vazio)');
+
+  h3('6. Reabrir vem limpo e com a escolha marcada');
+  face.click();
+  await esperar(60);
+  eh(inp.value === '', 'o campo de busca abre vazio', JSON.stringify(inp.value));
+  eh(ops().length === 6, 'com a lista inteira', ops().length + '', '6');
+  var marcada = pnl.querySelector('.pb-op.pb-sel');
+  eh(!!marcada && marcada.textContent === 'P. BERNARDO', 'e a opção atual vem marcada',
+     marcada && marcada.textContent);
+
+  h3('7. Clicar fora fecha, sem trocar o posto');
+  var ch1 = CHANGES;
+  foraDoCombo();
+  await esperar(60);
+  eh(pnl.hidden === true, 'o painel fechou');
+  eh(CHANGES === ch1, 'sem change nenhum', (CHANGES - ch1) + '', '0');
+  eh(sel.value === 'P. BERNARDO', 'e o posto continua o mesmo', sel.value);
+
+  h3('8. Teclado');
+  face.click();
+  await esperar(60);
+  digitar('p.');
+  tecla(inp, 'ArrowDown');
+  var sob = pnl.querySelector('.pb-op.pb-on');
+  eh(!!sob, 'a seta marca uma opção', sob && sob.textContent);
   tecla(inp, 'Escape');
-  await esperar(40);
-  eh(inp.value === '', 'Esc também limpa', JSON.stringify(inp.value));
-
-  h3('7. Escolher pelo select segue funcionando (é ele que manda)');
-  digitar('ana');
-  var c0 = CHANGES;
-  sel.value = 'P. ANA LUCIA';
-  sel.dispatchEvent(new Event('change', { bubbles: true }));
   await esperar(60);
-  eh(CHANGES === c0 + 1, 'o change saiu UMA vez', (CHANGES - c0) + '', '1');
-  eh(POSTO_ATUAL === 'P. ANA LUCIA', 'e o app leu o posto', POSTO_ATUAL);
-  eh(/ANA/.test(decodeURIComponent(location.hash)), 'o hash acompanha', location.hash || '(vazio)');
+  eh(pnl.hidden === true, 'Esc fecha');
+  eh(sel.value === 'P. BERNARDO', 'sem trocar o posto', sel.value);
+  // Enter escolhe a primeira da lista filtrada.
+  face.click();
+  await esperar(60);
+  digitar('topa');
+  var ch2 = CHANGES;
+  tecla(inp, 'Enter');
+  await esperar(80);
+  eh(sel.value === 'P. TOPAZIO', 'Enter escolhe a primeira filtrada', sel.value);
+  eh(CHANGES === ch2 + 1, 'e dispara UM change', (CHANGES - ch2) + '', '1');
+  eh(pnl.hidden === true, 'fechando o painel');
 
-  h3('8. Trocar a bandeira remonta a lista e zera a busca');
-  digitar('ana');
-  var selB = document.getElementById('sel-bandeira');
-  if (selB) {
-    selB.value = 'ALE';
-    selB.dispatchEvent(new Event('change', { bubbles: true }));
-    await esperar(80);
-    eh(inp.value === '', 'o termo antigo foi zerado', JSON.stringify(inp.value));
-    eh(ops().indexOf('P. BERNARDO') >= 0, 'e a lista é a da bandeira nova', ops().join('|'));
+  h3('9. Trocar a bandeira remonta a lista');
+  var selB2 = document.getElementById('sel-bandeira');
+  if (selB2) {
+    selB2.value = 'ALE';
+    selB2.dispatchEvent(new Event('change', { bubbles: true }));
+    await esperar(90);
+    eh(face.textContent.indexOf('Todos os postos') >= 0, 'a cara volta a "Todos os postos"',
+       face.textContent.replace(/\s+/g, ' ').trim());
+    eh(pnl.hidden === true, 'e o painel fica fechado');
+    face.click();
+    await esperar(60);
+    eh(ops().indexOf('P. BERNARDO') >= 0, 'a lista é a da bandeira nova', ops().join('|'));
+    foraDoCombo();
+    await esperar(40);
   } else {
     nota('sem #sel-bandeira no palco — pulado');
   }
 
-  h3('9. Estreito (375px): empilhado e sem estouro');
+  h3('10. Estreito (375px)');
   var palco = document.getElementById('palco');
-  var larguraAntes = palco.style.width;
+  var antes = palco.style.width;
   palco.style.width = '375px';
   await esperar(60);
-  var rI2 = inp.getBoundingClientRect(), rS2 = sel.getBoundingClientRect();
-  eh(rI2.bottom <= rS2.top + 1, 'campo continua acima da lista',
-     Math.round(rI2.bottom) + ' <= ' + Math.round(rS2.top));
-  eh(rI2.width <= 375 && rS2.width <= 375, 'os dois cabem em 375px',
-     Math.round(rI2.width) + ' / ' + Math.round(rS2.width));
+  face.click();
+  await esperar(60);
+  var rF2 = face.getBoundingClientRect(), rP2 = pnl.getBoundingClientRect();
+  eh(Math.abs(rP2.width - rF2.width) <= 1, 'o painel tem a largura da cara',
+     Math.round(rP2.width) + ' vs ' + Math.round(rF2.width));
   eh(document.documentElement.scrollWidth <= window.innerWidth + 1,
      'e a página não ganha rolagem horizontal');
-  palco.style.width = larguraAntes;
+  foraDoCombo();
+  palco.style.width = antes;
 
   linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
                              : '<span class="ok">TUDO PASSOU</span>'));
   pintar();
   document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — busca de posto';
+  // Deixa o painel aberto com um filtro, para o print mostrar o que o teste diz.
   await esperar(40);
-  digitar('ana');
+  face.click();
+  await esperar(60);
+  digitar('an');
 }
 
 rodar().catch(function (e) {

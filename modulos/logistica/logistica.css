@@ -40,55 +40,78 @@ html, body { height: 100%; overflow: hidden; }
 .sel-posto:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
 
 /* ── BUSCA DE POSTO ──────────────────────────────────────────
-   Campo SEPARADO, ACIMA do <select>. O select continua visível e continua
-   sendo quem escolhe; a busca só encurta as opções dele.
+   COMBOBOX PRÓPRIO: a cara fechada imita o <select>, e o painel aberto tem
+   a busca COLADA NO TOPO e a lista embaixo. O <select> nativo não aceita
+   campo nenhum dentro do dropdown — aquele painel é do navegador.
 
-   O .pb-busca é o contexto de posicionamento da lupa e do X; como filho de
-   .sb-block (flex column) ele já vem na largura toda, e o gap de .5rem do
-   bloco é que separa a busca da lista.
-
-   O campo REPETE a casca do .sel-posto (fundo, borda, raio, foco) em vez de
-   herdar a classe: ele precisa de padding lateral próprio por causa dos dois
-   ícones, e herdar .sel-posto traria um padding que os ícones desfariam. */
-.pb-busca { position: relative; display: flex; align-items: center; }
+   O .pb-cb é só o contexto de posicionamento do painel; como filho de
+   .sb-block (flex column, align stretch) ele já ocupa a largura toda. */
+.pb-cb { position: relative; }
+/* A CARA HERDA .sel-posto INTEIRO no HTML (class="sel-posto pb-face"), então
+   largura, altura, borda, raio, fundo e foco são os MESMOS do <select> de
+   bandeira logo acima — nenhuma medida é redeclarada aqui, para não haver
+   dois lugares dizendo o tamanho do mesmo controle. O que se acrescenta é só
+   o que <button> não traz de graça: alinhar texto e seta nas pontas. */
+.pb-face {
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  cursor: pointer; text-align: left;
+  /* line-height 1.25 pelo mesmo motivo medido de antes: com padding, borda e
+     fonte idênticos, <select> renderiza 38,19px e <button> 36,19px. 1,25 ×
+     13,6px fecha os 2px e sobrevive a uma troca de font-size, que um height
+     fixo não sobreviveria. Importa porque o <select> de BANDEIRA fica logo
+     acima e 2px de diferença é o desalinho que se vê sem saber nomear. */
+  line-height: 1.25;
+}
+.pb-face-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A seta imita a do <select>: mesma posição e mesmo peso visual. Sem ela o
+   controle deixa de anunciar que abre. */
+.pb-seta { flex: 0 0 auto; font-size: .7rem; color: var(--text3); }
+.pb-face[aria-expanded="true"] { border-color: var(--accent); }
+.pb-oculto { display: none; }
+/* PAINEL — abre POR CIMA, sem empurrar a sidebar e sem mudar a altura de
+   nada. z-index acima da lista de módulos e do conteúdo. */
+.pb-painel {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 40;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .38); overflow: hidden;
+}
+.pb-painel[hidden] { display: none; }
+/* A BUSCA COLADA NO TOPO: sem raio em cima e com uma linha separando da
+   lista, para ler como uma faixa do painel e não como um campo solto que
+   flutuou para dentro dele. */
+.pb-busca {
+  position: relative; display: flex; align-items: center;
+  border-bottom: 1px solid var(--border); padding: 4px;
+}
 .pb-lupa {
-  position: absolute; left: .6rem; font-size: .8rem; line-height: 1;
+  position: absolute; left: .75rem; font-size: .8rem; line-height: 1;
   /* Clicar na lupa tem de focar o campo, não bater num span. */
   pointer-events: none;
 }
-/* O padding-left abre espaço para a lupa e o direito para o X. O espaço do X
-   fica reservado SEMPRE, mesmo com ele escondido: senão o texto pularia 2rem
-   para o lado na primeira letra digitada.
-   line-height 1.25 mantido do desenho anterior — é o que iguala a altura do
-   <input> à do <select> (38,19 contra 36,19 com as mesmas medidas), e aqui
-   importa mais ainda, porque agora os dois ficam empilhados e à vista. */
+/* Sem borda e sem fundo próprios: quem faz a moldura é o painel. Um campo
+   com borda dentro de uma caixa com borda vira duas molduras concêntricas. */
 .pb-input {
-  width: 100%; background: var(--surface2); border: 1px solid var(--border);
-  color: var(--text); padding: .6rem 2rem .6rem 2.1rem; border-radius: 8px;
-  outline: none; font-size: .85rem; font-family: var(--sans); line-height: 1.25;
+  width: 100%; background: transparent; border: 0; outline: none;
+  color: var(--text); padding: .45rem .6rem .45rem 1.9rem;
+  font-size: .82rem; font-family: var(--sans);
 }
 .pb-input::placeholder { color: var(--text3); }
-.pb-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
-/* 28px de alvo, encostado na borda direita. Não são os 44px de um botão
-   solto: ele vive DENTRO de um campo de 38px, e o que manda é caber sem
-   espremer o texto. */
-.pb-x {
-  position: absolute; right: .35rem; width: 28px; height: 28px; padding: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: transparent; border: 0; border-radius: 6px; cursor: pointer;
-  color: var(--text3); font-size: .78rem; line-height: 1;
+.pb-lista {
+  max-height: 260px; overflow-y: auto; list-style: none; padding: 4px; margin: 0;
 }
-.pb-x:hover { background: var(--surface3); color: var(--text); }
-.pb-x[hidden] { display: none; }
-/* Contagem do filtro, abaixo da lista. SÓ com termo digitado: "37 postos" o
-   tempo todo vira ruído, e "nenhum posto" é o único caso em que a lista
-   curta precisa se explicar. */
-.pb-conta {
-  font-family: var(--mono); font-size: .7rem; color: var(--text3);
-  padding-left: .25rem;
+.pb-op {
+  padding: .45rem .6rem; border-radius: 6px; cursor: pointer;
+  font-family: var(--sans); font-size: .84rem; color: var(--text2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.pb-conta[hidden] { display: none; }
-.pb-conta-zero { color: var(--warning); }
+/* O MESMO destaque para o teclado e para o mouse: a seta e o ponteiro
+   apontam a mesma linha, e ter dois realces diferentes na mesma lista faz
+   o Enter parecer que vai escolher outra coisa. */
+.pb-op.pb-on, .pb-op:hover { background: var(--accent-dim); color: var(--accent); }
+/* A JÁ ESCOLHIDA em negrito, não em cor: a cor é do realce de navegação, e
+   usar a mesma nas duas faria a opção atual parecer estar sob a seta. */
+.pb-op.pb-sel { font-weight: 700; color: var(--text); }
+.pb-vazio { padding: .45rem .6rem; font-family: var(--mono); font-size: .78rem; color: var(--text3); }
 .nav-list { display: flex; flex-direction: column; gap: .35rem; list-style: none; }
 .nav-item {
   display: flex; align-items: center; gap: .6rem; padding: .7rem .9rem;

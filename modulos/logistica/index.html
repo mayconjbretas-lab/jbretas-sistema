@@ -96,29 +96,43 @@
       </div>
       <div class="sb-block">
         <div class="sb-section-title">Posto</div>
-        <!-- DOIS CONTROLES SEPARADOS, empilhados: o campo de busca EM CIMA e o
-             <select> EMBAIXO, os dois visíveis o tempo todo. O campo não cobre
-             nem substitui a lista — ele só ENCURTA as opções dela. Quem nunca
-             digitar nada continua usando o select como sempre usou.
+        <!-- COMBOBOX PRÓPRIO, sem biblioteca. O <select> nativo NÃO aceita
+             campo de busca dentro do dropdown: aquele painel é desenhado pelo
+             navegador e o interior dele não é entregue ao HTML. Por isso a
+             cara fechada é um <button> com o visual do .sel-posto, e o painel
+             aberto é um <div> nosso — input colado no topo, lista embaixo.
 
-             O <select> segue sendo a fonte de verdade: é o value dele que o
-             app lê (POSTO_ATUAL) e o onchange dele que aciona a carga da
-             matriz, a faixa e o hash. A busca NUNCA chama onPostoChange — ela
-             só reescreve as <option>.
-
-             O campo NÃO é type="search": o X nativo do Chrome apareceria ao
-             lado do nosso e ficariam dois botões de limpar. -->
-        <div class="pb-busca">
-          <span class="pb-lupa" aria-hidden="true">🔎</span>
-          <input type="text" class="pb-input" id="pb-input"
-                 placeholder="Buscar posto…" autocomplete="off" spellcheck="false"
-                 aria-controls="sel-posto">
-          <button type="button" class="pb-x" id="pb-x" aria-label="Limpar busca" hidden>✕</button>
+             O <select> CONTINUA AQUI e continua sendo a fonte de verdade: é o
+             value dele que o app lê (POSTO_ATUAL) e o onchange dele que aciona
+             a carga da matriz, a faixa e o hash. O combobox só escreve nele e
+             dispara o change — não há segundo caminho para o mesmo efeito.
+             Escondido por .pb-oculto, não removido: tirá-lo do DOM exigiria
+             reescrever popularSelPosto, onPostoChange, aplicarPostoDoHash e o
+             hash inteiro. tabindex="-1" para o Tab não parar num campo
+             invisível. -->
+        <div class="pb-cb" id="pb-cb">
+          <button type="button" class="sel-posto pb-face" id="pb-face"
+                  aria-haspopup="listbox" aria-expanded="false" aria-controls="pb-lista">
+            <span class="pb-face-txt" id="pb-face-txt">Carregando postos...</span>
+            <span class="pb-seta" aria-hidden="true">▾</span>
+          </button>
+          <div class="pb-painel" id="pb-painel" hidden>
+            <!-- Colado no topo do painel, DENTRO dele. O campo NÃO é
+                 type="search": o X nativo do Chrome apareceria sozinho ali. -->
+            <div class="pb-busca">
+              <span class="pb-lupa" aria-hidden="true">🔎</span>
+              <input type="text" class="pb-input" id="pb-input"
+                     placeholder="Buscar posto…" autocomplete="off" spellcheck="false"
+                     role="combobox" aria-expanded="true" aria-autocomplete="list"
+                     aria-controls="pb-lista">
+            </div>
+            <ul class="pb-lista" id="pb-lista" role="listbox"></ul>
+          </div>
+          <select class="sel-posto pb-oculto" id="sel-posto" onchange="onPostoChange()"
+                  tabindex="-1" aria-hidden="true">
+            <option value="">Carregando postos...</option>
+          </select>
         </div>
-        <select class="sel-posto" id="sel-posto" onchange="onPostoChange()">
-          <option value="">Carregando postos...</option>
-        </select>
-        <div class="pb-conta" id="pb-conta" hidden></div>
       </div>
       <nav class="sb-block" style="flex:1;">
         <div class="sb-section-title">Módulos</div>
