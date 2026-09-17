@@ -135,9 +135,48 @@ window.exigirSessao = exigirSessao;
     } catch (e) { return null; }
   }
 
+  // REVOGA A SESSÃO DO ALVO NO SERVIDOR. Antes daqui, "sair da visão" só
+  // apagava chaves do localStorage: o access_token e o REFRESH_TOKEN emitidos
+  // pelo /ti/entrar-como seguiam válidos no Supabase depois de o TI sair.
+  // Quem tivesse copiado o refresh (console, extensão, backup do
+  // localStorage) renovava a sessão daquele usuário indefinidamente.
+  //
+  // MELHOR ESFORÇO, com timeout: se a rede falhar, a saída da visão acontece
+  // de todo jeito — travar o TI dentro da identidade de outra pessoa por
+  // causa de um fetch seria pior que a sessão sobreviver. O erro vai ao
+  // console para aparecer em quem for investigar.
+  //
+  // O TOKEN VAI NO HEADER e é o do ALVO (a sessão ativa neste instante). A
+  // rota é guardada por `autenticar` e revoga a própria sessão de quem chama
+  // — por isso tem de ser chamada ANTES de restaurar o backup do TI.
+  async function revogarSessaoAlvo() {
+    const token = localStorage.getItem('jbretas_token') || sessionStorage.getItem('jbretas_token');
+    const api = (window.JBRETAS_CONFIG && window.JBRETAS_CONFIG.API_URL) || '';
+    if (!token || !api) return;
+    const ctl = new AbortController();
+    const t = setTimeout(function () { ctl.abort(); }, 4000);
+    try {
+      await fetch(api + '/ti/sair-como', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: '{}',
+        signal: ctl.signal,
+      });
+    } catch (e) {
+      console.warn('sair da visão: não foi possível revogar a sessão no servidor —', e && e.message);
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
   // Restaura a sessão TID original (as 4 chaves salvas em jbretas_ti_backup),
   // limpa backup + flag e volta pro Painel TI.
-  function voltarAoTI() {
+  //
+  // ASSÍNCRONA por causa da revogação: o await tem de terminar ANTES do
+  // location.href, senão a navegação cancela o fetch em vôo e o token do alvo
+  // fica vivo — que é exatamente o que esta mudança conserta.
+  async function voltarAoTI() {
+    await revogarSessaoAlvo();
     let backup = null;
     try { backup = JSON.parse(localStorage.getItem('jbretas_ti_backup') || 'null'); } catch (e) { backup = null; }
     if (typeof jbretasClearSessao === 'function') jbretasClearSessao();
@@ -224,7 +263,22 @@ window.exigirSessao = exigirSessao;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.textContent = '↩ Voltar ao TI';
-    btn.addEventListener('click', voltarAoTI);
+    // `disabled` no clique: a saída agora é assíncrona (revoga no servidor
+    // antes de navegar) e dois cliques dispariam duas revogações e duas
+    // navegações. O rótulo muda para a pessoa ver que algo está acontecendo.
+    btn.addEventListener('click', async function () {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      const rot = btn.textContent;
+      btn.textContent = 'saindo…';
+      try {
+        await voltarAoTI();
+      } finally {
+        // Só volta ao normal se a navegação não aconteceu (erro no meio).
+        btn.disabled = false;
+        btn.textContent = rot;
+      }
+    });
 
     bar.appendChild(txt);
     bar.appendChild(btn);
