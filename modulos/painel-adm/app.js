@@ -124,16 +124,22 @@ function setTab(btn, tab) {
 // roteador de hash abre #coleta. Ver o comentário no index.html.
 //
 // Três sub-vistas, no MESMO padrão da aba Relatórios: um mapa com uma linha
-// por vista, e o resto da função não muda quando entra a próxima. Hoje as
-// três desenham placeholder — o que está pronto é a navegação e o hash,
-// para o conteúdo entrar depois sem tocar no roteamento.
+// por vista, e o resto da função não muda quando entra a próxima. Banco e
+// Clientes ainda desenham placeholder; Nota prazo já tem módulo.
 //
 // A CHAVE TEM HÍFEN em nota-prazo, e isso importa: ela vai para a URL
 // (#financeiro/nota-prazo) e o validador de sub-vista é o próprio mapa —
 // o /^[a-z]+$/ do botaoDaAba vale para o nome da ABA, não para o da vista.
+//
+// `render` É OPCIONAL, e é o que troca o placeholder pelo módulo: a vista
+// que tem um desenha com ele, a que não tem segue em construção. Mesmo
+// contrato do REL_VISTAS. A função recebe o #fin-corpo, e NÃO a section:
+// quem manda no conteúdo da sub-vista é aquele div, e é ele que o
+// renderFinanceiro reescreve a cada troca de sub-botão.
 const FIN_VISTAS = {
   banco: { rot: 'Banco', botao: 'fin-btn-banco' },
-  'nota-prazo': { rot: 'Nota prazo', botao: 'fin-btn-nota-prazo' },
+  'nota-prazo': { rot: 'Nota prazo', botao: 'fin-btn-nota-prazo',
+                  render: (el) => renderNotaPrazo(el) },
   clientes: { rot: 'Clientes', botao: 'fin-btn-clientes' },
 };
 // Padrão da aba. Variável de MÓDULO, como a _relatVista: voltar ao
@@ -148,14 +154,29 @@ function renderFinanceiro() {
   const el = document.getElementById('fin-corpo');
   if (!el) return;
   const v = FIN_VISTAS[_finVista] || FIN_VISTAS.banco;
+  // O módulo da vista, quando existe. try/catch porque um erro aqui derruba
+  // a aba INTEIRA no clique — e um script que não carregou (deploy pela
+  // metade, cache velho) é exatamente o caso em que a pessoa precisa
+  // conseguir voltar para o Banco. O erro aparece na tela e no console.
+  if (typeof v.render === 'function') {
+    el.innerHTML = '';
+    try {
+      v.render(el);
+    } catch (e) {
+      console.error('Financeiro / ' + v.rot + ':', e);
+      el.innerHTML = '<div class="em-construcao">💲 ' + v.rot + ' — falhou ao abrir</div>';
+    }
+    return;
+  }
   // SEM escapar: v.rot vem do FIN_VISTAS, que é literal deste arquivo — não é
   // dado de usuário nem de API. E este módulo NÃO tem escapeHtml no escopo
   // (o esc() dos shared vive dentro dos IIFEs deles); chamar um que não existe
   // derrubaria a aba no clique.
   el.innerHTML = '<div class="em-construcao">💲 ' + v.rot + ' — em construção</div>';
 }
-// Sub-vista é recorte LOCAL: não refaz chamada nenhuma (não há nenhuma
-// ainda) e grava o hash, como o relAbrir.
+// Sub-vista é recorte LOCAL: o render da vista decide se busca algo (o
+// renderNotaPrazo não refaz a chamada na reabertura), e o hash é gravado
+// como no relAbrir.
 function finAbrir(vista) {
   if (!FIN_VISTAS[vista]) return;
   _finVista = vista;

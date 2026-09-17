@@ -1,0 +1,470 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Financeiro — Nota prazo</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+<link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+
+<div id="res">rodando…</div>
+<!-- O #fin-corpo real, do index.html de produção, é injetado aqui. -->
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// A tela nasce sobre QUATRO TABELAS VAZIAS, e é esse o estado que ela vai
+// ter no dia em que o SQL for aplicado. Por isso a bateria 1 é a do vazio, e
+// só depois entram dados.
+//
+//  1. TABELA VAZIA: os seis cards aparecem com R$ 0,00 (e não "—"), a lista
+//     mostra o texto de vazio, e nada quebra.
+//  2. MIGRAÇÃO NÃO APLICADA: o 503 da API vira a mensagem dela na tela, com
+//     o botão de tentar de novo — não um erro cru nem tela branca.
+//  3. COM DADOS: cards somam ABERTO+ATRASADO no "a receber", badges saem com
+//     a cor certa, e a linha PAGA mostra data em vez do botão Pagar.
+//  4. FILTROS: trocar ciclo/status refaz SÓ a lista (a rota recebe a query
+//     montada) e o "Limpar" zera os quatro.
+//  5. EXPANDIR: clicar na linha busca o extrato do PERÍODO DAQUELE
+//     fechamento e mostra os lançamentos; a divergência entre a soma das
+//     notas e o total da cobrança é apontada.
+//  6. PAGAR: confirma, chama a rota e recarrega os cards (não só a linha).
+//  7. FORMULÁRIOS: os três abrem, o de fechar período faz dry_run primeiro e
+//     o botão de gerar fica travado até haver prévia.
+//  8. O placeholder NÃO volta: o #fin-corpo fica com a tela, não com
+//     "em construção".
+//
+// A API é DUBLADA (apiFetch), com fixtures aqui dentro. O que está sob teste
+// é o módulo de produção, carregado do repo — não uma cópia.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+// ── dublês de sessão ────────────────────────────────────────────
+window.getUsuarioLogado = function () { return { id: 'h', nome: 'H', perfil: 'ADM' }; };
+window.exigirSessao = window.getUsuarioLogado;
+
+// ── FIXTURES ────────────────────────────────────────────────────
+// Datas fixas e não relativas a hoje: um teste que muda de resultado na
+// virada do mês não prova nada duas vezes.
+var POSTOS = [
+  { id: 'p1', nome: 'P. BRUNA' },
+  { id: 'p2', nome: 'P. ARAPONGA' },
+];
+// O vazio de verdade: é o que as quatro tabelas devolvem recém-criadas.
+var DASH_VAZIO = {
+  hoje: '2026-09-17', mes_de: '2026-09-01',
+  total_a_receber: 0, total_recebido_mes: 0, total_atrasado: 0,
+  clientes_ativos: 0, qtd_aberto: 0, qtd_atrasado: 0, qtd_pago_mes: 0,
+  por_ciclo: { QUINZENAL: { clientes: 0, aberto: 0 }, MENSAL: { clientes: 0, aberto: 0 } },
+  aberto_sem_ciclo: 0, postos: POSTOS,
+};
+var DASH_CHEIO = {
+  hoje: '2026-09-17', mes_de: '2026-09-01',
+  // 4.200 (aberto) + 1.800 (atrasado) = 6.000
+  total_a_receber: 6000, total_recebido_mes: 2500, total_atrasado: 1800,
+  clientes_ativos: 3, qtd_aberto: 1, qtd_atrasado: 1, qtd_pago_mes: 1,
+  por_ciclo: { QUINZENAL: { clientes: 2, aberto: 4200 }, MENSAL: { clientes: 1, aberto: 1800 } },
+  aberto_sem_ciclo: 0, postos: POSTOS,
+};
+var FECH = [
+  { id: 'f1', cliente_id: 'c1', cliente_nome: 'TRANSPORTES ALFA', cliente_tipo: 'FROTA',
+    ciclo: 'QUINZENAL', periodo_de: '2026-09-01', periodo_ate: '2026-09-15',
+    total: 4200, status: 'ABERTO', data_pagamento: null },
+  { id: 'f2', cliente_id: 'c2', cliente_nome: 'PADARIA BETA', cliente_tipo: 'PRAZO',
+    ciclo: 'MENSAL', periodo_de: '2026-08-01', periodo_ate: '2026-08-31',
+    total: 1800, status: 'ATRASADO', data_pagamento: null },
+  { id: 'f3', cliente_id: 'c3', cliente_nome: 'CLINICA GAMA', cliente_tipo: 'VIP',
+    ciclo: 'QUINZENAL', periodo_de: '2026-08-16', periodo_ate: '2026-08-31',
+    total: 2500, status: 'PAGO', data_pagamento: '2026-09-05' },
+];
+var CLIENTES = { quantidade: 3, clientes: [
+  { id: 'c1', nome: 'TRANSPORTES ALFA', tipo: 'FROTA', ciclo: 'QUINZENAL', ativo: true,
+    saldo_aberto: 4200, qtd_aberto: 1, estourou_limite: false,
+    blocos_em_uso: [{ id: 'b1', numero_bloco: 'A-00142', status: 'EM_USO' }] },
+  { id: 'c2', nome: 'PADARIA BETA', tipo: 'PRAZO', ciclo: 'MENSAL', ativo: true,
+    saldo_aberto: 1800, qtd_aberto: 1, estourou_limite: null, blocos_em_uso: [] },
+  { id: 'c3', nome: 'CLINICA GAMA', tipo: 'VIP', ciclo: 'QUINZENAL', ativo: true,
+    saldo_aberto: 0, qtd_aberto: 0, estourou_limite: false, blocos_em_uso: [] },
+] };
+// Extrato do f1: soma 4.150, e a cobrança é 4.200. DIVERGE DE PROPÓSITO em
+// R$ 50 — é a conferência que justifica a linha poder ser expandida, e um
+// extrato que fechasse certinho não provaria que o aviso aparece.
+var EXTRATO_F1 = {
+  cliente: { id: 'c1', nome: 'TRANSPORTES ALFA' },
+  periodo: { de: '2026-09-01', ate: '2026-09-15' },
+  quantidade: 2, total_lancado: 4150, litros_total: 700, saldo_aberto: 4200,
+  lancamentos: [
+    { id: 'l1', data: '2026-09-03', numero_nota: '0012', numero_bloco: 'A-00142',
+      posto_nome: 'P. BRUNA', combustivel: 'S10', litros: 400, valor: 2400 },
+    { id: 'l2', data: '2026-09-11', numero_nota: '0013', numero_bloco: 'A-00142',
+      posto_nome: 'P. ARAPONGA', combustivel: 'GC', litros: 300, valor: 1750 },
+  ],
+  fechamentos: [], blocos: [],
+};
+var PREVIA = {
+  success: true, dry_run: true, periodo: { de: '2026-09-01', ate: '2026-09-17' },
+  ciclo: 'TODOS', a_gerar: 1, total: 900, gerados: 0,
+  clientes: [{ cliente_id: 'c1', nome: 'TRANSPORTES ALFA', ciclo: 'QUINZENAL', quantidade: 3, total: 900 }],
+  pulados: [{ cliente_id: 'c3', nome: 'CLINICA GAMA', motivo: 'sem lançamento no período' }],
+};
+
+// ── apiFetch dublado ────────────────────────────────────────────
+// MODO: 'vazio' | 'cheio' | 'erro503'. As chamadas ficam em CHAMADAS para as
+// asserções lerem a query que o módulo montou — é ela que prova o filtro.
+var MODO = 'vazio';
+var CHAMADAS = [];
+window.apiFetch = function (path, opts) {
+  CHAMADAS.push({ path: path, metodo: (opts && opts.method) || 'GET',
+                  corpo: opts && opts.body ? JSON.parse(opts.body) : null });
+  if (MODO === 'erro503') {
+    return Promise.reject(new Error('Tabelas de Nota prazo ainda não existem no banco. Aplique sql/nota_prazo.sql no Supabase.'));
+  }
+  var cheio = MODO === 'cheio';
+  if (path.indexOf('/nota-prazo/dashboard') === 0) return Promise.resolve(cheio ? DASH_CHEIO : DASH_VAZIO);
+  if (path.indexOf('/nota-prazo/clientes') === 0) return Promise.resolve(cheio ? CLIENTES : { quantidade: 0, clientes: [] });
+  if (path.indexOf('/nota-prazo/extrato/') === 0) return Promise.resolve(EXTRATO_F1);
+  if (path.indexOf('/nota-prazo/fechamentos') === 0) {
+    if (!cheio) return Promise.resolve({ filtros: {}, total: 0, quantidade: 0, fechamentos: [] });
+    // O dublê aplica os MESMOS filtros da rota, para o teste poder afirmar
+    // sobre o resultado e não só sobre a URL.
+    var u = new URLSearchParams(path.split('?')[1] || '');
+    var ls = FECH.slice();
+    if (u.get('status')) ls = ls.filter(function (f) { return f.status === u.get('status'); });
+    if (u.get('ciclo')) ls = ls.filter(function (f) { return f.ciclo === u.get('ciclo'); });
+    if (u.get('de')) ls = ls.filter(function (f) { return f.periodo_ate >= u.get('de'); });
+    if (u.get('ate')) ls = ls.filter(function (f) { return f.periodo_ate <= u.get('ate'); });
+    return Promise.resolve({ filtros: {}, quantidade: ls.length, fechamentos: ls,
+      total: ls.reduce(function (a, f) { return a + f.total; }, 0) });
+  }
+  if (path.indexOf('/nota-prazo/fechar') === 0) {
+    var dry = !opts || !opts.body || JSON.parse(opts.body).dry_run !== false;
+    return Promise.resolve(dry ? PREVIA
+      : { success: true, dry_run: false, gerados: 1, total: 900, a_gerar: 1, clientes: PREVIA.clientes, pulados: [] });
+  }
+  if (/\/pagar$/.test(path)) {
+    // Efeito de verdade: a próxima leitura tem de mostrar PAGO, senão o
+    // teste não distingue "chamou a rota" de "a tela atualizou".
+    FECH[0] = Object.assign({}, FECH[0], { status: 'PAGO', data_pagamento: '2026-09-17' });
+    DASH_CHEIO = Object.assign({}, DASH_CHEIO, {
+      total_a_receber: 1800, total_atrasado: 1800, qtd_aberto: 0,
+      total_recebido_mes: 6700, qtd_pago_mes: 2,
+      por_ciclo: { QUINZENAL: { clientes: 2, aberto: 0 }, MENSAL: { clientes: 1, aberto: 1800 } },
+    });
+    return Promise.resolve({ success: true });
+  }
+  if (path.indexOf('/nota-prazo/cliente') === 0) return Promise.resolve({ success: true, criado: true, cliente: { id: 'c9' } });
+  if (path.indexOf('/nota-prazo/lancamento') === 0) return Promise.resolve({ success: true, lancamento: { id: 'l9' } });
+  return Promise.resolve({});
+};
+// confirm() dublado: as ações destrutivas pedem confirmação, e um teste não
+// pode parar num diálogo. CONFIRMOU guarda o texto, que também é afirmado.
+var CONFIRMOU = [], CONFIRMA = true;
+window.confirm = function (t) { CONFIRMOU.push(t); return CONFIRMA; };
+
+function js(src) {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { erro(new Error(src + ' não carregou')); };
+    document.body.appendChild(s);
+  });
+}
+function corpo() { return document.getElementById('np-corpo'); }
+function txt() { var c = corpo(); return c ? c.textContent.replace(/\s+/g, ' ').trim() : ''; }
+function cards() { return [].slice.call(document.querySelectorAll('#palco .np-card')); }
+function cardTxt(i) { var c = cards()[i]; return c ? c.textContent.replace(/\s+/g, ' ').trim() : '(sem card)'; }
+function linhasLista() { return [].slice.call(document.querySelectorAll('#palco .np-linha')); }
+// `metodo` OPCIONAL, e não é enfeite: '/nota-prazo/cliente' é PREFIXO de
+// '/nota-prazo/clientes', e toda escrita é seguida de um carregar() que
+// chama a segunda. Sem filtrar o verbo, procurar o POST devolve o GET que
+// veio depois — e a asserção passa a afirmar sobre a chamada errada.
+function ultima(re, metodo) {
+  for (var i = CHAMADAS.length - 1; i >= 0; i--) {
+    if (!re.test(CHAMADAS[i].path)) continue;
+    if (metodo && CHAMADAS[i].metodo !== metodo) continue;
+    return CHAMADAS[i];
+  }
+  return null;
+}
+// Espera a pintura terminar. O módulo pinta dentro de um await, então um
+// tick só não basta — 4 dão folga sem virar sleep arbitrário longo.
+async function assentar() { for (var i = 0; i < 4; i++) await esperar(30); }
+
+(async function () {
+  try {
+    // O palco é o #fin-corpo REAL: mesmo id, mesmo lugar na árvore.
+    document.getElementById('palco').innerHTML = '<div id="fin-corpo"></div>';
+    await js('/modulos/painel-adm/nota-prazo.js');
+    var alvo = document.getElementById('fin-corpo');
+
+    h3('0. O módulo se apresenta');
+    eh(typeof window.renderNotaPrazo === 'function', 'window.renderNotaPrazo existe',
+       typeof window.renderNotaPrazo, 'function');
+
+    // ── 1. TABELA VAZIA ──────────────────────────────────────────
+    h3('1. Quatro tabelas vazias (o estado em que a tela nasce)');
+    MODO = 'vazio'; CHAMADAS = [];
+    window.renderNotaPrazo(alvo);
+    await assentar();
+    eh(!!corpo(), 'a tela montou o #np-corpo dentro do #fin-corpo');
+    eh(!/em constru/.test(alvo.textContent), 'o placeholder NÃO aparece', txt().slice(0, 60));
+    eh(cards().length === 6, 'os seis cards estão lá', String(cards().length), '6');
+    nota('cards: ' + cards().map(function (c) { return c.querySelector('.np-rot').textContent; }).join(' · '));
+    eh(/R\$ 0,00/.test(cardTxt(0)), 'TOTAL A RECEBER é R$ 0,00 e não travessão', cardTxt(0));
+    eh(/R\$ 0,00/.test(cardTxt(1)), 'TOTAL RECEBIDO é R$ 0,00', cardTxt(1));
+    eh(/R\$ 0,00/.test(cardTxt(2)), 'TOTAL ATRASADO é R$ 0,00', cardTxt(2));
+    eh(cardTxt(3).indexOf('0') >= 0, 'CLIENTES ATIVOS é 0', cardTxt(3));
+    eh(/Nenhum fechamento/.test(txt()), 'a lista mostra o estado vazio com texto próprio');
+    eh(/Fechar período/.test(txt()), 'e diz o que fazer a seguir');
+    eh(linhasLista().length === 0, 'nenhuma linha de fechamento', String(linhasLista().length), '0');
+    eh(CHAMADAS.length === 3, 'a abertura faz TRÊS chamadas (dashboard, fechamentos, clientes)',
+       CHAMADAS.map(function (c) { return c.path.split('?')[0]; }).join(' '), '3');
+
+    // ── 2. MIGRAÇÃO NÃO APLICADA ─────────────────────────────────
+    h3('2. SQL não aplicado — a API devolve 503');
+    MODO = 'erro503'; CHAMADAS = [];
+    window.__npRecarregar();
+    await assentar();
+    eh(/sql\/nota_prazo\.sql/.test(txt()), 'a tela diz QUAL arquivo aplicar', txt().slice(0, 110));
+    eh(!!document.querySelector('#palco .np-erro'), 'num bloco de erro, não em tela branca');
+    eh(/Tentar de novo/.test(txt()), 'e oferece tentar de novo sem recarregar a página');
+    eh(!!document.querySelector('#palco .np-barra'), 'a barra de filtros continua na tela');
+
+    // ── 3. COM DADOS ─────────────────────────────────────────────
+    h3('3. Com dados');
+    MODO = 'cheio'; CHAMADAS = [];
+    window.__npRecarregar();
+    await assentar();
+    eh(/R\$ 6\.000,00/.test(cardTxt(0)), 'A RECEBER soma ABERTO + ATRASADO (4.200 + 1.800)', cardTxt(0));
+    eh(/R\$ 1\.800,00/.test(cardTxt(2)), 'ATRASADO sozinho é 1.800', cardTxt(2));
+    eh(/R\$ 2\.500,00/.test(cardTxt(1)), 'RECEBIDO NO MÊS é 2.500', cardTxt(1));
+    eh(/R\$ 4\.200,00/.test(cardTxt(4)), 'QUINZENAL mostra o aberto do ciclo', cardTxt(4));
+    eh(linhasLista().length === 3, 'três linhas na lista', String(linhasLista().length), '3');
+    var badges = [].slice.call(document.querySelectorAll('#palco .np-badge'))
+      .map(function (b) { return b.textContent.trim(); });
+    eh(badges.join('|') === 'ABERTO|ATRASADO|PAGO', 'os três badges, na ordem da lista',
+       badges.join('|'), 'ABERTO|ATRASADO|PAGO');
+    var corAtr = document.querySelectorAll('#palco .np-badge')[1].style.background;
+    var corPago = document.querySelectorAll('#palco .np-badge')[2].style.background;
+    eh(corAtr && corPago && corAtr !== corPago, 'com cores distintas por status',
+       corAtr + ' vs ' + corPago);
+    var btsPagar = [].slice.call(document.querySelectorAll('#palco .np-linha button'));
+    eh(btsPagar.length === 2, 'botão "Pagar" só nas duas linhas não pagas',
+       String(btsPagar.length), '2');
+    eh(/05\/09\/2026/.test(linhasLista()[2].textContent), 'e a linha PAGA mostra a data do pagamento',
+       linhasLista()[2].textContent.replace(/\s+/g, ' ').trim());
+
+    // ── 4. FILTROS ───────────────────────────────────────────────
+    h3('4. Filtros');
+    CHAMADAS = [];
+    window.__npFiltro('status', 'ATRASADO');
+    await assentar();
+    var c = ultima(/\/nota-prazo\/fechamentos/);
+    eh(c && /status=ATRASADO/.test(c.path), 'o status vai na query', c && c.path);
+    eh(linhasLista().length === 1, 'e a lista fica com uma linha', String(linhasLista().length), '1');
+    eh(!CHAMADAS.some(function (x) { return /dashboard/.test(x.path); }),
+       'o dashboard NÃO é rebuscado (os cards falam da rede, não do recorte)',
+       CHAMADAS.map(function (x) { return x.path.split('?')[0]; }).join(' '));
+    window.__npFiltro('ciclo', 'MENSAL');
+    await assentar();
+    c = ultima(/\/nota-prazo\/fechamentos/);
+    eh(c && /ciclo=MENSAL/.test(c.path) && /status=ATRASADO/.test(c.path),
+       'os dois filtros acumulam na mesma query', c && c.path);
+    window.__npFiltro('de', '2026-08-01');
+    await assentar();
+    c = ultima(/\/nota-prazo\/fechamentos/);
+    eh(c && /de=2026-08-01/.test(c.path), 'o período entra junto', c && c.path);
+    window.__npLimpar();
+    await assentar();
+    c = ultima(/\/nota-prazo\/fechamentos/);
+    eh(c && c.path.indexOf('?') < 0, 'e "Limpar" zera os quatro de uma vez', c && c.path,
+       '/nota-prazo/fechamentos');
+    eh(linhasLista().length === 3, 'a lista volta às três linhas', String(linhasLista().length), '3');
+
+    // ── 5. EXPANDIR ──────────────────────────────────────────────
+    h3('5. Expandir um fechamento');
+    CHAMADAS = [];
+    linhasLista()[0].click();
+    await assentar();
+    c = ultima(/\/nota-prazo\/extrato\//);
+    eh(!!c, 'clicar na linha busca o extrato', c && c.path);
+    eh(c && /de=2026-09-01/.test(c.path) && /ate=2026-09-15/.test(c.path),
+       'no período DO FECHAMENTO, não no do filtro da tela', c && c.path);
+    eh(/0012/.test(txt()) && /0013/.test(txt()), 'as duas notas aparecem');
+    eh(/P\. BRUNA/.test(txt()), 'com o posto resolvido em nome');
+    eh(/divergem em R\$ 50,00/.test(txt()),
+       'e a divergência soma × cobrança é apontada (4.150 vs 4.200)',
+       (txt().match(/divergem em [^·]*/) || ['(não apontou)'])[0]);
+    CHAMADAS = [];
+    linhasLista()[0].click();
+    await assentar();
+    eh(!/0012/.test(txt()), 'clicar de novo fecha o detalhe');
+    linhasLista()[0].click();
+    await assentar();
+    eh(!ultima(/extrato/) || CHAMADAS.filter(function (x) { return /extrato/.test(x.path); }).length === 0,
+       'e reabrir NÃO rebusca (o extrato fica em memória)',
+       String(CHAMADAS.filter(function (x) { return /extrato/.test(x.path); }).length), '0');
+
+    // ── 6. PAGAR ─────────────────────────────────────────────────
+    h3('6. Pagar');
+    CONFIRMOU = []; CONFIRMA = false; CHAMADAS = [];
+    linhasLista()[0].querySelector('button').click();
+    await assentar();
+    eh(CONFIRMOU.length === 1, 'pede confirmação antes', String(CONFIRMOU.length), '1');
+    eh(/TRANSPORTES ALFA/.test(CONFIRMOU[0]) && /R\$ 4\.200,00/.test(CONFIRMOU[0]),
+       'dizendo quem e quanto', CONFIRMOU[0].replace(/\n/g, ' | '));
+    eh(!CHAMADAS.some(function (x) { return /pagar/.test(x.path); }),
+       'e cancelar NÃO chama a rota',
+       CHAMADAS.map(function (x) { return x.path; }).join(' ') || '(nenhuma)');
+    CONFIRMA = true; CHAMADAS = [];
+    linhasLista()[0].querySelector('button').click();
+    await assentar();
+    c = ultima(/\/pagar$/);
+    eh(!!c && c.metodo === 'POST', 'confirmar chama POST .../pagar', c && (c.metodo + ' ' + c.path));
+    eh(CHAMADAS.some(function (x) { return /dashboard/.test(x.path); }),
+       'e recarrega os cards junto (pagar muda os dois totais)');
+    eh(/R\$ 1\.800,00/.test(cardTxt(0)), 'A RECEBER caiu para 1.800', cardTxt(0));
+    eh(/R\$ 6\.700,00/.test(cardTxt(1)), 'RECEBIDO subiu para 6.700', cardTxt(1));
+    eh([].slice.call(document.querySelectorAll('#palco .np-badge'))
+       .map(function (b) { return b.textContent.trim(); }).join('|') === 'PAGO|ATRASADO|PAGO',
+       'e o badge da linha virou PAGO',
+       [].slice.call(document.querySelectorAll('#palco .np-badge'))
+         .map(function (b) { return b.textContent.trim(); }).join('|'), 'PAGO|ATRASADO|PAGO');
+
+    // ── 7. FORMULÁRIOS ───────────────────────────────────────────
+    h3('7. Os três formulários');
+    window.__npForm('cliente');
+    await assentar();
+    eh(!!document.getElementById('np-c-nome'), '"Novo cliente" abre o formulário');
+    eh(document.getElementById('np-c-corte').value === '15', 'com dia de corte 15 no quinzenal',
+       document.getElementById('np-c-corte').value, '15');
+    document.getElementById('np-c-ciclo').value = 'MENSAL';
+    window.__npCorte('MENSAL');
+    eh(document.getElementById('np-c-corte').value === '30', 'e 30 ao trocar para mensal',
+       document.getElementById('np-c-corte').value, '30');
+    CHAMADAS = [];
+    window.__npSalvarCliente();
+    await assentar();
+    eh(!ultima(/\/nota-prazo\/cliente/, 'POST'), 'sem nome, não chama a rota',
+       (ultima(/\/nota-prazo\/cliente/, 'POST') || {}).path || '(nenhuma)');
+    eh(/Informe o nome/.test(txt()), 'e diz por quê');
+    document.getElementById('np-c-nome').value = 'OFICINA DELTA';
+    document.getElementById('np-c-ciclo').value = 'MENSAL';
+    CHAMADAS = [];
+    window.__npSalvarCliente();
+    await assentar();
+    c = ultima(/\/nota-prazo\/cliente/, 'POST');
+    eh(!!c && c.corpo && c.corpo.nome === 'OFICINA DELTA',
+       'com nome, manda POST com o corpo certo', c && JSON.stringify(c.corpo));
+    eh(!!c && c.corpo && c.corpo.ciclo === 'MENSAL', 'incluindo o ciclo escolhido',
+       c && c.corpo && c.corpo.ciclo, 'MENSAL');
+
+    window.__npForm('lancamento');
+    await assentar();
+    eh(!!document.getElementById('np-l-cliente'), '"Importar relatório TecnoX" abre o formulário');
+    eh(/— escolha o cliente —/.test(document.getElementById('np-l-bloco').textContent),
+       'e o select de bloco começa vazio (bloco de outro cliente é como a nota entra errada)',
+       document.getElementById('np-l-bloco').textContent.trim());
+    window.__npBlocos('c1');
+    eh(/A-00142/.test(document.getElementById('np-l-bloco').textContent),
+       'escolher o cliente traz SÓ os blocos em uso dele',
+       document.getElementById('np-l-bloco').textContent.replace(/\s+/g, ' ').trim());
+    window.__npBlocos('c2');
+    eh(/nenhum bloco em uso/.test(document.getElementById('np-l-bloco').textContent),
+       'e cliente sem bloco diz isso, em vez de ficar vazio',
+       document.getElementById('np-l-bloco').textContent.replace(/\s+/g, ' ').trim());
+    document.getElementById('np-l-cliente').value = 'c1';
+    document.getElementById('np-l-valor').value = '0';
+    CHAMADAS = [];
+    window.__npSalvarLancamento();
+    await assentar();
+    eh(!ultima(/\/nota-prazo\/lancamento/, 'POST'), 'valor zero não vai para a API',
+       (ultima(/\/nota-prazo\/lancamento/, 'POST') || {}).path || '(nenhuma)');
+    // O cliente NÃO é escolhido de novo de propósito: o erro de validação
+    // repinta a tela, e o que se afirma aqui é que o formulário sobreviveu.
+    eh(document.getElementById('np-l-cliente').value === 'c1',
+       'e o erro de validação NÃO apaga o que já estava preenchido',
+       document.getElementById('np-l-cliente').value || '(vazio)', 'c1');
+    document.getElementById('np-l-valor').value = '250.50';
+    CHAMADAS = [];
+    window.__npSalvarLancamento();
+    await assentar();
+    c = ultima(/\/nota-prazo\/lancamento/, 'POST');
+    eh(!!c && c.corpo && c.corpo.valor === '250.50' && c.corpo.cliente_id === 'c1',
+       'valor > 0 manda o lançamento', c && JSON.stringify(c.corpo));
+
+    window.__npForm('fechar');
+    await assentar();
+    var btsF = [].slice.call(document.querySelectorAll('#palco .np-form .np-form-pe button'));
+    eh(btsF.length === 3, '"Fechar período" abre com três botões', String(btsF.length), '3');
+    eh(btsF[1].disabled === true, 'e "Gerar" nasce travado, sem prévia',
+       String(btsF[1].disabled), 'true');
+    // O ciclo escolhido tem de CHEGAR na rota: era o campo que o repintar
+    // zerava, e um fechamento sem ciclo cobra a rede inteira.
+    document.getElementById('np-f-ciclo').value = 'MENSAL';
+    CHAMADAS = [];
+    window.__npFechar(true);
+    await assentar();
+    c = ultima(/\/nota-prazo\/fechar/, 'POST');
+    eh(!!c && c.corpo && c.corpo.dry_run === true, '"Ver prévia" manda dry_run true',
+       c && JSON.stringify(c.corpo));
+    eh(!!c && c.corpo && c.corpo.ciclo === 'MENSAL', 'com o ciclo escolhido na tela',
+       c && c.corpo && c.corpo.ciclo, 'MENSAL');
+    eh(/TRANSPORTES ALFA/.test(txt()) && /R\$ 900,00/.test(txt()), 'e a prévia lista quem entra e quanto');
+    eh(/CLINICA GAMA/.test(txt()) && /sem lançamento/.test(txt()),
+       'dizendo também quem ficou de fora e por quê');
+    btsF = [].slice.call(document.querySelectorAll('#palco .np-form .np-form-pe button'));
+    eh(btsF[1].disabled === false, 'com prévia, "Gerar" destrava', String(btsF[1].disabled), 'false');
+    CONFIRMOU = []; CONFIRMA = true; CHAMADAS = [];
+    window.__npFechar(false);
+    await assentar();
+    eh(CONFIRMOU.length === 1, 'gerar pede confirmação', String(CONFIRMOU.length), '1');
+    c = ultima(/\/nota-prazo\/fechar/, 'POST');
+    eh(!!c && c.corpo && c.corpo.dry_run === false, 'e só então manda dry_run false',
+       c && JSON.stringify(c.corpo));
+
+    // ── 8. O placeholder não volta ───────────────────────────────
+    h3('8. O placeholder não volta');
+    window.__npForm('');
+    await assentar();
+    eh(!/em constru/.test(alvo.textContent), 'o #fin-corpo segue com a tela, não com o placeholder',
+       alvo.textContent.replace(/\s+/g, ' ').trim().slice(0, 70));
+    // Reabrir a sub-vista (é o que o finAbrir faz) não pode rebuscar tudo.
+    CHAMADAS = [];
+    window.renderNotaPrazo(alvo);
+    await assentar();
+    eh(CHAMADAS.length === 0, 'e reabrir a sub-vista não refaz as chamadas',
+       String(CHAMADAS.length), '0');
+    eh(cards().length === 6, 'com os cards ainda na tela', String(cards().length), '6');
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+})();
+</script>

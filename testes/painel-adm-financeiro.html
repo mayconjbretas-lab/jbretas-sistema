@@ -27,7 +27,8 @@
 // 1. A barra inferior tem "Financeiro" onde tinha "Coleta", na MESMA posição,
 //    e o botão da Coleta continua no DOM — escondido.
 // 2. Clicar em Financeiro abre a #s-financeiro com três sub-botões, Banco
-//    marcado por padrão, e cada um mostra seu placeholder.
+//    marcado por padrão. Banco e Clientes mostram placeholder; Nota prazo
+//    entrega o #fin-corpo ao módulo dela (dublado aqui — ver o dublê).
 // 3. O hash: #financeiro, #financeiro/banco, /nota-prazo, /clientes. Ida e
 //    volta — o hash muda ao clicar E o clique acontece ao mudar o hash.
 // 4. #coleta na URL AINDA ABRE a aba Coleta, mesmo com o botão escondido.
@@ -65,6 +66,14 @@ window.apiFetch = function () { return Promise.resolve({ success: true }); };
  'renderComparar'].forEach(function (n) { window[n] = window[n] || function () {}; });
 var RENDERIZOU = {};
 window.renderColetaRevisao = function () { RENDERIZOU.coleta = (RENDERIZOU.coleta || 0) + 1; };
+// Nota prazo deixou de ser placeholder (modulos/painel-adm/nota-prazo.js).
+// Dublado AQUI e não carregado: este teste é do ROTEAMENTO — ele prova que a
+// sub-vista chama o módulo dela, e o conteúdo da tela é provado em
+// testes/nota-prazo.html, com o módulo de verdade e a API dublada.
+window.renderNotaPrazo = function (el) {
+  RENDERIZOU.notaPrazo = (RENDERIZOU.notaPrazo || 0) + 1;
+  el.innerHTML = '<div id="np-dubl">Nota prazo (dublê)</div>';
+};
 try { localStorage.setItem('jb_versao_painel', 'desktop'); } catch (e) {}
 
 function js(src) {
@@ -160,8 +169,13 @@ async function rodar() {
      'Nota prazo marcado, Banco desmarcado',
      subs().filter(function (b) { return b.classList.contains('active'); })
        .map(function (b) { return b.textContent.trim(); }).join(','), 'Nota prazo');
-  eh(/Nota prazo/.test(document.getElementById('fin-corpo').textContent),
-     'e o placeholder acompanha', document.getElementById('fin-corpo').textContent.trim());
+  // Nota prazo NÃO é mais placeholder: a sub-vista chama o módulo dela.
+  eh(RENDERIZOU.notaPrazo === 1, 'e o módulo de Nota prazo foi chamado uma vez',
+     String(RENDERIZOU.notaPrazo || 0), '1');
+  eh(!!document.getElementById('np-dubl'), 'com o #fin-corpo entregue ao módulo',
+     document.getElementById('fin-corpo').textContent.trim());
+  eh(!/em constru/.test(document.getElementById('fin-corpo').textContent),
+     'e sem o "em construção" de antes', document.getElementById('fin-corpo').textContent.trim());
   eh(location.hash === '#financeiro/nota-prazo', 'o hash virou #financeiro/nota-prazo',
      location.hash, '#financeiro/nota-prazo');
   subs()[2].click();
