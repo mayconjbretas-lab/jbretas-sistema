@@ -43,7 +43,10 @@
 //    texto, botão direito abre menu próprio (sem o do navegador) com Inserir
 //    ou Editar+Excluir, e salvar/excluir chama a rota e acerta a célula sem
 //    re-renderizar a grade.
-// 6. Mobile (≤560px): as metades empilham e a medição troca a borda da
+// 6. A medição é o ÚLTIMO lançamento com data <= a do pedido, não a da mesma
+//    data: com o pedido de 17/09 o card mostra a medição de 16/09 e o rótulo
+//    vira "MEDIÇÃO 16/09". Com a data igual, segue "MEDIÇÃO DO DIA".
+// 7. Mobile (≤560px): as metades empilham e a medição troca a borda da
 //    esquerda pela de cima.
 //
 // O fixture veio da rota ANTES da migração, então `comentarios_disponiveis` é
@@ -404,6 +407,79 @@ async function rodar() {
   eh(!!aviso && /medicao_comentario\.sql/.test(aviso.textContent),
      'e diz qual SQL falta', aviso ? aviso.textContent : '(nada)');
   document.body.click(); await esperar(100);
+
+  h3('13. A medição é o ÚLTIMO lançamento até a data do pedido');
+  // O outro fixture: pedido de 17/09, dia em que NENHUM posto havia lançado
+  // medição ainda. Antes desta mudança o lado direito ficava vazio nos 37.
+  var F17 = await baixar('/testes/fixtures-logi-pedido-17-09.json');
+  nota('fixture 2: pedido de ' + F17.data + ' · ' + F17.postos.length + ' postos');
+  var datasMed = {};
+  F17.postos.forEach(function (p) { var d = p.data_medicao || '(null)'; datasMed[d] = (datasMed[d] || 0) + 1; });
+  nota('data_medicao no payload: ' + JSON.stringify(datasMed));
+  eh(!!F17.postos[0].data_medicao, 'a rota devolve data_medicao por posto',
+     F17.postos[0].data_medicao || '(ausente)');
+  eh(F17.postos.every(function (p) { return p.data_medicao === '2026-09-16'; }),
+     'e ela é 16/09 nos 37 — a última antes de 17/09',
+     Object.keys(datasMed).join(' '), '2026-09-16');
+  eh(F17.postos.every(function (p) { return p.medicao_total !== null; }),
+     'todos os postos têm medição (antes ficariam vazios)',
+     F17.postos.filter(function (p) { return p.medicao_total !== null; }).length + '/' + F17.postos.length);
+
+  renderGrade(F17, F17.data);
+  await esperar(180);
+  var c17 = cards()[0];
+  var rot17 = c17.querySelector('.grade-meia--med .grade-meia-rot');
+  nota('rótulo: ' + rot17.textContent.trim());
+  eh(rot17.textContent.trim() === 'Medição 16/09',
+     'o rótulo traz a data da medição', rot17.textContent.trim(), 'Medição 16/09');
+  eh(rot17.className.indexOf('grade-meia-rot--atras') >= 0,
+     'e vem marcado como data anterior', rot17.className);
+  // Os números do card são os da medição de 16/09, não de 17/09.
+  var p17 = F17.postos.filter(function (p) { return p.posto_nome === c17.getAttribute('data-nome'); })[0];
+  var tot17 = c17.querySelector('.grade-meia--med .grade-total--med');
+  eh(tot17.textContent.indexOf(fmtNum(p17.medicao_total)) >= 0,
+     'e o total é o daquele dia', tot17.textContent.trim(), fmtNum(p17.medicao_total) + ' L');
+  // O lado do PEDIDO segue na data selecionada — é o que não devia mudar.
+  eh(c17.querySelector('.grade-meia--ped .grade-meia-rot').textContent.trim() === 'Pedido final',
+     'o rótulo do pedido não mudou',
+     c17.querySelector('.grade-meia--ped .grade-meia-rot').textContent.trim(), 'Pedido final');
+  var comPed17 = cards().filter(function (c) {
+    return c.className.indexOf('grade-card--sem-pedido') < 0;
+  })[0];
+  var pp17 = F17.postos.filter(function (p) { return p.posto_nome === comPed17.getAttribute('data-nome'); })[0];
+  eh(comPed17.querySelector('.grade-meia--ped .grade-total').textContent.indexOf(fmtNum(pp17.total)) >= 0,
+     'e o total do pedido é o da data selecionada',
+     comPed17.querySelector('.grade-meia--ped .grade-total').textContent.trim(), fmtNum(pp17.total) + ' L');
+  // A % do tanque continua funcionando sobre a medição recuperada.
+  eh(comPed17.querySelectorAll('.grade-meia--med .gm-pct').length > 0,
+     'a % do tanque segue aparecendo',
+     comPed17.querySelectorAll('.grade-meia--med .gm-pct').length + ' célula(s) com %');
+
+  h3('14. Com a data igual, o rótulo é o de sempre');
+  renderGrade(FIX, FIX.data);
+  await esperar(180);
+  var rotIgual = cards()[0].querySelector('.grade-meia--med .grade-meia-rot');
+  eh(FIX.postos[0].data_medicao === FIX.data, 'no fixture de ' + FIX.data + ' a medição é do próprio dia',
+     FIX.postos[0].data_medicao, FIX.data);
+  eh(rotIgual.textContent.trim() === 'Medição do dia', 'e o rótulo segue "Medição do dia"',
+     rotIgual.textContent.trim(), 'Medição do dia');
+  eh(rotIgual.className.indexOf('grade-meia-rot--atras') < 0, 'sem a marca de data anterior',
+     rotIgual.className);
+
+  h3('15. Sem medição nenhuma na janela');
+  var semNada = JSON.parse(JSON.stringify(F17));
+  semNada.postos = semNada.postos.map(function (p) {
+    return Object.assign({}, p, { medicao_total: null, medicao_por_combustivel: {}, data_medicao: null, comentarios: {} });
+  });
+  renderGrade(semNada, semNada.data);
+  await esperar(150);
+  eh(!!cards()[0].querySelector('.grade-meia--med .grade-sem-tag'), 'a direita diz "sem medição"',
+     (cards()[0].querySelector('.grade-meia--med .grade-sem-tag') || {}).textContent);
+  eh(cards()[0].querySelector('.grade-meia--med .grade-meia-rot').textContent.trim() === 'Medição do dia',
+     'e o rótulo volta ao padrão (não há data para mostrar)',
+     cards()[0].querySelector('.grade-meia--med .grade-meia-rot').textContent.trim());
+  renderGrade(FIX, FIX.data);
+  await esperar(150);
 
   h3('12. Mobile (≤560px): metades empilhadas');
   if (window.innerWidth > 560) {

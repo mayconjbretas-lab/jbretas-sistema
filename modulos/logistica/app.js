@@ -528,6 +528,20 @@ function celulaMedicao(p, cod, valor, comentario, capacidade) {
   '</div>';
 }
 
+// O rótulo da metade da medição. Com a data IGUAL à do pedido continua
+// "Medição do dia", que é o que a tela sempre disse; quando a medição é de
+// antes, o rótulo passa a trazer o dia — "Medição 16/09". Sem isso o card
+// anunciaria um estoque de ontem como se fosse de hoje, e é justamente o
+// caso comum: o pedido de hoje é para amanhã, e amanhã ainda não foi medido.
+function rotuloMedicao(p, dataPedido) {
+  var dm = p.data_medicao;
+  if (!dm || dm === dataPedido) return 'Medição do dia';
+  // dd/mm, sem o ano: a data do pedido está no cabeçalho da grade, e o ano
+  // repetido em 37 cards não informa nada.
+  var pt = String(dm).split('-');
+  return pt.length === 3 ? 'Medição ' + pt[2] + '/' + pt[1] : 'Medição do dia';
+}
+
 function montarCard(p, montado) {
   var pc = p.por_combustivel || {};
   var mpc = p.medicao_por_combustivel || {};
@@ -566,7 +580,8 @@ function montarCard(p, montado) {
         '<div class="grade-cls">' + (linhas || '<span class="grade-sem-tag">sem pedido</span>') + '</div>' +
       '</div>' +
       '<div class="grade-meia grade-meia--med">' +
-        '<div class="grade-meia-rot">Medição do dia</div>' +
+        '<div class="grade-meia-rot' + (p.data_medicao && p.data_medicao !== _gradeData ? ' grade-meia-rot--atras' : '') + '">' +
+          esc(rotuloMedicao(p, _gradeData)) + '</div>' +
         (temMed
           ? '<div class="grade-total grade-total--med">' + fmtNum(p.medicao_total) + ' L' +
               (menor === null ? ''
