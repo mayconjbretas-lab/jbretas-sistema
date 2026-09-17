@@ -1,0 +1,31 @@
+# ================================================================
+# Headers de segurança dos assets — Cloudflare Workers static assets
+#
+# O front é servido por Workers static assets (wrangler.json: assets.directory
+# "."), sem Pages e sem script. Este arquivo é lido pelo runtime de assets, no
+# mesmo formato do Pages, e NÃO vai ao ar como asset: o wrangler o consome.
+#
+# POR QUE EXISTE: a API já mandava tudo isto via helmet(), e o front — que é
+# onde o token de sessão mora, no localStorage — não mandava nada. Medido em
+# 17/09/2026: nenhum header de segurança em nenhuma resposta do Cloudflare.
+#
+# ESTE ARQUIVO NÃO REDIRECIONA. `_headers` só acrescenta cabeçalho; forçar
+# http -> https exige código (ver worker.js e o comentário lá). O HSTS abaixo
+# resolve a partir da SEGUNDA visita — o navegador passa a trocar http por
+# https sozinho, sem ir à rede. A primeira visita por http é o que o
+# redirecionamento cobre.
+#
+# CSP FICOU DE FORA, de propósito. Ela é o header que mais protegeria (o
+# sistema tem 445 usos de innerHTML e o token em localStorage), e também o
+# único que quebra a tela se sair errado: são libs de três CDNs (cdnjs,
+# unpkg, fonts.googleapis), <style> injetado por módulo e handler inline em
+# onclick por toda parte — uma CSP sem 'unsafe-inline' derruba o sistema
+# inteiro, e uma CSP com 'unsafe-inline' não protege de XSS. Entra em
+# trabalho próprio, com teste tela por tela.
+# ================================================================
+
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
