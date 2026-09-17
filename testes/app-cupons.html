@@ -38,7 +38,8 @@
 // 11. O chip TODOS é o primeiro e o padrão: cards e listas mostram o nível
 //     inteiro, com os total_* da resposta (somar por combustível contaria
 //     cupom duas vezes).
-// 12. A vista "Soutag vs TecnoX": importa um .xlsx no navegador, cruza por
+// 12. A vista "Soutag vs TecnoX": importa um .xlsx no navegador, GRAVA pela
+//     API e compara TOTAIS por posto (não mais cupom a cupom — ver o 24). Cruza por
 //     posto + dia + combustível + valor (±R$ 0,50) e separa em conferido /
 //     só TecnoX / só Soutag. A planilha do teste é GERADA com o SheetJS a
 //     partir dos itens REAIS, então o cruzamento é exercitado de ponta a
@@ -79,10 +80,10 @@ var CHAMADAS = [];
 // A comparação SAIU DO NAVEGADOR: o cruzamento mora em jbretas-api/lib/soutag.js,
 // atrás da GET /app/soutag-comparar, e esta tela só desenha o que ela devolve.
 //
-// O dublê abaixo REPRODUZ o cruzamento para poder devolver um payload realista.
+// O dublê abaixo REPRODUZ a totalização para poder devolver um payload realista.
 // Ele NÃO é a prova de que a conta está certa — essa é do harness da própria
-// função, jbretas-api/teste-soutag.js, que roda sobre lib/soutag.js e cobre o
-// um-para-um, o par mais próximo, os dois passos e a normalização de nome.
+// função, jbretas-api/teste-soutag.js, que roda sobre lib/soutag.js e cobre a
+// fronteira dos 2%, o posto sem cupom, o não reconhecido e a normalização.
 // O que ESTE arquivo prova é o lado de cá: que a tela lê a planilha, manda o
 // corpo certo para a importação e desenha corretamente o que volta.
 var SG_POST = null;      // o corpo do último POST /app/soutag-importar
@@ -90,106 +91,72 @@ var SG_LINHAS = [];      // o que está "gravado" no banco de mentira
 var SG_ITENS = [];       // os itens da TecnoX que o servidor usaria
 var SG_ARQ = null;
 var SG_SO_APP = false;
-function sgCruzarDuble() {
-  var itens = SG_ITENS.map(function (i, k) {
-    return { k: k, posto: i.nome_posto, data: i.data, comb: i.combustivel,
-             valor: Number(i.valor_liquido) || 0, litros: Number(i.litros) || 0,
-             preco: i.preco_litro, id: i.id_cupom,
-             cupom: i.nome_posto + '|' + i.data + '|' + i.id_cupom, usado: false };
-  });
-  var porChave = {};
-  itens.forEach(function (it) {
-    var c = it.posto + '|' + it.data + '|' + it.comb;
-    (porChave[c] = porChave[c] || []).push(it);
-  });
-  var achar = function (l, tol) {
-    var cand = porChave[l.posto + '|' + l.data + '|' + l.comb] || [], achou = null, melhor = Infinity;
-    for (var k = 0; k < cand.length; k++) {
-      if (cand[k].usado) continue;
-      var d = Math.abs(cand[k].valor - l.valor);
-      if (tol && d > 1.00) continue;
-      if (d < melhor) { melhor = d; achou = cand[k]; }
-    }
-    return achou;
-  };
+function sgTotalizarDuble() {
   var r2 = function (v) { return Math.round(v * 100) / 100; };
-  var semPosto = [], pend = [];
-  SG_LINHAS.forEach(function (l) { (l.posto ? pend : semPosto).push(l); });
-  var par = function (l, it, st) {
-    return { status: st, data: l.data, posto: it.posto, comb: l.comb, valor: l.valor,
-             valor_tecnox: it.valor, dif: r2(l.valor - it.valor), litros: l.litros,
-             litros_tecnox: it.litros, preco: it.preco, id: l.id, id_cupom: it.id,
-             cupom: it.cupom, usuario: l.usuario, posto_planilha: l.posto_planilha };
-  };
-  var conferido = [], resto = [];
-  pend.forEach(function (l) {
-    var it = achar(l, true);
-    if (it) { it.usado = true; conferido.push(par(l, it, 'conferido')); } else resto.push(l);
-  });
-  var divergente = [], soSoutag = [];
-  resto.forEach(function (l) {
-    var it = achar(l, false);
-    if (it) { it.usado = true; divergente.push(par(l, it, 'divergente')); }
-    else soSoutag.push({ status: 'soutag', data: l.data, posto: l.posto, comb: l.comb,
-      valor: l.valor, litros: l.litros, id: l.id, usuario: l.usuario, posto_planilha: l.posto_planilha });
-  });
-  var soTecnox = itens.filter(function (it) { return !it.usado; }).map(function (it) {
-    return { status: 'tecnox', data: it.data, posto: it.posto, comb: it.comb,
-             valor_tecnox: it.valor, litros_tecnox: it.litros, preco: it.preco,
-             id_cupom: it.id, cupom: it.cupom };
-  });
-  var sgV = 0, semV = 0, txV = 0, txL = 0, cup = {};
-  SG_LINHAS.forEach(function (l) { sgV += l.valor; });
-  semPosto.forEach(function (l) { semV += l.valor; });
-  itens.forEach(function (it) { txV += it.valor; txL += it.litros; cup[it.cupom] = 1; });
-  var mapa = {}, ordem = [];
-  var alvo = function (nome) {
-    var n = nome || '(posto não reconhecido)';
-    if (!mapa[n]) {
-      mapa[n] = { nome: n, sg_n: 0, sg_v: 0, sg_l: 0, tx_n: 0, tx_v: 0, tx_l: 0, cupons: {},
-                  conferido: 0, divergente: 0, soutag: 0, tecnox: 0, linhas: [], nao_reconhecido: !nome };
-      ordem.push(mapa[n]);
+  var balde = {}, ordem = [];
+  var alvo = function (posto) {
+    var n = posto || '(posto não reconhecido)';
+    if (!balde[n]) {
+      balde[n] = { nome: n, nao_reconhecido: !posto, sg_n: 0, sg_v: 0, sg_l: 0, sg_tem: false,
+                   tx_itens: 0, tx_v: 0, tx_l: 0, cupons: {} };
+      ordem.push(balde[n]);
     }
-    return mapa[n];
+    return balde[n];
   };
-  var lancar = function (l) {
-    var p = alvo(l.posto);
-    p.linhas.push(l); p[l.status]++;
-    if (l.status !== 'tecnox') { p.sg_n++; p.sg_v += l.valor; if (l.litros != null) p.sg_l += l.litros; }
-    if (l.status !== 'soutag') { p.tx_n++; p.tx_v += l.valor_tecnox; p.tx_l += l.litros_tecnox;
-      if (l.cupom) p.cupons[l.cupom] = 1; }
-  };
-  conferido.forEach(lancar); divergente.forEach(lancar); soSoutag.forEach(lancar); soTecnox.forEach(lancar);
-  semPosto.forEach(function (l) {
-    lancar({ status: 'soutag', data: l.data, posto: '', comb: l.comb, valor: l.valor,
-             litros: l.litros, id: l.id, usuario: l.usuario, posto_planilha: l.posto_planilha });
+  var sgN = 0, sgV = 0, sgL = 0, sgTem = false, semN = 0, semV = 0, nc = {};
+  SG_LINHAS.forEach(function (l) {
+    var b = alvo(l.posto);
+    b.sg_n++; b.sg_v += l.valor; sgN++; sgV += l.valor;
+    if (l.litros !== null && l.litros !== undefined) {
+      b.sg_l += l.litros; b.sg_tem = true; sgL += l.litros; sgTem = true;
+    }
+    if (!l.posto) {
+      semN++; semV += l.valor;
+      if (!nc[l.posto_planilha]) nc[l.posto_planilha] = { nome: l.posto_planilha, n: 0 };
+      nc[l.posto_planilha].n++;
+    }
   });
-  ordem.forEach(function (p) {
-    p.cupons_tx = Object.keys(p.cupons).length; delete p.cupons;
-    p.sg_v = r2(p.sg_v); p.tx_v = r2(p.tx_v); p.dif = r2(p.sg_v - p.tx_v);
-    p.ok = (p.sg_n === p.tx_n) && Math.abs(p.dif) <= 1.00 && !p.nao_reconhecido;
+  var txItens = 0, txV = 0, txL = 0, cupRede = {};
+  SG_ITENS.forEach(function (i) {
+    var b = alvo(i.nome_posto);
+    b.tx_itens++; b.tx_v += Number(i.valor_liquido) || 0; b.tx_l += Number(i.litros) || 0;
+    var ck = i.nome_posto + '|' + i.data + '|' + i.id_cupom;
+    b.cupons[ck] = 1; cupRede[ck] = 1;
+    txItens++; txV += Number(i.valor_liquido) || 0; txL += Number(i.litros) || 0;
   });
-  var nc = {};
-  semPosto.forEach(function (l) {
-    if (!nc[l.posto_planilha]) nc[l.posto_planilha] = { nome: l.posto_planilha, n: 0, perto: '', sim: 0, como: 'nenhum' };
-    nc[l.posto_planilha].n++;
+  var postos = ordem.map(function (b) {
+    var sg_v = r2(b.sg_v), tx_v = r2(b.tx_v), dif = r2(sg_v - tx_v);
+    var dif_pct = tx_v > 0 ? r2((dif / tx_v) * 100) : null;
+    return { posto_id: null, nome: b.nome, nao_reconhecido: b.nao_reconhecido,
+             sg_n: b.sg_n, sg_v: sg_v, sg_l: b.sg_tem ? b.sg_l : null,
+             tx_cupons: Object.keys(b.cupons).length, tx_itens: b.tx_itens,
+             tx_v: tx_v, tx_l: b.tx_l, dif: dif, dif_pct: dif_pct,
+             ok: b.nao_reconhecido ? false
+               : (dif_pct === null ? (sg_v === 0 && tx_v === 0) : Math.abs(dif_pct) < 2) };
+  }).sort(function (a, b) {
+    var da = Math.abs(a.dif), db = Math.abs(b.dif);
+    if (da !== db) return db - da;
+    return String(a.nome).localeCompare(String(b.nome));
   });
-  var blocoNR = ordem.filter(function (p) { return p.nao_reconhecido; })[0];
-  if (blocoNR) blocoNR.linhas.forEach(function (l) { l.perto = ''; l.sim = 0; l.como = 'nenhum'; });
+  var difR = r2(r2(sgV) - r2(txV));
+  var pctR = r2(txV) > 0 ? r2((difR / r2(txV)) * 100) : null;
   return {
     success: true,
     consulta: { de: '2026-09-14', ate: '2026-09-14', so_app: SG_SO_APP, canal: 'SOUTAG',
-                soutag_linhas: SG_LINHAS.length, tecnox_itens: itens.length,
-                tecnox_itens_total: itens.length, itens_placa: 0,
-                tolerancia_placa: 0.02, tolerancia_valor: 1.00 },
+                soutag_linhas: SG_LINHAS.length, tecnox_itens: SG_ITENS.length,
+                tecnox_itens_total: SG_ITENS.length, itens_placa: 0,
+                tolerancia_placa: 0.02, tolerancia_pct: 2 },
     preco_placa: {},
     ultima_importacao: SG_LINHAS.length ? { quando: '2026-09-17T18:30:00.000Z',
       arquivo: SG_ARQ, por: null, transacoes: SG_LINHAS.length } : null,
-    conferido: conferido, divergente: divergente, soSoutag: soSoutag, soTecnox: soTecnox,
-    semPosto: semPosto, itens: itens.length, postos: ordem,
+    rede: { sg_n: sgN, sg_v: r2(sgV), sg_l: sgTem ? sgL : null,
+            sem_posto_n: semN, sem_posto_v: r2(semV),
+            tx_cupons: Object.keys(cupRede).length, tx_itens: txItens,
+            tx_v: r2(txV), tx_l: txL, dif: difR, dif_pct: pctR,
+            ok: Math.abs(pctR || 0) < 2 && !!r2(txV),
+            postos: postos.length, postos_divergentes: postos.filter(function (p) { return !p.ok; }).length },
+    postos: postos,
     naoCasou: Object.keys(nc).map(function (k) { return nc[k]; }),
-    sg: { valor: r2(sgV), n: SG_LINHAS.length, litros: null, sem_posto_valor: r2(semV) },
-    tx: { valor: r2(txV), n: itens.length, litros: txL, cupons: Object.keys(cup).length },
   };
 }
 // O INVERSO da razaoSocial(), que e o que o servidor faz com lib/soutag.js.
@@ -232,7 +199,7 @@ window.apiFetch = function (url, opts) {
   }
   if (String(url).indexOf('/app/soutag-comparar') === 0) {
     SG_SO_APP = /so_app=1/.test(String(url));
-    return Promise.resolve(sgCruzarDuble());
+    return Promise.resolve(sgTotalizarDuble());
   }
   // A rota de detalhe: dois fixtures REAIS de 14/09, um com so_app e um sem.
   if (String(url).indexOf('/app/cupons-detalhe') === 0) {
@@ -1289,9 +1256,15 @@ async function rodar() {
        'e o "importado por" desta sessão (a coluna do banco é opcional)',
        ult ? ult.textContent.replace(/\s+/g, ' ').trim() : '');
 
-    h3('24. O cruzamento em dois passos');
-    // Leitura dos cards: rótulo -> valor. Os quatro de status são botão, os
-    // três de diferença não.
+    h3('24. Comparação por TOTAIS');
+    // O CRUZAMENTO CUPOM A CUPOM SAIU. Ele classificava cada linha em
+    // conferido / valor divergente / só Soutag / só TecnoX, e não era
+    // confiável: a API da TecnoX não devolve HORA, só o dia, e sem hora dois
+    // abastecimentos do mesmo posto, dia e combustível com valores próximos
+    // são indistinguíveis — casar por valor era sorteio.
+    //
+    // O que a tela mostra agora é o total de cada posto dos dois lados, a
+    // diferença em R$ e em %, e um selo ok/diverge na fronteira dos 2%.
     var cardEl = function (rot) {
       return [].slice.call(document.querySelectorAll('#palco .ap-sg-cd')).filter(function (e) {
         return e.querySelector('.ap-sg-cd-r').textContent.trim() === rot;
@@ -1299,26 +1272,13 @@ async function rodar() {
     };
     var cardV = function (rot) { var c = cardEl(rot); return c ? c.querySelector('.ap-sg-cd-v').textContent.trim() : null; };
     var cardN = function (rot) { var t = cardV(rot); return t === null ? null : numBR(t); };
-    nota('status: ' + [].slice.call(document.querySelectorAll('#palco .ap-sg-cd--bt')).map(function (b) {
-      return b.querySelector('.ap-sg-cd-r').textContent.trim() + ' ' +
-             b.querySelector('.ap-sg-cd-v').textContent.trim();
-    }).join(' · '));
-    eh(cardN('conferidos') === base.length, 'os ' + base.length + ' pares casaram no 1º passo',
-       cardN('conferidos') + '', base.length + '');
-    // AS 3 DESLOCADAS SÃO "valor divergente", não "só Soutag": existe item do
-    // MESMO posto+dia+combustível na TecnoX, só não com aquele valor. É o 2º
-    // passo, e é a diferença que o card novo mostra — antes as três caíam em
-    // "só Soutag" junto com as que não existem em lugar nenhum.
-    eh(cardN('valor divergente') === 3, 'as 3 deslocadas em R$ 99,99 viram valor divergente',
-       cardN('valor divergente') + '', '3');
-    eh(cardN('só Soutag') === 1, 'e só Soutag fica com a linha de posto inexistente',
-       cardN('só Soutag') + '', '1');
-    eh(cardN('só TecnoX') === fonte.itens.length - base.length - 3,
-       'o resto dos itens da TecnoX fica como só TecnoX',
-       cardN('só TecnoX') + '', (fonte.itens.length - base.length - 3) + '');
-    // A razão social casou: nenhum dos 40 caiu em posto não reconhecido.
-    eh(cardN('conferidos') > 0, 'a normalização de razão social funcionou (POSTO X LTDA → P. X)',
-       cardN('conferidos') + ' pares');
+    eh(!cardEl('conferidos') && !cardEl('só TecnoX') && !cardEl('só Soutag') && !cardEl('valor divergente'),
+       'os quatro cartões de status sumiram',
+       ['conferidos', 'só TecnoX', 'só Soutag', 'valor divergente']
+         .filter(function (r) { return !!cardEl(r); }).join(',') || 'nenhum');
+    eh(!document.querySelector('#palco .ap-sg-tag'),
+       'e as etiquetas de status por linha também',
+       document.querySelectorAll('#palco .ap-sg-tag').length + '', '0');
 
     h3('24b. Os dois blocos');
     var blSg = document.querySelector('#palco .ap-sg-bloco--sg');
@@ -1355,129 +1315,94 @@ async function rodar() {
        'e os itens', blTx.textContent.replace(/\s+/g, ' ').trim(),
        fonte.itens.length.toLocaleString('pt-BR') + ' itens');
 
-    h3('24c. Os três cards de diferença');
-    nota('diferenças: ' + ['Diferença R$', 'Diferença litros', 'Diferença transações']
+    h3('24c. Os três cards da rede');
+    nota('cards: ' + ['Diferença R$', 'Diferença litros', 'Postos que divergem']
       .map(function (r) { return r + ' = ' + cardV(r); }).join(' · '));
     eh(Math.abs(cardN('Diferença R$') - (somaSg - somaTx)) < 0.02,
        'Diferença R$ = Soutag − TecnoX', cardN('Diferença R$') + '', (somaSg - somaTx).toFixed(2));
     eh(cardEl('Diferença R$').className.indexOf('diverge') >= 0,
-       'e o card fica vermelho porque diverge', cardEl('Diferença R$').className);
-    eh(hexDe(getComputedStyle(cardEl('Diferença R$')).borderTopColor) === '#A32D2D',
-       'com a borda vermelha', hexDe(getComputedStyle(cardEl('Diferença R$')).borderTopColor), '#A32D2D');
+       'e o card fica vermelho porque a rede diverge', cardEl('Diferença R$').className);
     eh(cardV('Diferença litros') === '—', 'Diferença litros em travessão (a planilha não traz)',
        cardV('Diferença litros'), '—');
     eh(cardEl('Diferença litros').className.indexOf('diverge') < 0,
        'e ela NÃO é acusada de divergir — é dado que não veio',
        cardEl('Diferença litros').className);
-    eh(cardN('Diferença transações') === rows.length - fonte.itens.length,
-       'Diferença transações = linhas da planilha − itens da TecnoX',
-       cardN('Diferença transações') + '', (rows.length - fonte.itens.length) + '');
+    eh(!!cardEl('Postos que divergem'), 'o terceiro card conta os postos que não fecham',
+       cardV('Postos que divergem'));
 
-    h3('25. Lista por posto, badge e detalhe');
-    var linhasSgp = function () { return [].slice.call(document.querySelectorAll('#palco .ap-linha-sgp')); };
+    h3('25. A tabela de totais por posto');
+    var linhasSgt = function () { return [].slice.call(document.querySelectorAll('#palco .ap-sgt-linha')); };
     var nomeDe = function (l) { return l.querySelector('.ap-nome').textContent.trim(); };
-    var todosPostos = linhasSgp();
-    eh(todosPostos.length > 0, 'a lista é por POSTO', todosPostos.length + ' posto(s)');
-    var cabP = [].slice.call(document.querySelector('#palco .ap-cab-sgp').children)
-      .map(function (e) { return e.textContent.trim(); });
-    nota('cabeçalho: ' + cabP.filter(Boolean).join(' · '));
-    eh(cabP.join('|') === 'Posto|Linhas SG|Itens TX|R$ Soutag|R$ TecnoX|Diferença|',
-       'com posto, contagem dos dois lados, R$ dos dois lados e a diferença',
-       cabP.join('|'), 'Posto|Linhas SG|Itens TX|R$ Soutag|R$ TecnoX|Diferença|');
-    // O POSTO DE UM DOS PARES CONFERIDOS.
-    var pNome = base[0].nome_posto;
-    var lp = todosPostos.filter(function (l) { return nomeDe(l) === pNome; })[0];
-    eh(!!lp, 'o posto ' + pNome + ' está na lista');
-    nota(pNome + ': ' + nums(lp).join(' | '));
-    eh(numBR(nums(lp)[0]) > 0, 'com linhas da Soutag', nums(lp)[0]);
-    eh(!!lp.querySelector('.ap-sgp-badge'), 'e o badge ok/diverge',
-       lp.querySelector('.ap-sgp-badge').textContent.trim());
-    // DIVERGENTE PRIMEIRO: a lista existe para achar o posto que não fecha.
-    eh(todosPostos[0].querySelector('.ap-sgp-badge').textContent.trim() === 'diverge',
-       'o primeiro da lista é um que diverge',
-       todosPostos[0].querySelector('.ap-sgp-badge').textContent.trim(), 'diverge');
-    eh(hexDe(getComputedStyle(todosPostos[0].querySelector('.ap-sgp-badge')).color) === '#A32D2D',
-       'com o badge vermelho',
-       hexDe(getComputedStyle(todosPostos[0].querySelector('.ap-sgp-badge')).color), '#A32D2D');
-    // O BALDE do nome que não casou é uma linha, e o aviso diz qual nome é.
-    var lnr = todosPostos.filter(function (l) { return /não reconhecido/.test(nomeDe(l)); })[0];
-    eh(!!lnr, 'o posto não reconhecido vira uma linha própria, fora dos postos de verdade');
+    var rede = document.querySelector('#palco .ap-sgt-rede');
+    eh(!!rede, 'a linha REDE existe, no topo da tabela');
+    eh(rede && nomeDe(rede) === 'REDE', 'e se chama REDE', rede && nomeDe(rede), 'REDE');
+    // A REDE tem de vir ANTES de qualquer posto no DOM: é o total, não um item.
+    var lista = document.querySelector('#palco .ap-lista');
+    var filhos = [].slice.call(lista.children);
+    eh(filhos.indexOf(rede) < filhos.indexOf(linhasSgt()[0]),
+       'e vem antes do primeiro posto',
+       filhos.indexOf(rede) + ' < ' + filhos.indexOf(linhasSgt()[0]));
+    var celRede = nums(rede);
+    nota('REDE: ' + celRede.join(' | '));
+    eh(Math.abs(numBR(celRede[2]) - somaSg) < 0.02,
+       'a REDE traz o total R$ da planilha inteira', celRede[2], somaSg.toFixed(2));
+    eh(Math.abs(numBR(celRede[3]) - somaTx) < 0.02,
+       'e o total R$ da TecnoX no recorte', celRede[3], somaTx.toFixed(2));
+    eh(Math.abs(numBR(celRede[4]) - (somaSg - somaTx)) < 0.02,
+       'com a diferença ao lado', celRede[4], (somaSg - somaTx).toFixed(2));
+    eh(/%$/.test(celRede[5]), 'e o percentual', celRede[5]);
+
+    var todos = linhasSgt();
+    nota('postos na tabela: ' + todos.map(nomeDe).join(' · '));
+    eh(todos.length > 0, 'a tabela tem uma linha por posto com movimento', todos.length + '');
+    eh(todos.every(function (l) { return nums(l).length === 6; }),
+       'cada linha com as seis colunas numéricas',
+       todos[0] ? nums(todos[0]).join('|') : '(vazia)');
+    // ORDEM: quem mais diverge primeiro, pela diferença em MÓDULO.
+    var difs = todos.map(function (l) { return Math.abs(numBR(nums(l)[4])); });
+    var ordenado = difs.every(function (d, i) { return i === 0 || difs[i - 1] >= d - 0.001; });
+    eh(ordenado, 'ordenadas por diferença ABSOLUTA, quem mais diverge primeiro',
+       difs.slice(0, 5).map(function (d) { return d.toFixed(2); }).join(' ≥ '));
+
+    h3('25b. O selo de 2%');
+    var badge = function (l) { return l.querySelector('.ap-sgp-badge').textContent.trim(); };
+    eh(todos.every(function (l) { return /^(ok|diverge)$/.test(badge(l)); }),
+       'cada posto tem selo ok ou diverge',
+       todos.map(badge).filter(function (b, i, a) { return a.indexOf(b) === i; }).join(','));
+    // O selo tem de CONCORDAR com a coluna de percentual, linha a linha —
+    // é a afirmação que pega o dia em que um dos dois mudar sozinho.
+    var briga = todos.filter(function (l) {
+      var p = nums(l)[5];
+      if (p === '—') return badge(l) !== 'diverge';   // sem base nunca é ok
+      return (Math.abs(numBR(p)) < 2) !== (badge(l) === 'ok');
+    });
+    eh(briga.length === 0, 'e o selo concorda com a coluna Dif % em TODAS as linhas',
+       briga.map(function (l) { return nomeDe(l) + ' ' + nums(l)[5] + ' ' + badge(l); }).join(' ; ') || 'nenhuma diverge',
+       'nenhuma');
+    var okEl = todos.filter(function (l) { return badge(l) === 'ok'; })[0];
+    var dvEl = todos.filter(function (l) { return badge(l) === 'diverge'; })[0];
+    if (okEl) eh(hexDe(getComputedStyle(okEl.querySelector('.ap-sgp-badge')).color) === '#0F6E56',
+       'ok em verde', hexDe(getComputedStyle(okEl.querySelector('.ap-sgp-badge')).color), '#0F6E56');
+    if (dvEl) eh(hexDe(getComputedStyle(dvEl.querySelector('.ap-sgp-badge')).color) === '#A32D2D',
+       'diverge em vermelho', hexDe(getComputedStyle(dvEl.querySelector('.ap-sgp-badge')).color), '#A32D2D');
+    // O posto não reconhecido é um balde próprio e NUNCA é ok.
+    var lnr = todos.filter(function (l) { return /não reconhecido/.test(nomeDe(l)); })[0];
+    eh(!!lnr, 'o posto não reconhecido vira uma linha própria');
+    eh(!lnr || badge(lnr) === 'diverge', 'e nunca recebe selo de ok',
+       lnr ? badge(lnr) : '(ausente)', 'diverge');
     var avisoN = [].slice.call(document.querySelectorAll('#palco .ap-aviso')).filter(function (e) {
       return /não cas/.test(e.textContent);
     })[0];
     eh(!!avisoN && /INEXISTENTE/.test(avisoN.textContent),
        'e o aviso nomeia o que não casou', avisoN ? avisoN.textContent.trim() : '(nenhum)');
 
-    h3('25b. Clicar no posto expande os cupons');
-    eh(!document.querySelector('#palco .ap-sg-det'), 'nenhum posto aberto antes do clique');
-    lp.click();
-    await esperar(240);
-    var detP = document.querySelector('#palco .ap-sg-det');
-    eh(!!detP, 'clicar expande');
-    if (detP) {
-      var linsD = [].slice.call(detP.querySelectorAll('.ap-sg-lin'));
-      eh(linsD.length > 0, 'com os cupons individuais do posto', linsD.length + ' linha(s)');
-      var tagsD = {};
-      linsD.forEach(function (l) { tagsD[l.querySelector('.ap-sg-tag').textContent.trim()] = 1; });
-      nota('fontes no detalhe: ' + Object.keys(tagsD).join(' · '));
-      eh(!!tagsD['conferido'], 'cada linha com o badge da fonte, e o conferido está entre elas',
-         Object.keys(tagsD).join(','));
-      var tgOk = linsD.filter(function (l) {
-        return l.querySelector('.ap-sg-tag').textContent.trim() === 'conferido';
-      })[0].querySelector('.ap-sg-tag');
-      eh(hexDe(getComputedStyle(tgOk).color) === '#0F6E56', 'conferido em verde',
-         hexDe(getComputedStyle(tgOk).color), '#0F6E56');
-      // As duas colunas de valor, uma de cada fonte.
-      var lConf = linsD.filter(function (l) {
-        return l.querySelector('.ap-sg-tag').textContent.trim() === 'conferido';
-      })[0];
-      nota('linha conferida: ' + [].slice.call(lConf.children).map(function (e) { return e.textContent.trim(); }).join(' | '));
-      eh(lConf.children[2].textContent.trim() !== '—' && lConf.children[3].textContent.trim() !== '—',
-         'o conferido mostra o R$ dos DOIS lados',
-         lConf.children[2].textContent.trim() + ' × ' + lConf.children[3].textContent.trim());
-      var lTx = linsD.filter(function (l) {
-        return l.querySelector('.ap-sg-tag').textContent.trim() === 'só TecnoX';
-      })[0];
-      if (lTx) {
-        eh(lTx.children[2].textContent.trim() === '—',
-           'e o só TecnoX deixa o lado Soutag em travessão', lTx.children[2].textContent.trim(), '—');
-      }
-    }
-    lp.click();
+    h3('25c. Nada expande — a tabela é de totais');
+    eh(!document.querySelector('#palco .ap-sg-det'), 'não há detalhe por posto');
+    todos[0].click();
     await esperar(200);
-    eh(!document.querySelector('#palco .ap-sg-det'), 'clicar de novo fecha');
-
-    h3('25c. Os cards de status filtram');
-    var stBtn = function (rot) {
-      return [].slice.call(document.querySelectorAll('#palco .ap-sg-cd--bt')).filter(function (b) {
-        return b.querySelector('.ap-sg-cd-r').textContent.trim() === rot;
-      })[0];
-    };
-    stBtn('valor divergente').click();
-    await esperar(240);
-    var pDiv = linhasSgp();
-    nota('postos com valor divergente: ' + pDiv.map(nomeDe).join(' · '));
-    eh(pDiv.length > 0 && pDiv.length < todosPostos.length,
-       'o card "valor divergente" reduz a lista aos postos que têm alguma',
-       pDiv.length + ' de ' + todosPostos.length);
-    eh(stBtn('valor divergente').getAttribute('aria-pressed') === 'true', 'e o card fica aceso',
-       stBtn('valor divergente').getAttribute('aria-pressed'), 'true');
-    pDiv[0].click();
-    await esperar(220);
-    var linsF = [].slice.call(document.querySelectorAll('#palco .ap-sg-det .ap-sg-lin'));
-    eh(linsF.length > 0 && linsF.every(function (l) {
-         return l.querySelector('.ap-sg-tag').textContent.trim() === 'valor divergente';
-       }), 'e o detalhe do posto mostra só as divergentes', linsF.length + ' linha(s)');
-    pDiv[0].click();
-    await esperar(180);
-    // CLICAR DE NOVO SOLTA: sem isso quem clica num dos quatro cards fica
-    // preso nele procurando um botão "todos" que não existe.
-    stBtn('valor divergente').click();
-    await esperar(240);
-    eh(linhasSgp().length === todosPostos.length, 'clicar de novo no card solta o filtro',
-       linhasSgp().length + '', todosPostos.length + '');
-    eh(stBtn('valor divergente').getAttribute('aria-pressed') === 'false', 'e o card apaga',
-       stBtn('valor divergente').getAttribute('aria-pressed'), 'false');
+    eh(!document.querySelector('#palco .ap-sg-det'), 'e clicar numa linha não abre nada');
+    eh(linhasSgt().length === todos.length, 'nem muda a tabela',
+       linhasSgt().length + '', todos.length + '');
 
     h3('28. Normalização de razão social: os casos reais');
     // CADA CASO É UMA LINHA COPIADA DE UM ITEM VERDADEIRO daquele posto. Se o
@@ -1549,7 +1474,7 @@ async function rodar() {
     eh(enviados.every(function (n) { return !/^P\. /.test(n); }),
        'e nenhuma chegou já normalizada (quem normaliza é o servidor)',
        enviados.filter(function (n) { return /^P\. /.test(n); }).join(',') || 'nenhuma');
-    var comSg = linhasSgp().filter(function (l) { return numBR(nums(l)[0]) > 0; }).map(nomeDe).sort();
+    var comSg = linhasSgt().filter(function (l) { return numBR(nums(l)[0]) > 0; }).map(nomeDe).sort();
     nota('postos com linha da Soutag (pelo dublê, que não normaliza de verdade): ' + comSg.join(' · '));
     // ════════ O QUE MUDOU AO O CRUZAMENTO IR PARA O SERVIDOR ════════
     // "BOM BOM" casa por prefixo com BOMBOM MATRIZ e BOMBOM FILIAL, e o nome

@@ -113,8 +113,6 @@
   var _sg = null;            // { linhas, arquivo, quando, colunas }
   var _sgErro = '';
   var _sgLendo = false;
-  var _sgAberto = '';        // posto expandido na lista (vazio = nenhum)
-  var _sgStatus = 'todos';   // todos | conferido | divergente | tecnox | soutag
   // O RESULTADO VEM DO SERVIDOR (GET /app/soutag-comparar), não da memória:
   // a planilha agora é gravada, e quem abre a tela sem importar vê a última
   // comparação. _sgChave é o recorte que está em _sgSrv — período + so_app —
@@ -355,26 +353,28 @@
       '.ap-sg-cd--tx .ap-sg-cd-v{color:#185FA5}' +
       '.ap-sg-cd--sg .ap-sg-cd-v{color:#3C3489}' +
       '.ap-sg-cd--dv .ap-sg-cd-v{color:#A32D2D}' +
-      // LISTA POR POSTO — sete colunas fixas, como todas as listas desta tela.
-      '.ap-cab-sgp{grid-template-columns:196px 86px 86px 128px 128px 128px 84px}' +
-      '.ap-linha-sgp{cursor:pointer}' +
-      '.ap-linha-sgp.aberto{background:color-mix(in srgb,var(--ac) 8%,transparent)}' +
+      // TABELA DE TOTAIS — oito colunas fixas, como todas as listas desta
+      // tela. 210+112+102+124+124+124+82+78 = 956px de conteúdo, dentro do
+      // teto de 1400 do .ap-wrap.
+      // SEM 1fr, mesma razão da Movimentação: com fração os números espalham
+      // até a borda do monitor e ficam longe do nome do posto.
+      '.ap-cab-sgt{display:grid;grid-template-columns:210px 112px 102px 124px 124px 124px 82px 78px;' +
+        'justify-content:start;align-items:center;gap:.7rem 8px;width:100%;padding:9px 0;' +
+        'background:transparent;border:0;text-align:left;font:inherit;color:var(--tx)}' +
+      '.ap-cab.ap-cab-sgt{padding:0 0 5px;border-bottom:1px solid var(--bd)}' +
+      '.ap-sgt-linha{border-bottom:1px solid var(--bd)}' +
+      // A REDE lê como cabeçalho de totais, não como o primeiro posto: fundo
+      // próprio, negrito e uma borda de 2px separando-a da lista.
+      '.ap-sgt-rede{border-bottom:2px solid var(--bd);font-weight:700;' +
+        'background:color-mix(in srgb,var(--ac) 6%,transparent);padding:10px 0 12px}' +
+      '.ap-sgt-rede .ap-nome{letter-spacing:.06em}' +
       '.ap-sgp-badge{font:700 .62rem var(--mono);border-radius:20px;padding:2px 9px;text-align:center}' +
       '.ap-sgp-ok{color:#0F6E56;background:#E1F5EE}' +
       '.ap-sgp-dv{color:#A32D2D;background:#FBE9E9}' +
       '.ap-sg-dif--dv{color:#A32D2D;font-weight:700}' +
-      // Detalhe do posto: indentado 20px como o detalhe do posto da lista por
-      // posto, e com grade própria de seis colunas.
-      '.ap-sg-det{padding:.4rem 0 .9rem 20px;border-bottom:1px solid var(--bd)}' +
-      '.ap-cab-sgc{display:grid;grid-template-columns:64px 84px 124px 124px 96px 132px;align-items:center;gap:.7rem 8px;padding:5px 0}' +
-      '.ap-sg-lin{border-bottom:.5px solid var(--bd)}' +
-      '.ap-sg-lin:last-child{border-bottom:0}' +
-      '.ap-cab-sgc.ap-cab span{font:700 .58rem var(--mono);letter-spacing:.05em;color:var(--tx3);text-transform:uppercase}' +
-      '.ap-sg-tag{display:inline-block;font:700 .62rem var(--mono);border-radius:20px;padding:2px 9px}' +
-      '.ap-sg-tag--conferido{color:#0F6E56;background:#E1F5EE}' +
-      '.ap-sg-tag--divergente{color:#A32D2D;background:#FBE9E9}' +
-      '.ap-sg-tag--tecnox{color:#185FA5;background:#E7F0FA}' +
-      '.ap-sg-tag--soutag{color:#3C3489;background:#EEEDFE}' +
+      // O CSS do detalhe por posto (.ap-sg-det, .ap-cab-sgc, .ap-sg-tag--*)
+      // saiu junto com ele: a tabela de totais não expande, e as quatro
+      // etiquetas de status que essas classes pintavam não existem mais.
       '.ap-sg-legenda{font:.64rem var(--mono);color:var(--tx3);font-style:italic;padding:.7rem 0 0;line-height:1.6}' +
       '.ap-estado,.ap-vazio{font:.75rem var(--mono);color:var(--tx3);padding:1rem 0}' +
       '.ap-erro{font:.75rem var(--mono);color:var(--dg);padding:1rem 0}' +
@@ -392,10 +392,10 @@
         // número à direita) e as três de número viram linhas dentro da célula.
         // Esconder colunas aqui não serve — todas as seis são o dado.
         '.ap-cab-cup{grid-template-columns:1fr auto}' +
-        '.ap-cab-sgp{grid-template-columns:1fr auto}' +
-        '.ap-cab-sgc{grid-template-columns:1fr auto}' +
-        '.ap-cab.ap-cab-sgp{display:none}' +
-        '.ap-cab.ap-cab-sgc{display:none}' +
+        // TOTAIS no celular: duas colunas (posto à esquerda, o número à
+        // direita) e o cabeçalho some, como nas outras listas.
+        '.ap-cab-sgt{grid-template-columns:1fr auto}' +
+        '.ap-cab.ap-cab-sgt{display:none}' +
         '.ap-sg-bl-v{font-size:1.25rem}' +
         '.ap-cab.ap-cab-cup{display:none}' +
         '.ap-linha-cup .ap-c-comb,.ap-rede.ap-cab-cup .ap-c-comb{display:none}' +
@@ -1252,8 +1252,17 @@
   }
 
   // ── Render da vista ─────────────────────────────────────────────
-  var ROT_SG = { conferido: 'conferido', divergente: 'valor divergente',
-                 tecnox: 'só TecnoX', soutag: 'só Soutag' };
+  // ── Render da vista ─────────────────────────────────────────────
+  // ════════ OS QUATRO STATUS SAÍRAM ════════
+  // Havia aqui um cartão-botão por status — conferidos, só TecnoX, só Soutag,
+  // valor divergente — e um detalhe que abria a lista de cupons do posto.
+  // Tudo isso lia o cruzamento CUPOM A CUPOM, que foi removido: a API da
+  // TecnoX não devolve HORA, só o dia, e sem hora dois abastecimentos do
+  // mesmo posto, dia e combustível com valores próximos são indistinguíveis.
+  // "Conferido" não provava que os dois lados falavam da mesma bomba.
+  //
+  // No lugar, a tela compara TOTAIS por posto — ver o htmlSoutag abaixo e o
+  // totalizar() de jbretas-api/lib/soutag.js.
   // O sinal ANTES da moeda: reais(-3) escreve "R$ -3,00" e o menos se perde
   // no meio da linha. Aqui sai "−R$ 3,00", que se lê de longe.
   function comSinal(v, fmt) {
@@ -1270,68 +1279,13 @@
       (sub ? '<div class="ap-sg-cd-s">' + esc(sub) + '</div>' : '') +
     '</div>';
   }
-  // Card de status: BOTÃO. Clicar filtra a lista de postos (e os cupons
-  // dentro dela) por aquele status; clicar de novo solta. Os quatro números
-  // sem isso seriam quatro números — com o filtro, cada um é a porta para as
-  // linhas que ele conta.
-  function cardSt(chave, rot, n, cls) {
-    var on = (_sgStatus === chave);
-    return '<button type="button" class="ap-sg-cd ap-sg-cd--bt ' + cls + (on ? ' on' : '') + '"' +
-      ' aria-pressed="' + (on ? 'true' : 'false') + '" onclick="__apSgStatus(\'' + chave + '\')">' +
-      '<div class="ap-sg-cd-r">' + esc(rot) + '</div>' +
-      '<div class="ap-sg-cd-v">' + nf(n, 0) + '</div>' +
-    '</button>';
-  }
-  // A chave do posto aberto é o nome SEM PONTUAÇÃO, não o nome cru: ela entra
-  // num atributo onclick, e um posto chamado "D'AGUA" fecharia a string e
-  // derrubaria o handler. Antes isto reusava o nucleoPosto, que foi para o
-  // servidor junto com o cruzamento — aqui a exigência é só não ter apóstrofo,
-  // então a limpeza basta e não precisa saber nada de razão social.
-  function chavePosto(nome) {
-    return String(nome == null ? '' : nome).replace(/[^A-Za-z0-9 ]+/g, '').trim();
-  }
-  function htmlSgPosto(p) {
-    var linhas = (_sgStatus === 'todos') ? p.linhas
-      : p.linhas.filter(function (l) { return l.status === _sgStatus; });
-    linhas = linhas.slice().sort(function (a, b) {
-      if (a.data !== b.data) return a.data < b.data ? 1 : -1;
-      return String(a.comb || '').localeCompare(String(b.comb || ''));
-    });
-    var cab = '<div class="ap-cab ap-cab-sgc">' +
-      '<span>Data</span><span>Comb.</span>' +
-      '<span class="ap-n">R$ Soutag</span><span class="ap-n">R$ TecnoX</span>' +
-      '<span class="ap-n">Dif.</span><span>Fonte</span>' +
-    '</div>';
-    var corpo = linhas.slice(0, 300).map(function (l) {
-      return '<div class="ap-cab-sgc ap-sg-lin">' +
-        '<span class="ap-c-data">' + esc(diaCurto(l.data)) + '</span>' +
-        '<span><span class="ap-cchip">' + esc(l.comb || '—') + '</span></span>' +
-        '<span class="ap-n">' + (l.valor === undefined ? '—' : reais(l.valor)) + '</span>' +
-        '<span class="ap-n">' + (l.valor_tecnox === undefined ? '—' : reais(l.valor_tecnox)) + '</span>' +
-        '<span class="ap-n' + ((l.dif !== undefined && Math.abs(l.dif) > 0.004) ? ' ap-sg-dif--dv' : '') + '">' +
-          (l.dif === undefined ? '—' : comSinal(l.dif, function (x) { return nf(x, 2); })) + '</span>' +
-        '<span><span class="ap-sg-tag ap-sg-tag--' + l.status + '">' + esc(ROT_SG[l.status]) + '</span>' +
-          // O nome CRU da planilha só nas linhas de posto não reconhecido: é
-          // ali que ele é a informação que resolve o problema.
-          (l.perto !== undefined && !l.posto ? '<span class="ap-mini">' + esc(l.posto_planilha) +
-            (l.perto ? ' · mais parecido: ' + esc(l.perto) + ' (' + nf(l.sim * 100, 0) + '%)' : '') +
-            '</span>' : '') +
-        '</span>' +
-      '</div>';
-    }).join('');
-    var corte = linhas.length > 300
-      ? '<div class="ap-aviso">mostrando 300 de ' + nf(linhas.length, 0) + ' linhas deste posto</div>' : '';
-    return '<div class="ap-sg-det">' + cab +
-      (corpo || '<div class="ap-vazio">Nada neste status.</div>') + corte + '</div>';
-  }
   // "Última importação: DD/MM/AAAA às HH:MM · N transações · importado por X"
   //
-  // O "importado por" SÓ APARECE quando foi esta sessão que importou. A tabela
-  // não guarda quem importou enquanto a coluna opcional não existir (ver o
-  // fim de sql/soutag_transacao.sql), e pôr ali o nome de quem está olhando
-  // faria a tela AFIRMAR algo falso para todo mundo que abre depois — que é
-  // justamente o caso que motivou gravar a planilha. Sem o dado, a frase sai
-  // sem essa parte.
+  // `por` vem da coluna importado_por de soutag_transacao; _sgImportou, desta
+  // sessão. Nesta ordem, porque a coluna vale para todo mundo e a sessão só
+  // para quem importou. Sem nenhum dos dois, a frase sai SEM essa parte — pôr
+  // ali o nome de quem está OLHANDO faria a tela afirmar algo falso
+  // justamente para quem abre sem ter importado.
   function htmlUltima() {
     var u = _sgSrv && _sgSrv.ultima_importacao;
     if (!u) return '';
@@ -1340,8 +1294,6 @@
       : (d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ' às ' +
          d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo',
                                          hour: '2-digit', minute: '2-digit' }));
-    // `por` vem da coluna opcional; _sgImportou, desta sessão. Nesta ordem,
-    // porque a coluna vale para todo mundo e a sessão só para quem importou.
     var por = u.por || (_sgImportou && _sgImportou.importado_por) || '';
     return '<div class="ap-sg-ultima">Última importação: <b>' + esc(quando) + '</b> · ' +
       nf(u.transacoes, 0) + ' transações' +
@@ -1380,10 +1332,10 @@
     }
     if (!_sgSrv) return topo + '<div class="ap-estado">—</div>';
     var c = _sgSrv;
-    if (!c.sg.n) {
+    if (!c.rede.sg_n) {
       return topo + '<div class="ap-estado">Nenhuma transação da Soutag gravada neste período.' +
         '<br><span class="ap-sub">Importe a planilha para comparar com os ' +
-        nf(c.tx.n, 0) + ' itens que a TecnoX tem aqui. ' +
+        nf(c.rede.tx_itens, 0) + ' itens que a TecnoX tem aqui. ' +
         'Colunas esperadas: Posto · Data/Hora · Valor · Combustível. ' +
         'Usuário e ID entram se existirem.' +
         '<br>A planilha é lida no navegador e GRAVADA: quem abrir esta tela depois ' +
@@ -1391,56 +1343,51 @@
     }
 
     // ── Os dois lados ──
-    var sgL = (c.sg.litros === null) ? '—' : litros(c.sg.litros);
+    var sgL = (c.rede.sg_l === null) ? '—' : litros(c.rede.sg_l);
     var blocos = '<div class="ap-sg-blocos">' +
       '<div class="ap-sg-bloco ap-sg-bloco--sg">' +
         '<div class="ap-sg-bl-rot">Soutag · planilha</div>' +
-        '<div class="ap-sg-bl-v">' + reais(c.sg.valor) + '</div>' +
+        '<div class="ap-sg-bl-v">' + reais(c.rede.sg_v) + '</div>' +
         '<div class="ap-sg-bl-l">' +
-          '<span class="ap-sg-bl-i"><b>' + nf(c.sg.n, 0) + '</b> transações</span>' +
+          '<span class="ap-sg-bl-i"><b>' + nf(c.rede.sg_n, 0) + '</b> transações</span>' +
           '<span class="ap-sg-bl-i"><b>' + sgL + '</b>' +
-            (c.sg.litros === null ? ' litros (a planilha não traz a coluna)' : '') + '</span>' +
+            (c.rede.sg_l === null ? ' litros (a planilha não traz a coluna)' : '') + '</span>' +
         '</div>' +
         // O TOTAL É DA PLANILHA INTEIRA, inclusive as linhas cujo posto não
         // casou — é o número que fecha com o Excel de quem importou. O peso
         // delas fica aqui, para ninguém procurar a diferença no lugar errado.
-        (c.semPosto.length ? '<div class="ap-sg-bl-s">inclui ' + nf(c.semPosto.length, 0) +
-          ' de posto não reconhecido (' + reais(c.sg.sem_posto_valor) + ')</div>' : '') +
+        (c.rede.sem_posto_n ? '<div class="ap-sg-bl-s">inclui ' + nf(c.rede.sem_posto_n, 0) +
+          ' de posto não reconhecido (' + reais(c.rede.sem_posto_v) + ')</div>' : '') +
       '</div>' +
       '<div class="ap-sg-bloco ap-sg-bloco--tx">' +
         '<div class="ap-sg-bl-rot">TecnoX · ' + esc(CANAIS[_canal].rot) + '</div>' +
-        '<div class="ap-sg-bl-v">' + reais(c.tx.valor) + '</div>' +
+        '<div class="ap-sg-bl-v">' + reais(c.rede.tx_v) + '</div>' +
         '<div class="ap-sg-bl-l">' +
-          '<span class="ap-sg-bl-i"><b>' + nf(c.tx.cupons, 0) + '</b> cupons</span>' +
-          '<span class="ap-sg-bl-i"><b>' + nf(c.tx.n, 0) + '</b> itens</span>' +
-          '<span class="ap-sg-bl-i"><b>' + litros(c.tx.litros) + '</b></span>' +
+          '<span class="ap-sg-bl-i"><b>' + nf(c.rede.tx_cupons, 0) + '</b> cupons</span>' +
+          '<span class="ap-sg-bl-i"><b>' + nf(c.rede.tx_itens, 0) + '</b> itens</span>' +
+          '<span class="ap-sg-bl-i"><b>' + litros(c.rede.tx_l) + '</b></span>' +
         '</div>' +
         // CUPONS E ITENS, os dois: o cruzamento casa ITEM com linha da
         // planilha (o cupom de GC+ET é uma linha da Soutag para cada
         // combustível), e é o item que a diferença de transações compara.
-        '<div class="ap-sg-bl-s">o cruzamento casa linha da planilha com ITEM do cupom</div>' +
+        // CUPOM E ITEM, os dois: um cupom de GC+ET tem dois itens, e a
+        // planilha da Soutag traz uma linha por combustível. A comparação
+        // que decide o selo é a de DINHEIRO, que não depende disso.
+        '<div class="ap-sg-bl-s">um cupom pode ter vários itens; a planilha traz um por combustível</div>' +
       '</div>' +
     '</div>';
 
-    // ── As três diferenças ──
-    var dV = Math.round((c.sg.valor - c.tx.valor) * 100) / 100;
-    var dL = (c.sg.litros === null) ? null : Math.round(c.sg.litros - c.tx.litros);
-    var dN = c.sg.n - c.tx.n;
+    // ── As três diferenças da rede ──
+    var R = c.rede;
+    var dL = (R.sg_l === null) ? null : Math.round(R.sg_l - R.tx_l);
     var difs = '<div class="ap-sg-cards">' +
-      cardDif('Diferença R$', comSinal(dV, reais), Math.abs(dV) > 0.004, 'Soutag − TecnoX') +
+      cardDif('Diferença R$', comSinal(R.dif, reais), !R.ok,
+        R.dif_pct === null ? 'sem base de comparação' : comSinal(R.dif_pct, function (x) { return nf(x, 2) + '%'; }) + ' sobre a TecnoX') +
       cardDif('Diferença litros', comSinal(dL, litros),
         dL === null ? null : Math.abs(dL) >= 1,
         dL === null ? 'a planilha não traz litros' : 'Soutag − TecnoX') +
-      cardDif('Diferença transações', comSinal(dN, function (x) { return nf(x, 0); }), dN !== 0,
-        nf(c.sg.n, 0) + ' linhas × ' + nf(c.tx.n, 0) + ' itens') +
-    '</div>';
-
-    // ── Os quatro status ──
-    var status = '<div class="ap-sg-cards">' +
-      cardSt('conferido', 'conferidos', c.conferido.length, 'ap-sg-cd--ok') +
-      cardSt('tecnox', 'só TecnoX', c.soTecnox.length, 'ap-sg-cd--tx') +
-      cardSt('soutag', 'só Soutag', c.soSoutag.length + c.semPosto.length, 'ap-sg-cd--sg') +
-      cardSt('divergente', 'valor divergente', c.divergente.length, 'ap-sg-cd--dv') +
+      cardDif('Postos que divergem', nf(R.postos_divergentes, 0), R.postos_divergentes > 0,
+        'de ' + nf(R.postos, 0) + ' com movimento') +
     '</div>';
 
     var avisoNome = c.naoCasou.length
@@ -1452,63 +1399,77 @@
         }).join(' · ') + (c.naoCasou.length > 8 ? ' …' : '') + '</div>'
       : '';
 
-    // ── A lista por posto ──
-    // DIVERGENTE PRIMEIRO, e dentro disso pela diferença em módulo: a lista
-    // existe para achar o posto que não fecha, e ordenar por nome deixaria o
-    // único posto torto na letra T.
-    var postos = c.postos.filter(function (p) {
-      return _sgStatus === 'todos' || p[_sgStatus] > 0;
-    }).slice().sort(function (a, b) {
-      if (a.ok !== b.ok) return a.ok ? 1 : -1;
-      var da = Math.abs(a.dif), db = Math.abs(b.dif);
-      if (da !== db) return db - da;
-      return String(a.nome).localeCompare(String(b.nome));
-    });
-    var cab = '<div class="ap-cab ap-cab-sgp">' +
-      '<span>Posto</span><span class="ap-n">Linhas SG</span><span class="ap-n">Itens TX</span>' +
+    // ── A TABELA POR POSTO ──
+    // Sete colunas fixas, sem 1fr: mesma razão das outras listas desta tela —
+    // com fração os números fogem para a borda do monitor e ficam longe do
+    // nome do posto.
+    //
+    // A ORDEM VEM DO SERVIDOR (diferença em módulo, quem mais diverge
+    // primeiro). A tela não reordena: o critério é o mesmo que decide o selo,
+    // e tê-lo em dois lugares é tê-lo divergindo um dia.
+    //
+    // A LINHA REDE NÃO É UM POSTO e por isso não é clicável nem entra na
+    // ordenação: ela é o total, fica no topo e tem borda própria — o mesmo
+    // desenho da REDE na lista Por posto.
+    var pct = function (v) { return v === null || v === undefined ? '—' : comSinal(v, function (x) { return nf(x, 2) + '%'; }); };
+    var cab = '<div class="ap-cab ap-cab-sgt">' +
+      '<span>Posto</span>' +
+      '<span class="ap-n">Transações SG</span><span class="ap-n">Cupons TX</span>' +
       '<span class="ap-n">R$ Soutag</span><span class="ap-n">R$ TecnoX</span>' +
-      '<span class="ap-n">Diferença</span><span></span>' +
+      '<span class="ap-n">Diferença R$</span><span class="ap-n">Dif %</span>' +
+      '<span></span>' +
     '</div>';
-    var linhas = postos.map(function (p) {
-      var ck = chavePosto(p.nome);
-      var aberto = (_sgAberto === ck);
-      return '<div class="ap-linha ap-cab-sgp ap-linha-sgp' + (aberto ? ' aberto' : '') + '"' +
-        ' role="button" tabindex="0" aria-expanded="' + (aberto ? 'true' : 'false') + '"' +
-        ' onclick="__apSgPosto(\'' + esc(ck) + '\')">' +
-        '<span class="ap-nome">' + esc(p.nome) + '</span>' +
+    var linhaRede = '<div class="ap-cab-sgt ap-sgt-rede">' +
+      '<span class="ap-nome">REDE</span>' +
+      '<span class="ap-n">' + nf(R.sg_n, 0) + '</span>' +
+      '<span class="ap-n">' + nf(R.tx_cupons, 0) +
+        '<span class="ap-mini">' + nf(R.tx_itens, 0) + ' itens</span></span>' +
+      '<span class="ap-n">' + reais(R.sg_v) + '</span>' +
+      '<span class="ap-n">' + reais(R.tx_v) + '</span>' +
+      '<span class="ap-n' + (R.ok ? '' : ' ap-sg-dif--dv') + '">' + comSinal(R.dif, reais) + '</span>' +
+      '<span class="ap-n' + (R.ok ? '' : ' ap-sg-dif--dv') + '">' + pct(R.dif_pct) + '</span>' +
+      '<span class="ap-sgp-badge ' + (R.ok ? 'ap-sgp-ok' : 'ap-sgp-dv') + '">' +
+        (R.ok ? 'ok' : 'diverge') + '</span>' +
+    '</div>';
+    var linhas = (c.postos || []).map(function (p) {
+      return '<div class="ap-cab-sgt ap-sgt-linha">' +
+        '<span class="ap-nome" title="' + esc(p.nome) + '">' + esc(p.nome) + '</span>' +
         '<span class="ap-n">' + nf(p.sg_n, 0) + '</span>' +
-        '<span class="ap-n">' + nf(p.tx_n, 0) +
-          '<span class="ap-mini">' + nf(p.cupons_tx, 0) + ' cupons</span></span>' +
+        '<span class="ap-n">' + nf(p.tx_cupons, 0) +
+          '<span class="ap-mini">' + nf(p.tx_itens, 0) + ' itens</span></span>' +
         '<span class="ap-n">' + reais(p.sg_v) + '</span>' +
         '<span class="ap-n">' + reais(p.tx_v) + '</span>' +
-        '<span class="ap-n' + (p.ok ? '' : ' ap-sg-dif--dv') + '">' +
-          comSinal(p.dif, reais) + '</span>' +
+        '<span class="ap-n' + (p.ok ? '' : ' ap-sg-dif--dv') + '">' + comSinal(p.dif, reais) + '</span>' +
+        '<span class="ap-n' + (p.ok ? '' : ' ap-sg-dif--dv') + '">' + pct(p.dif_pct) + '</span>' +
         '<span class="ap-sgp-badge ' + (p.ok ? 'ap-sgp-ok' : 'ap-sgp-dv') + '">' +
           (p.ok ? 'ok' : 'diverge') + '</span>' +
-      '</div>' + (aberto ? htmlSgPosto(p) : '');
+      '</div>';
     }).join('');
 
     var legenda = '<div class="ap-sg-legenda">' +
-      'Cruzamento por posto + data + combustível + valor, com tolerância de ' +
-        reais((c.consulta && c.consulta.tolerancia_valor) || 1) + '.<br>' +
-      // O toggle muda QUAL CONJUNTO DA TECNOX entra, e só ele: a planilha da
-      // Soutag não traz preço por litro e não sabe o que é preço de placa.
-      // Sem esta frase, o "só Soutag" crescer ao ligar o filtro pareceria bug.
-      (c.consulta && c.consulta.so_app
-        ? '<b>Só preço de app</b> está ligado: ' + nf(c.consulta.itens_placa, 0) +
-          ' itens da TecnoX saíram no preço da placa e ficaram de fora, então as ' +
-          'transações deles aparecem como "só Soutag".<br>'
-        : '') +
-      '<b>valor divergente</b>: existe abastecimento do mesmo posto, dia e combustível na TecnoX, ' +
-      'mas nenhum com valor dentro da tolerância — o par mostrado é o de valor mais próximo, ' +
-      'e sem ID comum entre os sistemas não há como provar que é a mesma bomba.<br>' +
-      '<b>ok</b> no posto: mesma contagem dos dois lados e diferença de até ' +
-        reais((c.consulta && c.consulta.tolerancia_valor) || 1) + '.' +
+      'Comparação por <b>totais de cada posto</b>, não transação a transação: a API da ' +
+      'TecnoX devolve o dia, não a hora, e sem hora dois abastecimentos do mesmo posto, ' +
+      'dia e combustível com valores próximos são indistinguíveis — casar por valor seria ' +
+      'sorteio.<br>' +
+      '<b>ok</b> = diferença abaixo de ' + nf(c.consulta.tolerancia_pct, 0) + '% sobre a TecnoX. ' +
+      '<b>diverge</b> = ' + nf(c.consulta.tolerancia_pct, 0) + '% ou mais. ' +
+      'Posto sem cupom nenhum na TecnoX nunca é ok: não há denominador, e ' +
+      'chamá-lo de ok por falta de base esconderia justamente o caso mais grave.<br>' +
+      // O toggle é o que torna a comparação honesta — ver o comentário da rota.
+      (c.consulta.so_app
+        ? '<b>Só preço de app</b> está LIGADO: dos ' + nf(c.consulta.tecnox_itens_total, 0) +
+          ' itens do convênio, ' + nf(c.consulta.itens_placa, 0) + ' saíram no preço da placa ' +
+          'e ficaram de fora. É esta a comparação que fecha — a planilha da Soutag só traz ' +
+          'transação em que o app mudou o preço.'
+        : '<b>Só preço de app</b> está DESLIGADO: o lado TecnoX inclui os abastecimentos do ' +
+          'convênio cobrados no preço da placa, que nunca estiveram na planilha da Soutag. ' +
+          'A diferença tende a sair negativa em todo posto, e isso não é erro de ninguém — ' +
+          'ligue o filtro para a comparação real.') +
     '</div>';
 
-    return topo + blocos + difs + status + avisoNome +
-      '<div class="ap-lista">' + cab +
-      (linhas || '<div class="ap-vazio">Nenhum posto neste status.</div>') + '</div>' +
+    return topo + blocos + difs + avisoNome +
+      '<div class="ap-lista">' + cab + linhaRede +
+      (linhas || '<div class="ap-vazio">Nenhum posto com movimento no período.</div>') + '</div>' +
       legenda;
   }
 
@@ -1542,7 +1503,6 @@
       r = lerPlanilha(XLSX, buf);
       _sg = { linhas: r.linhas, arquivo: file.name, quando: new Date(),
               colunas: r.colunas, cruas: r.cruas, temLitros: r.temLitros };
-      _sgAberto = ''; _sgStatus = 'todos';
     } catch (e) {
       _sg = null;
       _sgErro = 'Não foi possível ler a planilha: ' + ((e && e.message) ? e.message : e);
@@ -1586,17 +1546,8 @@
   };
   // Relê do banco sem importar nada.
   window.__apSgRecarregar = function () { carregarSoutag(true); };
-  // Clicar no posto aberto fecha, como o detalhe do cupom e o do posto.
-  window.__apSgPosto = function (v) {
-    _sgAberto = (_sgAberto === v) ? '' : (v || '');
-    pintar();
-  };
-  // Clicar no card de status aceso solta o filtro — sem isso, quem clica num
-  // dos quatro fica preso nele e vai procurar um botão "todos" que não há.
-  window.__apSgStatus = function (v) {
-    _sgStatus = (_sgStatus === v) ? 'todos' : (v || 'todos');
-    pintar();
-  };
+  // __apSgPosto e __apSgStatus saíram junto com o detalhe por posto e os
+  // quatro cartões de status: a tabela de totais não expande nem filtra.
   // A comparação depende do recorte da TecnoX; trocar período/canal invalida
   // o cruzamento, mas NÃO a planilha — ela é do arquivo, não do recorte.
 
