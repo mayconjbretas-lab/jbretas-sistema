@@ -116,6 +116,16 @@ function hexDe(rgb) {
 // "P. BRUNA" -> "POSTO BRUNA LTDA": a planilha da Soutag traz razão social,
 // e é isso que a normalização da tela tem de desfazer. Sem regex de
 // propósito — a barra invertida dentro de um patch gerado é onde o erro mora.
+// litros() e reais() vivem DENTRO do IIFE do modulo — o harness nao os
+// alcanca. Estes formatam igual: litros sem decimal + " L", reais com duas
+// casas. toLocaleString e nao Math.round: no empate os dois arredondam para
+// lados diferentes.
+function litrosT(v) {
+  return Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' L';
+}
+function reaisT(v) {
+  return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 function razaoSocial(nome) {
   var t = String(nome == null ? '' : nome);
   if (t.indexOf('P. ') === 0) t = t.slice(3);
@@ -638,12 +648,16 @@ async function rodar() {
   var somaL = esperados.reduce(function (t, i) { return t + i.litros; }, 0);
   eh(cr[3].indexOf(Math.round(somaL).toLocaleString('pt-BR')) >= 0,
      'e soma os litros DA LISTA', cr[3], Math.round(somaL).toLocaleString('pt-BR') + ' L');
+  // O TETO SUBIU PARA 5.000 e um dia inteiro passou a caber: em 14/09 são
+  // 3.740 itens, então a rota devolve todos e NÃO há aviso. Antes, com 2.000,
+  // o corte caía depois da ordenação por preço e a lista de GC chegava com 80
+  // dos 1.390 do dia — é isso que o teto novo conserta.
   var aviso = document.querySelector('#palco .ap-aviso');
-  eh(!!aviso && /2000/.test(aviso.textContent), 'o aviso do teto aparece, com o número da rota',
-     aviso ? aviso.textContent.trim() : '(nenhum)');
-  eh(!!aviso && aviso.textContent.indexOf(FIX.det.total.toLocaleString('pt-BR')) >= 0,
-     'e diz quantos itens o recorte tem', aviso ? aviso.textContent.trim() : '—',
-     FIX.det.total + '');
+  nota('total ' + FIX.det.total + ' · devolvidos ' + FIX.det.itens.length + ' · cortou ' + FIX.det.cortou);
+  eh(FIX.det.cortou === false, 'o dia inteiro cabe no teto', String(FIX.det.cortou), 'false');
+  eh(FIX.det.itens.length === FIX.det.total, 'a rota devolveu todos os itens',
+     FIX.det.itens.length + '', FIX.det.total + '');
+  eh(!aviso, 'e não há aviso de corte', aviso ? aviso.textContent.trim() : 'nenhum', 'nenhum');
 
   h3('16. O chip de combustível filtra');
   chip('ET').click();
@@ -721,6 +735,125 @@ async function rodar() {
   vbtn('Por posto').click();
   chip('GC').click();
   await esperar(180);
+
+  h3('26. Detalhe do cupom');
+  // A lista está na vista Por cupom neste ponto (seção 19 voltou para Por
+  // posto; aqui se entra de novo) e no chip GC.
+  var vbD = function (rot) { return [].slice.call(document.querySelectorAll('#palco .ap-vbtn'))
+    .filter(function (b) { return b.textContent.trim() === rot; })[0]; };
+  vbD('Por cupom').click();
+  await esperar(280);
+  // Um cupom com MAIS DE UM item, para o detalhe ter o que somar. A chave é
+  // posto|data|id_cupom — id_cupom sozinho é sequencial do PDV de cada posto.
+  var fonteD = /so_app=1/.test(CHAMADAS.filter(function (u) {
+    return u.indexOf('/app/cupons-detalhe') === 0; }).pop() || '') ? FIX.detApp : FIX.det;
+  var porChave = {};
+  fonteD.itens.forEach(function (i) {
+    var k = i.posto_id + '|' + i.data + '|' + i.id_cupom;
+    (porChave[k] = porChave[k] || []).push(i);
+  });
+  var chaves = Object.keys(porChave);
+  var multi = chaves.filter(function (k) { return porChave[k].length > 1; });
+  nota(chaves.length + ' cupons distintos · ' + multi.length + ' com mais de um item');
+  eh(multi.length > 0, 'há cupom com mais de um item no recorte', multi.length + '');
+  // Um cupom de GC (o chip está em GC, então a linha dele está na lista).
+  var alvoK = chaves.filter(function (k) {
+    return porChave[k].some(function (i) { return i.combustivel === 'GC'; });
+  })[0];
+  var alvoItens = porChave[alvoK];
+  var linhaAlvo = [].slice.call(document.querySelectorAll('#palco .ap-linha-cup'))
+    .filter(function (l) {
+      return (l.getAttribute('onclick') || '').indexOf(alvoK) >= 0;
+    })[0];
+  eh(!!linhaAlvo, 'a linha do cupom ' + alvoItens[0].id_cupom + ' está na lista');
+  eh(!document.querySelector('#palco .ap-cd'), 'nenhum detalhe aberto antes do clique');
+  linhaAlvo.click();
+  await esperar(250);
+  var cd = document.querySelector('#palco .ap-cd');
+  eh(!!cd, 'clicar abre o detalhe');
+  if (cd) {
+    var secs = [].slice.call(cd.querySelectorAll('.ap-cd-sec'));
+    var rots = secs.map(function (x) { return x.querySelector('.ap-cd-rot').textContent.trim(); });
+    nota('seções: ' + rots.join(' | '));
+    eh(rots[0] === 'Cupom', 'primeira seção é o cabeçalho do cupom', rots[0], 'Cupom');
+    eh(rots.indexOf('Cliente') >= 0, 'tem a seção Cliente');
+    eh(rots.indexOf('Total do cupom') >= 0, 'e a do total');
+    var txt = cd.textContent;
+    eh(txt.indexOf(String(alvoItens[0].id_cupom)) >= 0, 'mostra o ID do cupom',
+       String(alvoItens[0].id_cupom));
+    eh(txt.indexOf(alvoItens[0].nome_posto) >= 0, 'o posto', alvoItens[0].nome_posto);
+    eh(txt.indexOf('cod_cliente') >= 0 && txt.indexOf('nome_cliente') >= 0,
+       'os dois campos de cliente, com o nome da coluna');
+    // Vazio aparece como (vazio), não desaparece: o pedido é conferir.
+    // split em vez de regex: contar ocorrencia de uma cadeia fixa nao precisa
+    // de barra invertida — e e a barra que vaza em patch gerado.
+    var vazios = txt.split('(vazio)').length - 1;
+    nota('campos de cliente vazios mostrados como (vazio): ' + vazios);
+    // Todos os itens do cupom.
+    var linsIt = [].slice.call(cd.querySelectorAll('.ap-cd-sec')).filter(function (x) {
+      // /ite(m|ns)/ e nao /item/: o rotulo e "Item" no singular e "2 itens" no
+      // plural, e "item" NAO e substring de "itens" (i-t-e-n-s).
+      return /ite(m|ns)/i.test(x.querySelector('.ap-cd-rot').textContent);
+    })[0].querySelectorAll('.ap-cd-linha');
+    eh(linsIt.length === alvoItens.length, 'uma linha por item do cupom',
+       linsIt.length + '', alvoItens.length + '');
+    // O total soma os itens.
+    var somaL = alvoItens.reduce(function (t, i) { return t + i.litros; }, 0);
+    var somaV = alvoItens.reduce(function (t, i) { return t + i.valor_liquido; }, 0);
+    var secTot = [].slice.call(cd.querySelectorAll('.ap-cd-sec')).filter(function (x) {
+      return x.querySelector('.ap-cd-rot').textContent.trim() === 'Total do cupom';
+    })[0];
+    nota('total na tela: ' + secTot.textContent.trim());
+    eh(secTot.textContent.indexOf(litrosT(somaL)) >= 0, 'total de litros = soma dos itens',
+       secTot.textContent, litrosT(somaL));
+    eh(secTot.textContent.indexOf(reaisT(somaV)) >= 0, 'e o valor também',
+       secTot.textContent, reaisT(somaV));
+    // Os campos crus do registro.
+    eh(txt.indexOf('id na tabela') >= 0 && txt.indexOf('gravado em') >= 0,
+       'mostra o id da linha e o criado_em');
+    eh(/bruto e desconto n[ãa]o existem/i.test(txt),
+       'e explica por que bruto e desconto não estão',
+       (cd.querySelector('.ap-cd-nota') || {}).textContent || '(sem nota)');
+    // Visual: painel com canto de 12px e seções com régua, como o da
+    // Movimentação.
+    var ccd = getComputedStyle(cd);
+    eh(ccd.borderRadius === '12px', 'painel com border-radius 12px', ccd.borderRadius, '12px');
+    eh(ccd.paddingTop === '20px' && ccd.paddingLeft === '24px', 'e padding 20px 24px',
+       ccd.paddingTop + ' ' + ccd.paddingLeft, '20px 24px');
+    // A régua fica ENTRE as seções: da segunda em diante cada uma tem borda em
+    // CIMA, e a primeira não tem nenhuma. Assim não sobra régua embaixo da
+    // última, que foi o defeito que esta asserção pegou.
+    eh(parseFloat(getComputedStyle(secs[0]).borderTopWidth) === 0,
+       'a primeira seção não tem régua em cima', getComputedStyle(secs[0]).borderTopWidth, '0px');
+    eh(secs.slice(1).every(function (x) { return parseFloat(getComputedStyle(x).borderTopWidth) > 0; }),
+       'e as seguintes têm, uma entre cada par',
+       secs.map(function (x) { return getComputedStyle(x).borderTopWidth; }).join(' '));
+    eh(secs.every(function (x) { return parseFloat(getComputedStyle(x).borderBottomWidth) === 0; }),
+       'e nenhuma tem régua embaixo (não sobra depois da última)',
+       secs.map(function (x) { return getComputedStyle(x).borderBottomWidth; }).join(' '));
+  }
+  h3('27. Clicar de novo fecha');
+  linhaAlvo.click();
+  await esperar(220);
+  eh(!document.querySelector('#palco .ap-cd'), 'o detalhe fechou');
+  eh(document.querySelectorAll('#palco .ap-linha-cup').length > 0, 'e a lista continua inteira',
+     document.querySelectorAll('#palco .ap-linha-cup').length + ' linha(s)');
+  // Abrir outro fecha o primeiro: é um por vez.
+  linhaAlvo.click();
+  await esperar(200);
+  var outra = [].slice.call(document.querySelectorAll('#palco .ap-linha-cup'))
+    .filter(function (l) { return l !== linhaAlvo; })[1];
+  if (outra) {
+    outra.click();
+    await esperar(220);
+    eh(document.querySelectorAll('#palco .ap-cd').length === 1,
+       'abrir outro deixa UM detalhe aberto',
+       document.querySelectorAll('#palco .ap-cd').length + '', '1');
+    outra.click();
+    await esperar(200);
+  }
+  vbD('Por posto').click();
+  await esperar(200);
 
   h3('20. O chip TODOS');
   // O TOGGLE É DESLIGADO AQUI de propósito: esta seção compara com o bloco

@@ -99,6 +99,12 @@
   // Ordenação da lista de cupons. O padrão é o da rota (preço crescente):
   // a pergunta da vista é quem pagou mais barato.
   var _ordemDet = { campo: 'preco', dir: 'asc' };
+  // Cupom aberto na vista Por cupom. A chave é posto|data|id_cupom, e NÃO só
+  // o id_cupom: ele é sequencial do PDV de cada posto, então dois postos
+  // repetem o mesmo número no mesmo dia. Agrupar só por ele juntaria cupons
+  // de postos diferentes num detalhe só — é o mesmo cuidado que o
+  // agregarCuponsApp toma para contar cupom distinto (ver lib/app-cupons.js).
+  var _cupomAberto = null;
 
   // ════════ SOUTAG vs TECNOX ════════
   // A planilha da Soutag é lida NO NAVEGADOR e cruzada com os itens que a
@@ -264,6 +270,24 @@
       '.ap-th:hover{color:var(--tx)}' +
       '.ap-seta-in{color:var(--ac);margin-left:3px}' +
       '.ap-aviso{font:.7rem var(--mono);color:var(--wn,var(--ac));padding:.5rem 0 0}' +
+      // ── Detalhe do cupom ──
+      // Mesmo desenho do detalhe do posto da Movimentação: painel no primeiro
+      // nível de superfície, canto de 12px, seções com rótulo e régua, e a
+      // última sem régua. Aqui em --sf (o wrap é --bg/--sf2), para o painel
+      // ler como embutido na linha que o abriu.
+      '.ap-linha-cup.aberto{background:color-mix(in srgb,var(--ac) 8%,transparent)}' +
+      '.ap-cd{background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:20px 24px;margin:8px 0 12px}' +
+      // RÉGUA ENTRE SEÇÕES, por irmão adjacente, e não border-bottom + 
+      // :last-of-type: o último DIV do painel é a nota, não a última seção,
+      // então o :last-of-type não casava com ela e a régua sobrava embaixo da
+      // última — somada à borda da nota. Assim a regra não depende de quem
+      // vem depois.
+      '.ap-cd-sec{margin-bottom:16px}' +
+      '.ap-cd-sec + .ap-cd-sec{border-top:.5px solid var(--bd);padding-top:14px}' +
+      '.ap-cd-rot{font:11px var(--mono);letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);margin-bottom:6px}' +
+      '.ap-cd-linha{display:flex;justify-content:space-between;gap:.8rem;padding:3px 0;font:.72rem var(--mono);color:var(--tx2)}' +
+      '.ap-cd-linha b{color:var(--tx);font-weight:500}' +
+      '.ap-cd-nota{font:.64rem var(--mono);color:var(--tx3);font-style:italic;margin-top:12px;padding-top:10px;border-top:.5px solid var(--bd)}' +
       // ── Soutag vs TecnoX ──
       '.ap-sg-topo{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:12px}' +
       '.ap-sg-imp{background:var(--sf2);color:var(--tx)}' +
@@ -773,7 +797,11 @@
       '<span class="ap-n">' + reais(nV) + '</span>' +
     '</div>';
     var linhas = itens.map(function (i) {
-      return '<div class="ap-linha ap-cab-cup ap-linha-cup">' +
+      var ck = chaveCupom(i);
+      var aberto = (_cupomAberto === ck);
+      return '<div class="ap-linha ap-cab-cup ap-linha-cup' + (aberto ? ' aberto' : '') + '"' +
+        ' role="button" tabindex="0" aria-expanded="' + (aberto ? 'true' : 'false') + '"' +
+        ' onclick="__apCupom(\'' + esc(ck) + '\')">' +
         '<span class="ap-c-data">' + esc(diaCurto(i.data)) + '</span>' +
         '<span class="ap-c-posto"><span class="ap-badge" style="background:' + fundo +
           ';color:' + cor + '">' + esc(i.nome_posto || '—') + '</span></span>' +
@@ -781,7 +809,7 @@
         '<span class="ap-n">' + litros(i.litros) + '</span>' +
         '<span class="ap-n" style="color:' + cor + ';font-weight:700">' + preco(i.preco_litro) + '</span>' +
         '<span class="ap-n">' + reais(i.valor_liquido) + '</span>' +
-      '</div>';
+      '</div>' + (aberto ? htmlCupomDet(i) : '');
     }).join('');
     // O aviso do teto vem da ROTA, com o número dela — repetir 2000 aqui
     // seria uma segunda cópia do limite.
@@ -791,6 +819,86 @@
       : '';
     return '<div class="ap-lista">' + htmlCabCupom() + rede + linhas + '</div>' + aviso;
   }
+  // ── Detalhe do cupom ───────────────────────────────────────────
+  // Mostra TUDO o que a tecnox_cupom_app guarda daquele cupom. Os itens saem
+  // do que a rota já devolveu — não há segunda chamada.
+  //
+  // ATENÇÃO AO QUE O 'TUDO' ALCANÇA: com "Só preço de app" LIGADO, a rota já
+  // deixou de fora os itens cobrados no preço de placa, e um cupom misto pode
+  // aparecer aqui com menos itens do que a tabela tem. O aviso no pé do
+  // detalhe diz isso — sem ele, um cupom de GC+ET apareceria com um item só e
+  // pareceria que a TecnoX mandou incompleto.
+  function chaveCupom(i) {
+    return String(i.posto_id) + '|' + String(i.data) + '|' + String(i.id_cupom == null ? '' : i.id_cupom);
+  }
+  window.__apCupom = function (ck) {
+    _cupomAberto = (_cupomAberto === ck) ? null : ck;   // clicar de novo fecha
+    pintar();
+  };
+  // Uma linha rótulo/valor, no formato do detalhe do posto da Movimentação.
+  function cdLin(rot, val) {
+    return '<div class="ap-cd-linha"><span>' + esc(rot) + '</span><b>' + val + '</b></div>';
+  }
+  function cdSec(rot, corpo) {
+    return '<div class="ap-cd-sec"><div class="ap-cd-rot">' + esc(rot) + '</div>' + corpo + '</div>';
+  }
+  function htmlCupomDet(ref) {
+    var ck = chaveCupom(ref);
+    // TODOS os itens do mesmo cupom, inclusive os que o chip de combustível
+    // está escondendo na lista: o detalhe é do cupom, não do recorte.
+    var itens = ((_det && _det.itens) || []).filter(function (i) { return chaveCupom(i) === ck; });
+    if (!itens.length) return '';
+    var i0 = itens[0];
+    var cfg = CANAIS[i0.canal] || CANAIS[_canal] || { rot: i0.canal, cor: '', fundo: '' };
+    var somaL = 0, somaV = 0;
+    itens.forEach(function (i) { somaL += Number(i.litros) || 0; somaV += Number(i.valor_liquido) || 0; });
+
+    var cab = cdSec('Cupom',
+      cdLin('ID do cupom', esc(i0.id_cupom == null ? '—' : i0.id_cupom)) +
+      cdLin('Data', esc(brDataCurta(i0.data))) +
+      cdLin('Posto', esc(i0.nome_posto || '—')) +
+      cdLin('Canal', '<span class="ap-badge" style="background:' + cfg.fundo + ';color:' + cfg.cor +
+        '">' + esc(cfg.rot || i0.canal) + '</span>'));
+
+    // Uma linha por ITEM. Dois do mesmo combustível no mesmo cupom acontecem
+    // (medido em 14/09/2026: 151 cupons com mais de um item, e o primeiro
+    // deles é ET+ET) — por isso a lista é por item e não por combustível.
+    var linsItens = itens.map(function (i, k) {
+      return cdLin((itens.length > 1 ? (k + 1) + '. ' : '') + (i.combustivel || '—'),
+        litros(i.litros) + '  ·  ' + preco(i.preco_litro) + '/L  ·  ' + reais(i.valor_liquido));
+    }).join('');
+    var sItens = cdSec(itens.length === 1 ? 'Item' : (itens.length + ' itens'), linsItens);
+
+    // BRUTO E DESCONTO NÃO EXISTEM NESTA TABELA. Ela guarda o líquido do
+    // item (ver sql/tecnox_cupom_app.sql); bruto e desconto vivem agregados
+    // em tecnox_venda_dia, por posto × dia × combustível, e não por cupom.
+    // Dito aqui em vez de omitido: quem abre o detalhe para conferir um
+    // desconto precisa saber por que ele não está.
+    var sCliente = cdSec('Cliente',
+      cdLin('cod_cliente', esc(i0.cod_cliente == null || i0.cod_cliente === '' ? '(vazio)' : i0.cod_cliente)) +
+      cdLin('nome_cliente', esc(i0.nome_cliente == null || i0.nome_cliente === '' ? '(vazio)' : i0.nome_cliente)));
+
+    var sTotal = cdSec('Total do cupom',
+      cdLin('Litros', litros(somaL)) +
+      cdLin('Valor líquido', reais(somaV)) +
+      cdLin('R$ por litro', somaL > 0 ? preco(somaV / somaL) : '—'));
+
+    var sBruto = cdSec('Registro',
+      cdLin('id na tabela', itens.map(function (i) { return esc(i.id == null ? '—' : i.id); }).join(', ')) +
+      cdLin('gravado em', esc(i0.criado_em ? String(i0.criado_em).replace('T', ' ').slice(0, 19) : '—')));
+
+    var nota = '<div class="ap-cd-nota">Bruto e desconto não existem nesta tabela — ela guarda o líquido do item. ' +
+      'Eles vivem agregados em tecnox_venda_dia, por posto × dia × combustível.' +
+      (_soApp ? '<br>Com "Só preço de app" ligado, itens deste cupom cobrados no preço da placa ficaram fora.' : '') +
+      '</div>';
+    return '<div class="ap-cd">' + cab + sItens + sCliente + sTotal + sBruto + nota + '</div>';
+  }
+  // dd/mm/aaaa no detalhe: ali o ano cabe e a data é o que se confere.
+  function brDataCurta(iso) {
+    var p = String(iso || '').split('-');
+    return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(iso || '');
+  }
+
   // dd/mm: o período está no filtro logo acima; o ano em 2.000 linhas não
   // informa nada.
   function diaCurto(iso) {
