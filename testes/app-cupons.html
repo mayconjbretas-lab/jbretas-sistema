@@ -35,6 +35,10 @@
 // 6. Sub-botão Soutag vs 99 troca o canal, as cores e refaz a chamada.
 // 7. Sete colunas fixas de 150px (nada de 1fr) e cards 150×96.
 // 8. Mobile (375px): cards 2 por linha e colunas de preço fora da linha.
+// 10. A vista "Por cupom": botão ao lado de "Por posto", lista item a item
+//     com as seis colunas, badge do posto na cor do canal, chip de
+//     combustível filtrando, cabeçalho ordenando, REDE no topo, aviso do
+//     teto de 2.000, e troca de vista sem rebuscar.
 // 9. O toggle "Só preço de app" vem LIGADO, tira os cupons cobrados no
 //    preço da placa (GC de 14/09: 1.390 itens → 832), derruba o preço médio
 //    e o máximo, NÃO chama a API, e desligado devolve os números cheios.
@@ -61,9 +65,15 @@ function pintar() { document.getElementById('res').innerHTML = linhas.join('\n')
 function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
 var FIX = {};
+var DET_ERRO = null;
 var CHAMADAS = [];
 window.apiFetch = function (url) {
   CHAMADAS.push(String(url));
+  // A rota de detalhe: dois fixtures REAIS de 14/09, um com so_app e um sem.
+  if (String(url).indexOf('/app/cupons-detalhe') === 0) {
+    if (DET_ERRO) return Promise.reject(DET_ERRO);
+    return Promise.resolve(/so_app=1/.test(String(url)) ? FIX.detApp : FIX.det);
+  }
   var m = /canal=([^&]+)/.exec(url);
   var canal = m ? decodeURIComponent(m[1]) : 'SOUTAG';
   return Promise.resolve(canal === '99' ? FIX.n99 : FIX.soutag);
@@ -86,6 +96,14 @@ function js(src) {
     s.onerror = function () { erro(new Error(src + ' não carregou')); };
     document.body.appendChild(s);
   });
+}
+// rgb() -> #RRGGBB, para comparar com os hex do pedido.
+function hexDe(rgb) {
+  var m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgb);
+  if (!m) return rgb;
+  return '#' + [1, 2, 3].map(function (i) {
+    return ('0' + Number(m[i]).toString(16)).slice(-2).toUpperCase();
+  }).join('');
 }
 function cards()   { return [].slice.call(document.querySelectorAll('#palco .ap-card')); }
 function rot(i)    { var c = cards()[i]; return c ? c.querySelector('.ap-rot').textContent.trim() : null; }
@@ -392,12 +410,25 @@ async function rodar() {
   eh(colsDe('.ap-linha').length === 7 && colsDe('.ap-rede').length === 7,
      'linha e REDE acompanham', colsDe('.ap-linha').length + '/' + colsDe('.ap-rede').length);
 
-  h3('9. "Por motorista" visível e desativado');
-  var pm = [].slice.call(document.querySelectorAll('#palco .ap-atalho'))
+  h3('9. Os dois botões de vista');
+  // ERA o "Por motorista", desativado à espera de dado de cliente que a
+  // TecnoX não manda. Foi substituído pelas duas vistas da lista, e esta
+  // seção guarda as duas pontas: as novas existem e a antiga não voltou.
+  var vistas = [].slice.call(document.querySelectorAll('#palco .ap-vbtn'))
+    .map(function (b) { return b.textContent.trim(); });
+  nota('vistas: ' + vistas.join(' · '));
+  eh(vistas.join('|') === 'Por posto|Por cupom', 'Por posto e Por cupom, nessa ordem',
+     vistas.join('|'), 'Por posto|Por cupom');
+  var motorista = [].slice.call(document.querySelectorAll('#palco .ap-atalho'))
     .filter(function (b) { return /motorista/i.test(b.textContent); })[0];
-  eh(!!pm, 'o botão existe');
-  eh(pm.disabled === true, 'está desativado');
-  eh(/aguardando dados do convênio/.test(pm.title), 'com o tooltip', pm.title);
+  eh(!motorista, 'o "Por motorista" não existe mais',
+     motorista ? 'ainda está lá' : 'ausente');
+  // Os três atalhos de PERÍODO seguem intactos ao lado deles.
+  var periodos = [].slice.call(document.querySelectorAll('#palco .ap-atalho'))
+    .filter(function (b) { return b.className.indexOf('ap-vbtn') < 0; })
+    .map(function (b) { return b.textContent.trim(); });
+  eh(periodos.join('|') === 'Ontem|7 dias|30 dias', 'e os atalhos de período continuam',
+     periodos.join('|'), 'Ontem|7 dias|30 dias');
 
   h3('10. Estreito (375px)');
   h3('10. O chip de GNV');
@@ -444,8 +475,20 @@ async function rodar() {
   var cw = getComputedStyle(wrap);
   eh(!!wrap, 'o .ap-wrap existe');
   eh(cw.maxWidth === '1400px', 'teto de 1400px', cw.maxWidth, '1400px');
-  eh(cw.marginLeft === cw.marginRight && cw.marginLeft !== '0px',
-     'margens laterais iguais (margin:0 auto centrando)', cw.marginLeft + ' / ' + cw.marginRight);
+  // SÓ DÁ PARA AFIRMAR A CENTRALIZAÇÃO QUANDO HÁ FOLGA: com o contêiner
+  // mais estreito que os 1400px do teto, o margin:auto resolve em 0 e o
+  // wrap ocupa tudo — o que está certo. Afirmar margem > 0 numa janela de
+  // 1400px reprovaria o CSS correto.
+  var largoDoPalco = document.getElementById('palco').clientWidth;
+  eh(cw.marginLeft === cw.marginRight, 'margens laterais IGUAIS (margin:0 auto)',
+     cw.marginLeft + ' / ' + cw.marginRight);
+  if (largoDoPalco > 1400) {
+    eh(cw.marginLeft !== '0px', 'e maiores que zero, porque há folga',
+       cw.marginLeft + ' (palco ' + largoDoPalco + 'px)');
+  } else {
+    nota('palco com ' + largoDoPalco + 'px: mais estreito que o teto de 1400,');
+    nota('então margin:auto resolve em 0 — a centralização aparece acima de 1400px.');
+  }
   eh(getComputedStyle(sec).display === 'block', 'a seção segue display:block (não flex)',
      getComputedStyle(sec).display, 'block');
   // O .ap-wrap tem UM filho (o #ap-corpo); barra, cards e lista são filhos
@@ -500,6 +543,162 @@ async function rodar() {
   eh(!!det2 && getComputedStyle(det2).paddingLeft === '20px', 'detalhe indentado 20px',
      det2 ? getComputedStyle(det2).paddingLeft : '(sem detalhe)', '20px');
   if (det2) { linhasP()[0].click(); await esperar(120); }
+
+  h3('13. Vista "Por cupom": o botão');
+  FIX.det    = await baixar('/testes/fixtures-app-detalhe.json');
+  FIX.detApp = await baixar('/testes/fixtures-app-detalhe-soapp.json');
+  nota('fixtures: ' + FIX.det.total + ' itens no total (' + FIX.det.itens.length +
+       ' devolvidos) · com so_app ' + FIX.detApp.total + ' (' + FIX.detApp.itens.length + ')');
+  var vbtn = function (rot) {
+    return [].slice.call(document.querySelectorAll('#palco .ap-vbtn'))
+      .filter(function (b) { return b.textContent.trim() === rot; })[0];
+  };
+  eh(!!vbtn('Por posto') && !!vbtn('Por cupom'), 'os dois botões de vista existem');
+  eh(!document.querySelector('#palco .ap-atalho[disabled]') ||
+     [].slice.call(document.querySelectorAll('#palco .ap-atalho[disabled]'))
+       .every(function (b) { return !/motorista/i.test(b.textContent); }),
+     'e o "Por motorista" não existe mais',
+     [].slice.call(document.querySelectorAll('#palco .ap-atalho')).map(function (b) { return b.textContent.trim(); }).join(' · '));
+  eh(vbtn('Por posto').getAttribute('aria-pressed') === 'true', 'Por posto marcado no começo',
+     vbtn('Por posto').getAttribute('aria-pressed'), 'true');
+
+  h3('14. A lista item a item');
+  var antes14 = CHAMADAS.length;
+  vbtn('Por cupom').click();
+  await esperar(250);
+  var det = CHAMADAS.filter(function (u) { return u.indexOf('/app/cupons-detalhe') === 0; });
+  eh(det.length === 1, 'buscou a rota de detalhe uma vez', det.length + '', '1');
+  nota('url: ' + det[0]);
+  // O PERÍODO SAI DO FILTRO, não de uma data cravada: o padrão do módulo é
+  // "ontem", que muda com o relógio de quem roda o teste. Cravar 14/09
+  // reprovaria a tela por causa da data de hoje.
+  var dDe = document.querySelector('#palco .ap-data').value;
+  var dAte = document.querySelectorAll('#palco .ap-data')[1].value;
+  eh(det[0].indexOf('de=' + dDe + '&ate=' + dAte) >= 0, 'com o período do filtro',
+     det[0], 'de=' + dDe + '&ate=' + dAte);
+  eh(/canal=SOUTAG/.test(det[0]), 'e o canal');
+  // O toggle está DESLIGADO neste ponto do harness (ver a seção 0e), então
+  // a rota é chamada sem so_app.
+  eh(!/so_app=1/.test(det[0]), 'sem so_app (o toggle está desligado aqui)', det[0]);
+  var cabCup = document.querySelector('#palco .ap-cab-cup');
+  eh(!!cabCup, 'o cabeçalho da lista por cupom existe');
+  var ths = [].slice.call(cabCup.querySelectorAll('.ap-th')).map(function (b) { return b.textContent.replace(/[↑↓]/g, '').trim(); });
+  nota('cabeçalho: ' + ths.join(' · '));
+  eh(ths.join('|') === 'Data|Posto|Combustível|Litros|R$/litro|Valor',
+     'com as seis colunas pedidas', ths.join('|'), 'Data|Posto|Combustível|Litros|R$/litro|Valor');
+  var lin = [].slice.call(document.querySelectorAll('#palco .ap-linha-cup'));
+  // O chip está em GC neste ponto (a seção 10 voltou para ele).
+  var esperados = FIX.det.itens.filter(function (i) { return i.combustivel === 'GC'; });
+  nota(lin.length + ' linhas na tela · ' + esperados.length + ' itens de GC no fixture');
+  eh(lin.length === esperados.length, 'uma linha por item do combustível do chip',
+     lin.length + '', esperados.length + '');
+  var c1 = lin[0].children;
+  nota('primeira linha: ' + [].slice.call(c1).map(function (e) { return e.textContent.trim(); }).join(' | '));
+  eh(/^\d{2}\/\d{2}$/.test(c1[0].textContent.trim()), 'data em dd/mm', c1[0].textContent.trim());
+  eh(!!c1[1].querySelector('.ap-badge'), 'posto em badge');
+  eh(!!c1[2].querySelector('.ap-cchip'), 'combustível em chip');
+  // O badge na cor do canal: Soutag é roxo #3C3489 sobre #EEEDFE.
+  var badge = c1[1].querySelector('.ap-badge');
+  eh(hexDe(getComputedStyle(badge).color) === '#3C3489', 'badge na cor do Soutag',
+     hexDe(getComputedStyle(badge).color), '#3C3489');
+  eh(hexDe(getComputedStyle(c1[4]).color) === '#3C3489', 'e o R$/litro destacado na mesma cor',
+     hexDe(getComputedStyle(c1[4]).color), '#3C3489');
+
+  h3('15. REDE no topo e aviso do teto');
+  var redeC = document.querySelector('#palco .ap-rede.ap-cab-cup');
+  eh(!!redeC, 'a linha REDE existe');
+  var cr = [].slice.call(redeC.children).map(function (e) { return e.textContent.trim(); });
+  nota('REDE: ' + cr.join(' | '));
+  eh(cr[0] === 'REDE', 'diz REDE', cr[0]);
+  eh(cr[1] === esperados.length.toLocaleString('pt-BR') + ' cupons' ||
+     cr[1] === esperados.length + ' cupons', 'conta os cupons da lista', cr[1],
+     esperados.length + ' cupons');
+  var somaL = esperados.reduce(function (t, i) { return t + i.litros; }, 0);
+  eh(cr[3].indexOf(Math.round(somaL).toLocaleString('pt-BR')) >= 0,
+     'e soma os litros DA LISTA', cr[3], Math.round(somaL).toLocaleString('pt-BR') + ' L');
+  var aviso = document.querySelector('#palco .ap-aviso');
+  eh(!!aviso && /2000/.test(aviso.textContent), 'o aviso do teto aparece, com o número da rota',
+     aviso ? aviso.textContent.trim() : '(nenhum)');
+  eh(!!aviso && aviso.textContent.indexOf(FIX.det.total.toLocaleString('pt-BR')) >= 0,
+     'e diz quantos itens o recorte tem', aviso ? aviso.textContent.trim() : '—',
+     FIX.det.total + '');
+
+  h3('16. O chip de combustível filtra');
+  chip('ET').click();
+  await esperar(180);
+  var linET = document.querySelectorAll('#palco .ap-linha-cup').length;
+  var espET = FIX.det.itens.filter(function (i) { return i.combustivel === 'ET'; }).length;
+  eh(linET === espET, 'ET mostra só os itens de ET', linET + '', espET + '');
+  eh(linET !== lin.length, 'e o número muda ao trocar de chip',
+     'GC ' + lin.length + ' → ET ' + linET);
+  var combsNaTela = new Set([].slice.call(document.querySelectorAll('#palco .ap-linha-cup .ap-cchip'))
+    .map(function (e) { return e.textContent.trim(); }));
+  eh(combsNaTela.size === 1 && combsNaTela.has('ET'), 'e toda linha é do combustível do chip',
+     [...combsNaTela].join(','), 'ET');
+  eh(CHAMADAS.filter(function (u) { return u.indexOf('/app/cupons-detalhe') === 0; }).length === 1,
+     'trocar de chip NÃO rebusca',
+     CHAMADAS.filter(function (u) { return u.indexOf('/app/cupons-detalhe') === 0; }).length + '', '1');
+
+  h3('17. Ordenar pelo cabeçalho');
+  var thDe = function (rot) {
+    return [].slice.call(document.querySelectorAll('#palco .ap-cab-cup .ap-th'))
+      .filter(function (b) { return b.textContent.replace(/[↑↓]/g, '').trim() === rot; })[0];
+  };
+  var precos = function () {
+    return [].slice.call(document.querySelectorAll('#palco .ap-linha-cup'))
+      .map(function (l) { return parseFloat(l.children[4].textContent.replace(/[^0-9,]/g, '').replace(',', '.')); });
+  };
+  var p0 = precos();
+  eh(p0.length > 1, 'há linhas para ordenar', p0.length + '');
+  var cresc = p0.every(function (v, k) { return k === 0 || p0[k - 1] <= v + 1e-9; });
+  eh(cresc, 'começa em preço CRESCENTE (mais barato primeiro)',
+     p0.slice(0, 3).join(' ≤ ') + ' …');
+  thDe('R$/litro').click();
+  await esperar(180);
+  var p1 = precos();
+  var desc = p1.every(function (v, k) { return k === 0 || p1[k - 1] >= v - 1e-9; });
+  eh(desc, 'clicar inverte para decrescente', p1.slice(0, 3).join(' ≥ ') + ' …');
+  eh(Math.abs(p1[0] - Math.max.apply(null, p0)) < 1e-9, 'e o primeiro passa a ser o mais caro',
+     p1[0] + '', Math.max.apply(null, p0) + '');
+  thDe('Litros').click();
+  await esperar(180);
+  var lits = [].slice.call(document.querySelectorAll('#palco .ap-linha-cup'))
+    .map(function (l) { return parseFloat(l.children[3].textContent.replace(/[^0-9]/g, '')); });
+  eh(lits.every(function (v, k) { return k === 0 || lits[k - 1] >= v; }),
+     'Litros começa do maior', lits.slice(0, 3).join(' ≥ ') + ' …');
+  thDe('R$/litro').click();
+  await esperar(180);
+
+  h3('18. O toggle rebusca com so_app e reduz os itens');
+  var tgl = chip('Só preço de app');
+  eh(tgl.getAttribute('aria-pressed') === 'false', 'o toggle está desligado aqui',
+     tgl.getAttribute('aria-pressed'));
+  tgl.click();
+  await esperar(250);
+  var det2 = CHAMADAS.filter(function (u) { return u.indexOf('/app/cupons-detalhe') === 0; });
+  eh(det2.length === 2, 'ligar o toggle rebusca (o corte é do servidor)', det2.length + '', '2');
+  eh(/so_app=1/.test(det2[1]), 'agora com so_app=1', det2[1]);
+  var linSo = document.querySelectorAll('#palco .ap-linha-cup').length;
+  var espSo = FIX.detApp.itens.filter(function (i) { return i.combustivel === 'ET'; }).length;
+  eh(linSo === espSo, 'a lista passa a ser a filtrada', linSo + '', espSo + '');
+  nota('ET: ' + espET + ' itens sem filtro → ' + espSo + ' com "só preço de app"');
+  eh(espSo < espET, 'e são menos itens', espSo + ' < ' + espET);
+
+  h3('19. Trocar de vista não rebusca');
+  var antes19 = CHAMADAS.length;
+  vbtn('Por posto').click();
+  await esperar(180);
+  eh(!!document.querySelector('#palco .ap-linha') && !document.querySelector('#palco .ap-linha-cup'),
+     'volta para a lista por posto');
+  vbtn('Por cupom').click();
+  await esperar(180);
+  eh(!!document.querySelector('#palco .ap-linha-cup'), 'e volta para a de cupom');
+  eh(CHAMADAS.length === antes19, 'sem NENHUMA chamada nova nas duas trocas',
+     (CHAMADAS.length - antes19) + '', '0');
+  // Volta ao estado que as seções seguintes esperam.
+  vbtn('Por posto').click();
+  chip('GC').click();
+  await esperar(180);
 
   var palco = document.getElementById('palco');
   palco.style.width = '375px';

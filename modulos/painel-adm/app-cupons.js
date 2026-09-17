@@ -74,6 +74,24 @@
   // AGREGAÇÃO VEM DUAS VEZES" na GET /app/cupons.
   var _soApp = true;
 
+  // ════════ VISTA: POR POSTO | POR CUPOM ════════
+  // "Por posto" é a lista de sempre (agregado por posto, da /app/cupons).
+  // "Por cupom" é o item a item, da /app/cupons-detalhe — uma rota separada
+  // porque o agregado não guarda a linha e a linha não cabe no agregado.
+  //
+  // CACHE POR CHAVE, e é o que faz a troca de vista não rebuscar: a chave é
+  // período + canal + so_app, tudo que muda o conjunto. Trocar de vista com a
+  // mesma chave desenha do que está na memória; trocar período ou canal muda
+  // a chave e a próxima abertura da vista busca.
+  var _vista = 'posto';
+  var _det = null;          // resposta da /app/cupons-detalhe
+  var _detChave = '';       // a chave do que está em _det
+  var _detCarregando = false;
+  var _detErro = '';
+  // Ordenação da lista de cupons. O padrão é o da rota (preço crescente):
+  // a pergunta da vista é quem pagou mais barato.
+  var _ordemDet = { campo: 'preco', dir: 'asc' };
+
   // ── Formatação (reusa o mmFmt, como o movimentacao-postos) ──────
   function nf(v, casas) {
     if (window.mmFmt && window.mmFmt.nf) return window.mmFmt.nf(v, casas);
@@ -143,6 +161,9 @@
       '.ap-chip{background:var(--sf2);border:1px solid var(--bd);border-radius:6px;color:var(--tx2);' +
         'padding:.25rem .6rem;font:700 .68rem var(--mono);cursor:pointer}' +
       '.ap-chip.on{background:var(--ac);border-color:var(--ac);color:#0a0d0f}' +
+      // Os dois botões de vista: .ap-atalho com estado, porque são escolha
+      // de UMA entre duas — não são atalho de período como os vizinhos.
+      '.ap-vbtn.on{background:var(--acd);border-color:var(--ac);color:var(--ac)}' +
       // O toggle: verde quando ligado, para não ser confundido com um chip de
       // combustível selecionado (amarelo do --ac). Desativado quando a
       // resposta não traz o bloco filtrado.
@@ -204,6 +225,27 @@
       '.ap-det th:first-child{text-align:left}' +
       '.ap-det td{font:.72rem var(--mono);color:var(--tx);padding:.28rem .7rem .28rem 0;text-align:right}' +
       '.ap-det td:first-child{text-align:left;font-weight:600}' +
+      // ── Lista POR CUPOM ──
+      // Seis colunas: as três primeiras com largura própria (data curta, nome
+      // de posto e código) e as três de número com os mesmos 110px. Fixas, e
+      // não 1fr, pela razão de sempre nesta tela: com fração os números
+      // espalham até a borda e param longe do nome.
+      '.ap-cab-cup{grid-template-columns:64px 230px 104px 110px 110px 120px}' +
+      '.ap-linha-cup{cursor:default}' +
+      '.ap-linha-cup:hover{background:color-mix(in srgb,var(--ac) 5%,transparent)}' +
+      '.ap-c-data{font:.72rem var(--mono);color:var(--tx3)}' +
+      '.ap-c-posto{overflow:hidden}' +
+      // O badge herda a cor do canal (roxo Soutag / âmbar 99), inline: a cor
+      // é dado, e vive no mapa CANAIS.
+      '.ap-badge{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;border-radius:20px;padding:2px 9px;font:700 .66rem var(--mono)}' +
+      '.ap-cchip{display:inline-block;border:1px solid var(--bd);border-radius:5px;padding:1px 7px;font:700 .64rem var(--mono);color:var(--tx2);background:var(--sf2)}' +
+      // Cabeçalho clicável: é botão de verdade (ordena), então tem cursor e
+      // hover. O resto do visual é o do .ap-cab span, para a linha não mudar
+      // de peso só porque virou botão.
+      '.ap-th{background:transparent;border:0;padding:0;text-align:inherit;cursor:pointer;font:700 .58rem var(--mono);letter-spacing:.05em;color:var(--tx3);text-transform:uppercase}' +
+      '.ap-th:hover{color:var(--tx)}' +
+      '.ap-seta-in{color:var(--ac);margin-left:3px}' +
+      '.ap-aviso{font:.7rem var(--mono);color:var(--wn,var(--ac));padding:.5rem 0 0}' +
       '.ap-estado,.ap-vazio{font:.75rem var(--mono);color:var(--tx3);padding:1rem 0}' +
       '.ap-erro{font:.75rem var(--mono);color:var(--dg);padding:1rem 0}' +
       // MOBILE: cards 2 por linha e as colunas de preço saem da linha — elas
@@ -216,6 +258,12 @@
         '.ap-cab{display:none}' +
         '.ap-linha,.ap-rede{grid-template-columns:1fr auto;gap:4px .7rem}' +
         '.ap-c-med,.ap-c-min,.ap-c-max,.ap-c-valor{display:none}' +
+        // POR CUPOM no celular: duas colunas (o que identifica à esquerda, o
+        // número à direita) e as três de número viram linhas dentro da célula.
+        // Esconder colunas aqui não serve — todas as seis são o dado.
+        '.ap-cab-cup{grid-template-columns:1fr auto}' +
+        '.ap-cab.ap-cab-cup{display:none}' +
+        '.ap-linha-cup .ap-c-comb,.ap-rede.ap-cab-cup .ap-c-comb{display:none}' +
         '.ap-det table{width:100%}' +
       '}';
     document.head.appendChild(st);
@@ -260,6 +308,37 @@
   }
   var _idx = {};
 
+  function chaveDet() {
+    return _de + '|' + _ate + '|' + _canal + '|' + (_soApp ? '1' : '0');
+  }
+  async function carregarDetalhe() {
+    var chave = chaveDet();
+    // ACERTO DE CACHE AINDA PINTA. Sem o pintar() aqui, voltar para a vista
+    // de cupom com os dados já em mão trocava o _vista e não redesenhava —
+    // a tela ficava na lista por posto. Não rebuscar não é não desenhar.
+    if (_det && _detChave === chave) { pintar(); return; }
+    _detCarregando = true; _detErro = ''; pintar();
+    var meu = ++_seq;
+    try {
+      var url = '/app/cupons-detalhe?de=' + encodeURIComponent(_de) +
+                '&ate=' + encodeURIComponent(_ate) +
+                '&canal=' + encodeURIComponent(_canal) +
+                (_soApp ? '&so_app=1' : '');
+      var r = await apiFetch(url);
+      if (meu !== _seq) return;
+      _det = r; _detChave = chave;
+    } catch (e) {
+      if (meu !== _seq) return;
+      _det = null; _detChave = '';
+      _detErro = (e && e.message) ? e.message : 'Falha ao carregar os cupons';
+    } finally {
+      if (meu === _seq) { _detCarregando = false; pintar(); }
+    }
+  }
+  // Período, canal e o toggle mudam a chave: o que está em _det fica velho.
+  // Zerado aqui em vez de refetchado, para não buscar uma vista fechada.
+  function invalidarDetalhe() { _det = null; _detChave = ''; _detErro = ''; }
+
   // O bloco do combustível escolhido dentro de um nível (rede ou posto).
   // null quando o posto não vendeu aquele combustível no período — e null
   // vira travessão na tela, não zero: não vender não é vender zero.
@@ -275,8 +354,28 @@
   window.__apCanal = function (c) {
     if (!CANAIS[c] || c === _canal) return;
     _canal = c; _postoAberto = null;
+    invalidarDetalhe();
     gravarHashApp();
     carregar();       // canal é outro recorte no servidor
+    if (_vista === 'cupom') carregarDetalhe();
+  };
+  window.__apVista = function (v) {
+    if (v !== 'posto' && v !== 'cupom') return;
+    if (v === _vista) return;
+    _vista = v;
+    _postoAberto = null;
+    if (v === 'cupom') carregarDetalhe();   // busca só se a chave mudou
+    else pintar();
+  };
+  // Clique no cabeçalho ordena. Mesma coluna inverte o sentido; coluna nova
+  // começa no sentido que a pergunta dela pede — preço e litros do menor para
+  // o maior, data e valor do maior para o menor.
+  window.__apOrdemDet = function (campo) {
+    var PADRAO = { data: 'desc', posto: 'asc', comb: 'asc', litros: 'desc', preco: 'asc', valor: 'desc' };
+    if (!PADRAO[campo]) return;
+    if (_ordemDet.campo === campo) _ordemDet.dir = (_ordemDet.dir === 'asc' ? 'desc' : 'asc');
+    else _ordemDet = { campo: campo, dir: PADRAO[campo] };
+    pintar();
   };
   window.__apComb = function (c) {
     if (COMBS.indexOf(c) < 0 || c === _comb) return;
@@ -288,7 +387,9 @@
     if (qual === 'de') _de = v; else _ate = v;
     if (_ate < _de) { _erro = 'Fim anterior ao início.'; _dados = null; pintar(); return; }
     _postoAberto = null;
+    invalidarDetalhe();
     carregar();
+    if (_vista === 'cupom') carregarDetalhe();
   };
   window.__apAtalho = function (qual) {
     var ontem = somaDias(hojeISO(), -1);
@@ -296,14 +397,19 @@
     if (qual === '7')  { _ate = ontem; _de = somaDias(ontem, -6); }
     if (qual === '30') { _ate = ontem; _de = somaDias(ontem, -29); }
     _postoAberto = null;
+    invalidarDetalhe();
     carregar();
+    if (_vista === 'cupom') carregarDetalhe();
   };
   // Recorte LOCAL, como o chip de combustível: o JSON já tem os dois blocos.
   window.__apSoApp = function () {
     if (!temFiltro()) return;
     _soApp = !_soApp;
     _postoAberto = null;
-    pintar();
+    // A vista Por posto tem os dois blocos em mão e só troca; a Por cupom
+    // depende do filtro ter sido feito no servidor, então rebusca.
+    invalidarDetalhe();
+    if (_vista === 'cupom') carregarDetalhe(); else pintar();
   };
   window.__apCard = function (id) {
     _ordem = (_ordem === id) ? 'litros' : id;   // clicar de novo volta ao padrão
@@ -337,6 +443,12 @@
         ' aria-pressed="' + (on ? 'true' : 'false') + '"' +
         ' onclick="__apCanal(\'' + c + '\')">' + esc(cfg.rot) + '</button>';
     };
+    var vbtn = function (v, rot) {
+      var on = (_vista === v);
+      return '<button type="button" class="ap-atalho ap-vbtn' + (on ? ' on' : '') + '"' +
+        ' aria-pressed="' + (on ? 'true' : 'false') + '"' +
+        ' onclick="__apVista(\'' + v + '\')">' + esc(rot) + '</button>';
+    };
     var chip = function (c) {
       return '<button type="button" class="ap-chip' + (_comb === c ? ' on' : '') + '"' +
         ' aria-pressed="' + (_comb === c ? 'true' : 'false') + '"' +
@@ -351,12 +463,11 @@
         '<button type="button" class="ap-atalho" onclick="__apAtalho(\'ontem\')">Ontem</button>' +
         '<button type="button" class="ap-atalho" onclick="__apAtalho(\'7\')">7 dias</button>' +
         '<button type="button" class="ap-atalho" onclick="__apAtalho(\'30\')">30 dias</button>' +
-        // Vista por motorista: botão à vista e desativado. O dado de cliente
-        // que a TecnoX manda hoje não identifica ninguém — 99,6% dos cupons
-        // vêm com o mesmo cod_cliente "1". Sem isso a vista existiria
-        // mostrando "todos os clientes do posto" como se fosse um.
-        '<button type="button" class="ap-atalho" disabled aria-disabled="true"' +
-          ' title="em breve — aguardando dados do convênio">Por motorista</button>' +
+        // AS DUAS VISTAS DA LISTA. Substituíram o botão "Por motorista", que
+        // era um desativado à espera de dado de cliente que a TecnoX não
+        // manda (99,6% dos cupons vêm com o mesmo cod_cliente "1"). O item a
+        // item responde a mesma curiosidade sem depender daquele campo.
+        vbtn('posto', 'Por posto') + vbtn('cupom', 'Por cupom') +
         '<div class="ap-chips">' + COMBS.map(chip).join('') + '</div>' +
         htmlSoApp() +
       '</div>';
@@ -515,6 +626,106 @@
       linhas + '</div>';
   }
 
+  // ── Lista POR CUPOM ─────────────────────────────────────────────
+  // Os itens do combustível do chip. O chip é de escolha ÚNICA (é o mesmo da
+  // vista Por posto), então a coluna COMBUSTÍVEL mostra sempre o mesmo código
+  // — ela fica porque é a linha do abastecimento, e ler uma linha sem saber de
+  // que combustível ela é depende de lembrar qual chip está aceso.
+  function itensDaVista() {
+    var todos = (_det && _det.itens) || [];
+    var so = todos.filter(function (i) { return i.combustivel === _comb; });
+    var dir = (_ordemDet.dir === 'asc') ? 1 : -1;
+    var campo = _ordemDet.campo;
+    var valor = function (i) {
+      if (campo === 'data') return i.data;
+      if (campo === 'posto') return String(i.nome_posto || '');
+      if (campo === 'comb') return String(i.combustivel || '');
+      if (campo === 'litros') return Number(i.litros) || 0;
+      if (campo === 'valor') return Number(i.valor_liquido) || 0;
+      return i.preco_litro === null ? Infinity : Number(i.preco_litro);
+    };
+    // slice() antes do sort: ordenar no lugar mexeria em _det.itens, e a
+    // próxima troca de chip herdaria a ordem da anterior.
+    return so.slice().sort(function (a, b) {
+      var va = valor(a), vb = valor(b);
+      if (typeof va === 'string') return dir * va.localeCompare(vb);
+      return dir * (va - vb);
+    });
+  }
+  function setaDet(campo) {
+    if (_ordemDet.campo !== campo) return '';
+    return '<span class="ap-seta-in">' + (_ordemDet.dir === 'asc' ? '↑' : '↓') + '</span>';
+  }
+  function htmlCabCupom() {
+    var h = function (cls, rot, campo) {
+      return '<button type="button" class="' + cls + ' ap-th"' +
+        ' onclick="__apOrdemDet(\'' + campo + '\')">' + esc(rot) + setaDet(campo) + '</button>';
+    };
+    return '<div class="ap-cab ap-cab-cup">' +
+      h('ap-c-data', 'Data', 'data') +
+      h('ap-c-posto', 'Posto', 'posto') +
+      h('ap-c-comb', 'Combustível', 'comb') +
+      h('ap-n', 'Litros', 'litros') +
+      h('ap-n', 'R$/litro', 'preco') +
+      h('ap-n', 'Valor', 'valor') +
+    '</div>';
+  }
+  function htmlListaCupom() {
+    if (_detCarregando) return '<div class="ap-estado">Carregando cupons…</div>';
+    if (_detErro) return '<div class="ap-erro">' + esc(_detErro) + '</div>';
+    if (!_det) return '<div class="ap-estado">—</div>';
+    var cor = CANAIS[_canal].cor, fundo = CANAIS[_canal].fundo;
+    var itens = itensDaVista();
+    if (!itens.length) {
+      return htmlCabCupom() + '<div class="ap-vazio">Nenhum cupom de ' + esc(_comb) +
+        ' neste recorte.</div>';
+    }
+    // REDE no topo: a soma DO QUE ESTÁ NA LISTA, não do dia inteiro — é o que
+    // fecha com as linhas abaixo dela.
+    var nL = 0, nV = 0, soma = 0, comPreco = 0;
+    itens.forEach(function (i) {
+      nL += Number(i.litros) || 0;
+      nV += Number(i.valor_liquido) || 0;
+      if (i.preco_litro !== null) { soma += Number(i.preco_litro); comPreco++; }
+    });
+    var rede = '<div class="ap-rede ap-cab-cup">' +
+      '<span class="ap-c-data">REDE</span>' +
+      // "cupons", não "cupom"+"s": o plural troca a letra. Um `+ 's'` dava
+      // "cupoms" na tela.
+      '<span class="ap-c-posto">' + nf(itens.length, 0) +
+        (itens.length === 1 ? ' cupom' : ' cupons') + '</span>' +
+      '<span class="ap-c-comb">' + esc(_comb) + '</span>' +
+      '<span class="ap-n">' + litros(nL) + '</span>' +
+      '<span class="ap-n" style="color:' + cor + ';font-weight:700">' +
+        (comPreco ? preco(soma / comPreco) : '—') + '</span>' +
+      '<span class="ap-n">' + reais(nV) + '</span>' +
+    '</div>';
+    var linhas = itens.map(function (i) {
+      return '<div class="ap-linha ap-cab-cup ap-linha-cup">' +
+        '<span class="ap-c-data">' + esc(diaCurto(i.data)) + '</span>' +
+        '<span class="ap-c-posto"><span class="ap-badge" style="background:' + fundo +
+          ';color:' + cor + '">' + esc(i.nome_posto || '—') + '</span></span>' +
+        '<span class="ap-c-comb"><span class="ap-cchip">' + esc(i.combustivel) + '</span></span>' +
+        '<span class="ap-n">' + litros(i.litros) + '</span>' +
+        '<span class="ap-n" style="color:' + cor + ';font-weight:700">' + preco(i.preco_litro) + '</span>' +
+        '<span class="ap-n">' + reais(i.valor_liquido) + '</span>' +
+      '</div>';
+    }).join('');
+    // O aviso do teto vem da ROTA, com o número dela — repetir 2000 aqui
+    // seria uma segunda cópia do limite.
+    var aviso = _det.aviso
+      ? '<div class="ap-aviso">' + esc(_det.aviso) + ' (' + nf(_det.total, 0) +
+        ' itens no recorte)</div>'
+      : '';
+    return '<div class="ap-lista">' + htmlCabCupom() + rede + linhas + '</div>' + aviso;
+  }
+  // dd/mm: o período está no filtro logo acima; o ano em 2.000 linhas não
+  // informa nada.
+  function diaCurto(iso) {
+    var p = String(iso || '').split('-');
+    return p.length === 3 ? p[2] + '/' + p[1] : String(iso || '');
+  }
+
   function pintar() {
     if (!_sec) return;
     var alvo = _sec.querySelector('#ap-corpo');
@@ -526,7 +737,10 @@
     if (_carregando) { alvo.innerHTML = cab + '<div class="ap-estado">Carregando…</div>'; return; }
     if (_erro) { alvo.innerHTML = cab + '<div class="ap-erro">' + esc(_erro) + '</div>'; return; }
     if (!_dados) { alvo.innerHTML = cab + '<div class="ap-estado">—</div>'; return; }
-    alvo.innerHTML = cab + htmlCards() + htmlLista();
+    // Os CARDS são os mesmos nas duas vistas: eles falam do recorte, não da
+    // forma da lista. Só a lista troca.
+    alvo.innerHTML = cab + htmlCards() +
+      (_vista === 'cupom' ? htmlListaCupom() : htmlLista());
   }
 
   // ── Entrada pública ─────────────────────────────────────────────
