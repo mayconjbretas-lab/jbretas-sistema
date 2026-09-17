@@ -625,7 +625,11 @@ async function assentar() { for (var i = 0; i < 4; i++) await esperar(30); }
       nota('primeira fatura enviada: ' + JSON.stringify(f1));
       eh(!!f1 && f1.seq === '37576106', 'o Seq vai como TEXTO (é a chave, não número para somar)',
          f1 && (typeof f1.seq) + ' ' + f1.seq, 'string 37576106');
-      eh(!!f1 && f1.cod === '21941' && f1.cliente === 'AKKA COMERCIO DE VEICULOS LTDA',
+      // O NOME É FICTÍCIO, o Cód é o real. A fixture teve a coluna Cliente
+      // trocada por nomes inventados (240 distintos, o mesmo tanto do
+      // original); Seq, Cód, datas, valores e o Total Geral são os do arquivo
+      // que a TecnoX exportou.
+      eh(!!f1 && f1.cod === '21941' && f1.cliente === 'JUREMA LTDA',
          'o Cód e o nome do cliente', f1 && (f1.cod + ' ' + f1.cliente));
       // A DATA VAI EM ISO, pelos componentes LOCAIS da Date que o SheetJS
       // monta. Com toISOString() num fuso a leste de Greenwich, 04/08 viraria
