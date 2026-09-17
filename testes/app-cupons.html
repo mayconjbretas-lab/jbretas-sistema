@@ -35,6 +35,14 @@
 // 6. Sub-botão Soutag vs 99 troca o canal, as cores e refaz a chamada.
 // 7. Sete colunas fixas de 150px (nada de 1fr) e cards 150×96.
 // 8. Mobile (375px): cards 2 por linha e colunas de preço fora da linha.
+// 11. O chip TODOS é o primeiro e o padrão: cards e listas mostram o nível
+//     inteiro, com os total_* da resposta (somar por combustível contaria
+//     cupom duas vezes).
+// 12. A vista "Soutag vs TecnoX": importa um .xlsx no navegador, cruza por
+//     posto + dia + combustível + valor (±R$ 0,50) e separa em conferido /
+//     só TecnoX / só Soutag. A planilha do teste é GERADA com o SheetJS a
+//     partir dos itens REAIS, então o cruzamento é exercitado de ponta a
+//     ponta — inclusive a razão social ("POSTO BRUNA LTDA" → "P. BRUNA").
 // 10. A vista "Por cupom": botão ao lado de "Por posto", lista item a item
 //     com as seis colunas, badge do posto na cor do canal, chip de
 //     combustível filtrando, cabeçalho ordenando, REDE no topo, aviso do
@@ -104,6 +112,14 @@ function hexDe(rgb) {
   return '#' + [1, 2, 3].map(function (i) {
     return ('0' + Number(m[i]).toString(16)).slice(-2).toUpperCase();
   }).join('');
+}
+// "P. BRUNA" -> "POSTO BRUNA LTDA": a planilha da Soutag traz razão social,
+// e é isso que a normalização da tela tem de desfazer. Sem regex de
+// propósito — a barra invertida dentro de um patch gerado é onde o erro mora.
+function razaoSocial(nome) {
+  var t = String(nome == null ? '' : nome);
+  if (t.indexOf('P. ') === 0) t = t.slice(3);
+  return 'POSTO ' + t + ' LTDA';
 }
 function cards()   { return [].slice.call(document.querySelectorAll('#palco .ap-card')); }
 function rot(i)    { var c = cards()[i]; return c ? c.querySelector('.ap-rot').textContent.trim() : null; }
@@ -200,6 +216,10 @@ async function rodar() {
   eh(/tolerância/.test(tg.title) && /placa/.test(tg.title), 'o title explica a régua', tg.title);
 
   h3('0c. Ligado: os números são os filtrados');
+  // O chip padrão agora é TODOS; esta seção fala do GC, então escolhe o chip
+  // antes de afirmar os números dele.
+  chip('GC').click();
+  await esperar(150);
   nota('card preço médio: ' + val(0));
   eh(val(0).indexOf(p3(gcApp.preco_medio)) >= 0, 'o card mostra o preço médio FILTRADO',
      val(0), 'R$ ' + p3(gcApp.preco_medio));
@@ -417,8 +437,9 @@ async function rodar() {
   var vistas = [].slice.call(document.querySelectorAll('#palco .ap-vbtn'))
     .map(function (b) { return b.textContent.trim(); });
   nota('vistas: ' + vistas.join(' · '));
-  eh(vistas.join('|') === 'Por posto|Por cupom', 'Por posto e Por cupom, nessa ordem',
-     vistas.join('|'), 'Por posto|Por cupom');
+  eh(vistas.join('|') === 'Por posto|Por cupom|Soutag vs TecnoX',
+     'as três vistas, nessa ordem', vistas.join('|'),
+     'Por posto|Por cupom|Soutag vs TecnoX');
   var motorista = [].slice.call(document.querySelectorAll('#palco .ap-atalho'))
     .filter(function (b) { return /motorista/i.test(b.textContent); })[0];
   eh(!motorista, 'o "Por motorista" não existe mais',
@@ -435,8 +456,9 @@ async function rodar() {
   var chipsComb = [].slice.call(document.querySelectorAll('#palco .ap-chips .ap-chip'))
     .map(function (c) { return c.textContent.trim(); });
   nota('chips: ' + chipsComb.join(' · '));
-  eh(chipsComb.join('|') === 'GC|GA|ET|S10|GNV', 'cinco chips, GNV depois de S10',
-     chipsComb.join('|'), 'GC|GA|ET|S10|GNV');
+  eh(chipsComb.join('|') === 'Todos|GC|GA|ET|S10|GNV',
+     'seis chips: Todos na frente e GNV depois de S10',
+     chipsComb.join('|'), 'Todos|GC|GA|ET|S10|GNV');
   var gnvFix = (FIX.soutag.rede.por_combustivel || [])
     .filter(function (c) { return c.combustivel === 'GNV'; })[0];
   eh(!!gnvFix, 'a resposta traz GNV na rede',
@@ -699,6 +721,195 @@ async function rodar() {
   vbtn('Por posto').click();
   chip('GC').click();
   await esperar(180);
+
+  h3('20. O chip TODOS');
+  // O TOGGLE É DESLIGADO AQUI de propósito: esta seção compara com o bloco
+  // CHEIO do fixture (FIX.soutag.rede). Com ele ligado a tela mostra o
+  // so_app, e a comparação reprovaria uma tela certa — foi o que aconteceu na
+  // primeira rodada.
+  if (chip('Só preço de app').getAttribute('aria-pressed') === 'true') {
+    chip('Só preço de app').click();
+    await esperar(200);
+  }
+  var chips = [].slice.call(document.querySelectorAll('#palco .ap-chips .ap-chip'))
+    .map(function (b) { return b.textContent.trim(); });
+  nota('chips: ' + chips.join(' · '));
+  eh(chips[0] === 'Todos', 'é o PRIMEIRO chip', chips[0], 'Todos');
+  eh(chips.join('|') === 'Todos|GC|GA|ET|S10|GNV', 'e os outros seguem na ordem',
+     chips.join('|'), 'Todos|GC|GA|ET|S10|GNV');
+  chip('Todos').click();
+  await esperar(180);
+  eh(chip('Todos').getAttribute('aria-pressed') === 'true', 'fica marcado ao clicar');
+  // Os cards passam a mostrar o nível inteiro, e os números são os total_*.
+  var R = FIX.soutag.rede;
+  nota('rede: ' + R.total_itens + ' itens · ' + R.total_cupons + ' cupons · médio ' + R.total_preco_medio);
+  eh(val(0).indexOf(p3(R.total_preco_medio)) >= 0, "o card de preço médio é o do nível",
+     val(0), 'R$ ' + p3(R.total_preco_medio));
+  eh(val(1).indexOf(p3(R.total_preco_min)) >= 0, "e o mínimo também", val(1),
+     'R$ ' + p3(R.total_preco_min));
+  eh(val(3).indexOf(R.total_cupons.toLocaleString('pt-BR')) >= 0,
+     'o card de cupons traz o DISTINTO do nível', val(3), R.total_cupons + '');
+  // E a soma por combustível daria outro número — é por isso que vem do nível.
+  var somaCup = R.por_combustivel.reduce(function (t, c) { return t + c.cupons; }, 0);
+  nota('soma dos cupons por combustível: ' + somaCup + ' (o distinto do nível é ' + R.total_cupons + ')');
+  eh(somaCup !== R.total_cupons, "somar por combustível daria número diferente",
+     somaCup + ' ≠ ' + R.total_cupons);
+  eh(cards()[0].querySelector('.ap-sub').textContent.indexOf('todos os combustíveis') >= 0,
+     'a sublinha do card diz todos os combustíveis',
+     cards()[0].querySelector('.ap-sub').textContent.trim());
+  // A lista por posto mostra os totais de cada posto.
+  var p1 = FIX.soutag.postos[0];
+  var linhaP1 = linhasP().filter(function (l) {
+    return l.querySelector('.ap-nome').textContent.trim() === p1.nome;
+  })[0];
+  eh(!!linhaP1, 'o posto ' + p1.nome + ' está na lista');
+  eh(nums(linhaP1)[0] === p1.total_cupons.toLocaleString('pt-BR'),
+     'e a linha dele traz o total_cupons do posto', nums(linhaP1)[0], p1.total_cupons + '');
+
+  h3('21. TODOS na lista por cupom');
+  var vb = function (rot) { return [].slice.call(document.querySelectorAll('#palco .ap-vbtn'))
+    .filter(function (b) { return b.textContent.trim() === rot; })[0]; };
+  vb('Por cupom').click();
+  await esperar(300);
+  var linhasCup = document.querySelectorAll('#palco .ap-linha-cup').length;
+  // O toggle está LIGADO neste ponto (seção 18 ligou), então o fixture é o so_app.
+  var fonte = /so_app=1/.test(CHAMADAS.filter(function (u) {
+    return u.indexOf('/app/cupons-detalhe') === 0; }).pop()) ? FIX.detApp : FIX.det;
+  eh(linhasCup === fonte.itens.length, 'mostra TODOS os itens, sem filtrar por combustível',
+     linhasCup + '', fonte.itens.length + '');
+  var combs = new Set([].slice.call(document.querySelectorAll('#palco .ap-linha-cup .ap-cchip'))
+    .map(function (e) { return e.textContent.trim(); }));
+  nota('combustíveis na lista: ' + [...combs].sort().join(' · '));
+  eh(combs.size > 1, 'e a coluna COMBUSTÍVEL passa a variar', combs.size + ' distintos', '> 1');
+
+  h3('22. Soutag vs TecnoX: a vista e o botão');
+  eh(!!vb('Soutag vs TecnoX'), 'o terceiro botão de vista existe');
+  vb('Soutag vs TecnoX').click();
+  await esperar(300);
+  eh(!!document.querySelector('#palco .ap-sg-imp'), 'o botão de importar aparece');
+  eh(!document.querySelector('#palco .ap-card'), 'e os cards saem (o resumo daqui é outro)',
+     document.querySelectorAll('#palco .ap-card').length + ' card(s)', '0');
+  eh(!!document.getElementById('ap-sg-file'), 'com o input de arquivo escondido');
+  eh(document.getElementById('ap-sg-file').accept === '.xlsx', 'aceitando .xlsx',
+     document.getElementById('ap-sg-file').accept);
+
+  h3('23. Importar: a planilha é lida no navegador');
+  // O SheetJS é o MESMO que a tela usa (carregado sob demanda pelo módulo).
+  // Aqui ele é carregado antes para GERAR a planilha do teste.
+  var XLSX;
+  try {
+    XLSX = await new Promise(function (ok, er) {
+      var sc = document.createElement('script');
+      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      sc.onload = function () { ok(window.XLSX); };
+      sc.onerror = function () { er(new Error('cdnjs inacessível')); };
+      document.head.appendChild(sc);
+    });
+  } catch (e) {
+    nota('SheetJS não carregou (' + e.message + ') — as seções de importação ficam de fora.');
+    nota('A tela carrega a mesma biblioteca do mesmo endereço, sob demanda.');
+    XLSX = null;
+  }
+  eh(!!XLSX, 'o SheetJS carregou do cdnjs', XLSX ? 'sim' : 'NÃO');
+  if (XLSX) {
+    // A PLANILHA DO TESTE sai dos itens REAIS: 40 deles viram linhas da
+    // Soutag, com o posto em RAZÃO SOCIAL ("POSTO X LTDA") para exercitar a
+    // normalização, mais 3 linhas que a TecnoX não tem e 1 de posto
+    // inexistente. Assim os três baldes têm conteúdo previsto.
+    var base = fonte.itens.slice(0, 40);
+    var COMBNOME = { GC: 'GASOLINA COMUM', GA: 'GASOLINA ADITIVADA', ET: 'ETANOL',
+                     S10: 'DIESEL S-10', S500: 'DIESEL S-500', GNV: 'GNV', ETAD: 'ETANOL ADITIVADO' };
+    var rows = base.map(function (i, k) {
+      return {
+        'Posto': razaoSocial(i.nome_posto),
+        'Data/Hora': i.data + ' 08:' + ('0' + (k % 60)).slice(-2) + ':00',
+        'Valor': i.valor_liquido,
+        'Combustível': COMBNOME[i.combustivel] || i.combustivel,
+        'Usuário': 'TESTE',
+        'ID': 'SG' + k,
+      };
+    });
+    // Três que a Soutag tem e a TecnoX não: valor deslocado além da tolerância.
+    for (var x = 0; x < 3; x++) {
+      var b0 = base[x];
+      rows.push({
+        'Posto': razaoSocial(b0.nome_posto),
+        'Data/Hora': b0.data + ' 09:00:00',
+        'Valor': b0.valor_liquido + 99.99,
+        'Combustível': COMBNOME[b0.combustivel] || b0.combustivel,
+        'Usuário': 'TESTE', 'ID': 'SGX' + x,
+      });
+    }
+    // Uma de posto que não existe na TecnoX.
+    rows.push({ 'Posto': 'POSTO INEXISTENTE DO TESTE LTDA', 'Data/Hora': base[0].data + ' 10:00:00',
+                'Valor': 123.45, 'Combustível': 'GASOLINA COMUM', 'Usuário': 'TESTE', 'ID': 'SGZ' });
+    var ws = XLSX.utils.json_to_sheet(rows);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Transacoes');
+    var buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    var file = new File([buf], 'soutag-teste.xlsx',
+      { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    nota('planilha gerada: ' + rows.length + ' linhas (' + base.length + ' que devem conferir, 3 só Soutag, 1 posto inexistente)');
+    // O input real, com o handler real.
+    var inp = document.getElementById('ap-sg-file');
+    var dt = new DataTransfer();
+    dt.items.add(file);
+    inp.files = dt.files;
+    await window.__apSgArquivo(inp);
+    await esperar(400);
+    eh(!document.querySelector('#palco .ap-erro'), 'a planilha foi lida sem erro',
+       (document.querySelector('#palco .ap-erro') || {}).textContent || 'sem erro');
+    eh(!!document.querySelector('#palco .ap-sg-arq'), 'o nome do arquivo aparece',
+       (document.querySelector('#palco .ap-sg-arq') || {}).textContent);
+
+    h3('24. O cruzamento');
+    var ns = [].slice.call(document.querySelectorAll('#palco .ap-sg-n'))
+      .map(function (e) { return e.textContent.trim(); });
+    nota('resumo: ' + ns.join(' · '));
+    var pega = function (re) { var t = ns.filter(function (x) { return re.test(x); })[0] || ''; return parseInt(t.replace(/[^0-9]/g, ''), 10) || 0; };
+    var nConf = pega(/conferido/), nTec = pega(/TecnoX/), nSou = pega(/Soutag/), nSem = pega(/reconhecido/);
+    eh(nConf === base.length, 'os ' + base.length + ' pares casaram', nConf + '', base.length + '');
+    eh(nSou === 3, 'as 3 linhas deslocadas ficaram como só Soutag', nSou + '', '3');
+    eh(nSem === 1, 'e a de posto inexistente ficou separada', nSem + '', '1');
+    eh(nTec === fonte.itens.length - base.length,
+       'o resto dos itens da TecnoX ficou como só TecnoX',
+       nTec + '', (fonte.itens.length - base.length) + '');
+    // A razão social casou: nenhum dos 40 caiu em "posto não reconhecido".
+    eh(nConf > 0, 'a normalização de razão social funcionou (POSTO X LTDA → P. X)',
+       nConf + ' pares');
+
+    h3('25. Os filtros');
+    var selPosto = document.querySelectorAll('#palco .ap-sg-filtros select')[0];
+    var selStatus = document.querySelectorAll('#palco .ap-sg-filtros select')[1];
+    eh(!!selPosto && !!selStatus, 'os dois selects existem');
+    var totalLinhas = document.querySelectorAll('#palco .ap-linha.ap-cab-sg').length;
+    window.__apSgStatus('conferido');
+    await esperar(180);
+    var soConf = document.querySelectorAll('#palco .ap-linha.ap-cab-sg').length;
+    eh(soConf === nConf, 'filtrar por conferido mostra só eles', soConf + '', nConf + '');
+    window.__apSgStatus('soutag');
+    await esperar(180);
+    eh(document.querySelectorAll('#palco .ap-linha.ap-cab-sg').length === 3,
+       'e por só Soutag mostra as 3',
+       document.querySelectorAll('#palco .ap-linha.ap-cab-sg').length + '', '3');
+    window.__apSgStatus('todos');
+    await esperar(180);
+    var umPosto = base[0].nome_posto;
+    window.__apSgPosto(umPosto);
+    await esperar(180);
+    var doPosto = [].slice.call(document.querySelectorAll('#palco .ap-linha.ap-cab-sg'))
+      .map(function (l) { return l.children[1].textContent.trim(); });
+    eh(doPosto.length > 0 && doPosto.every(function (t) { return t.indexOf(umPosto) === 0; }),
+       'filtrar por posto deixa só ' + umPosto, doPosto.length + ' linha(s)');
+    window.__apSgPosto('');
+    await esperar(180);
+    eh(document.querySelectorAll('#palco .ap-linha.ap-cab-sg').length === totalLinhas,
+       'e limpar o filtro devolve todas', '', totalLinhas + '');
+  }
+  // Volta ao estado das seções finais.
+  vb('Por posto').click();
+  chip('GC').click();
+  await esperar(200);
 
   var palco = document.getElementById('palco');
   palco.style.width = '375px';

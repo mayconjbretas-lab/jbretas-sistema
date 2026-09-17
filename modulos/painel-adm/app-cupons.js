@@ -36,6 +36,14 @@
     SOUTAG: { rot: 'Soutag', cor: '#3C3489', fundo: '#EEEDFE' },
     '99':   { rot: '99',     cor: '#633806', fundo: '#FAEEDA' },
   };
+  // 'TODOS' NÃO É COMBUSTÍVEL: é o sentinela do primeiro chip, e o padrão ao
+  // abrir a aba. Com ele, cards e listas mostram o nível INTEIRO — inclusive
+  // os combustíveis que não têm chip (S500, ETAD, POD), que antes só apareciam
+  // no detalhe do posto. Os números vêm dos total_* da resposta, e não da soma
+  // dos por_combustivel: somar `cupons` por combustível conta duas vezes o
+  // cupom que levou dois (medido em 14/09/2026: 3.152 contra 2.726 distintos),
+  // e média de médias não é a média. Ver os totais() em lib/app-cupons.js.
+  var COMB_TODOS = 'TODOS';
   // Os cinco da barra. A resposta traz mais (S500, ETAD, POD) — esses
   // aparecem no DETALHE do posto, que mostra tudo que o posto teve; na barra
   // ficam de fora de propósito, porque ela é de escolha rápida.
@@ -44,12 +52,12 @@
   // convênio (14/09, Soutag: 53 itens, 30 deles no preço de app), e três
   // postos da rede o vendem. Sem o chip, o único jeito de ver o preço de GNV
   // era abrir posto por posto no detalhe.
-  var COMBS = ['GC', 'GA', 'ET', 'S10', 'GNV'];
+  var COMBS = [COMB_TODOS, 'GC', 'GA', 'ET', 'S10', 'GNV'];
 
   var _sec = null;
   var _pronto = false;
   var _canal = 'SOUTAG';
-  var _comb = 'GC';
+  var _comb = COMB_TODOS;   // padrão ao abrir: todos os combustíveis
   var _de = '';
   var _ate = '';
   var _dados = null;
@@ -91,6 +99,16 @@
   // Ordenação da lista de cupons. O padrão é o da rota (preço crescente):
   // a pergunta da vista é quem pagou mais barato.
   var _ordemDet = { campo: 'preco', dir: 'asc' };
+
+  // ════════ SOUTAG vs TECNOX ════════
+  // A planilha da Soutag é lida NO NAVEGADOR e cruzada com os itens que a
+  // TecnoX devolveu. Nada vai para o banco e nada sobe para a API: o arquivo
+  // não sai da máquina de quem importou, e fechar a aba descarta tudo.
+  var _sg = null;            // { linhas, arquivo, quando, colunas }
+  var _sgErro = '';
+  var _sgLendo = false;
+  var _sgPosto = '';         // filtro por posto (vazio = todos)
+  var _sgStatus = 'todos';   // todos | conferido | tecnox | soutag
 
   // ── Formatação (reusa o mmFmt, como o movimentacao-postos) ──────
   function nf(v, casas) {
@@ -246,6 +264,27 @@
       '.ap-th:hover{color:var(--tx)}' +
       '.ap-seta-in{color:var(--ac);margin-left:3px}' +
       '.ap-aviso{font:.7rem var(--mono);color:var(--wn,var(--ac));padding:.5rem 0 0}' +
+      // ── Soutag vs TecnoX ──
+      '.ap-sg-topo{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:12px}' +
+      '.ap-sg-imp{background:var(--sf2);color:var(--tx)}' +
+      '.ap-sg-imp:disabled{opacity:.6;cursor:progress}' +
+      '.ap-sg-arq{font:.7rem var(--mono);color:var(--tx3)}' +
+      '.ap-sg-resumo{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:12px}' +
+      '.ap-sg-n{font:700 .72rem var(--mono);border:1px solid var(--bd);border-radius:20px;padding:4px 12px}' +
+      // Verde conferido, azul só TecnoX, âmbar só Soutag, vermelho nome que
+      // não casou — as cores dizem de que lado está a pendência.
+      '.ap-sg-ok{color:#0F6E56;border-color:#0F6E56}' +
+      '.ap-sg-t{color:#185FA5;border-color:#185FA5}' +
+      '.ap-sg-s{color:#BA7517;border-color:#BA7517}' +
+      '.ap-sg-x{color:#A32D2D;border-color:#A32D2D}' +
+      '.ap-sg-filtros{display:flex;gap:.7rem;flex-wrap:wrap;margin-bottom:12px;font:.7rem var(--mono);color:var(--tx3)}' +
+      '.ap-sg-filtros label{display:flex;align-items:center;gap:.35rem}' +
+      '.ap-cab-sg{grid-template-columns:64px 230px 90px 130px 150px}' +
+      '.ap-sg-tag{font:700 .64rem var(--mono)}' +
+      '.ap-sg-conferido .ap-sg-tag{color:#0F6E56}' +
+      '.ap-sg-tecnox .ap-sg-tag{color:#185FA5}' +
+      '.ap-sg-soutag .ap-sg-tag{color:#BA7517}' +
+      '.ap-sg-sem-posto .ap-sg-tag{color:#A32D2D}' +
       '.ap-estado,.ap-vazio{font:.75rem var(--mono);color:var(--tx3);padding:1rem 0}' +
       '.ap-erro{font:.75rem var(--mono);color:var(--dg);padding:1rem 0}' +
       // MOBILE: cards 2 por linha e as colunas de preço saem da linha — elas
@@ -262,6 +301,8 @@
         // número à direita) e as três de número viram linhas dentro da célula.
         // Esconder colunas aqui não serve — todas as seis são o dado.
         '.ap-cab-cup{grid-template-columns:1fr auto}' +
+        '.ap-cab-sg{grid-template-columns:1fr auto}' +
+        '.ap-cab.ap-cab-sg{display:none}' +
         '.ap-cab.ap-cab-cup{display:none}' +
         '.ap-linha-cup .ap-c-comb,.ap-rede.ap-cab-cup .ap-c-comb{display:none}' +
         '.ap-det table{width:100%}' +
@@ -342,8 +383,32 @@
   // O bloco do combustível escolhido dentro de um nível (rede ou posto).
   // null quando o posto não vendeu aquele combustível no período — e null
   // vira travessão na tela, não zero: não vender não é vender zero.
+  // Rótulo curto do chip: o sentinela vira uma palavra, não a sigla.
+  function rotComb(c) { return c === COMB_TODOS ? 'Todos' : c; }
+  // Para as frases ("por litro · GC", "Sem cupom de GC").
+  function nomeComb(c) { return c === COMB_TODOS ? 'todos os combustíveis' : c; }
+
   function doComb(nivel) {
-    if (!nivel || !nivel.por_combustivel) return null;
+    if (!nivel) return null;
+    // TODOS: monta o mesmo formato de um bloco de combustível a partir dos
+    // total_* do nível. Assim cards, coluna, ordenação e linha da REDE não
+    // precisam saber que existe um estado "todos" — eles só chamam doComb.
+    if (_comb === COMB_TODOS) {
+      if (nivel.total_itens === undefined) return null;
+      if (!nivel.total_itens) return null;
+      return {
+        combustivel: COMB_TODOS,
+        preco_medio: nivel.total_preco_medio,
+        preco_min: nivel.total_preco_min,
+        preco_max: nivel.total_preco_max,
+        preco_medio_ponderado: nivel.total_preco_medio_ponderado,
+        cupons: nivel.total_cupons,
+        itens: nivel.total_itens,
+        litros: nivel.total_litros,
+        valor: nivel.total_valor,
+      };
+    }
+    if (!nivel.por_combustivel) return null;
     for (var i = 0; i < nivel.por_combustivel.length; i++) {
       if (nivel.por_combustivel[i].combustivel === _comb) return nivel.por_combustivel[i];
     }
@@ -360,11 +425,13 @@
     if (_vista === 'cupom') carregarDetalhe();
   };
   window.__apVista = function (v) {
-    if (v !== 'posto' && v !== 'cupom') return;
+    if (v !== 'posto' && v !== 'cupom' && v !== 'soutag') return;
     if (v === _vista) return;
     _vista = v;
     _postoAberto = null;
-    if (v === 'cupom') carregarDetalhe();   // busca só se a chave mudou
+    // As duas vistas de item precisam do detalhe; a de posto já tem o
+    // agregado em mão. carregarDetalhe() pinta no acerto de cache também.
+    if (v === 'cupom' || v === 'soutag') carregarDetalhe();
     else pintar();
   };
   // Clique no cabeçalho ordena. Mesma coluna inverte o sentido; coluna nova
@@ -452,7 +519,7 @@
     var chip = function (c) {
       return '<button type="button" class="ap-chip' + (_comb === c ? ' on' : '') + '"' +
         ' aria-pressed="' + (_comb === c ? 'true' : 'false') + '"' +
-        ' onclick="__apComb(\'' + c + '\')">' + esc(c) + '</button>';
+        ' onclick="__apComb(\'' + c + '\')">' + esc(rotComb(c)) + '</button>';
     };
     return '<div class="ap-barra">' +
         cb('SOUTAG') + cb('99') +
@@ -468,6 +535,7 @@
         // manda (99,6% dos cupons vêm com o mesmo cod_cliente "1"). O item a
         // item responde a mesma curiosidade sem depender daquele campo.
         vbtn('posto', 'Por posto') + vbtn('cupom', 'Por cupom') +
+        vbtn('soutag', 'Soutag vs TecnoX') +
         '<div class="ap-chips">' + COMBS.map(chip).join('') + '</div>' +
         htmlSoApp() +
       '</div>';
@@ -507,7 +575,7 @@
       '</button>';
     };
     return '<div class="ap-cards">' +
-      card('medio', 'Preço médio', c ? preco(c.preco_medio) : '—', 'por litro · ' + esc(_comb)) +
+      card('medio', 'Preço médio', c ? preco(c.preco_medio) : '—', 'por litro · ' + esc(nomeComb(_comb))) +
       card('min', 'Preço mínimo', c ? preco(c.preco_min) : '—', 'menor praticado') +
       card('max', 'Preço máximo', c ? preco(c.preco_max) : '—', 'maior praticado') +
       card('cupons', 'Cupons', c ? nf(c.cupons, 0) : '—',
@@ -593,7 +661,7 @@
         'Preço médio é a média dos itens; R$ total ÷ litros dá ' +
         (function () {
           var c = doComb(p);
-          return (c && c.preco_medio_ponderado != null) ? preco(c.preco_medio_ponderado) + ' em ' + esc(_comb) : '—';
+          return (c && c.preco_medio_ponderado != null) ? preco(c.preco_medio_ponderado) + ' em ' + esc(nomeComb(_comb)) : '—';
         })() + '.' +
       '</div>' +
     '</div>';
@@ -633,7 +701,11 @@
   // que combustível ela é depende de lembrar qual chip está aceso.
   function itensDaVista() {
     var todos = (_det && _det.itens) || [];
-    var so = todos.filter(function (i) { return i.combustivel === _comb; });
+    // TODOS não filtra: é o conjunto inteiro, e aí a coluna COMBUSTÍVEL passa
+    // a variar de linha em linha — que é o que ela sempre prometeu.
+    var so = (_comb === COMB_TODOS)
+      ? todos.slice()
+      : todos.filter(function (i) { return i.combustivel === _comb; });
     var dir = (_ordemDet.dir === 'asc') ? 1 : -1;
     var campo = _ordemDet.campo;
     var valor = function (i) {
@@ -677,7 +749,7 @@
     var cor = CANAIS[_canal].cor, fundo = CANAIS[_canal].fundo;
     var itens = itensDaVista();
     if (!itens.length) {
-      return htmlCabCupom() + '<div class="ap-vazio">Nenhum cupom de ' + esc(_comb) +
+      return htmlCabCupom() + '<div class="ap-vazio">Nenhum cupom de ' + esc(nomeComb(_comb)) +
         ' neste recorte.</div>';
     }
     // REDE no topo: a soma DO QUE ESTÁ NA LISTA, não do dia inteiro — é o que
@@ -694,7 +766,7 @@
       // "cupoms" na tela.
       '<span class="ap-c-posto">' + nf(itens.length, 0) +
         (itens.length === 1 ? ' cupom' : ' cupons') + '</span>' +
-      '<span class="ap-c-comb">' + esc(_comb) + '</span>' +
+      '<span class="ap-c-comb">' + esc(rotComb(_comb)) + '</span>' +
       '<span class="ap-n">' + litros(nL) + '</span>' +
       '<span class="ap-n" style="color:' + cor + ';font-weight:700">' +
         (comPreco ? preco(soma / comPreco) : '—') + '</span>' +
@@ -726,6 +798,363 @@
     return p.length === 3 ? p[2] + '/' + p[1] : String(iso || '');
   }
 
+  // ── SheetJS SOB DEMANDA ─────────────────────────────────────────
+  // 860 KB. Carregar no <head> punia todo mundo que abre o painel por causa
+  // de uma tela que quase ninguém usa; aqui o script entra no primeiro
+  // clique em "Importar" e a promessa fica guardada, então o segundo clique
+  // não recarrega.
+  //
+  // O REPOSITÓRIO NÃO TINHA SheetJS no front: todas as importações de .xlsx
+  // daqui mandam o arquivo para a API, que parseia com o pacote `xlsx` do
+  // npm. Esta é a primeira que parseia no navegador, e é de propósito — ver
+  // o comentário do estado acima.
+  var _xlsxPromessa = null;
+  var XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  function carregarXlsx() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    if (_xlsxPromessa) return _xlsxPromessa;
+    _xlsxPromessa = new Promise(function (ok, erro) {
+      var sc = document.createElement('script');
+      sc.src = XLSX_URL;
+      sc.onload = function () {
+        if (window.XLSX) ok(window.XLSX);
+        else erro(new Error('a biblioteca de planilha carregou sem se registrar'));
+      };
+      sc.onerror = function () {
+        _xlsxPromessa = null;   // deixa tentar de novo depois
+        erro(new Error('não foi possível baixar a biblioteca de planilha (precisa de internet)'));
+      };
+      document.head.appendChild(sc);
+    });
+    return _xlsxPromessa;
+  }
+
+  // ── Nome de posto: dos dois lados para o mesmo núcleo ───────────
+  // A Soutag escreve razão social ("POSTO BRUNA LTDA"), a TecnoX escreve o
+  // apelido ("P. BRUNA"). Comparar as duas cadeias nunca casaria. O núcleo é
+  // o que sobra depois de tirar acento, pontuação e as palavras que não
+  // identificam ninguém — POSTO, P, LTDA, ME, EIRELI, S/A, COMERCIO,
+  // COMBUSTIVEIS, DERIVADOS, AUTO, DE/DA/DO/E.
+  //
+  // O QUE SOBRA É COMPARADO INTEIRO, não por prefixo: "SANTA INES MINAS" e
+  // "SANTA INES - JOAQUIM" têm o mesmo começo e são postos DIFERENTES.
+  var LIXO_POSTO = ['POSTO', 'P', 'AUTO', 'LTDA', 'ME', 'EPP', 'EIRELI', 'SA', 'S', 'A',
+    'COMERCIO', 'COMERCIAL', 'COMBUSTIVEIS', 'COMBUSTIVEL', 'DERIVADOS', 'PETROLEO',
+    'DISTRIBUIDORA', 'DE', 'DA', 'DO', 'DOS', 'DAS', 'E'];
+  function nucleoPosto(nome) {
+    var t = String(nome == null ? '' : nome)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9 ]+/g, ' ')
+      .split(/\s+/)
+      .filter(function (w) { return w && LIXO_POSTO.indexOf(w) < 0; });
+    return t.join(' ');
+  }
+  // núcleo -> nome da TecnoX. Montado dos itens em mão, então só reconhece
+  // posto que teve movimento no recorte — que é exatamente com o que se
+  // compara.
+  function indicePostos() {
+    var m = {};
+    ((_det && _det.itens) || []).forEach(function (i) {
+      var nc = nucleoPosto(i.nome_posto);
+      if (nc) m[nc] = i.nome_posto;
+    });
+    return m;
+  }
+
+  // ── Combustível: nome por extenso -> código ─────────────────────
+  // A planilha da Soutag pode trazer o nome ou a sigla. Os itens da TecnoX
+  // vêm sempre em código (o rollup grava assim).
+  var MAPA_SG_COMB = [
+    [/GASOLINA\s*ADITIVAD/, 'GA'], [/GASOLINA\s*COMUM/, 'GC'],
+    [/\bGA\b/, 'GA'], [/\bGC\b/, 'GC'],
+    [/ETANOL\s*ADITIVAD/, 'ETAD'], [/ETANOL|\bALCOOL\b/, 'ET'], [/\bET\b/, 'ET'],
+    [/S\s*-?\s*10|DIESEL\s*S10/, 'S10'], [/S\s*-?\s*500|DIESEL\s*S500/, 'S500'],
+    [/\bGNV\b|GAS\s+NATURAL/, 'GNV'],
+    [/OCTAPRO/, 'OCT'], [/PODIUM/, 'POD'],
+  ];
+  function codComb(txt) {
+    var t = String(txt == null ? '' : txt).normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    for (var k = 0; k < MAPA_SG_COMB.length; k++) {
+      if (MAPA_SG_COMB[k][0].test(t)) return MAPA_SG_COMB[k][1];
+    }
+    return t.trim();   // desconhecido entra cru: some no cruzamento, não em silêncio
+  }
+
+  // ── Data: a planilha traz Data/Hora; o cruzamento é por DIA ─────
+  // Serial do Excel (número) e texto convivem na mesma coluna dependendo de
+  // como a planilha foi salva. O serial conta dias desde 1899-12-30 (a base
+  // com o ano bissexto fantasma de 1900, que o Excel mantém por compatibilidade).
+  function diaDaCelula(v) {
+    if (v === null || v === undefined || v === '') return '';
+    if (typeof v === 'number' && isFinite(v)) {
+      var ms = Math.round((v - 25569) * 86400000);   // 25569 = 1970-01-01 em serial
+      var d = new Date(ms);
+      if (isNaN(d.getTime())) return '';
+      return d.toISOString().slice(0, 10);
+    }
+    var t = String(v).trim();
+    var iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+    if (iso) return iso[1] + '-' + iso[2] + '-' + iso[3];
+    var br = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(t);
+    if (br) {
+      var ano = br[3].length === 2 ? ('20' + br[3]) : br[3];
+      return ano + '-' + ('0' + br[2]).slice(-2) + '-' + ('0' + br[1]).slice(-2);
+    }
+    return '';
+  }
+  function numeroDaCelula(v) {
+    if (typeof v === 'number') return v;
+    var t = String(v == null ? '' : v).replace(/[^0-9,.-]/g, '');
+    // pt-BR: ponto é milhar e vírgula é decimal. "1.234,56" -> 1234.56
+    if (t.indexOf(',') >= 0) t = t.split('.').join('').split(',').join('.');
+    var n = Number(t);
+    return isFinite(n) ? n : NaN;
+  }
+
+  // ── Leitura da planilha ─────────────────────────────────────────
+  // Cabeçalho casado sem acento e sem caixa: planilha exportada troca
+  // "Combustível" por "COMBUSTIVEL" dependendo de quem exporta.
+  var COLUNAS_SG = {
+    posto: ['POSTO'],
+    data: ['DATA/HORA', 'DATAHORA', 'DATA'],
+    valor: ['VALOR'],
+    combustivel: ['COMBUSTIVEL', 'PRODUTO'],
+    usuario: ['USUARIO'],
+    id: ['ID'],
+  };
+  function chaveCol(nome) {
+    return String(nome == null ? '' : nome).normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, '');
+  }
+  function lerPlanilha(XLSX, buffer) {
+    var wb = XLSX.read(buffer, { type: 'array' });
+    var aba = wb.SheetNames[0];
+    if (!aba) throw new Error('a planilha não tem nenhuma aba');
+    var cru = XLSX.utils.sheet_to_json(wb.Sheets[aba], { defval: '', raw: true });
+    if (!cru.length) throw new Error('a primeira aba da planilha está vazia');
+    // Mapa cabeçalho-da-planilha -> campo nosso.
+    var de = {};
+    Object.keys(cru[0]).forEach(function (h) {
+      var k = chaveCol(h);
+      Object.keys(COLUNAS_SG).forEach(function (campo) {
+        if (COLUNAS_SG[campo].indexOf(k) >= 0 && !de[campo]) de[campo] = h;
+      });
+    });
+    var faltando = ['posto', 'data', 'valor', 'combustivel'].filter(function (c) { return !de[c]; });
+    if (faltando.length) {
+      throw new Error('a planilha não tem a(s) coluna(s): ' + faltando.join(', ') +
+        ' — achei: ' + Object.keys(cru[0]).join(', '));
+    }
+    var linhas = cru.map(function (r, idx) {
+      return {
+        i: idx,
+        posto_planilha: String(r[de.posto] == null ? '' : r[de.posto]).trim(),
+        data: diaDaCelula(r[de.data]),
+        valor: numeroDaCelula(r[de.valor]),
+        combustivel: codComb(r[de.combustivel]),
+        usuario: de.usuario ? String(r[de.usuario] == null ? '' : r[de.usuario]).trim() : '',
+        id: de.id ? String(r[de.id] == null ? '' : r[de.id]).trim() : '',
+      };
+    }).filter(function (l) { return l.data && isFinite(l.valor); });
+    if (!linhas.length) throw new Error('nenhuma linha da planilha tem data e valor legíveis');
+    return { linhas: linhas, colunas: de, abas: wb.SheetNames.length, aba: aba, cruas: cru.length };
+  }
+
+  // ── O cruzamento ────────────────────────────────────────────────
+  // UM PARA UM, e é o que o bilhete duplicado exige: dois abastecimentos do
+  // mesmo posto, dia, combustível e valor são DOIS, e cada um casa com um.
+  // Um item da TecnoX já casado sai da mesa (`usado`), senão a segunda linha
+  // da Soutag casaria com o mesmo cupom e os dois lados pareceriam conferidos.
+  //
+  // A TOLERÂNCIA É DE R$ 0,50 no valor, como pedido. Data e combustível têm
+  // de ser IGUAIS — afrouxar ali casaria abastecimento de dias diferentes.
+  var SG_TOL = 0.50;
+  function cruzarSoutag() {
+    var itens = ((_det && _det.itens) || []).map(function (i, k) {
+      return { k: k, data: i.data, nome: i.nome_posto, nucleo: nucleoPosto(i.nome_posto),
+               comb: i.combustivel, valor: Number(i.valor_liquido), litros: Number(i.litros),
+               preco: i.preco_litro, id: i.id_cupom, usado: false };
+    });
+    // Índice por dia|núcleo|combustível: sem ele o cruzamento é n×m e uma
+    // planilha de 4.000 linhas contra 4.000 itens daria 16 milhões de voltas.
+    var porChave = {};
+    itens.forEach(function (it) {
+      var c = it.data + '|' + it.nucleo + '|' + it.comb;
+      (porChave[c] = porChave[c] || []).push(it);
+    });
+    var idx = indicePostos();
+    var conferido = [], soSoutag = [], semPosto = [];
+    ((_sg && _sg.linhas) || []).forEach(function (l) {
+      var nc = nucleoPosto(l.posto_planilha);
+      var oficial = idx[nc];
+      var linha = {
+        fonte: 'soutag', data: l.data, posto: oficial || l.posto_planilha,
+        posto_planilha: l.posto_planilha, comb: l.combustivel, valor: l.valor,
+        usuario: l.usuario, id: l.id,
+      };
+      if (!oficial) {
+        // Posto que a TecnoX não tem NO RECORTE: não é divergência de
+        // abastecimento, é nome que não casou. Separado para não inflar o
+        // "só Soutag" com erro de cadastro.
+        semPosto.push(linha);
+        return;
+      }
+      var cand = porChave[l.data + '|' + nc + '|' + l.combustivel] || [];
+      var achou = null, melhor = Infinity;
+      for (var k = 0; k < cand.length; k++) {
+        if (cand[k].usado) continue;
+        var dif = Math.abs(cand[k].valor - l.valor);
+        // O MAIS PRÓXIMO entre os candidatos, não o primeiro: com dois cupons
+        // dentro da tolerância, casar o primeiro deixaria o par melhor órfão.
+        if (dif <= SG_TOL && dif < melhor) { melhor = dif; achou = cand[k]; }
+      }
+      if (achou) {
+        achou.usado = true;
+        conferido.push(Object.assign({}, linha, {
+          fonte: 'ambos', posto: achou.nome, litros: achou.litros,
+          valor_tecnox: achou.valor, dif: Math.round((l.valor - achou.valor) * 100) / 100,
+          preco: achou.preco, id_cupom: achou.id,
+        }));
+      } else {
+        soSoutag.push(linha);
+      }
+    });
+    var soTecnox = itens.filter(function (it) { return !it.usado; }).map(function (it) {
+      return { fonte: 'tecnox', data: it.data, posto: it.nome, comb: it.comb,
+               valor: it.valor, litros: it.litros, preco: it.preco, id_cupom: it.id };
+    });
+    return { conferido: conferido, soTecnox: soTecnox, soSoutag: soSoutag,
+             semPosto: semPosto, itens: itens.length };
+  }
+
+  // ── Render da vista ─────────────────────────────────────────────
+  function htmlSoutag() {
+    var topo = '<div class="ap-sg-topo">' +
+      '<button type="button" class="ap-cbtn ap-sg-imp" onclick="__apSgAbrir()"' +
+        (_sgLendo ? ' disabled' : '') + '>' +
+        (_sgLendo ? 'Lendo a planilha…' : 'Importar planilha Soutag') + '</button>' +
+      '<input type="file" id="ap-sg-file" accept=".xlsx" hidden onchange="__apSgArquivo(this)">' +
+      (_sg ? '<span class="ap-sg-arq">' + esc(_sg.arquivo) + ' · ' +
+        nf(_sg.linhas.length, 0) + ' linha' + (_sg.linhas.length === 1 ? '' : 's') + '</span>' : '') +
+    '</div>';
+    if (_sgErro) topo += '<div class="ap-erro">' + esc(_sgErro) + '</div>';
+    if (!_det) {
+      return topo + '<div class="ap-estado">' +
+        (_detCarregando ? 'Carregando os cupons da TecnoX…' : '—') + '</div>';
+    }
+    if (!_sg) {
+      return topo + '<div class="ap-estado">Importe a planilha da Soutag para comparar com os ' +
+        nf((_det.itens || []).length, 0) + ' cupons que a TecnoX devolveu neste recorte.' +
+        '<br><span class="ap-sub">Colunas esperadas: Posto · Data/Hora · Valor · Combustível · Usuário · ID. ' +
+        'O arquivo é lido no navegador e não é enviado nem gravado.</span></div>';
+    }
+    var c = cruzarSoutag();
+    var resumo = '<div class="ap-sg-resumo">' +
+      '<span class="ap-sg-n ap-sg-ok">' + nf(c.conferido.length, 0) + ' conferidos</span>' +
+      '<span class="ap-sg-n ap-sg-t">' + nf(c.soTecnox.length, 0) + ' só TecnoX</span>' +
+      '<span class="ap-sg-n ap-sg-s">' + nf(c.soSoutag.length, 0) + ' só Soutag</span>' +
+      (c.semPosto.length ? '<span class="ap-sg-n ap-sg-x">' + nf(c.semPosto.length, 0) +
+        ' posto não reconhecido</span>' : '') +
+    '</div>';
+    // Um só array com o status, para o filtro e a ordenação valerem para os três.
+    var todas = []
+      .concat(c.conferido.map(function (l) { return Object.assign({ status: 'conferido' }, l); }))
+      .concat(c.soTecnox.map(function (l) { return Object.assign({ status: 'tecnox' }, l); }))
+      .concat(c.soSoutag.map(function (l) { return Object.assign({ status: 'soutag' }, l); }))
+      .concat(c.semPosto.map(function (l) { return Object.assign({ status: 'sem-posto' }, l); }));
+    var postos = {};
+    todas.forEach(function (l) { if (l.posto) postos[l.posto] = 1; });
+    var opcoes = Object.keys(postos).sort();
+    var filtros = '<div class="ap-sg-filtros">' +
+      '<label>Posto <select class="ap-data" onchange="__apSgPosto(this.value)">' +
+        '<option value="">todos (' + opcoes.length + ')</option>' +
+        opcoes.map(function (p) {
+          return '<option value="' + esc(p) + '"' + (p === _sgPosto ? ' selected' : '') + '>' + esc(p) + '</option>';
+        }).join('') +
+      '</select></label>' +
+      '<label>Status <select class="ap-data" onchange="__apSgStatus(this.value)">' +
+        [['todos', 'todos'], ['conferido', 'conferidos'], ['tecnox', 'só TecnoX'],
+         ['soutag', 'só Soutag'], ['sem-posto', 'posto não reconhecido']].map(function (o) {
+          return '<option value="' + o[0] + '"' + (o[0] === _sgStatus ? ' selected' : '') + '>' + o[1] + '</option>';
+        }).join('') +
+      '</select></label>' +
+    '</div>';
+    var vis = todas.filter(function (l) {
+      if (_sgPosto && l.posto !== _sgPosto) return false;
+      if (_sgStatus !== 'todos' && l.status !== _sgStatus) return false;
+      return true;
+    });
+    // Mesma ordem da lista de cupons: dia mais recente primeiro, e dentro do
+    // dia por posto, para as divergências do mesmo posto ficarem juntas.
+    vis.sort(function (a, b) {
+      if (a.data !== b.data) return a.data < b.data ? 1 : -1;
+      return String(a.posto || '').localeCompare(String(b.posto || ''));
+    });
+    var ROT = { conferido: 'conferido', tecnox: 'só TecnoX', soutag: 'só Soutag',
+                'sem-posto': 'posto não reconhecido' };
+    var cab = '<div class="ap-cab ap-cab-sg">' +
+      '<span>Data</span><span>Posto</span><span>Comb.</span>' +
+      '<span class="ap-n">Valor</span><span>Fonte</span>' +
+    '</div>';
+    var linhas = vis.slice(0, 1500).map(function (l) {
+      return '<div class="ap-linha ap-cab-sg ap-sg-' + l.status + '">' +
+        '<span class="ap-c-data">' + esc(diaCurto(l.data)) + '</span>' +
+        '<span class="ap-c-posto">' + esc(l.posto || '—') +
+          (l.status === 'sem-posto' ? '<span class="ap-sub"> (' + esc(l.posto_planilha) + ')</span>' : '') +
+        '</span>' +
+        '<span><span class="ap-cchip">' + esc(l.comb || '—') + '</span></span>' +
+        '<span class="ap-n">' + reais(l.valor) +
+          // A DIFERENÇA dentro da tolerância vai à vista: "conferido" com R$
+          // 0,30 de diferença é conferido, e esconder isso faria o número da
+          // Soutag parecer idêntico ao da TecnoX.
+          ((l.status === 'conferido' && l.dif) ? '<span class="ap-sub"> (' +
+            (l.dif > 0 ? '+' : '') + nf(l.dif, 2) + ')</span>' : '') +
+        '</span>' +
+        '<span class="ap-sg-tag">' + ROT[l.status] + '</span>' +
+      '</div>';
+    }).join('');
+    var corte = vis.length > 1500
+      ? '<div class="ap-aviso">mostrando 1.500 de ' + nf(vis.length, 0) +
+        ' linhas — use os filtros</div>'
+      : '';
+    return topo + resumo + filtros +
+      '<div class="ap-lista">' + cab + (linhas || '<div class="ap-vazio">Nada neste filtro.</div>') + '</div>' +
+      corte;
+  }
+
+  // ── Ações da vista ──────────────────────────────────────────────
+  window.__apSgAbrir = function () {
+    var el = document.getElementById('ap-sg-file');
+    if (el) { el.value = ''; el.click(); }   // value vazio para reimportar o MESMO arquivo
+  };
+  window.__apSgArquivo = async function (input) {
+    var file = input && input.files && input.files[0];
+    if (!file) return;
+    if (!/\.xlsx$/i.test(file.name)) {
+      _sgErro = 'Selecione um arquivo .xlsx (planilha do Excel).'; pintar(); return;
+    }
+    _sgLendo = true; _sgErro = ''; pintar();
+    try {
+      var XLSX = await carregarXlsx();
+      var buf = new Uint8Array(await file.arrayBuffer());
+      var r = lerPlanilha(XLSX, buf);
+      _sg = { linhas: r.linhas, arquivo: file.name, quando: new Date(),
+              colunas: r.colunas, cruas: r.cruas };
+      _sgPosto = ''; _sgStatus = 'todos';
+    } catch (e) {
+      _sg = null;
+      _sgErro = 'Não foi possível ler a planilha: ' + ((e && e.message) ? e.message : e);
+    } finally {
+      _sgLendo = false; pintar();
+    }
+  };
+  window.__apSgPosto = function (v) { _sgPosto = v || ''; pintar(); };
+  window.__apSgStatus = function (v) { _sgStatus = v || 'todos'; pintar(); };
+  // A comparação depende do recorte da TecnoX; trocar período/canal invalida
+  // o cruzamento, mas NÃO a planilha — ela é do arquivo, não do recorte.
+
   function pintar() {
     if (!_sec) return;
     var alvo = _sec.querySelector('#ap-corpo');
@@ -739,6 +1168,9 @@
     if (!_dados) { alvo.innerHTML = cab + '<div class="ap-estado">—</div>'; return; }
     // Os CARDS são os mesmos nas duas vistas: eles falam do recorte, não da
     // forma da lista. Só a lista troca.
+    // A vista Soutag NÃO mostra os cards: eles falam do recorte da TecnoX, e
+    // ali a pergunta é o cruzamento com a planilha — o resumo dela é outro.
+    if (_vista === 'soutag') { alvo.innerHTML = cab + htmlSoutag(); return; }
     alvo.innerHTML = cab + htmlCards() +
       (_vista === 'cupom' ? htmlListaCupom() : htmlLista());
   }
