@@ -181,6 +181,18 @@
       </div>
     </section>
     <section class="scr" id="s-coleta"><div class="em-construcao">📋 Coleta — em construção</div></section>
+    <!-- FINANCEIRO: três sub-vistas, mesmo padrão da aba Relatórios (mapa de
+         vistas + .fueltab-row). Por enquanto todas mostram placeholder; o
+         que existe de verdade é o roteamento e o hash, para o conteúdo
+         entrar depois sem mexer na navegação. -->
+    <section class="scr" id="s-financeiro">
+      <div class="fueltab-row" id="fin-seletor">
+        <button class="fueltab" type="button" id="fin-btn-banco" onclick="finAbrir('banco')">Banco</button>
+        <button class="fueltab" type="button" id="fin-btn-nota-prazo" onclick="finAbrir('nota-prazo')">Nota prazo</button>
+        <button class="fueltab" type="button" id="fin-btn-clientes" onclick="finAbrir('clientes')">Clientes</button>
+      </div>
+      <div id="fin-corpo"></div>
+    </section>
     <section class="scr" id="s-medicao"><div class="em-construcao">🛢️ Medição — em construção</div></section>
     <section class="scr" id="s-mapa"><div class="em-construcao">🗺️ Mapa — em construção</div></section>
     <section class="scr" id="s-hist"><div class="em-construcao">📈 Histórico — em construção</div></section>
@@ -244,7 +256,14 @@
 
   <nav class="bnav">
     <button class="nbtn active" onclick="setTab(this,'comp')">    <span class="ni">⚖️</span><span class="nl">Comparação</span></button>
-    <button class="nbtn" onclick="setTab(this,'coleta')">        <span class="ni">📋</span><span class="nl">Coleta</span></button>
+    <button class="nbtn" onclick="setTab(this,'financeiro')">    <span class="ni">💲</span><span class="nl">Financeiro</span></button>
+    <!-- COLETA CONTINUA AQUI, só escondida. O botão não foi apagado porque
+         ele é o que o roteador de hash procura: o aplicarHash faz
+         botaoDaAba('coleta') e chama setTab com ele, então remover o botão
+         quebraria o acesso por #coleta na URL — que é o pedido. A classe
+         precisa existir: .nbtn declara display:flex, que VENCE o
+         [hidden]{display:none} do navegador. -->
+    <button class="nbtn nbtn--oculto" onclick="setTab(this,'coleta')" aria-hidden="true" tabindex="-1"><span class="ni">📋</span><span class="nl">Coleta</span></button>
     <button class="nbtn" onclick="setTab(this,'medicao')">       <span class="ni">🛢️</span><span class="nl">Medição</span></button>
     <button class="nbtn" onclick="setTab(this,'mapa')">          <span class="ni">🗺️</span><span class="nl">Mapa</span></button>
     <button class="nbtn" onclick="setTab(this,'hist')">          <span class="ni">📈</span><span class="nl">Histórico</span></button>

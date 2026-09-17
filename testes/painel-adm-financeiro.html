@@ -1,0 +1,251 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel ADM — aba Financeiro</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+<link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+
+<div id="res">rodando…</div>
+<!-- A barra e as seções REAIS do index.html são injetadas aqui. -->
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// 1. A barra inferior tem "Financeiro" onde tinha "Coleta", na MESMA posição,
+//    e o botão da Coleta continua no DOM — escondido.
+// 2. Clicar em Financeiro abre a #s-financeiro com três sub-botões, Banco
+//    marcado por padrão, e cada um mostra seu placeholder.
+// 3. O hash: #financeiro, #financeiro/banco, /nota-prazo, /clientes. Ida e
+//    volta — o hash muda ao clicar E o clique acontece ao mudar o hash.
+// 4. #coleta na URL AINDA ABRE a aba Coleta, mesmo com o botão escondido.
+// 5. Nenhuma outra aba mudou: os oito rótulos visíveis e as sections que
+//    existiam continuam lá.
+//
+// A barra e as seções vêm do index.html de PRODUÇÃO; o app.js também. Copiar
+// o markup à mão provaria que o harness sabe escrever HTML.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+// ── dublês: o painel-adm carrega muita coisa; aqui só o roteamento importa ──
+window.exigirSessao = function () { return { id: 'h', nome: 'H', perfil: 'ADM', ti: true }; };
+window.getUsuarioLogado = window.exigirSessao;
+window.aplicarTema = function () {};
+window.caminhoRaiz = function () { return '/'; };
+window.abrirPainelDesktop = function () {};
+window.apiFetch = function () { return Promise.resolve({ success: true }); };
+// Os renders das outras abas: dublados para o setTab não estourar ao passar
+// por elas. O que está sob teste é a navegação, não o conteúdo delas.
+['renderColetaRevisao', 'renderMedicao', 'renderDre', 'renderMovMes', 'renderMovPostos',
+ 'renderMercado', 'renderRelatorios', 'renderCustoMargem', 'renderKpi', 'renderAppCupons',
+ 'renderComparar'].forEach(function (n) { window[n] = window[n] || function () {}; });
+var RENDERIZOU = {};
+window.renderColetaRevisao = function () { RENDERIZOU.coleta = (RENDERIZOU.coleta || 0) + 1; };
+try { localStorage.setItem('jb_versao_painel', 'desktop'); } catch (e) {}
+
+function js(src) {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { erro(new Error(src + ' não carregou')); };
+    document.body.appendChild(s);
+  });
+}
+function baixar(u) {
+  return new Promise(function (ok, er) {
+    var x = new XMLHttpRequest();
+    x.open('GET', u);
+    x.onload = function () { ok(x.responseText); };
+    x.onerror = function () { er(new Error(u + ' não carregou')); };
+    x.send();
+  });
+}
+function nbtns() { return [].slice.call(document.querySelectorAll('#palco .bnav .nbtn')); }
+function rotulos(soVisiveis) {
+  return nbtns().filter(function (b) { return !soVisiveis || b.offsetParent !== null; })
+    .map(function (b) { return b.querySelector('.nl').textContent.trim(); });
+}
+function btnDe(rot) {
+  return nbtns().filter(function (b) { return b.querySelector('.nl').textContent.trim() === rot; })[0];
+}
+function subs() {
+  return [].slice.call(document.querySelectorAll('#palco #fin-seletor .fueltab'));
+}
+function ativa() {
+  var s = document.querySelector('#palco .scr.active');
+  return s ? s.id : '(nenhuma)';
+}
+
+// ════════════════════════════════════════════════════════════════
+async function rodar() {
+  var doc = new DOMParser().parseFromString(
+    await baixar('/modulos/painel-adm/index.html'), 'text/html');
+  var main = doc.querySelector('.pa-main');
+  var bnav = doc.querySelector('.bnav');
+  if (!main || !bnav) throw new Error('não achei .pa-main / .bnav no index.html');
+  var palco = document.getElementById('palco');
+  palco.appendChild(document.importNode(main, true));
+  palco.appendChild(document.importNode(bnav, true));
+  await js('/modulos/painel-adm/app.js');
+  await esperar(120);
+
+  h3('1. A barra inferior');
+  nota('visíveis: ' + rotulos(true).join(' · '));
+  nota('no DOM:   ' + rotulos(false).join(' · '));
+  eh(rotulos(true).join('|') === 'Comparação|Financeiro|Medição|Mapa|Histórico|Relatórios|Custo|Mais+',
+     'oito botões visíveis, com Financeiro na posição da Coleta',
+     rotulos(true).join('|'),
+     'Comparação|Financeiro|Medição|Mapa|Histórico|Relatórios|Custo|Mais+');
+  eh(rotulos(true).indexOf('Coleta') < 0, 'Coleta não aparece na barra');
+  var bColeta = btnDe('Coleta');
+  eh(!!bColeta, 'mas o botão dela CONTINUA no DOM');
+  eh(bColeta && getComputedStyle(bColeta).display === 'none',
+     'com display:none (o .nbtn é flex e venceria o [hidden])',
+     bColeta ? getComputedStyle(bColeta).display : '—', 'none');
+  var bFin = btnDe('Financeiro');
+  eh(!!bFin, 'o botão Financeiro existe');
+  eh(bFin.querySelector('.ni').textContent.trim() === '💲', 'com o cifrão',
+     bFin.querySelector('.ni').textContent.trim(), '💲');
+  // Posição: o Financeiro é o 2º botão do DOM, onde a Coleta estava.
+  eh(nbtns()[1] === bFin, 'e é o segundo da barra, a posição que era da Coleta',
+     nbtns()[1].querySelector('.nl').textContent.trim(), 'Financeiro');
+
+  h3('2. A aba abre com três sub-botões');
+  bFin.click();
+  await esperar(150);
+  eh(ativa() === 's-financeiro', 'a section ativa é a #s-financeiro', ativa(), 's-financeiro');
+  eh(getComputedStyle(document.getElementById('s-financeiro')).display === 'block',
+     'e ela é display:block no .active',
+     getComputedStyle(document.getElementById('s-financeiro')).display, 'block');
+  var rs = subs().map(function (b) { return b.textContent.trim(); });
+  nota('sub-botões: ' + rs.join(' · '));
+  eh(rs.join('|') === 'Banco|Nota prazo|Clientes', 'os três, na ordem pedida',
+     rs.join('|'), 'Banco|Nota prazo|Clientes');
+  eh(subs()[0].classList.contains('active'), 'Banco marcado por padrão',
+     subs().filter(function (b) { return b.classList.contains('active'); })
+       .map(function (b) { return b.textContent.trim(); }).join(',') || '(nenhum)', 'Banco');
+  var corpo = document.getElementById('fin-corpo');
+  nota('conteúdo: ' + corpo.textContent.trim());
+  eh(/em constru/.test(corpo.textContent), 'e o placeholder aparece', corpo.textContent.trim());
+  eh(/Banco/.test(corpo.textContent), 'dizendo qual vista é', corpo.textContent.trim());
+
+  h3('3. Trocar de sub-botão');
+  subs()[1].click();
+  await esperar(120);
+  eh(subs()[1].classList.contains('active') && !subs()[0].classList.contains('active'),
+     'Nota prazo marcado, Banco desmarcado',
+     subs().filter(function (b) { return b.classList.contains('active'); })
+       .map(function (b) { return b.textContent.trim(); }).join(','), 'Nota prazo');
+  eh(/Nota prazo/.test(document.getElementById('fin-corpo').textContent),
+     'e o placeholder acompanha', document.getElementById('fin-corpo').textContent.trim());
+  eh(location.hash === '#financeiro/nota-prazo', 'o hash virou #financeiro/nota-prazo',
+     location.hash, '#financeiro/nota-prazo');
+  subs()[2].click();
+  await esperar(120);
+  eh(location.hash === '#financeiro/clientes', 'e #financeiro/clientes no terceiro',
+     location.hash, '#financeiro/clientes');
+  eh(/Clientes/.test(document.getElementById('fin-corpo').textContent), 'com o placeholder de Clientes');
+
+  h3('4. O hash abre a aba e a sub-vista');
+  // aplicarHash é a função de produção que o hashchange chama.
+  location.hash = '#financeiro/banco';
+  eh(aplicarHash() === true, 'aplicarHash aceita #financeiro/banco');
+  await esperar(120);
+  eh(ativa() === 's-financeiro' && subs()[0].classList.contains('active'),
+     'abre a aba no Banco', ativa() + ' · ' +
+     subs().filter(function (b) { return b.classList.contains('active'); })
+       .map(function (b) { return b.textContent.trim(); }).join(','));
+  location.hash = '#financeiro/clientes';
+  aplicarHash();
+  await esperar(120);
+  eh(subs()[2].classList.contains('active'), 'e #financeiro/clientes abre no Clientes',
+     subs().filter(function (b) { return b.classList.contains('active'); })
+       .map(function (b) { return b.textContent.trim(); }).join(','), 'Clientes');
+  // Sub-vista inventada não zera a aba.
+  location.hash = '#financeiro/inventada';
+  aplicarHash();
+  await esperar(120);
+  eh(ativa() === 's-financeiro', 'sub-vista inventada ainda abre a aba', ativa(), 's-financeiro');
+  eh(subs()[2].classList.contains('active'),
+     'e mantém a última válida (Clientes), sem tela vazia',
+     subs().filter(function (b) { return b.classList.contains('active'); })
+       .map(function (b) { return b.textContent.trim(); }).join(','), 'Clientes');
+  // #financeiro sem sub-vista.
+  location.hash = '#financeiro';
+  eh(aplicarHash() === true, '#financeiro sozinho também abre');
+  await esperar(120);
+  eh(ativa() === 's-financeiro', 'na aba', ativa(), 's-financeiro');
+
+  h3('5. #coleta por URL ainda funciona, com o botão escondido');
+  // A ORDEM IMPORTA: mexer em location.hash tambem dispara o hashchange, que
+  // chama o aplicarHash sozinho. O contador e zerado DEPOIS disso, para medir
+  // a chamada explicita e nao as duas. Em producao nao ha dobro: o gravarHash
+  // usa replaceState, que nao dispara hashchange.
+  location.hash = '#coleta';
+  await esperar(120);
+  RENDERIZOU.coleta = 0;
+  eh(aplicarHash() === true, 'aplicarHash aceita #coleta');
+  await esperar(150);
+  eh(ativa() === 's-coleta', 'a section da Coleta abre', ativa(), 's-coleta');
+  eh(RENDERIZOU.coleta === 1, 'e o renderColetaRevisao foi chamado',
+     RENDERIZOU.coleta + '', '1');
+  eh(bColeta.classList.contains('active'), 'o botão escondido fica marcado (sem aparecer)');
+  eh(getComputedStyle(bColeta).display === 'none', 'e segue invisível',
+     getComputedStyle(bColeta).display, 'none');
+  eh(rotulos(true).indexOf('Coleta') < 0, 'a barra continua sem mostrar Coleta');
+
+  h3('6. Nenhuma outra aba mudou');
+  var ids = [].slice.call(document.querySelectorAll('#palco .pa-main > .scr'))
+    .map(function (s) { return s.id; });
+  nota('sections: ' + ids.join(' · '));
+  ['s-comp', 's-coleta', 's-medicao', 's-mapa', 's-hist', 's-relat', 's-custo', 's-mais']
+    .forEach(function (id) {
+      eh(ids.indexOf(id) >= 0, '  ' + id + ' continua existindo');
+    });
+  eh(ids.indexOf('s-financeiro') >= 0, '  s-financeiro é a nova');
+  // As outras abas abrem normalmente.
+  var outras = [['Comparação', 's-comp'], ['Medição', 's-medicao'], ['Relatórios', 's-relat'],
+                ['Custo', 's-custo'], ['Mais+', 's-mais']];
+  for (var i = 0; i < outras.length; i++) {
+    btnDe(outras[i][0]).click();
+    await esperar(80);
+    eh(ativa() === outras[i][1], '  ' + outras[i][0] + ' abre a ' + outras[i][1], ativa(), outras[i][1]);
+  }
+
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">TUDO PASSOU</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — Financeiro';
+}
+
+rodar().catch(function (e) {
+  linhas.push('\n<span class="bad">ERRO: ' + hesc(e.message) + '</span>');
+  linhas.push(hesc(String(e.stack || '').split('\n').slice(0, 6).join('\n')));
+  pintar();
+  document.title = 'ERRO — Financeiro';
+});
+</script>

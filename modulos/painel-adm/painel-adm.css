@@ -88,6 +88,17 @@ html, body { height: 100%; overflow: hidden; }
   transition: color .15s, background .15s; min-width: 84px;
 }
 .nbtn:hover { color: var(--text); background: var(--surface2); }
+/* Botão de aba que existe no DOM e não aparece na barra. Hoje é a Coleta,
+   substituída pelo Financeiro: o botão fica porque o roteador de hash o
+   procura para abrir #coleta por URL. `display:none` explícito e não o
+   atributo [hidden] — o .nbtn acima declara display:flex, que vence o
+   [hidden]{display:none} do navegador. */
+.nbtn--oculto { display: none; }
+/* A #s-financeiro precisa de display:BLOCK, e nao herdar o flex do
+   .scr.active: com flex, o seletor de sub-botoes e o corpo ficariam lado a
+   lado em vez de um sobre o outro. Mesmo caminho do #s-app e do #s-relat —
+   quem precisa de coluna declara. */
+#s-financeiro.active { display: block; }
 .nbtn.active { color: var(--accent); background: var(--accent-dim); }
 .nbtn .ni { font-size: 1.1rem; line-height: 1; }
 .nbtn .nl { font-size: .66rem; font-weight: 700; letter-spacing: .02em; }

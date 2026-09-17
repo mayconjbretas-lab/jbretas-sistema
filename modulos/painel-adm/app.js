@@ -73,7 +73,11 @@ function setTab(btn, tab) {
   document.getElementById('s-' + tab)?.classList.add('active');
   if (tab === 'comp' && !comparaCarregado) carregarDadosComparar();
   // Coleta (revisão) — mesmo render do painel mobile (coleta-revisao.js).
+  // O botão saiu da barra (ver o index.html), mas a aba segue viva e
+  // alcançável por #coleta na URL — este ramo é o que a atende.
   if (tab === 'coleta') renderColetaRevisao(document.getElementById('s-coleta'));
+  // Financeiro — três sub-vistas; ver o bloco FIN_VISTAS.
+  if (tab === 'financeiro') renderFinanceiro();
   // Medição — ADM define o pré-pedido (medicao.js expõe renderMedicao em window).
   if (tab === 'medicao') renderMedicao(document.getElementById('s-medicao'));
   // Relatórios — hospeda DUAS vistas (relatórios da rede e DRE). Ver
@@ -113,6 +117,52 @@ function setTab(btn, tab) {
 // A ORDEM DAS CHAVES é a dos botões na tela, para quem ler as duas listas
 // não precisar cruzá-las. `mov` (mês × mês) fica sem botão de propósito,
 // como já estava: a vista existe, a entrada visível não.
+// ── ABA FINANCEIRO ──────────────────────────────────────────────
+// Substituiu a COLETA na barra inferior. Nada da Coleta foi apagado: a
+// section #s-coleta, o renderColetaRevisao e o ramo do setTab continuam
+// inteiros, e o botão dela segue no DOM (escondido) porque é por ele que o
+// roteador de hash abre #coleta. Ver o comentário no index.html.
+//
+// Três sub-vistas, no MESMO padrão da aba Relatórios: um mapa com uma linha
+// por vista, e o resto da função não muda quando entra a próxima. Hoje as
+// três desenham placeholder — o que está pronto é a navegação e o hash,
+// para o conteúdo entrar depois sem tocar no roteamento.
+//
+// A CHAVE TEM HÍFEN em nota-prazo, e isso importa: ela vai para a URL
+// (#financeiro/nota-prazo) e o validador de sub-vista é o próprio mapa —
+// o /^[a-z]+$/ do botaoDaAba vale para o nome da ABA, não para o da vista.
+const FIN_VISTAS = {
+  banco: { rot: 'Banco', botao: 'fin-btn-banco' },
+  'nota-prazo': { rot: 'Nota prazo', botao: 'fin-btn-nota-prazo' },
+  clientes: { rot: 'Clientes', botao: 'fin-btn-clientes' },
+};
+// Padrão da aba. Variável de MÓDULO, como a _relatVista: voltar ao
+// Financeiro reabre a última sub-vista escolhida, não o padrão.
+let _finVista = 'banco';
+
+function renderFinanceiro() {
+  Object.keys(FIN_VISTAS).forEach(function (k) {
+    const b = document.getElementById(FIN_VISTAS[k].botao);
+    if (b) b.classList.toggle('active', k === _finVista);
+  });
+  const el = document.getElementById('fin-corpo');
+  if (!el) return;
+  const v = FIN_VISTAS[_finVista] || FIN_VISTAS.banco;
+  // SEM escapar: v.rot vem do FIN_VISTAS, que é literal deste arquivo — não é
+  // dado de usuário nem de API. E este módulo NÃO tem escapeHtml no escopo
+  // (o esc() dos shared vive dentro dos IIFEs deles); chamar um que não existe
+  // derrubaria a aba no clique.
+  el.innerHTML = '<div class="em-construcao">💲 ' + v.rot + ' — em construção</div>';
+}
+// Sub-vista é recorte LOCAL: não refaz chamada nenhuma (não há nenhuma
+// ainda) e grava o hash, como o relAbrir.
+function finAbrir(vista) {
+  if (!FIN_VISTAS[vista]) return;
+  _finVista = vista;
+  renderFinanceiro();
+  gravarHash('financeiro');
+}
+
 const REL_VISTAS = {
   postos: { sec: 's-movpostos', botao: 'rel-btn-postos', render: (el) => renderMovPostos(el) },
   app: { sec: 's-app', botao: 'rel-btn-app', render: (el) => renderAppCupons(el) },
@@ -207,6 +257,7 @@ function hashDaAba(tab) {
     const canal = (typeof window.__apCanalAtual === 'function') ? window.__apCanalAtual() : '';
     return '#app' + (canal ? '/' + String(canal).toLowerCase() : '');
   }
+  if (tab === 'financeiro') return '#financeiro/' + _finVista;
   return '#' + tab + (tab === 'relat' ? '/' + _relatVista : '');
 }
 // O app-cupons.js chama isto ao trocar de canal, para a URL acompanhar sem
@@ -239,6 +290,9 @@ function aplicarHash() {
   // A sub-vista só é aceita se existir no mapa. "#relat/inventada" abre a
   // aba na última vista válida, em vez de abrir uma aba vazia.
   if (partes[0] === 'relat' && partes[1] && REL_VISTAS[partes[1]]) _relatVista = partes[1];
+  // Mesma regra para o Financeiro: sub-vista fora do mapa não zera a aba,
+  // abre na última válida. "#financeiro/inventada" cai no Banco.
+  if (partes[0] === 'financeiro' && partes[1] && FIN_VISTAS[partes[1]]) _finVista = partes[1];
   setTab(btn, partes[0]);
   return true;
 }
