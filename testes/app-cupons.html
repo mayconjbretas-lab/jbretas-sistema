@@ -923,8 +923,9 @@ async function rodar() {
   eh(!document.querySelector('#palco .ap-card'), 'e os cards saem (o resumo daqui é outro)',
      document.querySelectorAll('#palco .ap-card').length + ' card(s)', '0');
   eh(!!document.getElementById('ap-sg-file'), 'com o input de arquivo escondido');
-  eh(document.getElementById('ap-sg-file').accept === '.xlsx', 'aceitando .xlsx',
-     document.getElementById('ap-sg-file').accept);
+  eh(document.getElementById('ap-sg-file').accept === '.xlsx,.xls',
+     'aceitando .xlsx e .xls (o SheetJS lê os dois)',
+     document.getElementById('ap-sg-file').accept, '.xlsx,.xls');
 
   h3('23. Importar: a planilha é lida no navegador');
   // O SheetJS é o MESMO que a tela usa (carregado sob demanda pelo módulo).

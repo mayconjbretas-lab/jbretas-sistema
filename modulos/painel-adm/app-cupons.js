@@ -1143,7 +1143,7 @@
       '<button type="button" class="ap-cbtn ap-sg-imp" onclick="__apSgAbrir()"' +
         (_sgLendo ? ' disabled' : '') + '>' +
         (_sgLendo ? 'Lendo a planilha…' : 'Importar planilha Soutag') + '</button>' +
-      '<input type="file" id="ap-sg-file" accept=".xlsx" hidden onchange="__apSgArquivo(this)">' +
+      '<input type="file" id="ap-sg-file" accept=".xlsx,.xls" hidden onchange="__apSgArquivo(this)">' +
       (_sg ? '<span class="ap-sg-arq">' + esc(_sg.arquivo) + ' · ' +
         nf(_sg.linhas.length, 0) + ' linha' + (_sg.linhas.length === 1 ? '' : 's') + '</span>' : '') +
     '</div>';
@@ -1240,8 +1240,12 @@
   window.__apSgArquivo = async function (input) {
     var file = input && input.files && input.files[0];
     if (!file) return;
-    if (!/\.xlsx$/i.test(file.name)) {
-      _sgErro = 'Selecione um arquivo .xlsx (planilha do Excel).'; pintar(); return;
+    // O SheetJS lê os dois formatos (xlsx é ZIP/OOXML, xls é BIFF/OLE2), e o
+    // XLSX.read decide pelos bytes, não pela extensão. O guard acompanha o
+    // accept do input: os dois aceitando o mesmo par, senão o picker deixaria
+    // escolher um arquivo que o código recusa na linha seguinte.
+    if (!/\.xlsx?$/i.test(file.name)) {
+      _sgErro = 'Selecione uma planilha do Excel (.xlsx ou .xls).'; pintar(); return;
     }
     _sgLendo = true; _sgErro = ''; pintar();
     try {
