@@ -91,6 +91,17 @@
   // Prévia do "Fechar período" (o dry_run da POST /nota-prazo/fechar).
   var _previa = null;
 
+  // ── Importação do relatório TecnoX ──
+  // A PLANILHA VIVE AQUI ATÉ A CONFIRMAÇÃO. Ler o arquivo não grava nada: o
+  // parse fica em _imp, a tela mostra o resumo, e só o clique em "Importar"
+  // manda para a rota. É o mesmo desenho do "Fechar período" (prévia antes de
+  // gerar cobrança) e pela mesma razão — isto cria conta a receber.
+  var _imp = null;         // o que o parser devolveu
+  var _impErro = '';
+  var _impLendo = false;
+  var _impSalvando = false;
+  var _impOk = null;       // a resposta da rota, depois de gravar
+
   // ── Formatação (reusa o mmFmt, como o app-cupons) ───────────────
   function nf(v, casas) {
     if (window.mmFmt && window.mmFmt.nf) return window.mmFmt.nf(v, casas);
@@ -112,6 +123,17 @@
   }
   function periodo(de, ate) { return dataBR(de) + ' → ' + dataBR(ate); }
   function hojeISO() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); }
+  // "17/09 às 15:42". FUSO DE BRASÍLIA explícito: criado_em é timestamptz e
+  // vem em UTC; sem o timeZone, quem abrir a tela de outro fuso lê a hora
+  // dele para um evento que aconteceu no horário do escritório.
+  function quandoBR(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    var o = { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' };
+    var hm = d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString('pt-BR', o) + ' às ' + hm;
+  }
   function primeiroDoMes() { return hojeISO().slice(0, 8) + '01'; }
 
   // ── CSS (injetado uma vez, escopo .np-*) ────────────────────────
@@ -279,6 +301,236 @@
     pintar();
   }
 
+  // ── SheetJS sob demanda ─────────────────────────────────────────
+  // 860 KB que só quem importa precisa. SEGUNDA CÓPIA deste carregador no
+  // repositório (a outra está em app-cupons.js, para a planilha da Soutag), e
+  // de propósito: o guard `window.XLSX` faz a segunda chamada reaproveitar a
+  // biblioteca que a primeira baixou, então a duplicação custa 20 linhas e
+  // não um download. Extrair para shared/js exigiria editar o app-cupons, que
+  // está em mão de outra frente agora.
+  var _xlsxPromessa = null;
+  var XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  function carregarXlsx() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    if (_xlsxPromessa) return _xlsxPromessa;
+    _xlsxPromessa = new Promise(function (ok, erro) {
+      var sc = document.createElement('script');
+      sc.src = XLSX_URL;
+      sc.onload = function () {
+        if (window.XLSX) ok(window.XLSX);
+        else erro(new Error('a biblioteca de planilha carregou sem se registrar'));
+      };
+      sc.onerror = function () {
+        _xlsxPromessa = null;   // deixa tentar de novo depois
+        erro(new Error('não foi possível baixar a biblioteca de planilha (precisa de internet)'));
+      };
+      document.head.appendChild(sc);
+    });
+    return _xlsxPromessa;
+  }
+
+  // ── O relatório de faturas da TecnoX ────────────────────────────
+  // ESTRUTURA MEDIDA nos três arquivos de agosto/2026 (502, 512 e 517 linhas):
+  //
+  //   L1        título | período | gerado          (3 células)
+  //   L2        "Empresas selecionadas"
+  //   L3-L48    as 46 empresas do filtro, uma por linha, só coluna A
+  //   L49-L50   vazias
+  //   L51       CABEÇALHO: Seq. Emissão Vencimento Doc. Cód Cliente Tipo
+  //             Placa KM R$ Bruto Acrés. Desc. Juros Multa Taxa R$ Liquido
+  //             Data PG R$ Pago Situação PG                (19 colunas)
+  //   L52+      grupo (2 células) → dados (17) → "Total Empresa:" (13), e
+  //             repete por coligada
+  //   penúltima "Total Geral:"                             (12 células)
+  //   última    "© Tecno X Sistemas | Página -1 de 1"      (2 células)
+  //
+  // O CABEÇALHO NÃO ESTÁ NA LINHA 1 e a linha dele NÃO é fixa: o preâmbulo
+  // tem o tamanho da lista de empresas selecionadas, que muda com o filtro de
+  // quem exporta. Quem acha o cabeçalho é a célula A = "Seq.".
+  //
+  // ════════ TRÊS LAYOUTS DE COLUNA NO MESMO ARQUIVO ════════
+  // Na linha de dados o líquido está em P; no "Total Empresa:" está em L; no
+  // "Total Geral:" está em K. Ler o total pelo índice da linha de dados traz
+  // número errado sem nenhum sintoma — é por isso que as linhas de total são
+  // tratadas à parte, e só o Total Geral é lido, com os índices dele.
+  //
+  // ════════ O RODAPÉ SE DISFARÇA DE GRUPO ════════
+  // "© Tecno X Sistemas" também tem 2 células preenchidas. O que separa um do
+  // outro é a coluna A: no grupo ela é o CÓDIGO NUMÉRICO da coligada.
+  var IMP_TITULO = /FATURAS?\s+POR\s+DATA\s+DE\s+EMISS[ÃA]O/i;
+  var IMP_OUTRO = /POR\s+DATA\s+DE\s+(LIQUIDA[ÇC][ÃA]O|VENCIMENTO)/i;
+  // Mesmo mapa da rota. Situação fora destas três não entra: um "Cancelado"
+  // adivinhado como ABERTO viraria conta a receber que ninguém deve.
+  var IMP_SIT = { 'PG TOTAL': 'PAGO', 'PG PARCIAL': 'ABERTO', 'ABERTO': 'ABERTO' };
+  // Índices das colunas de DADOS (A=0). As mortas ficam de fora: Placa e KM
+  // vieram 100% vazias nos três arquivos, e Acrés./Desc./Multa/Taxa sempre 0.
+  var IMP_COL = { seq: 0, emissao: 1, vencimento: 2, doc: 3, cod: 4, cliente: 5,
+                  bruto: 9, juros: 12, liquido: 15, data_pg: 16, pago: 17, situacao: 18 };
+  // Índices do "Total Geral:" — outro layout, ver acima.
+  var IMP_TG = { qtd: 3, bruto: 4, juros: 7, liquido: 10, pago: 11 };
+
+  function impTxt(v) { return v === null || v === undefined ? '' : String(v).trim(); }
+  function impCheia(l) {
+    var n = 0;
+    for (var i = 0; i < (l || []).length; i++) if (l[i] !== null && l[i] !== '') n++;
+    return n;
+  }
+  // COMPONENTES LOCAIS da Date, não toISOString(): o SheetJS monta a data com
+  // `new Date(ano, mes, dia)` em horário local, e toISOString() num fuso a
+  // leste de Greenwich devolveria o dia anterior. Serial e texto dd/mm/aaaa
+  // também aparecem, dependendo de como a planilha foi salva.
+  function impData(v) {
+    if (v === null || v === undefined || v === '') return '';
+    if (v instanceof Date) {
+      if (isNaN(v.getTime())) return '';
+      return v.getFullYear() + '-' + ('0' + (v.getMonth() + 1)).slice(-2) + '-' + ('0' + v.getDate()).slice(-2);
+    }
+    if (typeof v === 'number' && isFinite(v)) {
+      // 25569 = 1970-01-01 no serial do Excel (base 1899-12-30, com o ano
+      // bissexto fantasma de 1900 que o Excel mantém por compatibilidade).
+      var d = new Date(Math.round((v - 25569) * 86400000));
+      if (isNaN(d.getTime())) return '';
+      return d.toISOString().slice(0, 10);
+    }
+    var t = String(v).trim();
+    var iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+    if (iso) return iso[1] + '-' + iso[2] + '-' + iso[3];
+    var br = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(t);
+    if (br) {
+      var ano = br[3].length === 2 ? ('20' + br[3]) : br[3];
+      return ano + '-' + ('0' + br[2]).slice(-2) + '-' + ('0' + br[1]).slice(-2);
+    }
+    return '';
+  }
+  function impNum(v) {
+    if (typeof v === 'number') return isFinite(v) ? v : NaN;
+    var t = String(v === null || v === undefined ? '' : v).replace(/[^0-9,.-]/g, '');
+    if (t === '') return NaN;
+    // pt-BR: ponto é milhar, vírgula é decimal. "1.234,56" -> 1234.56
+    if (t.indexOf(',') >= 0) t = t.split('.').join('').split(',').join('.');
+    var n = Number(t);
+    return isFinite(n) ? n : NaN;
+  }
+
+  function lerRelatorio(XLSX, buffer, nomeArquivo) {
+    var wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+    var aba = wb.SheetNames[0];
+    if (!aba) throw new Error('a planilha não tem nenhuma aba');
+    var aoa = XLSX.utils.sheet_to_json(wb.Sheets[aba], { header: 1, raw: true, defval: null, blankrows: true });
+    if (!aoa.length) throw new Error('a primeira aba está vazia');
+
+    var titulo = impTxt((aoa[0] || [])[0]).replace(/\s+/g, ' ');
+    var outro = IMP_OUTRO.exec(titulo);
+    if (outro) {
+      throw new Error('Esta é a planilha por ' + (/LIQUIDA/i.test(outro[1]) ? 'LIQUIDAÇÃO' : 'VENCIMENTO') +
+        '. Exporte "FATURAS POR DATA DE EMISSÃO" — os três relatórios têm o mesmo cabeçalho e conteúdo diferente.');
+    }
+    if (!IMP_TITULO.test(titulo)) {
+      throw new Error('A célula A1 não é o título do relatório de faturas por emissão. Achei: "' +
+        (titulo || '(vazia)') + '"');
+    }
+
+    var ic = -1;
+    for (var i = 0; i < aoa.length; i++) {
+      if (impTxt((aoa[i] || [])[0]) === 'Seq.') { ic = i; break; }
+    }
+    if (ic < 0) throw new Error('não achei a linha de cabeçalho (nenhuma célula A com "Seq.")');
+
+    // O preâmbulo: as empresas do filtro. Vão para o resumo porque a
+    // diferença entre elas e os grupos COM movimento é informação — 46
+    // selecionadas e 33 com fatura, nos arquivos medidos.
+    var empresas = [];
+    for (var e = 2; e < ic; e++) {
+      var nomeE = impTxt((aoa[e] || [])[0]);
+      if (nomeE) empresas.push(nomeE);
+    }
+
+    var faturas = [], grupos = [], ignoradas = 0;
+    var totalGeral = null;
+    var grupoCod = '', grupoNome = '';
+    for (var r = ic + 1; r < aoa.length; r++) {
+      var l = aoa[r] || [];
+      var q = impCheia(l);
+      if (!q) continue;
+      var a0 = impTxt(l[0]);
+      if (a0 === 'Total Empresa:') continue;              // outro layout, ver acima
+      if (a0 === 'Total Geral:') {
+        totalGeral = {
+          qtd_titulos: impNum(l[IMP_TG.qtd]),
+          bruto: impNum(l[IMP_TG.bruto]),
+          juros: impNum(l[IMP_TG.juros]),
+          liquido: impNum(l[IMP_TG.liquido]),
+          pago: impNum(l[IMP_TG.pago]),
+        };
+        continue;
+      }
+      if (q === 2) {
+        // Grupo se A é código numérico; senão é o rodapé.
+        if (/^\d+$/.test(a0)) {
+          grupoCod = a0; grupoNome = impTxt(l[1]);
+          grupos.push({ cod: grupoCod, nome: grupoNome, faturas: 0, total: 0 });
+        }
+        continue;
+      }
+      // Linha de dados de verdade tem Situação PG. É o que separa dado de
+      // qualquer linha de resumo que o relatório venha a ganhar.
+      var sit = impTxt(l[IMP_COL.situacao]).replace(/\s+/g, ' ').toUpperCase();
+      if (!sit) { ignoradas++; continue; }
+      var liq = impNum(l[IMP_COL.liquido]);
+      var emi = impData(l[IMP_COL.emissao]);
+      var ven = impData(l[IMP_COL.vencimento]);
+      var seq = impTxt(l[IMP_COL.seq]);
+      var status = IMP_SIT[sit] || null;
+      if (!seq || !emi || !ven || !isFinite(liq) || !status) { ignoradas++; continue; }
+      var f = {
+        seq: seq,
+        doc: impTxt(l[IMP_COL.doc]),
+        cod: impTxt(l[IMP_COL.cod]),
+        cliente: impTxt(l[IMP_COL.cliente]),
+        emissao: emi,
+        vencimento: ven,
+        bruto: isFinite(impNum(l[IMP_COL.bruto])) ? impNum(l[IMP_COL.bruto]) : null,
+        juros: isFinite(impNum(l[IMP_COL.juros])) ? impNum(l[IMP_COL.juros]) : 0,
+        liquido: liq,
+        data_pg: impData(l[IMP_COL.data_pg]) || null,
+        pago: isFinite(impNum(l[IMP_COL.pago])) ? impNum(l[IMP_COL.pago]) : null,
+        situacao: impTxt(l[IMP_COL.situacao]),
+        status: status,
+        grupo_cod: grupoCod || null,
+        grupo_nome: grupoNome || null,
+      };
+      faturas.push(f);
+      var g = grupos[grupos.length - 1];
+      if (g && g.cod === grupoCod) { g.faturas++; g.total += liq; }
+    }
+    if (!faturas.length) throw new Error('nenhuma linha de fatura legível abaixo do cabeçalho');
+
+    // CENTAVOS na soma, como a rota: somar 383 numerics como float acumula
+    // erro justamente no número que confere com o Total Geral.
+    var cent = 0, clientes = {}, porStatus = { ABERTO: 0, PAGO: 0 }, dias = [];
+    faturas.forEach(function (f) {
+      cent += Math.round(f.liquido * 100);
+      clientes[f.cod] = f.cliente;
+      porStatus[f.status] = (porStatus[f.status] || 0) + 1;
+      dias.push(f.emissao);
+    });
+    dias.sort();
+    var total = cent / 100;
+    var tg = totalGeral && isFinite(totalGeral.liquido) ? totalGeral.liquido : null;
+    return {
+      arquivo: nomeArquivo, titulo: titulo, aba: aba, linha_cabecalho: ic + 1,
+      empresas: empresas, grupos: grupos, faturas: faturas,
+      clientes: Object.keys(clientes).length,
+      total: total, total_geral: tg, qtd_titulos: totalGeral ? totalGeral.qtd_titulos : null,
+      por_status: porStatus, ignoradas: ignoradas,
+      periodo: { de: dias[0], ate: dias[dias.length - 1] },
+      // A CONFERÊNCIA, calculada aqui para a tela poder mostrar antes de
+      // mandar: a rota refaz a mesma conta e recusa a gravação se não fechar.
+      fecha: tg === null ? null : Math.abs(cent - Math.round(tg * 100)) <= 1,
+      diferenca: tg === null ? null : (cent - Math.round(tg * 100)) / 100,
+    };
+  }
+
   // ── HTML: cards ─────────────────────────────────────────────────
   function htmlCards() {
     var d = _dash || {};
@@ -304,7 +556,16 @@
       // o card de cima e a soma dos dois de baixo, e sem esta linha ela
       // seria um rombo invisível.
       (d.aberto_sem_ciclo ? '<div class="np-msg erro">⚠ ' + reais(d.aberto_sem_ciclo) +
-        ' em aberto de cliente inativo ou removido — está no "total a receber" e fora dos ciclos.</div>' : '');
+        ' em aberto de cliente inativo ou removido — está no "total a receber" e fora dos ciclos.</div>' : '') +
+      // ÚLTIMA IMPORTAÇÃO — vem do dashboard (max criado_em das faturas com
+      // observação "Seq: %"), então sobrevive ao recarregar a página. O nome
+      // de quem importou só aparece se a coluna opcional importado_por existir
+      // (ver sql/nota_prazo_importacao.sql); sem ela, data e quantidade.
+      (d.ultima_importacao ? '<div class="np-msg">Última importação: ' +
+        esc(quandoBR(d.ultima_importacao.quando)) + ' · ' + nf(d.ultima_importacao.faturas, 0) +
+        ' fatura' + (d.ultima_importacao.faturas === 1 ? '' : 's') +
+        (d.ultima_importacao.por ? ' · importado por ' + esc(d.ultima_importacao.por) : '') +
+        '</div>' : '');
   }
 
   // ── HTML: barra de filtros e ações ──────────────────────────────
@@ -328,7 +589,11 @@
         '<button class="np-btn" type="button" onclick="__npLimpar()">Limpar</button></div>' +
       '<div class="np-acoes">' +
         '<button class="np-btn' + (_form === 'cliente' ? ' on' : '') + '" type="button" onclick="__npForm(\'cliente\')">Novo cliente</button>' +
-        '<button class="np-btn' + (_form === 'lancamento' ? ' on' : '') + '" type="button" onclick="__npForm(\'lancamento\')">Importar relatório TecnoX</button>' +
+        // ESTE BOTÃO DIZIA "Importar relatório TecnoX" e abria o formulário de
+        // lançamento manual — o rótulo prometia o que a tela não fazia. Voltou
+        // ao nome da ação dele; quem importa é o vizinho.
+        '<button class="np-btn' + (_form === 'lancamento' ? ' on' : '') + '" type="button" onclick="__npForm(\'lancamento\')">Novo lançamento</button>' +
+        '<button class="np-btn' + (_form === 'importar' ? ' on' : '') + '" type="button" onclick="__npForm(\'importar\')">Importar relatório TecnoX</button>' +
         '<button class="np-btn pri' + (_form === 'fechar' ? ' on' : '') + '" type="button" onclick="__npForm(\'fechar\')">Fechar período</button>' +
       '</div></div>';
   }
@@ -528,10 +793,100 @@
         '<button class="np-btn" type="button" onclick="__npForm(\'\')">Cancelar</button>' +
       '</div></div>';
   }
+  // ── HTML: importar relatório ────────────────────────────────────
+  function htmlImpResumo() {
+    var p = _imp;
+    var ab = p.por_status.ABERTO || 0, pg = p.por_status.PAGO || 0;
+    var h = '<div class="np-msg ' + (p.fecha === false ? 'erro' : 'ok') + '">' +
+      nf(p.clientes, 0) + ' cliente' + (p.clientes === 1 ? '' : 's') + ', ' +
+      nf(p.faturas.length, 0) + ' fatura' + (p.faturas.length === 1 ? '' : 's') + ', ' +
+      nf(ab, 0) + ' em aberto, ' + nf(pg, 0) + ' paga' + (pg === 1 ? '' : 's') +
+      ' — total ' + esc(reais(p.total)) + '</div>' +
+      '<div class="np-msg">Período de emissão: ' + esc(periodo(p.periodo.de, p.periodo.ate)) +
+      ' · ' + esc(p.titulo) + '</div>';
+    // A CONFERÊNCIA CONTRA O PRÓPRIO ARQUIVO. O relatório traz um "Total
+    // Geral:" e ele tem de bater com a soma das linhas lidas ao centavo; não
+    // batendo, o parser perdeu ou duplicou linha e a rota recusa a gravação.
+    if (p.total_geral === null) {
+      h += '<div class="np-msg erro">⚠ o arquivo não traz a linha "Total Geral:" — sem ela não há como conferir a soma.</div>';
+    } else if (p.fecha) {
+      h += '<div class="np-msg ok">✓ soma das linhas = Total Geral do arquivo (' + esc(reais(p.total_geral)) + ')' +
+        (p.qtd_titulos && isFinite(p.qtd_titulos)
+          ? ' · ' + nf(p.qtd_titulos, 0) + ' títulos declarados, ' + nf(p.faturas.length, 0) + ' lidos'
+          : '') + '</div>';
+    } else {
+      h += '<div class="np-msg erro">⚠ a soma das linhas (' + esc(reais(p.total)) +
+        ') NÃO fecha com o Total Geral do arquivo (' + esc(reais(p.total_geral)) +
+        '), diferença ' + esc(reais(p.diferenca)) + '. A importação está bloqueada.</div>';
+    }
+    if (p.ignoradas) {
+      h += '<div class="np-msg">' + nf(p.ignoradas, 0) + ' linha(s) ignorada(s) — sem situação, ' +
+        'data ou valor legível (o relatório tem linhas de total e rodapé).</div>';
+    }
+    // AS COLIGADAS, que é o agrupamento do relatório e o que vai para a
+    // observação de cada fatura (a futura aba Coligadas lê dali).
+    var gs = p.grupos.filter(function (g) { return g.faturas > 0; });
+    h += '<div class="np-msg">' + nf(gs.length, 0) + ' de ' + nf(p.empresas.length, 0) +
+      ' empresas selecionadas têm fatura no período:</div>' +
+      '<div class="np-det"><div class="np-det-cab" style="grid-template-columns:60px 340px 90px 140px">' +
+      '<span>Cód</span><span>Coligada</span><span>Faturas</span><span>Total</span></div>';
+    gs.forEach(function (g) {
+      h += '<div class="np-det-linha" style="grid-template-columns:60px 340px 90px 140px">' +
+        '<span>' + esc(g.cod) + '</span><span>' + esc(g.nome) + '</span>' +
+        '<span>' + nf(g.faturas, 0) + '</span><span>' + esc(reais(g.total)) + '</span></div>';
+    });
+    h += '</div>';
+    return h;
+  }
+  function htmlImpFeito() {
+    var r = _impOk;
+    var h = '<div class="np-msg ok">✓ ' + nf(r.faturas_inseridas, 0) + ' fatura(s) gravada(s), total ' +
+      esc(reais(r.total)) + '.</div>' +
+      '<div class="np-msg">' + nf(r.clientes_criados, 0) + ' cliente(s) cadastrado(s)' +
+      (r.clientes_renomeados ? ', ' + nf(r.clientes_renomeados, 0) + ' com nome atualizado' : '') +
+      ' · ' + nf(r.fechamentos_apagados, 0) + ' fatura(s) da importação anterior apagada(s) em ' +
+      esc(periodo(r.janela.de, r.janela.ate)) + '</div>';
+    if (r.recusadas && r.recusadas.length) {
+      h += '<div class="np-msg erro">' + nf(r.recusadas.length, 0) + ' linha(s) recusada(s) pela rota: ' +
+        esc(r.recusadas.slice(0, 5).map(function (x) { return 'L' + x.linha + ' ' + x.motivo; }).join(' · ')) +
+        (r.recusadas.length > 5 ? ' …' : '') + '</div>';
+    }
+    if (r.guarda_quem_importou === false) {
+      h += '<div class="np-msg">A coluna <b>importado_por</b> ainda não existe — a linha de última ' +
+        'importação vai mostrar data e quantidade, sem o nome. Ver o bloco 2 de sql/nota_prazo_importacao.sql.</div>';
+    }
+    return h;
+  }
+  function htmlFormImportar() {
+    var podeGravar = !!(_imp && _imp.fecha !== false && !_impSalvando);
+    var h = '<div class="np-form"><h4>Importar relatório TecnoX</h4>' +
+      '<p class="np-form-dica">Relatório <b>FATURAS POR DATA DE EMISSÃO — ANALÍTICO (TODOS OS LANÇAMENTOS)</b>, ' +
+      'em .xls ou .xlsx. Os relatórios por <b>liquidação</b> e por <b>vencimento</b> têm o mesmo cabeçalho e ' +
+      'conteúdo diferente — a tela recusa os dois.<br>' +
+      'O arquivo é lido no navegador e nada é gravado antes de você confirmar.</p>' +
+      '<div class="np-campos">' +
+        '<button class="np-btn" type="button" onclick="__npImpAbrir()"' + (_impLendo ? ' disabled' : '') + '>' +
+          (_impLendo ? 'Lendo a planilha…' : 'Escolher arquivo') + '</button>' +
+        '<input type="file" id="np-imp-file" accept=".xls,.xlsx" hidden onchange="__npImpArquivo(this)">' +
+        (_imp ? '<span class="np-sub">' + esc(_imp.arquivo) + ' · aba "' + esc(_imp.aba) +
+          '" · cabeçalho na linha ' + _imp.linha_cabecalho + '</span>' : '') +
+      '</div>';
+    if (_impErro) h += '<div class="np-msg erro">' + esc(_impErro) + '</div>';
+    if (_impOk) h += htmlImpFeito();
+    if (_imp) h += htmlImpResumo();
+    h += '<div class="np-form-pe">' +
+        '<button class="np-btn pri" type="button" onclick="__npImportar()"' + (podeGravar ? '' : ' disabled') + '>' +
+          (_impSalvando ? 'Gravando…' : (_imp ? 'Importar ' + nf(_imp.faturas.length, 0) + ' fatura(s)' : 'Importar')) +
+        '</button>' +
+        '<button class="np-btn" type="button" onclick="__npForm(\'\')">Fechar</button>' +
+      '</div></div>';
+    return h;
+  }
   function htmlForm() {
     if (_form === 'cliente') return htmlFormCliente();
     if (_form === 'lancamento') return htmlFormLancamento();
     if (_form === 'fechar') return htmlFormFechar();
+    if (_form === 'importar') return htmlFormImportar();
     return '';
   }
 
@@ -546,7 +901,12 @@
     if (!c) return null;
     var m = {};
     [].slice.call(c.querySelectorAll('input,select')).forEach(function (e) {
-      if (e.id) m[e.id] = e.value;
+      // INPUT DE ARQUIVO FICA FORA. O value dele é "C:\fakepath\nome.xls" e o
+      // navegador PROÍBE escrever qualquer coisa além de string vazia nele —
+      // o reporForm levantava TypeError ao repintar depois de escolher o
+      // arquivo, e a importação morria no meio. O arquivo já está em _imp;
+      // não é o DOM que o guarda.
+      if (e.id && e.type !== 'file') m[e.id] = e.value;
     });
     return m;
   }
@@ -606,6 +966,10 @@
   window.__npForm = function (qual) {
     _form = (_form === qual) ? '' : qual;
     _formErro = ''; _formOk = ''; _previa = null;
+    // A PLANILHA LIDA SOBREVIVE a fechar e reabrir o formulário (como o _sg
+    // da tela App): reler um arquivo de 400 KB porque a pessoa clicou fora é
+    // punição sem motivo. O que se limpa é a mensagem.
+    _impErro = ''; _impOk = null;
     pintar();
   };
   window.__npCorte = function (ciclo) {
@@ -752,6 +1116,75 @@
     } catch (e) {
       _formSalvando = false;
       _formErro = (e && e.message) || 'Falha ao fechar período';
+      pintar();
+    }
+  };
+
+  // ── Importação: escolher, ler e gravar ──────────────────────────
+  window.__npImpAbrir = function () {
+    var el = document.getElementById('np-imp-file');
+    // value vazio para o onchange disparar ao reescolher o MESMO arquivo —
+    // que é o caso de quem corrigiu a exportação e tenta de novo.
+    if (el) { el.value = ''; el.click(); }
+  };
+  window.__npImpArquivo = async function (input) {
+    var file = input && input.files && input.files[0];
+    if (!file) return;
+    // O SheetJS lê os dois formatos: o .xls da TecnoX é BIFF/OLE2 e o .xlsx é
+    // ZIP/OOXML, e o XLSX.read decide pelos bytes, não pela extensão. O guard
+    // acompanha o accept do input.
+    if (!/\.xlsx?$/i.test(file.name)) {
+      _impErro = 'Selecione uma planilha do Excel (.xls ou .xlsx).'; pintar(); return;
+    }
+    _impLendo = true; _impErro = ''; _impOk = null; _imp = null; pintar();
+    try {
+      var XLSX = await carregarXlsx();
+      var buf = new Uint8Array(await file.arrayBuffer());
+      _imp = lerRelatorio(XLSX, buf, file.name);
+    } catch (e) {
+      _imp = null;
+      _impErro = (e && e.message) ? e.message : String(e);
+    } finally {
+      _impLendo = false; pintar();
+    }
+  };
+  window.__npImportar = async function () {
+    if (!_imp || _imp.fecha === false) return;
+    var p = _imp;
+    // CONFIRMAÇÃO com os números, como o "Fechar período": esta rota apaga a
+    // importação anterior da janela e grava conta a receber.
+    if (!window.confirm(
+        nf(p.clientes, 0) + ' cliente(s), ' + nf(p.faturas.length, 0) + ' fatura(s), ' +
+        nf(p.por_status.ABERTO || 0, 0) + ' em aberto, ' + nf(p.por_status.PAGO || 0, 0) + ' paga(s).\n' +
+        'Total ' + reais(p.total) + '\n' +
+        'Emissão de ' + periodo(p.periodo.de, p.periodo.ate) + '\n\n' +
+        'Confirmar? Isso apaga a importação anterior deste mesmo período e grava as faturas.')) return;
+    _impSalvando = true; _impErro = ''; _impOk = null; pintar();
+    try {
+      var r = await apiFetch('/nota-prazo/importar', { method: 'POST', body: JSON.stringify({
+        arquivo: p.arquivo,
+        titulo: p.titulo,
+        total_geral: p.total_geral,
+        qtd_titulos: p.qtd_titulos,
+        // Só o que a rota usa. O resumo (grupos, empresas selecionadas)
+        // fica na tela: ele serve para conferir antes de mandar, e mandar
+        // junto seria pedir para a rota confiar em número que ela recalcula.
+        faturas: p.faturas.map(function (f) {
+          return { seq: f.seq, doc: f.doc, cod: f.cod, cliente: f.cliente,
+                   emissao: f.emissao, vencimento: f.vencimento,
+                   liquido: f.liquido, juros: f.juros, pago: f.pago,
+                   data_pg: f.data_pg, situacao: f.situacao,
+                   grupo_cod: f.grupo_cod, grupo_nome: f.grupo_nome };
+        }),
+      }) });
+      _impSalvando = false;
+      _impOk = r;
+      // Recarrega TUDO: importar muda os cards, a lista e a linha de última
+      // importação — não só a lista.
+      await carregar();
+    } catch (e) {
+      _impSalvando = false;
+      _impErro = (e && e.message) || 'Falha ao importar';
       pintar();
     }
   };

@@ -44,6 +44,12 @@
 //     o botão de gerar fica travado até haver prévia.
 //  8. O placeholder NÃO volta: o #fin-corpo fica com a tela, não com
 //     "em construção".
+//  9. IMPORTAÇÃO DO RELATÓRIO TECNOX, com o ARQUIVO REAL de agosto/2026
+//     (testes/fixtures-faturas-emissao.xls, .xls BIFF de 423 KB): o parser
+//     acha o cabeçalho na linha 51, ignora as linhas de total (que têm outro
+//     layout de coluna), não confunde o rodapé com uma coligada, soma 383
+//     faturas ao centavo contra o "Total Geral:" do arquivo, e só grava
+//     depois da confirmação. O relatório por vencimento é recusado.
 //
 // A API é DUBLADA (apiFetch), com fixtures aqui dentro. O que está sob teste
 // é o módulo de produção, carregado do repo — não uma cópia.
@@ -88,6 +94,10 @@ var DASH_CHEIO = {
   clientes_ativos: 3, qtd_aberto: 1, qtd_atrasado: 1, qtd_pago_mes: 1,
   por_ciclo: { QUINZENAL: { clientes: 2, aberto: 4200 }, MENSAL: { clientes: 1, aberto: 1800 } },
   aberto_sem_ciclo: 0, postos: POSTOS,
+  // A última importação vem do dashboard (max criado_em das faturas com
+  // observação "Seq: %"), então a linha sobrevive ao recarregar a página.
+  // 18:42Z é 15:42 em Brasília — é o que prova que o fuso está fixado.
+  ultima_importacao: { quando: '2026-09-17T18:42:00.000Z', faturas: 383, por: 'MAYCON' },
 };
 var FECH = [
   { id: 'f1', cliente_id: 'c1', cliente_nome: 'TRANSPORTES ALFA', cliente_tipo: 'FROTA',
@@ -177,6 +187,22 @@ window.apiFetch = function (path, opts) {
   }
   if (path.indexOf('/nota-prazo/cliente') === 0) return Promise.resolve({ success: true, criado: true, cliente: { id: 'c9' } });
   if (path.indexOf('/nota-prazo/lancamento') === 0) return Promise.resolve({ success: true, lancamento: { id: 'l9' } });
+  if (path.indexOf('/nota-prazo/importar') === 0) {
+    // A resposta tem a FORMA da rota real, com os números do corpo que
+    // chegou: assim o teste afirma sobre o que a tela mostra DEPOIS de
+    // gravar, e não sobre um número inventado no dublê.
+    var cp = JSON.parse(opts.body);
+    var ab = cp.faturas.filter(function (f) { return /ABERTO|PARCIAL/i.test(f.situacao); }).length;
+    return Promise.resolve({
+      success: true, arquivo: cp.arquivo, titulo: cp.titulo,
+      janela: { de: cp.faturas[0].emissao, ate: cp.faturas[cp.faturas.length - 1].emissao },
+      clientes_no_arquivo: 244, clientes_criados: 244, clientes_renomeados: 0,
+      faturas_inseridas: cp.faturas.length, fechamentos_apagados: 0,
+      total: cp.total_geral, total_geral: cp.total_geral, diferenca: 0,
+      por_status: { ABERTO: ab, PAGO: cp.faturas.length - ab, ATRASADO: 0 },
+      recusadas: [], importado_por: 'MAYCON', guarda_quem_importou: true,
+    });
+  }
   return Promise.resolve({});
 };
 // confirm() dublado: as ações destrutivas pedem confirmação, e um teste não
@@ -384,7 +410,10 @@ async function assentar() { for (var i = 0; i < 4; i++) await esperar(30); }
 
     window.__npForm('lancamento');
     await assentar();
-    eh(!!document.getElementById('np-l-cliente'), '"Importar relatório TecnoX" abre o formulário');
+    // O RÓTULO DESTE BOTÃO MUDOU: ele dizia "Importar relatório TecnoX" e
+    // abria este formulário, de lançamento manual. Quem importa é o botão
+    // vizinho, conferido na bateria 9.
+    eh(!!document.getElementById('np-l-cliente'), '"Novo lançamento" abre o formulário');
     eh(/— escolha o cliente —/.test(document.getElementById('np-l-bloco').textContent),
        'e o select de bloco começa vazio (bloco de outro cliente é como a nota entra errada)',
        document.getElementById('np-l-bloco').textContent.trim());
@@ -459,6 +488,216 @@ async function assentar() { for (var i = 0; i < 4; i++) await esperar(30); }
     eh(CHAMADAS.length === 0, 'e reabrir a sub-vista não refaz as chamadas',
        String(CHAMADAS.length), '0');
     eh(cards().length === 6, 'com os cards ainda na tela', String(cards().length), '6');
+
+    // ── 9. Importar o relatório TecnoX (ARQUIVO REAL) ────────────
+    h3('9. Importar o relatório TecnoX — planilha real de agosto/2026');
+    // O ARQUIVO É O DE VERDADE: testes/fixtures-faturas-emissao.xls, o mesmo
+    // .xls BIFF/OLE2 de 423 KB que a TecnoX exporta, com 502 linhas. O que
+    // está sob teste é o parser de produção contra o arquivo de produção:
+    // preâmbulo de 46 empresas, cabeçalho na linha 51, 33 coligadas, linhas
+    // de "Total Empresa:" com OUTRO layout de coluna, "Total Geral:" com um
+    // terceiro, e o rodapé "© Tecno X Sistemas" que tem duas células
+    // preenchidas igual a uma linha de grupo.
+    //
+    // OS NÚMEROS ESPERADOS FORAM MEDIDOS NO ARQUIVO, não escolhidos:
+    //   383 faturas · 244 clientes distintos (Cód) · 33 coligadas
+    //   378 "PG Total" + 4 "Aberto" + 1 "PG Parcial" = 378 pagas, 5 em aberto
+    //   soma do R$ Líquido = 1.815.661,76 = o "Total Geral:" do arquivo
+    var XLSX = null;
+    try {
+      XLSX = await new Promise(function (ok, er) {
+        var sc = document.createElement('script');
+        sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        sc.onload = function () { ok(window.XLSX); };
+        sc.onerror = function () { er(new Error('cdnjs inacessível')); };
+        document.head.appendChild(sc);
+      });
+    } catch (e) {
+      nota('SheetJS não carregou (' + e.message + ') — a bateria 9 fica de fora.');
+      nota('O módulo baixa a MESMA biblioteca do mesmo endereço, sob demanda.');
+    }
+    eh(!!XLSX, 'o SheetJS carregou do cdnjs (o mesmo que o módulo baixa sob demanda)',
+       XLSX ? 'sim' : 'NÃO');
+    if (XLSX) {
+      var acoes = [].slice.call(document.querySelectorAll('#palco .np-acoes .np-btn'))
+        .map(function (b) { return b.textContent.trim(); });
+      nota('ações da barra: ' + acoes.join(' · '));
+      // O BOTÃO DO MEIO DIZIA "Importar relatório TecnoX" E ABRIA O
+      // LANÇAMENTO MANUAL — rótulo prometendo o que a tela não fazia. Agora
+      // são quatro, cada um com o nome da própria ação.
+      eh(acoes.join('|') === 'Novo cliente|Novo lançamento|Importar relatório TecnoX|Fechar período',
+         'a barra tem os quatro botões, e o de importar é o de importar',
+         acoes.join('|'), 'Novo cliente|Novo lançamento|Importar relatório TecnoX|Fechar período');
+
+      window.__npForm('importar');
+      await assentar();
+      var inp = document.getElementById('np-imp-file');
+      eh(!!inp, 'o formulário de importação abre com o input de arquivo');
+      eh(inp.accept === '.xls,.xlsx', 'aceitando .xls e .xlsx (o SheetJS lê os dois)',
+         inp.accept, '.xls,.xlsx');
+      var btsI = [].slice.call(document.querySelectorAll('#palco .np-form .np-form-pe button'));
+      eh(btsI[0].disabled === true, 'e o botão de importar travado antes de haver arquivo',
+         String(btsI[0].disabled), 'true');
+
+      var buf = await fetch('/testes/fixtures-faturas-emissao.xls').then(function (r) {
+        if (!r.ok) throw new Error('fixture não encontrada (HTTP ' + r.status + ')');
+        return r.arrayBuffer();
+      });
+      nota('fixture: ' + buf.byteLength.toLocaleString('pt-BR') + ' bytes');
+      var dt = new DataTransfer();
+      dt.items.add(new File([buf], 'Faturas (Todos os lançamentos) analítico  emissao172731.xls',
+        { type: 'application/vnd.ms-excel' }));
+      inp.files = dt.files;
+      CHAMADAS = [];
+      await window.__npImpArquivo(inp);
+      await assentar();
+
+      eh(!/np-msg erro/.test(corpo().innerHTML) || !/não/.test(txt()),
+         'a planilha foi lida sem erro',
+         (document.querySelector('#palco .np-msg.erro') || {}).textContent || 'sem erro');
+      // LER NÃO GRAVA. É o ponto do desenho: o parse fica na memória da tela
+      // e a rota só é chamada na confirmação.
+      eh(CHAMADAS.length === 0, 'LER a planilha não chama a API — nada é gravado antes de confirmar',
+         String(CHAMADAS.length), '0');
+      var t9 = txt();
+      nota('resumo na tela: ' + t9.slice(t9.indexOf('244 cliente'), t9.indexOf('244 cliente') + 120));
+      eh(/244 clientes, 383 faturas, 5 em aberto, 378 pagas/.test(t9),
+         'o resumo traz clientes, faturas, em aberto e pagas — os números do arquivo',
+         (/\d+ clientes, \d+ faturas, \d+ em aberto, \d+ pagas/.exec(t9) || ['(não achei)'])[0],
+         '244 clientes, 383 faturas, 5 em aberto, 378 pagas');
+      eh(t9.indexOf('R$ 1.815.661,76') >= 0, 'com o total do lote', 'R$ 1.815.661,76');
+      eh(/03\/08\/2026 → 31\/08\/2026/.test(t9), 'e o período de EMISSÃO do lote',
+         (/\d{2}\/\d{2}\/\d{4} → \d{2}\/\d{2}\/\d{4}/.exec(t9) || ['—'])[0], '03/08/2026 → 31/08/2026');
+      // A CONFERÊNCIA CONTRA O PRÓPRIO ARQUIVO: soma das 383 linhas lidas
+      // contra o "Total Geral:" que o relatório declara. Bate ao centavo.
+      eh(/soma das linhas = Total Geral do arquivo/.test(t9),
+         'a conferência com o Total Geral passa');
+      eh(/383 títulos declarados, 383 lidos/.test(t9),
+         'e a contagem declarada no arquivo confere com a lida',
+         (/\d+ títulos declarados, \d+ lidos/.exec(t9) || ['—'])[0], '383 títulos declarados, 383 lidos');
+      // AS COLIGADAS: 33 com fatura de 46 selecionadas no filtro do relatório.
+      eh(/33 de 46 empresas selecionadas têm fatura/.test(t9),
+         'o resumo separa coligada COM fatura de empresa selecionada',
+         (/\d+ de \d+ empresas selecionadas/.exec(t9) || ['—'])[0], '33 de 46');
+      var linG = [].slice.call(document.querySelectorAll('#palco .np-form .np-det-linha'));
+      eh(linG.length === 33, 'uma linha por coligada com fatura', String(linG.length), '33');
+      // O RODAPÉ NÃO ENTROU COMO GRUPO. "© Tecno X Sistemas" tem duas células
+      // preenchidas, igual a uma linha de grupo; o que o separa é o código
+      // numérico na coluna A. Se tivesse entrado, seriam 34 linhas.
+      eh(!/Tecno X Sistemas/.test(t9), 'e o rodapé não virou coligada');
+      // CÉLULA POR CÉLULA, e não o textContent da linha: as células do grid
+      // são <span> adjacentes sem espaço entre elas, e o textContent cola
+      // tudo ("1POSTO J A LTDA19R$ 54.405,57").
+      var g1 = [].slice.call(linG[0].children).map(function (e) { return e.textContent.trim(); }).join(' | ');
+      nota('primeira coligada: ' + g1);
+      eh(g1 === '1 | POSTO J A LTDA | 19 | R$ 54.405,57',
+         'com código, nome, contagem e total por coligada', g1, '1 | POSTO J A LTDA | 19 | R$ 54.405,57');
+      btsI = [].slice.call(document.querySelectorAll('#palco .np-form .np-form-pe button'));
+      eh(/Importar 383/.test(btsI[0].textContent), 'o botão passa a dizer quantas faturas vai gravar',
+         btsI[0].textContent.trim(), 'Importar 383 fatura(s)');
+      eh(btsI[0].disabled === false, 'e destrava', String(btsI[0].disabled), 'false');
+
+      // ── 9b. Confirmar grava ──
+      h3('9b. Confirmar manda para a rota');
+      CONFIRMOU = []; CONFIRMA = false; CHAMADAS = [];
+      window.__npImportar();
+      await assentar();
+      eh(CONFIRMOU.length === 1, 'importar pede confirmação', String(CONFIRMOU.length), '1');
+      eh(/383 fatura\(s\)/.test(CONFIRMOU[0]) && /R\$ 1\.815\.661,76/.test(CONFIRMOU[0]),
+         'com os números na pergunta', CONFIRMOU[0].replace(/\n/g, ' ').slice(0, 110));
+      eh(!ultima(/\/nota-prazo\/importar/, 'POST'), 'e recusar não chama a rota',
+         (ultima(/\/nota-prazo\/importar/, 'POST') || {}).path || '(nenhuma)');
+
+      CONFIRMOU = []; CONFIRMA = true; CHAMADAS = [];
+      await window.__npImportar();
+      await assentar();
+      var ci = ultima(/\/nota-prazo\/importar/, 'POST');
+      eh(!!ci, 'confirmar chama POST /nota-prazo/importar');
+      eh(!!ci && ci.corpo.faturas.length === 383, 'com as 383 faturas',
+         ci && String(ci.corpo.faturas.length), '383');
+      eh(!!ci && /POR DATA DE EMISS/i.test(ci.corpo.titulo),
+         'o título do arquivo vai no corpo — a rota confere o corte de novo',
+         ci && ci.corpo.titulo);
+      eh(!!ci && ci.corpo.total_geral === 1815661.76,
+         'e o Total Geral do arquivo, para a rota recusar o que não fecha',
+         ci && String(ci.corpo.total_geral), '1815661.76');
+      var f1 = ci && ci.corpo.faturas[0];
+      nota('primeira fatura enviada: ' + JSON.stringify(f1));
+      eh(!!f1 && f1.seq === '37576106', 'o Seq vai como TEXTO (é a chave, não número para somar)',
+         f1 && (typeof f1.seq) + ' ' + f1.seq, 'string 37576106');
+      eh(!!f1 && f1.cod === '21941' && f1.cliente === 'AKKA COMERCIO DE VEICULOS LTDA',
+         'o Cód e o nome do cliente', f1 && (f1.cod + ' ' + f1.cliente));
+      // A DATA VAI EM ISO, pelos componentes LOCAIS da Date que o SheetJS
+      // monta. Com toISOString() num fuso a leste de Greenwich, 04/08 viraria
+      // 03/08 — e o periodo_de da cobrança sairia um dia atrás.
+      eh(!!f1 && f1.emissao === '2026-08-04' && f1.vencimento === '2026-08-10',
+         'emissão e vencimento em ISO, sem escorregar de dia',
+         f1 && (f1.emissao + ' → ' + f1.vencimento), '2026-08-04 → 2026-08-10');
+      eh(!!f1 && f1.liquido === 1869.36, 'o R$ Líquido', f1 && String(f1.liquido), '1869.36');
+      eh(!!f1 && f1.grupo_cod === '1' && f1.grupo_nome === 'POSTO J A LTDA',
+         'e a coligada da linha de grupo acima dela — é o que vai para a observação',
+         f1 && (f1.grupo_cod + ' ' + f1.grupo_nome), '1 POSTO J A LTDA');
+      // AS COLUNAS MORTAS NÃO SOBEM: Placa e KM vieram 100% vazias nos três
+      // arquivos, e Acrés./Desc./Multa/Taxa sempre 0.
+      eh(!!f1 && f1.placa === undefined && f1.km === undefined && f1.taxa === undefined,
+         'as colunas mortas não são enviadas', f1 && Object.keys(f1).join(','));
+
+      var t9b = txt();
+      eh(/383 fatura\(s\) gravada\(s\)/.test(t9b), 'a tela confirma o que foi gravado',
+         (/\d+ fatura\(s\) gravada\(s\)/.exec(t9b) || ['—'])[0]);
+      eh(/244 cliente\(s\) cadastrado\(s\)/.test(t9b), 'e quantos clientes foram cadastrados',
+         (/\d+ cliente\(s\) cadastrado\(s\)/.exec(t9b) || ['—'])[0]);
+      // Importar recarrega TUDO: os cards e a linha de última importação
+      // mudam, não só a lista.
+      var recarga = CHAMADAS.filter(function (c) { return /\/nota-prazo\/dashboard/.test(c.path); });
+      eh(recarga.length === 1, 'e a tela recarrega o dashboard depois de gravar',
+         String(recarga.length), '1');
+
+      // ── 9c. A linha de última importação ──
+      h3('9c. Última importação');
+      eh(/Última importação: 17\/09 às 15:42/.test(txt()),
+         'a linha mostra data e hora em Brasília (18:42Z = 15:42)',
+         (/Última importação:[^·]*/.exec(txt()) || ['—'])[0].trim(), '17/09 às 15:42');
+      eh(/383 faturas · importado por MAYCON/.test(txt()),
+         'com a contagem e quem importou',
+         (/\d+ faturas · importado por \w+/.exec(txt()) || ['—'])[0]);
+
+      // ── 9d. O relatório ERRADO é recusado ──
+      h3('9d. Liquidação e vencimento são recusados');
+      // MESMO CABEÇALHO, CONTEÚDO DIFERENTE: medido nos três arquivos de
+      // agosto, são 425 documentos distintos na união e só 352 nos três.
+      // Importar um pelo outro gravaria um conjunto parecido e errado, sem
+      // nenhum sintoma — por isso o título é conferido.
+      var ws = XLSX.utils.aoa_to_sheet([
+        ['FATURAS POR DATA DE VENCIMENTO     ANALÍTICO (TODOS OS LANÇAMENTOS)',
+         'Período: 01/08/2026 até 31/08/2026', 'Gerado: 17/09/2026 17:27:55'],
+        ['Empresas selecionadas'], ['POSTO J A LTDA'], [], [],
+        ['Seq.', 'Emissão', 'Vencimento', 'Doc.', 'Cód', 'Cliente', 'Tipo', 'Placa', 'KM',
+         'R$ Bruto', 'Acrés.', 'Desc.', 'Juros', 'Multa', 'Taxa', 'R$ Liquido', 'Data PG',
+         'R$ Pago', 'Situação PG'],
+        ['1', 'POSTO J A LTDA'],
+        [1, '2026-08-01', '2026-08-10', '1', 9, 'CLIENTE X', 'FATURA', null, null,
+         100, 0, 0, 0, 0, 0, 100, '2026-08-10', 100, 'PG Total'],
+      ]);
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+      var dt2 = new DataTransfer();
+      dt2.items.add(new File([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })],
+        'vencimento.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      inp = document.getElementById('np-imp-file');
+      inp.files = dt2.files;
+      CHAMADAS = [];
+      await window.__npImpArquivo(inp);
+      await assentar();
+      var msgE = (document.querySelector('#palco .np-form .np-msg.erro') || {}).textContent || '';
+      nota('erro: ' + msgE.trim());
+      eh(/VENCIMENTO/.test(msgE), 'a planilha por vencimento é recusada, dizendo qual é', msgE.trim());
+      eh(/EMISS/.test(msgE), 'e qual exportar no lugar');
+      eh(CHAMADAS.length === 0, 'sem chamar a rota', String(CHAMADAS.length), '0');
+      btsI = [].slice.call(document.querySelectorAll('#palco .np-form .np-form-pe button'));
+      eh(btsI[0].disabled === true, 'e com o botão de importar travado',
+         String(btsI[0].disabled), 'true');
+    }
   } catch (e) {
     falhas++;
     linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
