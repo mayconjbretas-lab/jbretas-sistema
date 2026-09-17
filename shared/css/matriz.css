@@ -426,3 +426,11 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
   .grade-meia--med { border-left: 0; padding-left: 0;
     border-top: .5px solid var(--border); padding-top: .55rem; }
 }
+/* O MÓDULO logistica-mobile EMPILHA EM QUALQUER LARGURA, e não só abaixo de
+   560px: ele é a tela do celular mesmo quando aberto largo (tablet, ou o
+   navegador do desktop apontado para ela). Escopado pelo host da grade dele
+   (#mb-matriz-vazio) em vez de uma classe nova no card, para o montarCard
+   compartilhado seguir devolvendo exatamente o mesmo HTML nos dois módulos. */
+#mb-matriz-vazio .grade-split { grid-template-columns: 1fr; gap: .55rem; }
+#mb-matriz-vazio .grade-meia--med { border-left: 0; padding-left: 0;
+  border-top: .5px solid var(--border); padding-top: .55rem; }

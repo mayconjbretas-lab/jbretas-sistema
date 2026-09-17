@@ -239,7 +239,10 @@ async function atualizarFaixaMobile() {
 
 // Estado da grade + marcação "montado" POR DATA (localStorage jb_logi_montado_
 // <data>) — marcação de trabalho, sem tabela/rota. Trocar a data usa outra chave.
+// Lidos pelo shared/js/grade-card.js — ver o contrato no cabeçalho dele.
 let _gradePostos = [];
+let _gradeComentarios = false;   // a coluna medicao.comentario existe?
+let _gradeTanques = {};          // { posto_id: { COD: capacidade } }
 let _gradeData = '';
 let _reduzidaNome = '';
 function montadoKey(dataISO) { return 'jb_logi_montado_' + dataISO; }
@@ -259,6 +262,8 @@ function renderGradeMobile(resp, dataISO) {
   if (!grade) return;
   _gradePostos = (resp && resp.postos) || [];
   _gradeData = dataISO;
+  if (resp && resp.comentarios_disponiveis !== undefined) _gradeComentarios = !!resp.comentarios_disponiveis;
+  if (resp && resp.tanques) _gradeTanques = resp.tanques;
   if (!_gradePostos.length) {
     grade.classList.remove('grade-host');
     grade.innerHTML = '<div class="grade-vazia">Nenhum posto ativo neste escopo.</div>';
@@ -266,24 +271,12 @@ function renderGradeMobile(resp, dataISO) {
   }
   grade.classList.add('grade-host');
   const montado = lerMontado(dataISO);
-  const cards = _gradePostos.map(p => {
-    const pc = p.por_combustivel || {};
-    const linhas = Object.keys(pc).filter(k => Number(pc[k]) > 0).map(k =>
-      '<div class="grade-cl"><span class="grade-cl-cod">' + esc(k) + '</span>' +
-      '<span class="grade-cl-val">' + fmtNum(pc[k]) + '</span></div>').join('');
-    const band = p.bandeira ? '<span class="grade-band">' + esc(p.bandeira) + '</span>' : '';
-    const on = montado.has(String(p.posto_id)) ? ' grade-card--montado' : '';
-    const semPed = (Number(p.total) || 0) <= 0 ? ' grade-card--sem-pedido' : '';   // borda tracejada/apagado
-    return '<div class="grade-card' + on + semPed + '" data-pid="' + esc(String(p.posto_id)) + '" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeToggle(this)">' +
-      '<div class="grade-card-top">' +
-        '<span class="grade-posto" data-nome="' + esc(p.posto_nome || '') + '" onclick="__gradeAbrir(event, this)">' + esc(p.posto_nome || '—') + '</span>' +
-        '<span class="grade-top-r"><span class="grade-check">✓</span>' + band +
-          '<span class="grade-lapis" title="Editar pedido" onclick="__gradeLapis(event, this)">✏️</span></span>' +
-      '</div>' +
-      '<div class="grade-total">' + fmtNum(p.total) + ' L</div>' +
-      '<div class="grade-cls">' + (linhas || '<span class="grade-sem-tag">sem pedido</span>') + '</div>' +
-    '</div>';
-  }).join('');
+  // MESMO montarCard do desktop (shared/js/grade-card.js): as duas metades,
+  // a % do tanque, o rótulo com a data da medição e o comentário de célula.
+  // O empilhamento vertical é do CSS, escopado em #mb-matriz-vazio — aqui as
+  // metades não dependem da largura da janela, porque a tela é a do celular
+  // em qualquer largura.
+  const cards = _gradePostos.map(p => montarCard(p, montado)).join('');
   const head =
     '<div class="grade-head">' +
       '<div class="grade-head-data">Pedido do dia · ' + fmtDataBR(dataISO) + '</div>' +

@@ -1,0 +1,240 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logística mobile — card dividido</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/shared/css/matriz.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:10px; margin:12px 0; }
+</style>
+
+<div id="res">rodando…</div>
+<!-- O host da grade do módulo do celular. O id IMPORTA: o CSS que empilha as
+     metades em qualquer largura é escopado nele. -->
+<div id="palco">
+  <div id="mb-matriz-vazio"></div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// O card do módulo do CELULAR (renderGradeMobile) desenha o MESMO card do
+// desktop, com o montarCard de shared/js/grade-card.js, sobre o payload REAL
+// de GET /medicao/pedido-dia de 17/09/2026 (pedido de 17/09, medição de
+// 16/09 — a última disponível).
+//
+// 1. As duas metades existem, com os rótulos, e a da medição vem DEPOIS da do
+//    pedido no DOM.
+// 2. Empilhadas em QUALQUER largura — inclusive larga —, porque este módulo é
+//    a tela do celular mesmo aberto num tablet. A medição troca a borda da
+//    esquerda pela de cima.
+// 3. % do tanque por combustível, com as três faixas de cor.
+// 4. Rótulo com a data quando a medição não é da data do pedido.
+// 5. O lápis segue no header.
+// 6. Comentário: triângulo, e o menu de contexto abre (o mesmo código do
+//    desktop, carregado do mesmo arquivo).
+//
+// O HTML do card é comparado BYTE A BYTE com o que o desktop produz para o
+// mesmo posto: é o que prova que o montarCard é de fato um só.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function hex(rgb) {
+  var m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgb);
+  if (!m) return rgb;
+  return '#' + [1, 2, 3].map(function (i) {
+    return ('0' + Number(m[i]).toString(16)).slice(-2).toUpperCase();
+  }).join('');
+}
+
+var FIX = null, CHAMADAS = [];
+window.exigirSessao = function () { return { id: 'h', nome: 'H', perfil: 'LOGISTICA' }; };
+window.getUsuarioLogado = window.exigirSessao;
+window.aplicarTema = function () {};
+window.caminhoRaiz = function () { return '/'; };
+window.apiFetch = function (url, opts) {
+  CHAMADAS.push({ url: String(url), opts: opts || null });
+  if (String(url).indexOf('/medicao/pedido-dia') === 0) return Promise.resolve(FIX);
+  return Promise.resolve({ success: true, postos: [] });
+};
+function js(src) {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { erro(new Error(src + ' não carregou')); };
+    document.body.appendChild(s);
+  });
+}
+function baixar(u) {
+  return new Promise(function (ok, er) {
+    var x = new XMLHttpRequest();
+    x.open('GET', u);
+    x.onload = function () { try { ok(JSON.parse(x.responseText)); } catch (e) { er(e); } };
+    x.onerror = function () { er(new Error(u + ' não carregou')); };
+    x.send();
+  });
+}
+function cards() { return [].slice.call(document.querySelectorAll('#palco .grade-card')); }
+function disparar(el, tipo, x, y) {
+  var ev = new MouseEvent(tipo, { bubbles: true, cancelable: true, clientX: x || 0, clientY: y || 0 });
+  return !el.dispatchEvent(ev);
+}
+
+// ════════════════════════════════════════════════════════════════
+async function rodar() {
+  FIX = await baixar('/testes/fixtures-logi-pedido-17-09.json');
+  nota('fixture: pedido de ' + FIX.data + ' · medição de ' + FIX.postos[0].data_medicao +
+       ' · ' + FIX.postos.length + ' postos');
+
+  // MESMA ORDEM DA PÁGINA: o card compartilhado e depois o app.js do módulo.
+  await js('/shared/js/grade-card.js');
+  await js('/modulos/logistica-mobile/app.js');
+  await esperar(120);
+  eh(typeof montarCard === 'function', 'o montarCard compartilhado está disponível',
+     typeof montarCard);
+  eh(typeof renderGradeMobile === 'function', 'e o renderGradeMobile do módulo',
+     typeof renderGradeMobile);
+  renderGradeMobile(FIX, FIX.data);
+  await esperar(200);
+
+  h3('1. O card dividido, no módulo do celular');
+  eh(cards().length === FIX.postos.length, 'um card por posto',
+     cards().length + '', FIX.postos.length + '');
+  var c0 = cards()[0];
+  eh(c0.className.indexOf('grade-card--split') >= 0, 'com a classe do card dividido', c0.className);
+  var meias = [].slice.call(c0.querySelectorAll('.grade-meia'));
+  eh(meias.length === 2, 'duas metades', meias.length + '', '2');
+  var rots = meias.map(function (m) { return m.querySelector('.grade-meia-rot').textContent.trim(); });
+  nota('rótulos: ' + rots.join(' | '));
+  eh(rots[0] === 'Pedido final', 'o pedido vem primeiro no DOM', rots[0], 'Pedido final');
+  eh(/^Medição/.test(rots[1]), 'e a medição depois', rots[1]);
+
+  h3('2. Empilhadas em qualquer largura');
+  var sp = c0.querySelector('.grade-split');
+  nota('janela com ' + window.innerWidth + 'px');
+  eh(getComputedStyle(sp).gridTemplateColumns.split(' ').length === 1,
+     'uma coluna só (mesmo numa janela larga)', getComputedStyle(sp).gridTemplateColumns);
+  var med = c0.querySelector('.grade-meia--med');
+  eh(parseFloat(getComputedStyle(med).borderTopWidth) > 0,
+     'a medição tem borda EM CIMA', getComputedStyle(med).borderTopWidth);
+  eh(parseFloat(getComputedStyle(med).borderLeftWidth) === 0,
+     'e não à esquerda', getComputedStyle(med).borderLeftWidth);
+  // A metade da medição fica abaixo da do pedido na tela, não ao lado.
+  var rP = meias[0].getBoundingClientRect(), rM = meias[1].getBoundingClientRect();
+  eh(rM.top >= rP.bottom - 1, 'e na tela ela cai ABAIXO do pedido',
+     'pedido termina em ' + Math.round(rP.bottom) + ', medição começa em ' + Math.round(rM.top));
+
+  h3('3. % do tanque e as faixas de cor');
+  var alvo = FIX.postos.filter(function (p) {
+    return Object.keys(p.medicao_por_combustivel).length >= 4 && FIX.tanques[p.posto_id];
+  })[0];
+  var cardA = cards().filter(function (c) { return c.getAttribute('data-nome') === alvo.posto_nome; })[0];
+  var capA = FIX.tanques[alvo.posto_id];
+  var CORES = { 1: '#0F6E56', 2: '#BA7517', 3: '#A32D2D' };
+  var vistas = {};
+  Object.keys(alvo.medicao_por_combustivel).forEach(function (cod) {
+    var cap = capA[cod];
+    if (cap == null || cap <= 0) return;
+    var pct = alvo.medicao_por_combustivel[cod] / cap * 100;
+    var fx = pct > 50 ? 1 : (pct >= 25 ? 2 : 3);
+    vistas[fx] = true;
+    var cel = cardA.querySelector('.gm-cel[data-comb="' + cod + '"]');
+    var elPct = cel && cel.querySelector('.gm-pct');
+    eh(!!elPct && elPct.textContent.trim() === Math.round(pct) + '%',
+       cod + ': ' + Math.round(pct) + '%', elPct ? elPct.textContent.trim() : '(nada)',
+       Math.round(pct) + '%');
+    eh(!!elPct && hex(getComputedStyle(elPct).color) === CORES[fx],
+       cod + ': na cor da faixa', elPct ? hex(getComputedStyle(elPct).color) : '—', CORES[fx]);
+  });
+  nota('faixas neste card: ' + Object.keys(vistas).length);
+  eh(!!cardA.querySelector('.gm-menor'), 'e o total traz o menor percentual',
+     (cardA.querySelector('.gm-menor') || {}).textContent);
+
+  h3('4. Rótulo com a data da medição');
+  eh(rots[1] === 'Medição 16/09', 'traz 16/09, a última antes do pedido de 17/09',
+     rots[1], 'Medição 16/09');
+  eh(c0.querySelector('.grade-meia--med .grade-meia-rot').className.indexOf('grade-meia-rot--atras') >= 0,
+     'marcado como data anterior');
+
+  h3('5. O lápis continua');
+  eh(!!c0.querySelector('.grade-card-top .grade-lapis'), 'no header do card');
+  eh(!!c0.querySelector('.grade-card-top .grade-top-r .grade-lapis'),
+     'no canto direito, junto da bandeira');
+
+  h3('6. Comentário: o mesmo código do desktop');
+  var comFix = JSON.parse(JSON.stringify(FIX));
+  comFix.comentarios_disponiveis = true;
+  var pc = comFix.postos.filter(function (p) { return Object.keys(p.medicao_por_combustivel).length >= 2; })[0];
+  var COMB = Object.keys(pc.medicao_por_combustivel)[0];
+  pc.comentarios = {}; pc.comentarios[COMB] = 'Bico 2 com vazamento.';
+  renderGradeMobile(comFix, comFix.data);
+  await esperar(180);
+  var cardC = cards().filter(function (c) { return c.getAttribute('data-nome') === pc.posto_nome; })[0];
+  var cel = cardC.querySelector('.gm-cel[data-comb="' + COMB + '"]');
+  eh(!!cel && !!cel.querySelector('.gm-tri'), 'o triângulo aparece na célula comentada');
+  eh(!!cel && hex(getComputedStyle(cel.querySelector('.gm-tri')).borderTopColor) === '#E24B4A',
+     'na cor de sempre', cel ? hex(getComputedStyle(cel.querySelector('.gm-tri')).borderTopColor) : '—',
+     '#E24B4A');
+  var cancelado = disparar(cel, 'contextmenu', 120, 120);
+  await esperar(150);
+  eh(cancelado, 'o menu nativo é cancelado');
+  var itens = [].slice.call(document.querySelectorAll('.gm-menu .gm-menu-item'))
+    .map(function (b) { return b.textContent.trim(); });
+  nota('itens: ' + itens.join(' | '));
+  eh(itens.join('|') === 'Editar comentário|Excluir comentário',
+     'e o menu abre com as duas opções', itens.join('|'));
+  document.body.click();
+  await esperar(100);
+
+  h3('7. É o MESMO card do desktop, byte a byte');
+  // montarCard é o de shared/js/grade-card.js; o que muda entre os módulos é
+  // só o host e o CSS. Chamando-o com o mesmo posto, o HTML tem de ser igual.
+  var montado = new Set();
+  var html = montarCard(pc, montado);
+  var caixa = document.createElement('div');
+  caixa.innerHTML = html;
+  var doModulo = cardC.outerHTML;
+  nota('montarCard: ' + html.length + ' bytes · card na tela: ' + doModulo.length + ' bytes');
+  eh(caixa.firstChild.outerHTML === doModulo, 'o HTML do card veio do montarCard compartilhado',
+     caixa.firstChild.outerHTML === doModulo ? 'idêntico' : 'DIFERENTE');
+  if (caixa.firstChild.outerHTML !== doModulo) {
+    var a = doModulo, b = caixa.firstChild.outerHTML, k = 0;
+    while (k < a.length && a[k] === b[k]) k++;
+    nota('primeira divergência no byte ' + k + ':');
+    nota('  tela:      …' + a.slice(Math.max(0, k - 30), k + 50));
+    nota('  montarCard:…' + b.slice(Math.max(0, k - 30), k + 50));
+  }
+
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">TUDO PASSOU</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — mobile';
+}
+
+rodar().catch(function (e) {
+  linhas.push('\n<span class="bad">ERRO: ' + hesc(e.message) + '</span>');
+  linhas.push(hesc(String(e.stack || '').split('\n').slice(0, 6).join('\n')));
+  pintar();
+  document.title = 'ERRO — mobile';
+});
+</script>

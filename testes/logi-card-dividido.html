@@ -127,6 +127,10 @@ async function rodar() {
   nota('fixture: ' + FIX.data + ' · ' + FIX.postos.length + ' postos · ' +
        FIX.postos_com_pedido + ' com pedido · comentarios_disponiveis=' + FIX.comentarios_disponiveis);
 
+  // A MESMA ORDEM DA PÁGINA DE PRODUÇÃO: o card compartilhado primeiro, o
+  // app.js do módulo depois. O grade-card.js só define funções; quem as chama
+  // é o renderGrade do app.js.
+  await js('/shared/js/grade-card.js');
   await js('/modulos/logistica/app.js');
   await esperar(80);
   // renderGrade direto: é a função de produção que monta a grade de cards.
