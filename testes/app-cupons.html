@@ -75,8 +75,165 @@ function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); 
 var FIX = {};
 var DET_ERRO = null;
 var CHAMADAS = [];
-window.apiFetch = function (url) {
+// ════════ AS DUAS ROTAS DA SOUTAG ════════
+// A comparação SAIU DO NAVEGADOR: o cruzamento mora em jbretas-api/lib/soutag.js,
+// atrás da GET /app/soutag-comparar, e esta tela só desenha o que ela devolve.
+//
+// O dublê abaixo REPRODUZ o cruzamento para poder devolver um payload realista.
+// Ele NÃO é a prova de que a conta está certa — essa é do harness da própria
+// função, jbretas-api/teste-soutag.js, que roda sobre lib/soutag.js e cobre o
+// um-para-um, o par mais próximo, os dois passos e a normalização de nome.
+// O que ESTE arquivo prova é o lado de cá: que a tela lê a planilha, manda o
+// corpo certo para a importação e desenha corretamente o que volta.
+var SG_POST = null;      // o corpo do último POST /app/soutag-importar
+var SG_LINHAS = [];      // o que está "gravado" no banco de mentira
+var SG_ITENS = [];       // os itens da TecnoX que o servidor usaria
+var SG_ARQ = null;
+var SG_SO_APP = false;
+function sgCruzarDuble() {
+  var itens = SG_ITENS.map(function (i, k) {
+    return { k: k, posto: i.nome_posto, data: i.data, comb: i.combustivel,
+             valor: Number(i.valor_liquido) || 0, litros: Number(i.litros) || 0,
+             preco: i.preco_litro, id: i.id_cupom,
+             cupom: i.nome_posto + '|' + i.data + '|' + i.id_cupom, usado: false };
+  });
+  var porChave = {};
+  itens.forEach(function (it) {
+    var c = it.posto + '|' + it.data + '|' + it.comb;
+    (porChave[c] = porChave[c] || []).push(it);
+  });
+  var achar = function (l, tol) {
+    var cand = porChave[l.posto + '|' + l.data + '|' + l.comb] || [], achou = null, melhor = Infinity;
+    for (var k = 0; k < cand.length; k++) {
+      if (cand[k].usado) continue;
+      var d = Math.abs(cand[k].valor - l.valor);
+      if (tol && d > 1.00) continue;
+      if (d < melhor) { melhor = d; achou = cand[k]; }
+    }
+    return achou;
+  };
+  var r2 = function (v) { return Math.round(v * 100) / 100; };
+  var semPosto = [], pend = [];
+  SG_LINHAS.forEach(function (l) { (l.posto ? pend : semPosto).push(l); });
+  var par = function (l, it, st) {
+    return { status: st, data: l.data, posto: it.posto, comb: l.comb, valor: l.valor,
+             valor_tecnox: it.valor, dif: r2(l.valor - it.valor), litros: l.litros,
+             litros_tecnox: it.litros, preco: it.preco, id: l.id, id_cupom: it.id,
+             cupom: it.cupom, usuario: l.usuario, posto_planilha: l.posto_planilha };
+  };
+  var conferido = [], resto = [];
+  pend.forEach(function (l) {
+    var it = achar(l, true);
+    if (it) { it.usado = true; conferido.push(par(l, it, 'conferido')); } else resto.push(l);
+  });
+  var divergente = [], soSoutag = [];
+  resto.forEach(function (l) {
+    var it = achar(l, false);
+    if (it) { it.usado = true; divergente.push(par(l, it, 'divergente')); }
+    else soSoutag.push({ status: 'soutag', data: l.data, posto: l.posto, comb: l.comb,
+      valor: l.valor, litros: l.litros, id: l.id, usuario: l.usuario, posto_planilha: l.posto_planilha });
+  });
+  var soTecnox = itens.filter(function (it) { return !it.usado; }).map(function (it) {
+    return { status: 'tecnox', data: it.data, posto: it.posto, comb: it.comb,
+             valor_tecnox: it.valor, litros_tecnox: it.litros, preco: it.preco,
+             id_cupom: it.id, cupom: it.cupom };
+  });
+  var sgV = 0, semV = 0, txV = 0, txL = 0, cup = {};
+  SG_LINHAS.forEach(function (l) { sgV += l.valor; });
+  semPosto.forEach(function (l) { semV += l.valor; });
+  itens.forEach(function (it) { txV += it.valor; txL += it.litros; cup[it.cupom] = 1; });
+  var mapa = {}, ordem = [];
+  var alvo = function (nome) {
+    var n = nome || '(posto não reconhecido)';
+    if (!mapa[n]) {
+      mapa[n] = { nome: n, sg_n: 0, sg_v: 0, sg_l: 0, tx_n: 0, tx_v: 0, tx_l: 0, cupons: {},
+                  conferido: 0, divergente: 0, soutag: 0, tecnox: 0, linhas: [], nao_reconhecido: !nome };
+      ordem.push(mapa[n]);
+    }
+    return mapa[n];
+  };
+  var lancar = function (l) {
+    var p = alvo(l.posto);
+    p.linhas.push(l); p[l.status]++;
+    if (l.status !== 'tecnox') { p.sg_n++; p.sg_v += l.valor; if (l.litros != null) p.sg_l += l.litros; }
+    if (l.status !== 'soutag') { p.tx_n++; p.tx_v += l.valor_tecnox; p.tx_l += l.litros_tecnox;
+      if (l.cupom) p.cupons[l.cupom] = 1; }
+  };
+  conferido.forEach(lancar); divergente.forEach(lancar); soSoutag.forEach(lancar); soTecnox.forEach(lancar);
+  semPosto.forEach(function (l) {
+    lancar({ status: 'soutag', data: l.data, posto: '', comb: l.comb, valor: l.valor,
+             litros: l.litros, id: l.id, usuario: l.usuario, posto_planilha: l.posto_planilha });
+  });
+  ordem.forEach(function (p) {
+    p.cupons_tx = Object.keys(p.cupons).length; delete p.cupons;
+    p.sg_v = r2(p.sg_v); p.tx_v = r2(p.tx_v); p.dif = r2(p.sg_v - p.tx_v);
+    p.ok = (p.sg_n === p.tx_n) && Math.abs(p.dif) <= 1.00 && !p.nao_reconhecido;
+  });
+  var nc = {};
+  semPosto.forEach(function (l) {
+    if (!nc[l.posto_planilha]) nc[l.posto_planilha] = { nome: l.posto_planilha, n: 0, perto: '', sim: 0, como: 'nenhum' };
+    nc[l.posto_planilha].n++;
+  });
+  var blocoNR = ordem.filter(function (p) { return p.nao_reconhecido; })[0];
+  if (blocoNR) blocoNR.linhas.forEach(function (l) { l.perto = ''; l.sim = 0; l.como = 'nenhum'; });
+  return {
+    success: true,
+    consulta: { de: '2026-09-14', ate: '2026-09-14', so_app: SG_SO_APP, canal: 'SOUTAG',
+                soutag_linhas: SG_LINHAS.length, tecnox_itens: itens.length,
+                tecnox_itens_total: itens.length, itens_placa: 0,
+                tolerancia_placa: 0.02, tolerancia_valor: 1.00 },
+    preco_placa: {},
+    ultima_importacao: SG_LINHAS.length ? { quando: '2026-09-17T18:30:00.000Z',
+      arquivo: SG_ARQ, por: null, transacoes: SG_LINHAS.length } : null,
+    conferido: conferido, divergente: divergente, soSoutag: soSoutag, soTecnox: soTecnox,
+    semPosto: semPosto, itens: itens.length, postos: ordem,
+    naoCasou: Object.keys(nc).map(function (k) { return nc[k]; }),
+    sg: { valor: r2(sgV), n: SG_LINHAS.length, litros: null, sem_posto_valor: r2(semV) },
+    tx: { valor: r2(txV), n: itens.length, litros: txL, cupons: Object.keys(cup).length },
+  };
+}
+// O INVERSO da razaoSocial(), que e o que o servidor faz com lib/soutag.js.
+// Aqui e proposital que seja BURRO: o duble so precisa saber a que posto cada
+// razao social do teste corresponde, e reimplementar a normalizacao de
+// verdade faria o teste medir a si mesmo. A normalizacao real tem harness
+// proprio em jbretas-api/teste-soutag.js.
+function sgPostoDaRazao(nome) {
+  var mapa = window.__SG_DE_RAZAO || {};
+  if (mapa[nome]) return mapa[nome];
+  var n = String(nome || '').toUpperCase()
+    .replace('AUTO POSTO ', '').replace('POSTOS ', '').replace('POSTO ', '')
+    .replace(' POSTO DE SERVICO', '').replace(' COMERCIO DE COMBUSTIVEIS E LUBRIFICANTES', '')
+    .replace('COMERCIO DE COMBUSTIVEIS ', '').replace(' COMERCIO DE COMBUSTIVEIS', '')
+    .replace(' LTDA.', '').replace(' LTDA', '').replace(' ME', '').replace(' EIRELI', '').trim();
+  var nomes = Object.keys(mapa).map(function (k) { return mapa[k]; });
+  for (var i = 0; i < nomes.length; i++) {
+    if (String(nomes[i]).toUpperCase().replace('P. ', '') === n) return nomes[i];
+  }
+  return '';
+}
+window.apiFetch = function (url, opts) {
   CHAMADAS.push(String(url));
+  if (String(url).indexOf('/app/soutag-importar') === 0) {
+    SG_POST = JSON.parse(opts.body);
+    SG_ARQ = SG_POST.arquivo;
+    // O servidor resolve o posto; aqui o dublê usa o mapa que o próprio teste
+    // montou ao gerar a planilha (razão social -> nome do sistema).
+    SG_LINHAS = SG_POST.transacoes.map(function (t) {
+      return { posto: sgPostoDaRazao(t.posto_nome),
+               posto_planilha: t.posto_nome, data: String(t.data).slice(0, 10),
+               comb: t.combustivel, valor: Number(t.valor) || 0, litros: null,
+               usuario: t.usuario, id: t.id_soutag };
+    });
+    var semP = SG_LINHAS.filter(function (l) { return !l.posto; }).length;
+    return Promise.resolve({ success: true, periodo: { de: '2026-09-14', ate: '2026-09-14' },
+      recebidas: SG_POST.transacoes.length, gravadas: SG_LINHAS.length, recusadas: 0,
+      apagadas: 0, sem_posto: semP, nao_casou: [], arquivo: SG_ARQ,
+      importado_por: 'HARNESS', importado_por_gravado: false });
+  }
+  if (String(url).indexOf('/app/soutag-comparar') === 0) {
+    SG_SO_APP = /so_app=1/.test(String(url));
+    return Promise.resolve(sgCruzarDuble());
+  }
   // A rota de detalhe: dois fixtures REAIS de 14/09, um com so_app e um sem.
   if (String(url).indexOf('/app/cupons-detalhe') === 0) {
     if (DET_ERRO) return Promise.reject(DET_ERRO);
@@ -156,10 +313,17 @@ function contem(gs, c) {
 // "P. BRUNA" -> "POSTO BRUNA LTDA": a planilha da Soutag traz razão social,
 // e é isso que a normalização da tela tem de desfazer. Sem regex de
 // propósito — a barra invertida dentro de um patch gerado é onde o erro mora.
+// O mapa INVERSO fica guardado: quem normaliza agora e o servidor, e o duble
+// da rota precisa saber a que posto cada razao social corresponde — e nao vai
+// reimplementar a normalizacao para descobrir (ela tem harness proprio em
+// jbretas-api/teste-soutag.js).
+window.__SG_DE_RAZAO = {};
 function razaoSocial(nome) {
   var t = String(nome == null ? '' : nome);
   if (t.indexOf('P. ') === 0) t = t.slice(3);
-  return 'POSTO ' + t + ' LTDA';
+  var r = 'POSTO ' + t + ' LTDA';
+  window.__SG_DE_RAZAO[r] = String(nome == null ? '' : nome);
+  return r;
 }
 function cards()   { return [].slice.call(document.querySelectorAll('#palco .ap-card')); }
 function rot(i)    { var c = cards()[i]; return c ? c.querySelector('.ap-rot').textContent.trim() : null; }
@@ -1079,6 +1243,10 @@ async function rodar() {
       { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     nota('planilha gerada: ' + rows.length + ' linhas (' + base.length + ' que devem conferir, 3 só Soutag, 1 posto inexistente)');
     // O input real, com o handler real.
+    // O LADO TECNOX DO SERVIDOR: os mesmos itens do recorte, que é o que a
+    // GET /app/soutag-comparar leria de tecnox_cupom_app no período.
+    SG_ITENS = fonte.itens;
+    SG_LINHAS = [];
     var inp = document.getElementById('ap-sg-file');
     var dt = new DataTransfer();
     dt.items.add(file);
@@ -1087,8 +1255,39 @@ async function rodar() {
     await esperar(400);
     eh(!document.querySelector('#palco .ap-erro'), 'a planilha foi lida sem erro',
        (document.querySelector('#palco .ap-erro') || {}).textContent || 'sem erro');
-    eh(!!document.querySelector('#palco .ap-sg-arq'), 'o nome do arquivo aparece',
-       (document.querySelector('#palco .ap-sg-arq') || {}).textContent);
+    // O QUE FOI ENVIADO. A tela lê o .xlsx e manda as linhas para a rota —
+    // este corpo é o contrato entre as duas metades.
+    eh(!!SG_POST && SG_POST.transacoes.length === rows.length,
+       'a tela mandou as ' + rows.length + ' linhas para POST /app/soutag-importar',
+       SG_POST ? SG_POST.transacoes.length + '' : '(não chamou)', rows.length + '');
+    eh(!!SG_POST && SG_POST.arquivo === 'soutag-teste.xlsx', 'com o nome do arquivo',
+       SG_POST && SG_POST.arquivo, 'soutag-teste.xlsx');
+    var t0 = SG_POST && SG_POST.transacoes[0];
+    eh(!!t0 && t0.posto_nome === razaoSocial(base[0].nome_posto),
+       'o posto vai CRU, em razão social (quem normaliza é o servidor)',
+       t0 && t0.posto_nome, razaoSocial(base[0].nome_posto));
+    eh(!!t0 && /^\d{4}-\d{2}-\d{2}$/.test(t0.data), 'a data já resolvida para AAAA-MM-DD',
+       t0 && t0.data);
+    eh(!!t0 && t0.combustivel === base[0].combustivel,
+       'e o combustível já em código (GASOLINA COMUM -> GC)',
+       t0 && t0.combustivel, base[0].combustivel);
+    // A ULTIMA chamada, nao a unica: abrir a vista ja busca a comparacao (e o
+    // caminho de quem nao importa nada), entao importar produz a SEGUNDA.
+    var comparas = CHAMADAS.filter(function (u) { return u.indexOf('/app/soutag-comparar') === 0; });
+    eh(comparas.length >= 2, 'a tela buscou a comparacao ao abrir a vista E depois de gravar',
+       comparas.length + ' chamada(s)', '2 ou mais');
+    eh(CHAMADAS.lastIndexOf(comparas[comparas.length - 1]) >
+         CHAMADAS.indexOf('/app/soutag-importar'),
+       'e a ultima veio DEPOIS da gravacao', comparas[comparas.length - 1]);
+    // A LINHA QUE O FELIPE VÊ.
+    var ult = document.querySelector('#palco .ap-sg-ultima');
+    eh(!!ult, 'a linha "Última importação" aparece',
+       ult ? ult.textContent.replace(/\s+/g, ' ').trim() : '(ausente)');
+    eh(!!ult && /transações/.test(ult.textContent) && /soutag-teste\.xlsx/.test(ult.textContent),
+       'com a contagem e o arquivo', ult ? ult.textContent.replace(/\s+/g, ' ').trim() : '');
+    eh(!!ult && /importado por HARNESS/.test(ult.textContent),
+       'e o "importado por" desta sessão (a coluna do banco é opcional)',
+       ult ? ult.textContent.replace(/\s+/g, ' ').trim() : '');
 
     h3('24. O cruzamento em dois passos');
     // Leitura dos cards: rótulo -> valor. Os quatro de status são botão, os
@@ -1325,39 +1524,76 @@ async function rodar() {
     nota('casos: ' + CASOS.map(function (c) { return c[0] + ' → ' + c[1]; }).join(' | '));
     eh(!document.querySelector('#palco .ap-erro'), 'a planilha de razão social foi lida',
        (document.querySelector('#palco .ap-erro') || {}).textContent || 'sem erro');
-    eh(cardN('conferidos') === CASOS.length, 'os ' + CASOS.length + ' casos casaram e conferiram',
-       cardN('conferidos') + '', CASOS.length + '');
-    eh(cardN('só Soutag') === 0, 'nenhum caiu em só Soutag', cardN('só Soutag') + '', '0');
-    eh(!document.querySelector('#palco .ap-linha-sgp .ap-nome') ||
-       !linhasSgp().some(function (l) { return /não reconhecido/.test(nomeDe(l)); }),
-       'e NENHUM em posto não reconhecido',
-       linhasSgp().filter(function (l) { return /não reconhecido/.test(nomeDe(l)); }).length + '', '0');
-    // Os postos que receberam linha da Soutag são exatamente os esperados.
+
+    // ════════ A NORMALIZAÇÃO NÃO É MAIS DAQUI ════════
+    // Ela vivia neste módulo e foi para jbretas-api/lib/soutag.js, porque o
+    // posto passou a ser resolvido NA IMPORTAÇÃO e gravado em
+    // soutag_transacao.posto_id. Estes sete casos continuam cobertos — um a
+    // um, com o nome do sistema esperado — no harness da própria função:
+    //
+    //     cd jbretas-api && npm run test:soutag
+    //
+    // Afirmar aqui que "POSTO ESPASSO REAL LTDA" vira "P. ESPAÇO REAL"
+    // exigiria reimplementar a normalização dentro deste arquivo, e o teste
+    // passaria a medir a própria cópia — verde dos dois lados no dia em que
+    // o servidor mudasse. O que SOBRA para este harness provar é o contrato
+    // do lado de cá: a razão social sai CRUA no corpo da importação, sem a
+    // tela tentar adivinhar nada.
+    var enviados = (SG_POST && SG_POST.transacoes || []).map(function (t) { return t.posto_nome; });
+    nota('enviados crus: ' + enviados.join(' | '));
+    eh(enviados.length === CASOS.length,
+       'as ' + CASOS.length + ' linhas foram para a rota', enviados.length + '', CASOS.length + '');
+    var crus = CASOS.every(function (c) { return enviados.indexOf(c[0]) >= 0; });
+    eh(crus, 'cada razão social foi enviada EXATAMENTE como está na planilha',
+       crus ? 'todas' : enviados.join(','), CASOS.map(function (c) { return c[0]; }).join(','));
+    eh(enviados.every(function (n) { return !/^P\. /.test(n); }),
+       'e nenhuma chegou já normalizada (quem normaliza é o servidor)',
+       enviados.filter(function (n) { return /^P\. /.test(n); }).join(',') || 'nenhuma');
     var comSg = linhasSgp().filter(function (l) { return numBR(nums(l)[0]) > 0; }).map(nomeDe).sort();
-    var espSgN = [];
-    CASOS.forEach(function (c) { if (espSgN.indexOf(c[1]) < 0) espSgN.push(c[1]); });
-    espSgN.sort();
-    nota('postos com linha da Soutag: ' + comSg.join(' · '));
-    eh(comSg.join('|') === espSgN.join('|'), 'cada razão social foi para o posto certo',
-       comSg.join('|'), espSgN.join('|'));
-    // A AMBIGUIDADE RESOLVIDA PELO VALOR: "BOM BOM" casa por prefixo com
-    // BOMBOM MATRIZ e BOMBOM FILIAL, e o nome não desempata. Quem desempata é
-    // o valor — a linha veio de um item da FILIAL, e é lá que ela foi.
-    eh(comSg.indexOf('P. BOMBOM FILIAL') >= 0 && comSg.indexOf('P. BOMBOM MATRIZ') < 0,
-       'e "POSTO BOM BOM LTDA" foi para a FILIAL, desempatada pelo valor',
+    nota('postos com linha da Soutag (pelo dublê, que não normaliza de verdade): ' + comSg.join(' · '));
+    // ════════ O QUE MUDOU AO O CRUZAMENTO IR PARA O SERVIDOR ════════
+    // "BOM BOM" casa por prefixo com BOMBOM MATRIZ e BOMBOM FILIAL, e o nome
+    // não desempata. ANTES quem desempatava era o VALOR, no cruzamento: a
+    // linha vinha de um item da FILIAL e ia para lá.
+    //
+    // AGORA NÃO MAIS, e isso é consequência do desenho pedido: o posto é
+    // resolvido NA IMPORTAÇÃO e gravado em soutag_transacao.posto_id, e nesse
+    // momento o cruzamento ainda não aconteceu — não há valor para desempatar.
+    // Ambíguo grava posto_id NULL.
+    //
+    // O DADO NÃO SE PERDE: a linha aparece como "posto não reconhecido" com o
+    // nome original, entra no total da planilha e é nomeada no aviso. O que se
+    // perde é a atribuição automática ao posto certo.
+    eh(comSg.indexOf('P. BOMBOM FILIAL') < 0 && comSg.indexOf('P. BOMBOM MATRIZ') < 0,
+       'e "POSTO BOM BOM LTDA" fica AMBÍGUO (não é mais desempatado pelo valor)',
        comSg.filter(function (n) { return /BOMBOM/.test(n); }).join(',') || '(nenhum)',
-       'P. BOMBOM FILIAL');
-    // ESTA planilha traz litros, então o lado Soutag sai do travessão.
-    var somaL2 = rows2.reduce(function (t, r) { return t + r['Litros']; }, 0);
+       '(nenhum)');
+    // ════════ OS LITROS NÃO SOBREVIVEM À GRAVAÇÃO ════════
+    // ESTA planilha TRAZ a coluna de litros, e antes disso o lado Soutag saía
+    // do travessão por causa dela. Agora não: a tabela soutag_transacao não
+    // tem coluna de litros (não está na especificação dela), então o volume
+    // morre na importação e o bloco volta ao travessão.
+    //
+    // A tela NÃO quebra — ela já sabia lidar com "a planilha não traz volume",
+    // e é esse mesmo caminho que ela toma. O que se perde é a conferência de
+    // litros, que passa a não existir nunca, e não só quando o arquivo não
+    // tem a coluna.
+    //
+    // O front JÁ MANDA os litros no corpo da importação e a rota já os monta:
+    // criando a coluna (bloco OPCIONAL no fim de sql/soutag_transacao.sql),
+    // isto volta a funcionar sem uma linha de código — e estas três asserções
+    // voltam a ser as de cima, que ficam no git para quando isso acontecer.
     var blSg2 = document.querySelector('#palco .ap-sg-bloco--sg');
-    nota('Soutag com litros: ' + blSg2.textContent.replace(/\s+/g, ' ').trim());
-    eh(!/não traz a coluna/.test(blSg2.textContent),
-       'com a coluna de litros presente, o bloco Soutag mostra volume',
+    nota('Soutag: ' + blSg2.textContent.replace(/\s+/g, ' ').trim());
+    eh(!!SG_POST && SG_POST.transacoes[0].litros > 0,
+       'a tela MANDA os litros da planilha para a rota',
+       SG_POST && SG_POST.transacoes[0].litros, '> 0');
+    eh(/não traz a coluna/.test(blSg2.textContent),
+       'mas sem a coluna no banco o volume não volta, e o bloco diz travessão',
        blSg2.textContent.replace(/\s+/g, ' ').trim());
-    eh(blSg2.textContent.indexOf(litrosT(somaL2)) >= 0, 'e é a soma da planilha',
-       blSg2.textContent.replace(/\s+/g, ' ').trim(), litrosT(somaL2));
-    eh(cardV('Diferença litros') !== '—', 'e o card de diferença de litros sai do travessão',
-       cardV('Diferença litros'));
+    eh(cardV('Diferença litros') === '—',
+       'e o card de diferença de litros fica em travessão (dado que não veio, não divergência)',
+       cardV('Diferença litros'), '—');
   }
   // Volta ao estado das seções finais.
   vb('Por posto').click();

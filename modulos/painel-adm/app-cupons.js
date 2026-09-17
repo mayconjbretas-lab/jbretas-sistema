@@ -115,6 +115,20 @@
   var _sgLendo = false;
   var _sgAberto = '';        // posto expandido na lista (vazio = nenhum)
   var _sgStatus = 'todos';   // todos | conferido | divergente | tecnox | soutag
+  // O RESULTADO VEM DO SERVIDOR (GET /app/soutag-comparar), não da memória:
+  // a planilha agora é gravada, e quem abre a tela sem importar vê a última
+  // comparação. _sgChave é o recorte que está em _sgSrv — período + so_app —
+  // e é o que diz se o que está na tela ainda vale.
+  var _sgSrv = null;
+  var _sgChave = '';
+  var _sgCarregando = false;
+  var _sgPasso = '';         // texto do passo em curso ('' = parado)
+  // Resumo do POST desta sessão. É a ÚNICA fonte do "importado por": a
+  // tabela não guarda quem importou enquanto a coluna opcional não for
+  // criada (ver o fim de sql/soutag_transacao.sql), e mostrar o nome de quem
+  // está OLHANDO seria informação errada — o Felipe veria "importado por
+  // Felipe" numa planilha que outra pessoa subiu.
+  var _sgImportou = null;
 
   // ── Formatação (reusa o mmFmt, como o movimentacao-postos) ──────
   function nf(v, casas) {
@@ -299,6 +313,11 @@
       '.ap-sg-imp{background:var(--sf2);color:var(--tx)}' +
       '.ap-sg-imp:disabled{opacity:.6;cursor:progress}' +
       '.ap-sg-arq{font:.7rem var(--mono);color:var(--tx3)}' +
+      // A linha da última importação. Acima de tudo e discreta: ela responde
+      // "estou olhando dado de quando?", que é a primeira pergunta de quem
+      // abre a tela sem ter importado.
+      '.ap-sg-ultima{font:.72rem var(--mono);color:var(--tx3);margin:-6px 0 14px}' +
+      '.ap-sg-ultima b{color:var(--tx2)}' +
       // OS DOIS BLOCOS, lado a lado. flex:1 1 320px e nenhuma media query: em
       // tela larga os dois dividem a faixa; abaixo de ~700px o basis não cabe
       // duas vezes e cada um pega a linha inteira sozinho.
@@ -451,6 +470,42 @@
       if (meu === _seq) { _detCarregando = false; pintar(); }
     }
   }
+  // ── Soutag × TecnoX: o cruzamento vem pronto do servidor ────────
+  // A chave NÃO inclui o canal: a comparação é sempre contra o canal SOUTAG
+  // (a rota fixa isso), porque comparar a planilha da Soutag com os cupons do
+  // 99 acusaria divergência em 100% das linhas. Trocar o canal da tela não
+  // invalida esta vista.
+  function chaveSoutag() { return _de + '|' + _ate + '|' + (_soApp ? '1' : '0'); }
+  function invalidarSoutag() { _sgSrv = null; _sgChave = ''; }
+  // CONTADOR PROPRIO, e nao o _seq das outras duas chamadas. Elas usam o _seq
+  // para descartar resposta de clique anterior, e o descarte e "meu !== _seq"
+  // — inclusive no finally que desliga o "carregando".
+  //
+  // Compartilhar o contador com esta aqui travava a tela: importar troca o
+  // periodo, chama carregar() e logo em seguida carregarSoutag(). A segunda
+  // incrementa o _seq, a primeira volta com o numero velho, cai no descarte e
+  // NUNCA desliga o _carregando dela — a tela fica em "Carregando…" para
+  // sempre, sem erro nenhum no console. Pegado pelo testes/app-cupons.html.
+  var _seqSg = 0;
+  async function carregarSoutag(forcar) {
+    var chave = chaveSoutag();
+    if (!forcar && _sgSrv && _sgChave === chave) { pintar(); return; }
+    _sgCarregando = true; _sgErro = ''; pintar();
+    var meu = ++_seqSg;
+    try {
+      var r = await apiFetch('/app/soutag-comparar?de=' + encodeURIComponent(_de) +
+        '&ate=' + encodeURIComponent(_ate) + '&so_app=' + (_soApp ? '1' : '0'));
+      if (meu !== _seqSg) return;
+      _sgSrv = r; _sgChave = chave;
+    } catch (e) {
+      if (meu !== _seqSg) return;
+      _sgSrv = null; _sgChave = '';
+      _sgErro = (e && e.message) ? e.message : 'Falha ao carregar a comparação';
+    } finally {
+      if (meu === _seqSg) { _sgCarregando = false; pintar(); }
+    }
+  }
+
   // Período, canal e o toggle mudam a chave: o que está em _det fica velho.
   // Zerado aqui em vez de refetchado, para não buscar uma vista fechada.
   function invalidarDetalhe() { _det = null; _detChave = ''; _detErro = ''; }
@@ -506,7 +561,10 @@
     _postoAberto = null;
     // As duas vistas de item precisam do detalhe; a de posto já tem o
     // agregado em mão. carregarDetalhe() pinta no acerto de cache também.
-    if (v === 'cupom' || v === 'soutag') carregarDetalhe();
+    // A vista Soutag NÃO depende mais do _det: o cruzamento inteiro vem da
+    // /app/soutag-comparar, que lê os dois lados no servidor.
+    if (v === 'soutag') carregarSoutag();
+    else if (v === 'cupom') carregarDetalhe();
     else pintar();
   };
   // Clique no cabeçalho ordena. Mesma coluna inverte o sentido; coluna nova
@@ -531,7 +589,9 @@
     _postoAberto = null;
     invalidarDetalhe();
     carregar();
+    invalidarSoutag();
     if (_vista === 'cupom') carregarDetalhe();
+    if (_vista === 'soutag') carregarSoutag();
   };
   window.__apAtalho = function (qual) {
     var ontem = somaDias(hojeISO(), -1);
@@ -541,7 +601,9 @@
     _postoAberto = null;
     invalidarDetalhe();
     carregar();
+    invalidarSoutag();
     if (_vista === 'cupom') carregarDetalhe();
+    if (_vista === 'soutag') carregarSoutag();
   };
   // Recorte LOCAL, como o chip de combustível: o JSON já tem os dois blocos.
   window.__apSoApp = function () {
@@ -551,7 +613,14 @@
     // A vista Por posto tem os dois blocos em mão e só troca; a Por cupom
     // depende do filtro ter sido feito no servidor, então rebusca.
     invalidarDetalhe();
-    if (_vista === 'cupom') carregarDetalhe(); else pintar();
+    // O so_app É PARÂMETRO DA ROTA na vista Soutag: o preço de placa não é
+    // coluna, é agregado da venda de pista, e o corte é feito no servidor.
+    // Por isso aqui rebusca, ao contrário da vista Por posto, que tem os dois
+    // blocos em mão.
+    invalidarSoutag();
+    if (_vista === 'cupom') carregarDetalhe();
+    else if (_vista === 'soutag') carregarSoutag();
+    else pintar();
   };
   window.__apCard = function (id) {
     _ordem = (_ordem === id) ? 'litros' : id;   // clicar de novo volta ao padrão
@@ -1053,144 +1122,27 @@
     return _xlsxPromessa;
   }
 
-  // ── Nome de posto: dos dois lados para o mesmo núcleo ───────────
-  // A Soutag escreve razão social ("POSTO BRUNA LTDA"), a TecnoX escreve o
-  // apelido ("P. BRUNA"). Comparar as duas cadeias nunca casaria. O núcleo é
-  // o que sobra depois de tirar acento, pontuação e as palavras que não
-  // identificam ninguém — POSTO, P, LTDA, ME, EIRELI, S/A, COMERCIO,
-  // COMBUSTIVEIS, DERIVADOS, AUTO, DE/DA/DO/E.
+  // ── O cruzamento MORA NO SERVIDOR ───────────────────────────────
+  // Ele vivia aqui: 190 linhas que casavam nome de posto (Levenshtein contra
+  // os 37) e cruzavam a planilha contra os itens da TecnoX, tudo em memória,
+  // sobre um arquivo que nunca saía desta máquina.
   //
-  // O QUE SOBRA É COMPARADO INTEIRO, não por prefixo: "SANTA INES MINAS" e
-  // "SANTA INES - JOAQUIM" têm o mesmo começo e são postos DIFERENTES.
+  // Saiu inteiro para lib/soutag.js, atrás da GET /app/soutag-comparar, porque
+  // o pedido mudou o que a tela é: a planilha passa a ser GRAVADA, e quem
+  // abre depois tem de ver a mesma comparação sem ter o arquivo. Uma conta
+  // que decide o que está conferido não pode existir em duas cópias — a do
+  // navegador e a do servidor divergiriam na primeira correção feita só de um
+  // lado, e ninguém veria.
   //
-  // A LISTA CRESCEU com os casos reais da planilha, e cada palavra aqui é uma
-  // que aparecia no núcleo e estragava o casamento:
-  //   POSTOS  — "POSTOS URBANO FERRAZ LTDA" (só POSTO estava na lista)
-  //   SERVICO — "PLANALTO POSTO DE SERVICO LTDA"
-  //   LUBRIFICANTES — "AVIVA COMERCIO DE COMBUSTIVEIS E LUBRIFICANTES LTDA"
-  // As outras (AUTOPOSTO, CIA, MEI, LTD, DERIVADO, SERVICOS, LUBRIFICANTE)
-  // são variações das mesmas, incluídas porque razão social muda de grafia
-  // entre um cadastro e outro.
-  var LIXO_POSTO = ['POSTO', 'POSTOS', 'P', 'AUTO', 'AUTOPOSTO', 'LTDA', 'LTD', 'ME', 'MEI',
-    'EPP', 'EIRELI', 'SA', 'S', 'A', 'CIA', 'COMERCIO', 'COMERCIAL', 'COMBUSTIVEIS',
-    'COMBUSTIVEL', 'LUBRIFICANTES', 'LUBRIFICANTE', 'DERIVADOS', 'DERIVADO', 'PETROLEO',
-    'DISTRIBUIDORA', 'SERVICO', 'SERVICOS', 'DE', 'DA', 'DO', 'DOS', 'DAS', 'E'];
-  function nucleoPosto(nome) {
-    var t = String(nome == null ? '' : nome)
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .toUpperCase()
-      .replace(/[^A-Z0-9 ]+/g, ' ')
-      .split(/\s+/)
-      .filter(function (w) { return w && LIXO_POSTO.indexOf(w) < 0; });
-    return t.join(' ');
-  }
-  function compactoPosto(nc) { return nc.split(' ').join(''); }
-
-  // núcleo -> nome do sistema. DE DUAS FONTES: os itens do recorte e a lista
-  // de postos da vista Por posto. Só os itens não bastavam — posto que não
-  // vendeu no app naquele dia não tem item nenhum, e uma linha da Soutag dele
-  // caía em "posto não reconhecido", que é a acusação errada: o nome casa, o
-  // que falta é a venda. Com as duas fontes, "não reconhecido" volta a
-  // significar nome que não casou.
-  function indicePostos() {
-    var m = {};
-    ((_det && _det.itens) || []).forEach(function (i) {
-      var nc = nucleoPosto(i.nome_posto);
-      if (nc) m[nc] = i.nome_posto;
-    });
-    ((_dados && _dados.postos) || []).forEach(function (p) {
-      var nc = nucleoPosto(p.nome);
-      if (nc && !m[nc]) m[nc] = p.nome;
-    });
-    return m;
-  }
-
-  // Levenshtein para o caso do nome escrito diferente ("ESPASSO REAL" por
-  // "ESPACO REAL"). Duas linhas de matriz em vez da matriz inteira: o
-  // cruzamento chama isto 37 × nomes-distintos vezes, e guardar 40×40 células
-  // por chamada não serve para nada.
-  function lev(a, b) {
-    if (a === b) return 0;
-    if (!a.length) return b.length;
-    if (!b.length) return a.length;
-    var ant = [], cur = [], i, k;
-    for (k = 0; k <= b.length; k++) ant[k] = k;
-    for (i = 1; i <= a.length; i++) {
-      cur[0] = i;
-      for (k = 1; k <= b.length; k++) {
-        var c = (a.charCodeAt(i - 1) === b.charCodeAt(k - 1)) ? 0 : 1;
-        cur[k] = Math.min(cur[k - 1] + 1, ant[k] + 1, ant[k - 1] + c);
-      }
-      for (k = 0; k <= b.length; k++) ant[k] = cur[k];
-    }
-    return ant[b.length];
-  }
-  function simil(a, b) {
-    var m = Math.max(a.length, b.length);
-    return m ? (1 - lev(a, b) / m) : 0;
-  }
-  // 0,80 com margem de 0,06 sobre o segundo colocado. A margem é o que
-  // impede o desempate na moeda: "SANTA INES" pontua igual contra
-  // "SANTA INES MINAS" e "SANTA INES - JOAQUIM", e escolher um dos dois por
-  // centésimo seria inventar. Empate vira AMBÍGUO, e quem desempata é o
-  // valor, no cruzamento.
-  var SIM_MIN = 0.80, SIM_MARGEM = 0.06;
-
-  // A CASCATA, do mais seguro ao mais frouxo. Cada degrau só decide quando
-  // aponta para UM posto; apontando para vários, o resultado é 'ambiguo' com a
-  // lista de candidatos e o cruzamento resolve pelo valor.
+  // O QUE FICOU AQUI é só a leitura do .xlsx (lerPlanilha, acima): o SheetJS
+  // não sobe para a API por causa de um upload de arquivo. O front lê a
+  // planilha, manda as linhas para a POST /app/soutag-importar e desenha o
+  // que a GET /app/soutag-comparar devolver.
   //
-  //   exato      — o núcleo é idêntico ("ALEX")
-  //   sem-espaco — idêntico ignorando espaço ("BOM BOM" = "BOMBOM")
-  //   prefixo    — um começa com o outro ("LOURA" -> "LOURA EMPREENDIMENTOS")
-  //   palavras   — todas as palavras de um estão no outro, em qualquer ordem
-  //   similar    — Levenshtein >= 0,80 e à frente do segundo por 0,06
-  //
-  // O PREFIXO É startsWith, NUNCA indexOf: "BERNARDO" está DENTRO de
-  // "SAO BERNARDO" e são dois postos diferentes. Com substring, toda linha do
-  // P. BERNARDO ficaria ambígua com o P. SAO BERNARDO sem motivo.
-  function casarPosto(nome, chaves, comp) {
-    var nc = nucleoPosto(nome);
-    if (!nc) return { como: 'vazio', candidatos: [] };
-    if (comp[nc] !== undefined) return { como: 'exato', candidatos: [nc] };
-    var cp = compactoPosto(nc);
-    var iguais = chaves.filter(function (k) { return comp[k] === cp; });
-    if (iguais.length) return { como: iguais.length === 1 ? 'sem-espaco' : 'ambiguo', candidatos: iguais };
-    var pref = chaves.filter(function (k) {
-      return comp[k].indexOf(cp) === 0 || cp.indexOf(comp[k]) === 0;
-    });
-    if (pref.length) {
-      // Ordenados pela similaridade: se o cruzamento tiver de chutar, chuta o
-      // mais parecido primeiro.
-      pref.sort(function (a, b) { return simil(comp[b], cp) - simil(comp[a], cp); });
-      return { como: pref.length === 1 ? 'prefixo' : 'ambiguo', candidatos: pref };
-    }
-    var toks = nc.split(' ').filter(Boolean);
-    var sub = chaves.filter(function (k) {
-      var t = k.split(' ').filter(Boolean);
-      return toks.every(function (w) { return t.indexOf(w) >= 0; }) ||
-             t.every(function (w) { return toks.indexOf(w) >= 0; });
-    });
-    if (sub.length) {
-      sub.sort(function (a, b) { return simil(comp[b], cp) - simil(comp[a], cp); });
-      return { como: sub.length === 1 ? 'palavras' : 'ambiguo', candidatos: sub };
-    }
-    var notas = chaves.map(function (k) { return { k: k, s: simil(comp[k], cp) }; })
-      .sort(function (a, b) { return b.s - a.s; });
-    if (notas.length && notas[0].s >= SIM_MIN) {
-      if (notas.length === 1 || (notas[0].s - notas[1].s) >= SIM_MARGEM) {
-        return { como: 'similar', candidatos: [notas[0].k], sim: notas[0].s };
-      }
-      return { como: 'ambiguo', sim: notas[0].s,
-        candidatos: notas.filter(function (n) { return n.s >= SIM_MIN; })
-          .map(function (n) { return n.k; }) };
-    }
-    // Nada casou. O mais parecido vai junto na resposta para a tela poder
-    // dizer "não achei, o mais próximo foi X (0,43)" — quem confere precisa
-    // saber se foi erro de digitação ou posto que não é da rede.
-    return { como: 'nenhum', candidatos: [], sim: notas.length ? notas[0].s : 0,
-             perto: notas.length ? notas[0].k : '' };
-  }
+  // A NORMALIZAÇÃO DE NOME também foi junto (lib/soutag.js: nucleo/resolver),
+  // e lá ela ganhou o mapa fixo dos nomes que a razão social não entrega —
+  // BARBOSA→DUDU, VF→BIANCA, CRS→OURO BRANCO, PAIVA→BEATRIZ. O harness dela é
+  // jbretas-api/teste-soutag.js.
 
   // ── Combustível: nome por extenso -> código ─────────────────────
   // A planilha da Soutag pode trazer o nome ou a sigla. Os itens da TecnoX
@@ -1299,193 +1251,6 @@
              cruas: cru.length, temLitros: !!de.litros };
   }
 
-  // ── O cruzamento ────────────────────────────────────────────────
-  // POSTO + DATA + COMBUSTÍVEL + VALOR (±R$ 1,00), e UM PARA UM: dois
-  // abastecimentos do mesmo posto, dia, combustível e valor são DOIS, e cada
-  // um casa com um. O item da TecnoX já casado sai da mesa (`usado`), senão a
-  // segunda linha da Soutag casaria com o mesmo item e os dois lados
-  // pareceriam conferidos.
-  //
-  // DOIS PASSOS, e é o que separa "valor divergente" de "só Soutag":
-  //   1º  valor dentro de R$ 1,00  -> conferido
-  //   2º  sobrou item do MESMO posto+dia+combustível, com qualquer valor
-  //       -> valor divergente (o par mostrado é o de valor mais próximo)
-  //   resto -> só Soutag (não existe nada daquele posto/dia/combustível)
-  //
-  // O 2º passo casa POR CHAVE, não por identidade do abastecimento: sem ID
-  // comum entre os dois sistemas não há como provar que são a mesma bomba.
-  // Então uma diferença grande ali quer dizer "o valor não bate com nada",
-  // não "este abastecimento mudou de preço". A legenda da tela diz isso.
-  var SG_TOL = 1.00;
-  function r2(v) { return Math.round(v * 100) / 100; }
-  function cruzarSoutag() {
-    var idx = indicePostos();
-    var chaves = Object.keys(idx);
-    var comp = {};
-    chaves.forEach(function (k) { comp[k] = compactoPosto(k); });
-
-    var itens = ((_det && _det.itens) || []).map(function (i, k) {
-      return { k: k, data: i.data, nome: i.nome_posto, nucleo: nucleoPosto(i.nome_posto),
-               comb: i.combustivel, valor: Number(i.valor_liquido) || 0,
-               litros: Number(i.litros) || 0, preco: i.preco_litro,
-               id: i.id_cupom, cupom: chaveCupom(i), usado: false };
-    });
-    // Índice por dia|núcleo|combustível: sem ele o cruzamento é n×m e uma
-    // planilha de 4.000 linhas contra 4.000 itens daria 16 milhões de voltas.
-    var porChave = {};
-    itens.forEach(function (it) {
-      var c = it.data + '|' + it.nucleo + '|' + it.comb;
-      (porChave[c] = porChave[c] || []).push(it);
-    });
-
-    // O casamento de nome é caro (Levenshtein contra 37 postos) e a planilha
-    // repete o mesmo posto centenas de vezes — uma resolução por nome
-    // DISTINTO, guardada.
-    var cache = {};
-    var linhas = ((_sg && _sg.linhas) || []).map(function (l) {
-      var r = cache[l.posto_planilha];
-      if (!r) r = cache[l.posto_planilha] = casarPosto(l.posto_planilha, chaves, comp);
-      return { data: l.data, comb: l.combustivel, valor: Number(l.valor) || 0,
-               litros: isFinite(l.litros) ? l.litros : null,
-               usuario: l.usuario, id: l.id, posto_planilha: l.posto_planilha,
-               como: r.como, cands: r.candidatos || [], perto: r.perto ? idx[r.perto] : '',
-               sim: r.sim || 0 };
-    });
-
-    var semPosto = [], pend = [];
-    linhas.forEach(function (l) { (l.cands.length ? pend : semPosto).push(l); });
-
-    // O MAIS PRÓXIMO entre os candidatos, não o primeiro: com dois itens
-    // dentro da tolerância, casar o primeiro deixaria o par melhor órfão.
-    // Varre TODOS os candidatos de posto — é aqui que o nome ambíguo se
-    // resolve: "BOM BOM" casa com o BOMBOM (matriz ou filial) que tiver o
-    // abastecimento, e o valor é o desempate que o nome não deu.
-    var achar = function (l, exigirTol) {
-      var achou = null, melhor = Infinity;
-      for (var c = 0; c < l.cands.length; c++) {
-        var cand = porChave[l.data + '|' + l.cands[c] + '|' + l.comb] || [];
-        for (var k = 0; k < cand.length; k++) {
-          if (cand[k].usado) continue;
-          var dif = Math.abs(cand[k].valor - l.valor);
-          if (exigirTol && dif > SG_TOL) continue;
-          if (dif < melhor) { melhor = dif; achou = cand[k]; }
-        }
-      }
-      return achou;
-    };
-    var par = function (l, it, status) {
-      return { status: status, data: l.data, posto: it.nome, comb: l.comb,
-               valor: l.valor, valor_tecnox: it.valor, dif: r2(l.valor - it.valor),
-               litros: l.litros, litros_tecnox: it.litros, preco: it.preco,
-               id: l.id, id_cupom: it.id, cupom: it.cupom, usuario: l.usuario,
-               posto_planilha: l.posto_planilha, como: l.como };
-    };
-
-    var conferido = [], resto = [];
-    pend.forEach(function (l) {
-      var it = achar(l, true);
-      if (it) { it.usado = true; conferido.push(par(l, it, 'conferido')); }
-      else resto.push(l);
-    });
-    var divergente = [], soSoutag = [];
-    resto.forEach(function (l) {
-      var it = achar(l, false);
-      if (it) { it.usado = true; divergente.push(par(l, it, 'divergente')); }
-      else {
-        soSoutag.push({ status: 'soutag', data: l.data, posto: idx[l.cands[0]],
-          comb: l.comb, valor: l.valor, litros: l.litros, id: l.id,
-          usuario: l.usuario, posto_planilha: l.posto_planilha, como: l.como });
-      }
-    });
-    var soTecnox = itens.filter(function (it) { return !it.usado; }).map(function (it) {
-      return { status: 'tecnox', data: it.data, posto: it.nome, comb: it.comb,
-               valor_tecnox: it.valor, litros_tecnox: it.litros, preco: it.preco,
-               id_cupom: it.id, cupom: it.cupom };
-    });
-
-    // ── Totais ──
-    // O lado SOUTAG é a planilha INTEIRA, inclusive as linhas de posto não
-    // reconhecido: é o total do arquivo, e esconder as não reconhecidas faria
-    // a soma da tela não fechar com a soma do Excel de quem importou. O
-    // quanto elas pesam aparece como sub-linha no bloco.
-    var sgV = 0, sgL = 0, sgLtem = false, semV = 0;
-    linhas.forEach(function (l) {
-      sgV += l.valor;
-      if (l.litros !== null) { sgL += l.litros; sgLtem = true; }
-    });
-    semPosto.forEach(function (l) { semV += l.valor; });
-    var txV = 0, txL = 0, cupons = {};
-    itens.forEach(function (it) { txV += it.valor; txL += it.litros; cupons[it.cupom] = 1; });
-
-    // ── Por posto ──
-    // A UNIDADE COMPARÁVEL É A LINHA: uma linha da planilha é uma transação
-    // (um combustível, um valor) e casa com um ITEM da TecnoX, não com um
-    // cupom — o cupom de GC+ET tem dois itens e aparece em duas linhas da
-    // Soutag. Por isso a coluna conta linha × item, e o número de cupons
-    // distintos vai embaixo, como referência.
-    var mapa = {}, ordem = [];
-    var alvo = function (nome) {
-      var n = nome || '(posto não reconhecido)';
-      var p = mapa[n];
-      if (!p) {
-        p = mapa[n] = { nome: n, sg_n: 0, sg_v: 0, sg_l: 0, tx_n: 0, tx_v: 0, tx_l: 0,
-                        cupons: {}, conferido: 0, divergente: 0, soutag: 0, tecnox: 0,
-                        linhas: [], nao_reconhecido: !nome };
-        ordem.push(p);
-      }
-      return p;
-    };
-    var lancar = function (l) {
-      var p = alvo(l.posto);
-      p.linhas.push(l);
-      p[l.status]++;
-      if (l.status !== 'tecnox') {
-        p.sg_n++; p.sg_v += l.valor;
-        if (l.litros !== null && l.litros !== undefined) p.sg_l += l.litros;
-      }
-      if (l.status !== 'soutag') {
-        p.tx_n++; p.tx_v += l.valor_tecnox; p.tx_l += l.litros_tecnox;
-        if (l.cupom) p.cupons[l.cupom] = 1;
-      }
-    };
-    conferido.forEach(lancar);
-    divergente.forEach(lancar);
-    soSoutag.forEach(lancar);
-    soTecnox.forEach(lancar);
-    semPosto.forEach(function (l) {
-      lancar({ status: 'soutag', data: l.data, posto: '', comb: l.comb, valor: l.valor,
-               litros: l.litros, id: l.id, posto_planilha: l.posto_planilha,
-               como: l.como, perto: l.perto, sim: l.sim });
-    });
-    ordem.forEach(function (p) {
-      p.cupons_tx = Object.keys(p.cupons).length;
-      p.dif = r2(p.sg_v - p.tx_v);
-      // OK é contagem igual E diferença de até R$ 1,00 — a mesma tolerância
-      // do cruzamento. Contagem igual com valor torto, ou valor igual com
-      // contagem torta, é diverge: as duas coisas têm de fechar.
-      p.ok = (p.sg_n === p.tx_n) && Math.abs(p.dif) <= SG_TOL && !p.nao_reconhecido;
-    });
-
-    // Nomes distintos que não casaram, com o mais parecido de cada: é a lista
-    // que resolve o problema (cadastro), não o número.
-    var naoCasou = {};
-    semPosto.forEach(function (l) {
-      if (!naoCasou[l.posto_planilha]) {
-        naoCasou[l.posto_planilha] = { nome: l.posto_planilha, n: 0, perto: l.perto, sim: l.sim };
-      }
-      naoCasou[l.posto_planilha].n++;
-    });
-
-    return {
-      conferido: conferido, divergente: divergente, soSoutag: soSoutag,
-      soTecnox: soTecnox, semPosto: semPosto, itens: itens.length,
-      postos: ordem, naoCasou: Object.keys(naoCasou).map(function (k) { return naoCasou[k]; }),
-      sg: { valor: r2(sgV), n: linhas.length, litros: sgLtem ? sgL : null,
-            sem_posto_valor: r2(semV) },
-      tx: { valor: r2(txV), n: itens.length, litros: txL, cupons: Object.keys(cupons).length },
-    };
-  }
-
   // ── Render da vista ─────────────────────────────────────────────
   var ROT_SG = { conferido: 'conferido', divergente: 'valor divergente',
                  tecnox: 'só TecnoX', soutag: 'só Soutag' };
@@ -1517,10 +1282,14 @@
       '<div class="ap-sg-cd-v">' + nf(n, 0) + '</div>' +
     '</button>';
   }
-  // A chave do posto aberto é o NÚCLEO do nome, não o nome: o núcleo só tem
-  // letra, número e espaço (o nucleoPosto tira o resto), então entra num
-  // atributo onclick sem apóstrofo para quebrar a string. Com o nome cru, um
-  // posto chamado "D'AGUA" derrubaria o handler.
+  // A chave do posto aberto é o nome SEM PONTUAÇÃO, não o nome cru: ela entra
+  // num atributo onclick, e um posto chamado "D'AGUA" fecharia a string e
+  // derrubaria o handler. Antes isto reusava o nucleoPosto, que foi para o
+  // servidor junto com o cruzamento — aqui a exigência é só não ter apóstrofo,
+  // então a limpeza basta e não precisa saber nada de razão social.
+  function chavePosto(nome) {
+    return String(nome == null ? '' : nome).replace(/[^A-Za-z0-9 ]+/g, '').trim();
+  }
   function htmlSgPosto(p) {
     var linhas = (_sgStatus === 'todos') ? p.linhas
       : p.linhas.filter(function (l) { return l.status === _sgStatus; });
@@ -1555,29 +1324,71 @@
     return '<div class="ap-sg-det">' + cab +
       (corpo || '<div class="ap-vazio">Nada neste status.</div>') + corte + '</div>';
   }
+  // "Última importação: DD/MM/AAAA às HH:MM · N transações · importado por X"
+  //
+  // O "importado por" SÓ APARECE quando foi esta sessão que importou. A tabela
+  // não guarda quem importou enquanto a coluna opcional não existir (ver o
+  // fim de sql/soutag_transacao.sql), e pôr ali o nome de quem está olhando
+  // faria a tela AFIRMAR algo falso para todo mundo que abre depois — que é
+  // justamente o caso que motivou gravar a planilha. Sem o dado, a frase sai
+  // sem essa parte.
+  function htmlUltima() {
+    var u = _sgSrv && _sgSrv.ultima_importacao;
+    if (!u) return '';
+    var d = new Date(u.quando);
+    var quando = isNaN(d.getTime()) ? String(u.quando).slice(0, 16).replace('T', ' ')
+      : (d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ' às ' +
+         d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo',
+                                         hour: '2-digit', minute: '2-digit' }));
+    // `por` vem da coluna opcional; _sgImportou, desta sessão. Nesta ordem,
+    // porque a coluna vale para todo mundo e a sessão só para quem importou.
+    var por = u.por || (_sgImportou && _sgImportou.importado_por) || '';
+    return '<div class="ap-sg-ultima">Última importação: <b>' + esc(quando) + '</b> · ' +
+      nf(u.transacoes, 0) + ' transações' +
+      (por ? ' · importado por ' + esc(por) : '') +
+      (u.arquivo ? ' · <span class="ap-mini">' + esc(u.arquivo) + '</span>' : '') +
+    '</div>';
+  }
+
   function htmlSoutag() {
+    var ocupado = _sgLendo || !!_sgPasso;
     var topo = '<div class="ap-sg-topo">' +
       '<button type="button" class="ap-cbtn ap-sg-imp" onclick="__apSgAbrir()"' +
-        (_sgLendo ? ' disabled' : '') + '>' +
-        (_sgLendo ? 'Lendo a planilha…' : 'Importar planilha Soutag') + '</button>' +
+        (ocupado ? ' disabled' : '') + '>' +
+        (ocupado ? (_sgPasso || 'Lendo a planilha…') : 'Importar planilha Soutag') + '</button>' +
       '<input type="file" id="ap-sg-file" accept=".xlsx,.xls" hidden onchange="__apSgArquivo(this)">' +
-      (_sg ? '<span class="ap-sg-arq">' + esc(_sg.arquivo) + ' · ' +
-        nf(_sg.linhas.length, 0) + ' linha' + (_sg.linhas.length === 1 ? '' : 's') + '</span>' : '') +
+      // Recarregar sem importar: a tabela é compartilhada, e outra pessoa pode
+      // ter subido uma planilha enquanto esta tela estava aberta.
+      '<button type="button" class="ap-atalho" onclick="__apSgRecarregar()"' +
+        (ocupado || _sgCarregando ? ' disabled' : '') + '>↻ Atualizar</button>' +
     '</div>';
+    topo += htmlUltima();
     if (_sgErro) topo += '<div class="ap-erro">' + esc(_sgErro) + '</div>';
-    if (!_det) {
-      return topo + '<div class="ap-estado">' +
-        (_detCarregando ? 'Carregando os cupons da TecnoX…' : '—') + '</div>';
+    // O resumo do POST desta sessão: janela apagada e linhas recusadas não
+    // podem ser silenciosas — a importação APAGA o período do lote.
+    if (_sgImportou) {
+      var im = _sgImportou;
+      topo += '<div class="ap-aviso">Gravadas ' + nf(im.gravadas, 0) + ' de ' +
+        nf(im.recebidas, 0) + ' linhas · período ' + esc(diaCurto(im.periodo.de)) + ' a ' +
+        esc(diaCurto(im.periodo.ate)) + ' (substituiu ' + nf(im.apagadas, 0) + ')' +
+        (im.recusadas ? ' · ' + nf(im.recusadas, 0) + ' sem data/valor legíveis' : '') +
+        (im.sem_posto ? ' · ' + nf(im.sem_posto, 0) + ' de posto não reconhecido' : '') +
+      '</div>';
     }
-    if (!_sg) {
-      return topo + '<div class="ap-estado">Importe a planilha da Soutag para comparar com os ' +
-        nf((_det.itens || []).length, 0) + ' itens que a TecnoX devolveu neste recorte.' +
-        '<br><span class="ap-sub">Colunas esperadas: Posto · Data/Hora · Valor · Combustível. ' +
-        'Usuário, ID e Litros entram se existirem — sem a coluna de litros, o lado Soutag ' +
-        'mostra travessão no volume em vez de zero.' +
-        '<br>O arquivo é lido no navegador e não é enviado nem gravado.</span></div>';
+    if (_sgCarregando && !_sgSrv) {
+      return topo + '<div class="ap-estado">Carregando a comparação…</div>';
     }
-    var c = cruzarSoutag();
+    if (!_sgSrv) return topo + '<div class="ap-estado">—</div>';
+    var c = _sgSrv;
+    if (!c.sg.n) {
+      return topo + '<div class="ap-estado">Nenhuma transação da Soutag gravada neste período.' +
+        '<br><span class="ap-sub">Importe a planilha para comparar com os ' +
+        nf(c.tx.n, 0) + ' itens que a TecnoX tem aqui. ' +
+        'Colunas esperadas: Posto · Data/Hora · Valor · Combustível. ' +
+        'Usuário e ID entram se existirem.' +
+        '<br>A planilha é lida no navegador e GRAVADA: quem abrir esta tela depois ' +
+        'vê a mesma comparação sem precisar do arquivo.</span></div>';
+    }
 
     // ── Os dois lados ──
     var sgL = (c.sg.litros === null) ? '—' : litros(c.sg.litros);
@@ -1659,7 +1470,7 @@
       '<span class="ap-n">Diferença</span><span></span>' +
     '</div>';
     var linhas = postos.map(function (p) {
-      var ck = nucleoPosto(p.nome);
+      var ck = chavePosto(p.nome);
       var aberto = (_sgAberto === ck);
       return '<div class="ap-linha ap-cab-sgp ap-linha-sgp' + (aberto ? ' aberto' : '') + '"' +
         ' role="button" tabindex="0" aria-expanded="' + (aberto ? 'true' : 'false') + '"' +
@@ -1678,11 +1489,21 @@
     }).join('');
 
     var legenda = '<div class="ap-sg-legenda">' +
-      'Cruzamento por posto + data + combustível + valor, com tolerância de ' + reais(SG_TOL) + '.<br>' +
+      'Cruzamento por posto + data + combustível + valor, com tolerância de ' +
+        reais((c.consulta && c.consulta.tolerancia_valor) || 1) + '.<br>' +
+      // O toggle muda QUAL CONJUNTO DA TECNOX entra, e só ele: a planilha da
+      // Soutag não traz preço por litro e não sabe o que é preço de placa.
+      // Sem esta frase, o "só Soutag" crescer ao ligar o filtro pareceria bug.
+      (c.consulta && c.consulta.so_app
+        ? '<b>Só preço de app</b> está ligado: ' + nf(c.consulta.itens_placa, 0) +
+          ' itens da TecnoX saíram no preço da placa e ficaram de fora, então as ' +
+          'transações deles aparecem como "só Soutag".<br>'
+        : '') +
       '<b>valor divergente</b>: existe abastecimento do mesmo posto, dia e combustível na TecnoX, ' +
       'mas nenhum com valor dentro da tolerância — o par mostrado é o de valor mais próximo, ' +
       'e sem ID comum entre os sistemas não há como provar que é a mesma bomba.<br>' +
-      '<b>ok</b> no posto: mesma contagem dos dois lados e diferença de até ' + reais(SG_TOL) + '.' +
+      '<b>ok</b> no posto: mesma contagem dos dois lados e diferença de até ' +
+        reais((c.consulta && c.consulta.tolerancia_valor) || 1) + '.' +
     '</div>';
 
     return topo + blocos + difs + status + avisoNome +
@@ -1706,21 +1527,65 @@
     if (!/\.xlsx?$/i.test(file.name)) {
       _sgErro = 'Selecione uma planilha do Excel (.xlsx ou .xls).'; pintar(); return;
     }
-    _sgLendo = true; _sgErro = ''; pintar();
+    // TRÊS PASSOS, e cada um aparece no botão: ler o .xlsx, GRAVAR e comparar.
+    // Antes era um só (ler), e a planilha morria na aba. O passo do meio é o
+    // que torna a comparação compartilhada.
+    //
+    // O PARSE CONTINUA NO NAVEGADOR: o SheetJS não sobe para a API só por
+    // causa de um upload de arquivo. O que vai para a rota são as linhas já
+    // lidas — e é a rota que resolve o posto, apaga o período e grava.
+    _sgLendo = true; _sgErro = ''; _sgImportou = null; pintar();
+    var r;
     try {
       var XLSX = await carregarXlsx();
       var buf = new Uint8Array(await file.arrayBuffer());
-      var r = lerPlanilha(XLSX, buf);
+      r = lerPlanilha(XLSX, buf);
       _sg = { linhas: r.linhas, arquivo: file.name, quando: new Date(),
               colunas: r.colunas, cruas: r.cruas, temLitros: r.temLitros };
       _sgAberto = ''; _sgStatus = 'todos';
     } catch (e) {
       _sg = null;
       _sgErro = 'Não foi possível ler a planilha: ' + ((e && e.message) ? e.message : e);
-    } finally {
       _sgLendo = false; pintar();
+      return;
     }
+    _sgLendo = false;
+    _sgPasso = 'Gravando ' + nf(r.linhas.length, 0) + ' transações…';
+    pintar();
+    try {
+      var resp = await apiFetch('/app/soutag-importar', { method: 'POST', body: JSON.stringify({
+        arquivo: file.name,
+        transacoes: r.linhas.map(function (l) {
+          // `litros` vai mesmo sem a coluna existir: a rota o descarta
+          // sozinho enquanto ela não estiver lá (ver o bloco OPCIONAL em
+          // sql/soutag_transacao.sql). Assim, criar a coluna basta.
+          return { posto_nome: l.posto_planilha, data: l.data, valor: l.valor,
+                   combustivel: l.combustivel, usuario: l.usuario, id_soutag: l.id,
+                   litros: isFinite(l.litros) ? l.litros : null };
+        }),
+      }) });
+      _sgImportou = resp;
+      // O PERÍODO DA TELA PASSA A SER O DO ARQUIVO quando eles não batem.
+      // Sem isto, importar a planilha de agosto com a tela em setembro gravava
+      // certo e mostrava a comparação de setembro — vazia — e pareceria que a
+      // importação não funcionou.
+      if (resp.periodo && (resp.periodo.de !== _de || resp.periodo.ate !== _ate)) {
+        _de = resp.periodo.de; _ate = resp.periodo.ate;
+        invalidarDetalhe();
+        carregar();
+      }
+    } catch (e) {
+      _sgErro = 'A planilha foi lida, mas não foi gravada: ' + ((e && e.message) ? e.message : e);
+      _sgPasso = ''; pintar();
+      return;
+    }
+    _sgPasso = 'Comparando…'; pintar();
+    // forcar: o recorte pode ser o mesmo de antes, e o que mudou foi o banco.
+    await carregarSoutag(true);
+    _sgPasso = ''; pintar();
   };
+  // Relê do banco sem importar nada.
+  window.__apSgRecarregar = function () { carregarSoutag(true); };
   // Clicar no posto aberto fecha, como o detalhe do cupom e o do posto.
   window.__apSgPosto = function (v) {
     _sgAberto = (_sgAberto === v) ? '' : (v || '');
@@ -1771,6 +1636,11 @@
       return;
     }
     if (!_dados && !_carregando) { carregar(); return; }
+    // Reabrir NA VISTA SOUTAG busca a comparação se ela não estiver em mão.
+    // É o caminho do Felipe: ele abre a tela, não importa nada, e tem de ver
+    // o que a última importação gravou. Sem isto, a vista abriria vazia até
+    // alguém clicar em algo.
+    if (_vista === 'soutag' && !_sgSrv && !_sgCarregando) { carregarSoutag(); return; }
     pintar();     // reabertura: não refaz a chamada
   };
 })();
