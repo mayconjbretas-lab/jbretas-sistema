@@ -113,9 +113,6 @@ function hexDe(rgb) {
     return ('0' + Number(m[i]).toString(16)).slice(-2).toUpperCase();
   }).join('');
 }
-// "P. BRUNA" -> "POSTO BRUNA LTDA": a planilha da Soutag traz razão social,
-// e é isso que a normalização da tela tem de desfazer. Sem regex de
-// propósito — a barra invertida dentro de um patch gerado é onde o erro mora.
 // litros() e reais() vivem DENTRO do IIFE do modulo — o harness nao os
 // alcanca. Estes formatam igual: litros sem decimal + " L", reais com duas
 // casas. toLocaleString e nao Math.round: no empate os dois arredondam para
@@ -126,6 +123,39 @@ function litrosT(v) {
 function reaisT(v) {
   return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+// pt-BR -> número. O ponto de milhar cai no [^0-9,] e o menos (o de teclado
+// e o U+2212 que a tela usa) volta pelo sinal, que a limpeza tiraria.
+function numBR(t) {
+  var neg = /[-\u2212]/.test(String(t));
+  var v = parseFloat(String(t).replace(/[^0-9,]/g, '').replace(',', '.'));
+  return isNaN(v) ? NaN : (neg ? -v : v);
+}
+function precoT(v) {
+  return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+// A TELA AGRUPA POR CUPOM e a rota devolve ITEM; o harness precisa do mesmo
+// agrupamento para saber o que esperar. Mesma chave da tela: posto|data|cupom.
+function agrupa(itens) {
+  var m = {}, ord = [];
+  itens.forEach(function (i) {
+    var k = i.posto_id + '|' + i.data + '|' + i.id_cupom;
+    if (!m[k]) {
+      m[k] = { chave: k, combs: [], litros: 0, valor: 0, n: 0, posto: i.nome_posto, data: i.data };
+      ord.push(m[k]);
+    }
+    var g = m[k];
+    g.n++; g.litros += i.litros; g.valor += i.valor_liquido;
+    if (g.combs.indexOf(i.combustivel) < 0) g.combs.push(i.combustivel);
+  });
+  return ord;
+}
+// CONTÉM, não "é": o chip GC mostra o cupom de GC+ET.
+function contem(gs, c) {
+  return gs.filter(function (g) { return g.combs.indexOf(c) >= 0; });
+}
+// "P. BRUNA" -> "POSTO BRUNA LTDA": a planilha da Soutag traz razão social,
+// e é isso que a normalização da tela tem de desfazer. Sem regex de
+// propósito — a barra invertida dentro de um patch gerado é onde o erro mora.
 function razaoSocial(nome) {
   var t = String(nome == null ? '' : nome);
   if (t.indexOf('P. ') === 0) t = t.slice(3);
@@ -594,7 +624,7 @@ async function rodar() {
   eh(vbtn('Por posto').getAttribute('aria-pressed') === 'true', 'Por posto marcado no começo',
      vbtn('Por posto').getAttribute('aria-pressed'), 'true');
 
-  h3('14. A lista item a item');
+  h3('14. A lista POR CUPOM (agrupada)');
   var antes14 = CHAMADAS.length;
   vbtn('Por cupom').click();
   await esperar(250);
@@ -616,14 +646,21 @@ async function rodar() {
   eh(!!cabCup, 'o cabeçalho da lista por cupom existe');
   var ths = [].slice.call(cabCup.querySelectorAll('.ap-th')).map(function (b) { return b.textContent.replace(/[↑↓]/g, '').trim(); });
   nota('cabeçalho: ' + ths.join(' · '));
-  eh(ths.join('|') === 'Data|Posto|Combustível|Litros|R$/litro|Valor',
-     'com as seis colunas pedidas', ths.join('|'), 'Data|Posto|Combustível|Litros|R$/litro|Valor');
+  // A coluna virou PLURAL porque a célula passou a ter N chips.
+  eh(ths.join('|') === 'Data|Posto|Combustíveis|Litros|R$/litro|Valor',
+     'com as seis colunas pedidas', ths.join('|'), 'Data|Posto|Combustíveis|Litros|R$/litro|Valor');
   var lin = [].slice.call(document.querySelectorAll('#palco .ap-linha-cup'));
-  // O chip está em GC neste ponto (a seção 10 voltou para ele).
-  var esperados = FIX.det.itens.filter(function (i) { return i.combustivel === 'GC'; });
-  nota(lin.length + ' linhas na tela · ' + esperados.length + ' itens de GC no fixture');
-  eh(lin.length === esperados.length, 'uma linha por item do combustível do chip',
+  // UMA LINHA POR CUPOM, e o chip filtra por CONTER: o chip está em GC neste
+  // ponto (a seção 10 voltou para ele) e entra todo cupom que tem GC, mesmo
+  // que tenha ET junto.
+  var gsTodos = agrupa(FIX.det.itens);
+  var esperados = contem(gsTodos, 'GC');
+  nota(FIX.det.itens.length + ' itens viraram ' + gsTodos.length + ' cupons · ' +
+       esperados.length + ' contêm GC · ' + lin.length + ' linhas na tela');
+  eh(lin.length === esperados.length, 'uma linha por CUPOM que contém GC',
      lin.length + '', esperados.length + '');
+  eh(gsTodos.length < FIX.det.itens.length, 'e há menos cupons que itens — o agrupamento juntou',
+     gsTodos.length + ' cupons de ' + FIX.det.itens.length + ' itens');
   var c1 = lin[0].children;
   nota('primeira linha: ' + [].slice.call(c1).map(function (e) { return e.textContent.trim(); }).join(' | '));
   eh(/^\d{2}\/\d{2}$/.test(c1[0].textContent.trim()), 'data em dd/mm', c1[0].textContent.trim());
@@ -635,6 +672,37 @@ async function rodar() {
      hexDe(getComputedStyle(badge).color), '#3C3489');
   eh(hexDe(getComputedStyle(c1[4]).color) === '#3C3489', 'e o R$/litro destacado na mesma cor',
      hexDe(getComputedStyle(c1[4]).color), '#3C3489');
+  // O CUPOM MISTO em UMA linha, com um chip por combustível.
+  var mistos = esperados.filter(function (g) { return g.combs.length > 1; });
+  nota(mistos.length + ' dos ' + esperados.length + ' cupons de GC têm mais de um combustível');
+  eh(mistos.length > 0, 'o recorte tem cupom misto para conferir', mistos.length + '');
+  var lm = [].slice.call(document.querySelectorAll('#palco .ap-linha-cup')).filter(function (l) {
+    return (l.getAttribute('onclick') || '').indexOf(mistos[0].chave) >= 0;
+  })[0];
+  eh(!!lm, 'o cupom ' + mistos[0].combs.join('+') + ' aparece como UMA linha só');
+  if (lm) {
+    var chipsL = [].slice.call(lm.querySelectorAll('.ap-cchip')).map(function (e) { return e.textContent.trim(); });
+    eh(chipsL.join('·') === mistos[0].combs.join('·'), 'com um chip por combustível',
+       chipsL.join('·'), mistos[0].combs.join('·'));
+    eh(!!lm.querySelector('.ap-cdot'), 'separados pelo ponto, como "GC · ET"');
+    // DO CUPOM INTEIRO: com o chip em GC, a linha mostra o ET também. É a
+    // única leitura coerente com "a linha é o cupom".
+    eh(lm.children[3].textContent.trim() === litrosT(mistos[0].litros),
+       'e litros do CUPOM INTEIRO, não só da parte de GC',
+       lm.children[3].textContent.trim(), litrosT(mistos[0].litros));
+    eh(lm.children[5].textContent.trim() === reaisT(mistos[0].valor), 'o valor também',
+       lm.children[5].textContent.trim(), reaisT(mistos[0].valor));
+    // PONDERADO pelos litros, não a média dos preços dos itens.
+    eh(lm.children[4].textContent.trim() === precoT(mistos[0].valor / mistos[0].litros),
+       'e o R$/litro é o ponderado do cupom',
+       lm.children[4].textContent.trim(), precoT(mistos[0].valor / mistos[0].litros));
+  }
+  // E A TELA DIZ que há misto na lista — sem isso o total da REDE não fecharia
+  // com o litro de GC do dia e pareceria erro de conta.
+  var notaM = document.querySelector('#palco .ap-aviso--misto');
+  eh(!!notaM, 'a nota dos cupons mistos aparece', notaM ? notaM.textContent.trim() : '(nenhuma)');
+  eh(!!notaM && notaM.textContent.indexOf(mistos.length.toLocaleString('pt-BR')) >= 0,
+     'com quantos são', notaM ? notaM.textContent.trim() : '—', mistos.length + '');
 
   h3('15. REDE no topo e aviso do teto');
   var redeC = document.querySelector('#palco .ap-rede.ap-cab-cup');
@@ -643,16 +711,24 @@ async function rodar() {
   nota('REDE: ' + cr.join(' | '));
   eh(cr[0] === 'REDE', 'diz REDE', cr[0]);
   eh(cr[1] === esperados.length.toLocaleString('pt-BR') + ' cupons' ||
-     cr[1] === esperados.length + ' cupons', 'conta os cupons da lista', cr[1],
+     cr[1] === esperados.length + ' cupons', 'conta os cupons DISTINTOS da lista', cr[1],
      esperados.length + ' cupons');
-  var somaL = esperados.reduce(function (t, i) { return t + i.litros; }, 0);
-  eh(cr[3].indexOf(Math.round(somaL).toLocaleString('pt-BR')) >= 0,
-     'e soma os litros DA LISTA', cr[3], Math.round(somaL).toLocaleString('pt-BR') + ' L');
+  var somaL = esperados.reduce(function (t, g) { return t + g.litros; }, 0);
+  var somaV = esperados.reduce(function (t, g) { return t + g.valor; }, 0);
+  eh(cr[3] === litrosT(somaL), 'e soma os litros DA LISTA', cr[3], litrosT(somaL));
+  eh(cr[5] === reaisT(somaV), 'e o valor', cr[5], reaisT(somaV));
+  // A REDE também é ponderada: valor/litros da lista. Média das médias dos
+  // cupons daria um número que não é o preço de nada.
+  eh(cr[4] === precoT(somaV / somaL), 'com o R$/litro ponderado da lista',
+     cr[4], precoT(somaV / somaL));
   // O TETO SUBIU PARA 5.000 e um dia inteiro passou a caber: em 14/09 são
   // 3.740 itens, então a rota devolve todos e NÃO há aviso. Antes, com 2.000,
   // o corte caía depois da ordenação por preço e a lista de GC chegava com 80
   // dos 1.390 do dia — é isso que o teto novo conserta.
-  var aviso = document.querySelector('#palco .ap-aviso');
+  // O AVISO DO TETO, e não qualquer .ap-aviso: a nota dos cupons mistos usa a
+  // mesma classe base, e o seletor genérico pegava ela — reprovando uma tela
+  // certa por causa de um texto que nada tem a ver com corte.
+  var aviso = document.querySelector('#palco .ap-aviso--teto');
   nota('total ' + FIX.det.total + ' · devolvidos ' + FIX.det.itens.length + ' · cortou ' + FIX.det.cortou);
   eh(FIX.det.cortou === false, 'o dia inteiro cabe no teto', String(FIX.det.cortou), 'false');
   eh(FIX.det.itens.length === FIX.det.total, 'a rota devolveu todos os itens',
@@ -663,14 +739,25 @@ async function rodar() {
   chip('ET').click();
   await esperar(180);
   var linET = document.querySelectorAll('#palco .ap-linha-cup').length;
-  var espET = FIX.det.itens.filter(function (i) { return i.combustivel === 'ET'; }).length;
-  eh(linET === espET, 'ET mostra só os itens de ET', linET + '', espET + '');
+  var espET = contem(gsTodos, 'ET').length;
+  eh(linET === espET, 'ET mostra os cupons que CONTÊM ET', linET + '', espET + '');
   eh(linET !== lin.length, 'e o número muda ao trocar de chip',
      'GC ' + lin.length + ' → ET ' + linET);
-  var combsNaTela = new Set([].slice.call(document.querySelectorAll('#palco .ap-linha-cup .ap-cchip'))
-    .map(function (e) { return e.textContent.trim(); }));
-  eh(combsNaTela.size === 1 && combsNaTela.has('ET'), 'e toda linha é do combustível do chip',
-     [...combsNaTela].join(','), 'ET');
+  // CONTÉM, e não "é só ele": toda linha tem o chip do combustível aceso, e
+  // algumas têm outro chip junto — é o cupom misto, que aparece nos dois
+  // filtros de propósito.
+  var todasComEt = [].slice.call(document.querySelectorAll('#palco .ap-linha-cup'))
+    .every(function (l) {
+      return [].slice.call(l.querySelectorAll('.ap-cchip'))
+        .some(function (c) { return c.textContent.trim() === 'ET'; });
+    });
+  eh(todasComEt, 'e toda linha da lista contém o chip ET');
+  var comOutro = [].slice.call(document.querySelectorAll('#palco .ap-linha-cup'))
+    .filter(function (l) { return l.querySelectorAll('.ap-cchip').length > 1; }).length;
+  nota(comOutro + ' linhas do filtro ET têm um segundo combustível');
+  eh(comOutro === contem(gsTodos, 'ET').filter(function (g) { return g.combs.length > 1; }).length,
+     'e são exatamente os cupons mistos com ET', comOutro + '',
+     contem(gsTodos, 'ET').filter(function (g) { return g.combs.length > 1; }).length + '');
   eh(CHAMADAS.filter(function (u) { return u.indexOf('/app/cupons-detalhe') === 0; }).length === 1,
      'trocar de chip NÃO rebusca',
      CHAMADAS.filter(function (u) { return u.indexOf('/app/cupons-detalhe') === 0; }).length + '', '1');
@@ -715,10 +802,10 @@ async function rodar() {
   eh(det2.length === 2, 'ligar o toggle rebusca (o corte é do servidor)', det2.length + '', '2');
   eh(/so_app=1/.test(det2[1]), 'agora com so_app=1', det2[1]);
   var linSo = document.querySelectorAll('#palco .ap-linha-cup').length;
-  var espSo = FIX.detApp.itens.filter(function (i) { return i.combustivel === 'ET'; }).length;
+  var espSo = contem(agrupa(FIX.detApp.itens), 'ET').length;
   eh(linSo === espSo, 'a lista passa a ser a filtrada', linSo + '', espSo + '');
-  nota('ET: ' + espET + ' itens sem filtro → ' + espSo + ' com "só preço de app"');
-  eh(espSo < espET, 'e são menos itens', espSo + ' < ' + espET);
+  nota('ET: ' + espET + ' cupons sem filtro → ' + espSo + ' com "só preço de app"');
+  eh(espSo < espET, 'e são menos cupons', espSo + ' < ' + espET);
 
   h3('19. Trocar de vista não rebusca');
   var antes19 = CHAMADAS.length;
@@ -905,11 +992,18 @@ async function rodar() {
   vb('Por cupom').click();
   await esperar(300);
   var linhasCup = document.querySelectorAll('#palco .ap-linha-cup').length;
-  // O toggle está LIGADO neste ponto (seção 18 ligou), então o fixture é o so_app.
+  // QUAL FIXTURE sai da última chamada, não de uma suposição: a seção 20
+  // desliga o toggle para comparar com o bloco cheio, então aqui ele está
+  // desligado — e era o contrário quando a 18 rodou.
   var fonte = /so_app=1/.test(CHAMADAS.filter(function (u) {
     return u.indexOf('/app/cupons-detalhe') === 0; }).pop()) ? FIX.detApp : FIX.det;
-  eh(linhasCup === fonte.itens.length, 'mostra TODOS os itens, sem filtrar por combustível',
-     linhasCup + '', fonte.itens.length + '');
+  eh(linhasCup === agrupa(fonte.itens).length,
+     'mostra TODOS os cupons, sem filtrar por combustível',
+     linhasCup + '', agrupa(fonte.itens).length + '');
+  // Sem chip aceso não há o que avisar sobre misto: a linha já é o cupom
+  // inteiro e o total da lista é o total do recorte.
+  eh(!document.querySelector('#palco .ap-aviso--misto'),
+     'e a nota dos mistos não aparece no chip TODOS');
   var combs = new Set([].slice.call(document.querySelectorAll('#palco .ap-linha-cup .ap-cchip'))
     .map(function (e) { return e.textContent.trim(); }));
   nota('combustíveis na lista: ' + [...combs].sort().join(' · '));
@@ -996,49 +1090,274 @@ async function rodar() {
     eh(!!document.querySelector('#palco .ap-sg-arq'), 'o nome do arquivo aparece',
        (document.querySelector('#palco .ap-sg-arq') || {}).textContent);
 
-    h3('24. O cruzamento');
-    var ns = [].slice.call(document.querySelectorAll('#palco .ap-sg-n'))
-      .map(function (e) { return e.textContent.trim(); });
-    nota('resumo: ' + ns.join(' · '));
-    var pega = function (re) { var t = ns.filter(function (x) { return re.test(x); })[0] || ''; return parseInt(t.replace(/[^0-9]/g, ''), 10) || 0; };
-    var nConf = pega(/conferido/), nTec = pega(/TecnoX/), nSou = pega(/Soutag/), nSem = pega(/reconhecido/);
-    eh(nConf === base.length, 'os ' + base.length + ' pares casaram', nConf + '', base.length + '');
-    eh(nSou === 3, 'as 3 linhas deslocadas ficaram como só Soutag', nSou + '', '3');
-    eh(nSem === 1, 'e a de posto inexistente ficou separada', nSem + '', '1');
-    eh(nTec === fonte.itens.length - base.length,
-       'o resto dos itens da TecnoX ficou como só TecnoX',
-       nTec + '', (fonte.itens.length - base.length) + '');
-    // A razão social casou: nenhum dos 40 caiu em "posto não reconhecido".
-    eh(nConf > 0, 'a normalização de razão social funcionou (POSTO X LTDA → P. X)',
-       nConf + ' pares');
+    h3('24. O cruzamento em dois passos');
+    // Leitura dos cards: rótulo -> valor. Os quatro de status são botão, os
+    // três de diferença não.
+    var cardEl = function (rot) {
+      return [].slice.call(document.querySelectorAll('#palco .ap-sg-cd')).filter(function (e) {
+        return e.querySelector('.ap-sg-cd-r').textContent.trim() === rot;
+      })[0];
+    };
+    var cardV = function (rot) { var c = cardEl(rot); return c ? c.querySelector('.ap-sg-cd-v').textContent.trim() : null; };
+    var cardN = function (rot) { var t = cardV(rot); return t === null ? null : numBR(t); };
+    nota('status: ' + [].slice.call(document.querySelectorAll('#palco .ap-sg-cd--bt')).map(function (b) {
+      return b.querySelector('.ap-sg-cd-r').textContent.trim() + ' ' +
+             b.querySelector('.ap-sg-cd-v').textContent.trim();
+    }).join(' · '));
+    eh(cardN('conferidos') === base.length, 'os ' + base.length + ' pares casaram no 1º passo',
+       cardN('conferidos') + '', base.length + '');
+    // AS 3 DESLOCADAS SÃO "valor divergente", não "só Soutag": existe item do
+    // MESMO posto+dia+combustível na TecnoX, só não com aquele valor. É o 2º
+    // passo, e é a diferença que o card novo mostra — antes as três caíam em
+    // "só Soutag" junto com as que não existem em lugar nenhum.
+    eh(cardN('valor divergente') === 3, 'as 3 deslocadas em R$ 99,99 viram valor divergente',
+       cardN('valor divergente') + '', '3');
+    eh(cardN('só Soutag') === 1, 'e só Soutag fica com a linha de posto inexistente',
+       cardN('só Soutag') + '', '1');
+    eh(cardN('só TecnoX') === fonte.itens.length - base.length - 3,
+       'o resto dos itens da TecnoX fica como só TecnoX',
+       cardN('só TecnoX') + '', (fonte.itens.length - base.length - 3) + '');
+    // A razão social casou: nenhum dos 40 caiu em posto não reconhecido.
+    eh(cardN('conferidos') > 0, 'a normalização de razão social funcionou (POSTO X LTDA → P. X)',
+       cardN('conferidos') + ' pares');
 
-    h3('25. Os filtros');
-    var selPosto = document.querySelectorAll('#palco .ap-sg-filtros select')[0];
-    var selStatus = document.querySelectorAll('#palco .ap-sg-filtros select')[1];
-    eh(!!selPosto && !!selStatus, 'os dois selects existem');
-    var totalLinhas = document.querySelectorAll('#palco .ap-linha.ap-cab-sg').length;
-    window.__apSgStatus('conferido');
+    h3('24b. Os dois blocos');
+    var blSg = document.querySelector('#palco .ap-sg-bloco--sg');
+    var blTx = document.querySelector('#palco .ap-sg-bloco--tx');
+    eh(!!blSg && !!blTx, 'os dois blocos, lado a lado');
+    eh(hexDe(getComputedStyle(blSg).borderLeftColor) === '#3C3489',
+       'Soutag com a borda esquerda roxa', hexDe(getComputedStyle(blSg).borderLeftColor), '#3C3489');
+    eh(hexDe(getComputedStyle(blTx).borderLeftColor) === '#185FA5',
+       'TecnoX com a borda esquerda azul', hexDe(getComputedStyle(blTx).borderLeftColor), '#185FA5');
+    eh(parseFloat(getComputedStyle(blSg).borderLeftWidth) === 4, 'de 4px',
+       getComputedStyle(blSg).borderLeftWidth, '4px');
+    var somaSg = rows.reduce(function (t, r) { return t + r['Valor']; }, 0);
+    var vSg = numBR(blSg.querySelector('.ap-sg-bl-v').textContent);
+    nota('Soutag: ' + blSg.textContent.replace(/\s+/g, ' ').trim());
+    eh(Math.abs(vSg - somaSg) < 0.02, 'total R$ da planilha INTEIRA (inclusive o posto que não casou)',
+       vSg + '', somaSg.toFixed(2));
+    eh(blSg.textContent.indexOf(rows.length + ' transações') >= 0, 'com as transações',
+       blSg.textContent.replace(/\s+/g, ' ').trim(), rows.length + ' transações');
+    // SEM COLUNA DE LITROS nesta planilha: travessão e a razão, não zero.
+    eh(/não traz a coluna/.test(blSg.textContent), 'e travessão nos litros, porque a planilha não traz a coluna',
+       blSg.textContent.replace(/\s+/g, ' ').trim());
+    eh(/posto não reconhecido/.test(blSg.textContent), 'dizendo quanto pesa o posto que não casou',
+       blSg.textContent.replace(/\s+/g, ' ').trim());
+    var somaTx = fonte.itens.reduce(function (t, i) { return t + i.valor_liquido; }, 0);
+    var vTx = numBR(blTx.querySelector('.ap-sg-bl-v').textContent);
+    nota('TecnoX: ' + blTx.textContent.replace(/\s+/g, ' ').trim());
+    eh(Math.abs(vTx - somaTx) < 0.02, 'total R$ da TecnoX no recorte', vTx + '', somaTx.toFixed(2));
+    // CUPONS E ITENS, os dois: o cruzamento casa ITEM, e o cupom é a referência.
+    var cupTx = agrupa(fonte.itens).length;
+    eh(blTx.textContent.indexOf(cupTx.toLocaleString('pt-BR') + ' cupons') >= 0,
+       'os cupons distintos', blTx.textContent.replace(/\s+/g, ' ').trim(),
+       cupTx.toLocaleString('pt-BR') + ' cupons');
+    eh(blTx.textContent.indexOf(fonte.itens.length.toLocaleString('pt-BR') + ' itens') >= 0,
+       'e os itens', blTx.textContent.replace(/\s+/g, ' ').trim(),
+       fonte.itens.length.toLocaleString('pt-BR') + ' itens');
+
+    h3('24c. Os três cards de diferença');
+    nota('diferenças: ' + ['Diferença R$', 'Diferença litros', 'Diferença transações']
+      .map(function (r) { return r + ' = ' + cardV(r); }).join(' · '));
+    eh(Math.abs(cardN('Diferença R$') - (somaSg - somaTx)) < 0.02,
+       'Diferença R$ = Soutag − TecnoX', cardN('Diferença R$') + '', (somaSg - somaTx).toFixed(2));
+    eh(cardEl('Diferença R$').className.indexOf('diverge') >= 0,
+       'e o card fica vermelho porque diverge', cardEl('Diferença R$').className);
+    eh(hexDe(getComputedStyle(cardEl('Diferença R$')).borderTopColor) === '#A32D2D',
+       'com a borda vermelha', hexDe(getComputedStyle(cardEl('Diferença R$')).borderTopColor), '#A32D2D');
+    eh(cardV('Diferença litros') === '—', 'Diferença litros em travessão (a planilha não traz)',
+       cardV('Diferença litros'), '—');
+    eh(cardEl('Diferença litros').className.indexOf('diverge') < 0,
+       'e ela NÃO é acusada de divergir — é dado que não veio',
+       cardEl('Diferença litros').className);
+    eh(cardN('Diferença transações') === rows.length - fonte.itens.length,
+       'Diferença transações = linhas da planilha − itens da TecnoX',
+       cardN('Diferença transações') + '', (rows.length - fonte.itens.length) + '');
+
+    h3('25. Lista por posto, badge e detalhe');
+    var linhasSgp = function () { return [].slice.call(document.querySelectorAll('#palco .ap-linha-sgp')); };
+    var nomeDe = function (l) { return l.querySelector('.ap-nome').textContent.trim(); };
+    var todosPostos = linhasSgp();
+    eh(todosPostos.length > 0, 'a lista é por POSTO', todosPostos.length + ' posto(s)');
+    var cabP = [].slice.call(document.querySelector('#palco .ap-cab-sgp').children)
+      .map(function (e) { return e.textContent.trim(); });
+    nota('cabeçalho: ' + cabP.filter(Boolean).join(' · '));
+    eh(cabP.join('|') === 'Posto|Linhas SG|Itens TX|R$ Soutag|R$ TecnoX|Diferença|',
+       'com posto, contagem dos dois lados, R$ dos dois lados e a diferença',
+       cabP.join('|'), 'Posto|Linhas SG|Itens TX|R$ Soutag|R$ TecnoX|Diferença|');
+    // O POSTO DE UM DOS PARES CONFERIDOS.
+    var pNome = base[0].nome_posto;
+    var lp = todosPostos.filter(function (l) { return nomeDe(l) === pNome; })[0];
+    eh(!!lp, 'o posto ' + pNome + ' está na lista');
+    nota(pNome + ': ' + nums(lp).join(' | '));
+    eh(numBR(nums(lp)[0]) > 0, 'com linhas da Soutag', nums(lp)[0]);
+    eh(!!lp.querySelector('.ap-sgp-badge'), 'e o badge ok/diverge',
+       lp.querySelector('.ap-sgp-badge').textContent.trim());
+    // DIVERGENTE PRIMEIRO: a lista existe para achar o posto que não fecha.
+    eh(todosPostos[0].querySelector('.ap-sgp-badge').textContent.trim() === 'diverge',
+       'o primeiro da lista é um que diverge',
+       todosPostos[0].querySelector('.ap-sgp-badge').textContent.trim(), 'diverge');
+    eh(hexDe(getComputedStyle(todosPostos[0].querySelector('.ap-sgp-badge')).color) === '#A32D2D',
+       'com o badge vermelho',
+       hexDe(getComputedStyle(todosPostos[0].querySelector('.ap-sgp-badge')).color), '#A32D2D');
+    // O BALDE do nome que não casou é uma linha, e o aviso diz qual nome é.
+    var lnr = todosPostos.filter(function (l) { return /não reconhecido/.test(nomeDe(l)); })[0];
+    eh(!!lnr, 'o posto não reconhecido vira uma linha própria, fora dos postos de verdade');
+    var avisoN = [].slice.call(document.querySelectorAll('#palco .ap-aviso')).filter(function (e) {
+      return /não cas/.test(e.textContent);
+    })[0];
+    eh(!!avisoN && /INEXISTENTE/.test(avisoN.textContent),
+       'e o aviso nomeia o que não casou', avisoN ? avisoN.textContent.trim() : '(nenhum)');
+
+    h3('25b. Clicar no posto expande os cupons');
+    eh(!document.querySelector('#palco .ap-sg-det'), 'nenhum posto aberto antes do clique');
+    lp.click();
+    await esperar(240);
+    var detP = document.querySelector('#palco .ap-sg-det');
+    eh(!!detP, 'clicar expande');
+    if (detP) {
+      var linsD = [].slice.call(detP.querySelectorAll('.ap-sg-lin'));
+      eh(linsD.length > 0, 'com os cupons individuais do posto', linsD.length + ' linha(s)');
+      var tagsD = {};
+      linsD.forEach(function (l) { tagsD[l.querySelector('.ap-sg-tag').textContent.trim()] = 1; });
+      nota('fontes no detalhe: ' + Object.keys(tagsD).join(' · '));
+      eh(!!tagsD['conferido'], 'cada linha com o badge da fonte, e o conferido está entre elas',
+         Object.keys(tagsD).join(','));
+      var tgOk = linsD.filter(function (l) {
+        return l.querySelector('.ap-sg-tag').textContent.trim() === 'conferido';
+      })[0].querySelector('.ap-sg-tag');
+      eh(hexDe(getComputedStyle(tgOk).color) === '#0F6E56', 'conferido em verde',
+         hexDe(getComputedStyle(tgOk).color), '#0F6E56');
+      // As duas colunas de valor, uma de cada fonte.
+      var lConf = linsD.filter(function (l) {
+        return l.querySelector('.ap-sg-tag').textContent.trim() === 'conferido';
+      })[0];
+      nota('linha conferida: ' + [].slice.call(lConf.children).map(function (e) { return e.textContent.trim(); }).join(' | '));
+      eh(lConf.children[2].textContent.trim() !== '—' && lConf.children[3].textContent.trim() !== '—',
+         'o conferido mostra o R$ dos DOIS lados',
+         lConf.children[2].textContent.trim() + ' × ' + lConf.children[3].textContent.trim());
+      var lTx = linsD.filter(function (l) {
+        return l.querySelector('.ap-sg-tag').textContent.trim() === 'só TecnoX';
+      })[0];
+      if (lTx) {
+        eh(lTx.children[2].textContent.trim() === '—',
+           'e o só TecnoX deixa o lado Soutag em travessão', lTx.children[2].textContent.trim(), '—');
+      }
+    }
+    lp.click();
+    await esperar(200);
+    eh(!document.querySelector('#palco .ap-sg-det'), 'clicar de novo fecha');
+
+    h3('25c. Os cards de status filtram');
+    var stBtn = function (rot) {
+      return [].slice.call(document.querySelectorAll('#palco .ap-sg-cd--bt')).filter(function (b) {
+        return b.querySelector('.ap-sg-cd-r').textContent.trim() === rot;
+      })[0];
+    };
+    stBtn('valor divergente').click();
+    await esperar(240);
+    var pDiv = linhasSgp();
+    nota('postos com valor divergente: ' + pDiv.map(nomeDe).join(' · '));
+    eh(pDiv.length > 0 && pDiv.length < todosPostos.length,
+       'o card "valor divergente" reduz a lista aos postos que têm alguma',
+       pDiv.length + ' de ' + todosPostos.length);
+    eh(stBtn('valor divergente').getAttribute('aria-pressed') === 'true', 'e o card fica aceso',
+       stBtn('valor divergente').getAttribute('aria-pressed'), 'true');
+    pDiv[0].click();
+    await esperar(220);
+    var linsF = [].slice.call(document.querySelectorAll('#palco .ap-sg-det .ap-sg-lin'));
+    eh(linsF.length > 0 && linsF.every(function (l) {
+         return l.querySelector('.ap-sg-tag').textContent.trim() === 'valor divergente';
+       }), 'e o detalhe do posto mostra só as divergentes', linsF.length + ' linha(s)');
+    pDiv[0].click();
     await esperar(180);
-    var soConf = document.querySelectorAll('#palco .ap-linha.ap-cab-sg').length;
-    eh(soConf === nConf, 'filtrar por conferido mostra só eles', soConf + '', nConf + '');
-    window.__apSgStatus('soutag');
-    await esperar(180);
-    eh(document.querySelectorAll('#palco .ap-linha.ap-cab-sg').length === 3,
-       'e por só Soutag mostra as 3',
-       document.querySelectorAll('#palco .ap-linha.ap-cab-sg').length + '', '3');
-    window.__apSgStatus('todos');
-    await esperar(180);
-    var umPosto = base[0].nome_posto;
-    window.__apSgPosto(umPosto);
-    await esperar(180);
-    var doPosto = [].slice.call(document.querySelectorAll('#palco .ap-linha.ap-cab-sg'))
-      .map(function (l) { return l.children[1].textContent.trim(); });
-    eh(doPosto.length > 0 && doPosto.every(function (t) { return t.indexOf(umPosto) === 0; }),
-       'filtrar por posto deixa só ' + umPosto, doPosto.length + ' linha(s)');
-    window.__apSgPosto('');
-    await esperar(180);
-    eh(document.querySelectorAll('#palco .ap-linha.ap-cab-sg').length === totalLinhas,
-       'e limpar o filtro devolve todas', '', totalLinhas + '');
+    // CLICAR DE NOVO SOLTA: sem isso quem clica num dos quatro cards fica
+    // preso nele procurando um botão "todos" que não existe.
+    stBtn('valor divergente').click();
+    await esperar(240);
+    eh(linhasSgp().length === todosPostos.length, 'clicar de novo no card solta o filtro',
+       linhasSgp().length + '', todosPostos.length + '');
+    eh(stBtn('valor divergente').getAttribute('aria-pressed') === 'false', 'e o card apaga',
+       stBtn('valor divergente').getAttribute('aria-pressed'), 'false');
+
+    h3('28. Normalização de razão social: os casos reais');
+    // CADA CASO É UMA LINHA COPIADA DE UM ITEM VERDADEIRO daquele posto. Se o
+    // nome casar, a linha confere; se não casar, cai em posto não reconhecido.
+    // Uma coisa prova a outra, sem precisar alcançar a função de dentro do
+    // IIFE. Esta planilha TEM coluna de litros — o caminho oposto ao da 24c.
+    var porPosto = {};
+    fonte.itens.forEach(function (i) {
+      (porPosto[i.nome_posto] = porPosto[i.nome_posto] || []).push(i);
+    });
+    var CASOS = [
+      ['AUTO POSTO ESPACO REAL LTDA', 'P. ESPAÇO REAL', 'AUTO POSTO + acento'],
+      ['AVIVA COMERCIO DE COMBUSTIVEIS E LUBRIFICANTES LTDA', 'P. AVIVA', 'LUBRIFICANTES'],
+      ['PLANALTO POSTO DE SERVICO LTDA', 'P. PLANALTO', 'POSTO DE SERVICO'],
+      ['POSTOS URBANO FERRAZ LTDA', 'P. URBANO FERRAZ', 'POSTOS no plural'],
+      ['COMERCIO DE COMBUSTIVEIS ALEX LTDA', 'P. ALEX', 'COMERCIO DE COMBUSTIVEIS na frente'],
+      ['POSTO BOM BOM LTDA', 'P. BOMBOM FILIAL', 'espaço a mais + matriz/filial ambíguo'],
+      ['POSTO ESPASSO REAL LTDA', 'P. ESPAÇO REAL', 'escrito errado (similaridade)'],
+    ];
+    var rows2 = [], usados = {};
+    CASOS.forEach(function (cs, k) {
+      // Um item AINDA NÃO USADO do posto: ESPAÇO REAL entra duas vezes (o
+      // certo e o errado), e os dois disputando o mesmo item deixariam o
+      // segundo sem par — o teste culparia a normalização por um problema de
+      // cruzamento.
+      var it = (porPosto[cs[1]] || []).filter(function (x) { return !usados[x.id]; })[0];
+      usados[it.id] = 1;
+      cs.push(it);
+      rows2.push({ 'Posto': cs[0], 'Data/Hora': it.data + ' 07:0' + k + ':00',
+                   'Valor': it.valor_liquido, 'Combustível': COMBNOME[it.combustivel] || it.combustivel,
+                   'Litros': it.litros, 'ID': 'NR' + k });
+    });
+    var ws2 = XLSX.utils.json_to_sheet(rows2);
+    var wb2 = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb2, ws2, 'Transacoes');
+    var buf2 = XLSX.write(wb2, { type: 'array', bookType: 'xlsx' });
+    var inp2 = document.getElementById('ap-sg-file');
+    var dt2 = new DataTransfer();
+    dt2.items.add(new File([buf2], 'soutag-razao-social.xlsx',
+      { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    inp2.files = dt2.files;
+    await window.__apSgArquivo(inp2);
+    await esperar(400);
+    nota('casos: ' + CASOS.map(function (c) { return c[0] + ' → ' + c[1]; }).join(' | '));
+    eh(!document.querySelector('#palco .ap-erro'), 'a planilha de razão social foi lida',
+       (document.querySelector('#palco .ap-erro') || {}).textContent || 'sem erro');
+    eh(cardN('conferidos') === CASOS.length, 'os ' + CASOS.length + ' casos casaram e conferiram',
+       cardN('conferidos') + '', CASOS.length + '');
+    eh(cardN('só Soutag') === 0, 'nenhum caiu em só Soutag', cardN('só Soutag') + '', '0');
+    eh(!document.querySelector('#palco .ap-linha-sgp .ap-nome') ||
+       !linhasSgp().some(function (l) { return /não reconhecido/.test(nomeDe(l)); }),
+       'e NENHUM em posto não reconhecido',
+       linhasSgp().filter(function (l) { return /não reconhecido/.test(nomeDe(l)); }).length + '', '0');
+    // Os postos que receberam linha da Soutag são exatamente os esperados.
+    var comSg = linhasSgp().filter(function (l) { return numBR(nums(l)[0]) > 0; }).map(nomeDe).sort();
+    var espSgN = [];
+    CASOS.forEach(function (c) { if (espSgN.indexOf(c[1]) < 0) espSgN.push(c[1]); });
+    espSgN.sort();
+    nota('postos com linha da Soutag: ' + comSg.join(' · '));
+    eh(comSg.join('|') === espSgN.join('|'), 'cada razão social foi para o posto certo',
+       comSg.join('|'), espSgN.join('|'));
+    // A AMBIGUIDADE RESOLVIDA PELO VALOR: "BOM BOM" casa por prefixo com
+    // BOMBOM MATRIZ e BOMBOM FILIAL, e o nome não desempata. Quem desempata é
+    // o valor — a linha veio de um item da FILIAL, e é lá que ela foi.
+    eh(comSg.indexOf('P. BOMBOM FILIAL') >= 0 && comSg.indexOf('P. BOMBOM MATRIZ') < 0,
+       'e "POSTO BOM BOM LTDA" foi para a FILIAL, desempatada pelo valor',
+       comSg.filter(function (n) { return /BOMBOM/.test(n); }).join(',') || '(nenhum)',
+       'P. BOMBOM FILIAL');
+    // ESTA planilha traz litros, então o lado Soutag sai do travessão.
+    var somaL2 = rows2.reduce(function (t, r) { return t + r['Litros']; }, 0);
+    var blSg2 = document.querySelector('#palco .ap-sg-bloco--sg');
+    nota('Soutag com litros: ' + blSg2.textContent.replace(/\s+/g, ' ').trim());
+    eh(!/não traz a coluna/.test(blSg2.textContent),
+       'com a coluna de litros presente, o bloco Soutag mostra volume',
+       blSg2.textContent.replace(/\s+/g, ' ').trim());
+    eh(blSg2.textContent.indexOf(litrosT(somaL2)) >= 0, 'e é a soma da planilha',
+       blSg2.textContent.replace(/\s+/g, ' ').trim(), litrosT(somaL2));
+    eh(cardV('Diferença litros') !== '—', 'e o card de diferença de litros sai do travessão',
+       cardV('Diferença litros'));
   }
   // Volta ao estado das seções finais.
   vb('Por posto').click();
