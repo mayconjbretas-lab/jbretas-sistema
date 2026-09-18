@@ -1,0 +1,364 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel TI — layout responsivo</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  /* O PALCO TEM A LARGURA DO CELULAR e nada mais: 375px é o iPhone SE/8, o
+     mais estreito que a operação usa. Ele é o contêiner, não a janela — a
+     media query é de VIEWPORT, então quem prova a media query de verdade é
+     abrir esta página num navegador estreito. O que o palco pega é o que
+     estoura por largura fixa, que independe da media query. */
+  #palco { border:1px dashed var(--border); margin:10px 0; overflow:hidden; }
+  #palco.mob { width:375px; }
+</style>
+<link rel="stylesheet" href="/modulos/painel-ti/painel-ti.css">
+
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// O painel-ti é de desktop e ficava ilegível no celular. Aqui a PÁGINA REAL
+// (o index.html de produção, com o app.js de produção e os fixtures reais)
+// é montada num contêiner de 375px e se afirma, elemento a elemento:
+//
+//  1. NADA ESTOURA os 375px — nenhum filho ultrapassa a borda do palco. É a
+//     afirmação que pega largura fixa esquecida, que é o que faz a PÁGINA
+//     ganhar rolagem horizontal no celular.
+//  2. AS TABELAS ROLAM POR DENTRO: quem tem scrollWidth maior que a largura
+//     está dentro de um .tx-tbl-wrap com overflow-x auto. Tabela larga não é
+//     defeito — tabela que empurra a página é.
+//  3. OS CONTROLES EMPILHAM: no .tx-controls, cada campo ocupa a linha
+//     inteira em vez de ficar espremido a 180px de min-width.
+//  4. O BOTÃO "Atualizar rollup" continua visível, com área de toque de pelo
+//     menos 40px de altura, e o clique manda { data, posto_id } como no
+//     desktop.
+//  5. OS KPIs de Pendências não ficam com 5 colunas num telefone.
+//  6. NADA MUDA ACIMA DE 768px: min-width do campo, controles em linha,
+//     botão de largura natural, abas numa linha só e KPIs com cinco colunas.
+//
+// DUAS EXECUÇÕES, E CADA UMA PROVA UMA METADE. As afirmações de mobile
+// (1, 3, 4-toque, 4b, 5-duas-colunas) só valem com a JANELA estreita, porque
+// media query é de viewport e um <div> de 375px não a dispara. Na janela
+// larga elas viram NOTA, não falha — cobrar do desktop uma regra que não é
+// dele daria vermelho permanente e ninguém olharia mais para este arquivo.
+// Rode as duas:  /testes/painel-ti-mobile  a 375px  e  a 1280px.
+//
+// PARA QUE SERVE O PALCO E PARA QUE NÃO SERVE: a media query é de VIEWPORT,
+// e um <div> de 375px não a dispara. Por isso o teste roda DUAS VEZES — uma
+// com a janela larga (onde as regras de desktop valem e o palco estreito
+// revela o que tem largura fixa) e a leitura final é feita com a JANELA
+// estreitada de verdade, que é como as asserções de media query fecham. Abrir
+// esta página a 375px de viewport é o passo que fecha a prova.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+var DIA = '2026-09-14';
+var FIX = null, CHAMADAS = [], POST_ROLLUP = null;
+var RESP_ROLLUP = { ok: true, data: DIA, parcial: false, postos_pedidos: 1,
+  postos_ok: 1, cupons: 196, litros: 4650.014, veiculos: 194, itens: 255,
+  liquido_comb: 24467.93, linhas: 50, ms: 27402, detalhe: [] };
+
+window.exigirSessao = function () { return { id: 'h', nome: 'H', perfil: 'ADM', ti: true }; };
+window.getUsuarioLogado = window.exigirSessao;
+window.redirecionarPorPerfil = function () {};
+window.caminhoRaiz = function () { return '/'; };
+window.abrirPainelDesktop = function () {};
+window.apiFetch = function (url, opts) {
+  CHAMADAS.push(String(url));
+  var u = String(url);
+  if (u.indexOf('/tecnox/rollup-dia') === 0) {
+    POST_ROLLUP = { metodo: (opts || {}).method, body: JSON.parse((opts || {}).body || '{}') };
+    return Promise.resolve(RESP_ROLLUP);
+  }
+  if (u.indexOf('/postos') === 0) return Promise.resolve(FIX.postos);
+  if (u.indexOf('/tecnox/movimentacao') === 0) return Promise.resolve(FIX.movimentacao);
+  if (u.indexOf('/tecnox/sondas') === 0) return Promise.resolve(FIX.sondas);
+  if (u.indexOf('/rollup/execucoes') === 0) return Promise.resolve(FIX.execucoes);
+  return Promise.resolve({ success: true, usuarios: [], itens: [] });
+};
+
+function js(src) {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { erro(new Error(src + ' não carregou')); };
+    document.body.appendChild(s);
+  });
+}
+function baixar(url) {
+  return new Promise(function (ok, er) {
+    var x = new XMLHttpRequest();
+    x.open('GET', url);
+    x.onload = function () { ok(x.responseText); };
+    x.onerror = function () { er(new Error(url + ' não carregou')); };
+    x.send();
+  });
+}
+
+// Quem passa da borda direita do palco. Ignora o que ESTÁ DENTRO de um
+// contêiner que rola (o próprio wrapper de tabela) — ali passar da borda é o
+// desenho, e é justamente o que se quer: a tabela rola por dentro.
+function estouram(palco) {
+  var lim = palco.getBoundingClientRect().right + 1;
+  return [].slice.call(palco.querySelectorAll('*')).filter(function (e) {
+    if (e.offsetParent === null && e.tagName !== 'BODY') return false;   // invisível
+    var r = e.getBoundingClientRect();
+    if (r.width === 0) return false;
+    if (r.right <= lim) return false;
+    for (var p = e.parentElement; p && p !== palco; p = p.parentElement) {
+      var ov = getComputedStyle(p).overflowX;
+      if (ov === 'auto' || ov === 'scroll' || ov === 'hidden') return false;
+    }
+    return true;
+  });
+}
+function descreve(e) {
+  return (e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') +
+    (e.className && typeof e.className === 'string' ? '.' + e.className.trim().split(/\s+/).join('.') : ''))
+    .slice(0, 70) + ' w=' + Math.round(e.getBoundingClientRect().width);
+}
+
+(async function () {
+  try {
+    FIX = JSON.parse(await baixar('/testes/fixtures-painel-ti.json'));
+    var doc = new DOMParser().parseFromString(
+      await baixar('/modulos/painel-ti/index.html'), 'text/html');
+    var app = doc.querySelector('.app-main');
+    if (!app) throw new Error('não achei .app-main no index.html');
+    // A PÁGINA INTEIRA, as quatro abas: o que estoura pode estar em qualquer
+    // uma, e montar só a do TecnoX esconderia as outras três.
+    var palco = document.getElementById('palco');
+    palco.appendChild(document.importNode(app, true));
+    palco.querySelector('#tab-tecnox').classList.add('active');
+
+    await js('/modulos/painel-ti/app.js');
+    await esperar(50);
+    ligarControlesTecnox();
+    ligarControlesMov();
+    await txCarregarPostos();
+    await esperar(150);
+    // A movimentação e a saúde do rollup, para a aba ter conteúdo de verdade
+    // (tabelas e cards) na hora de medir.
+    document.getElementById('mv-data').value = DIA;
+    document.getElementById('mv-posto').selectedIndex = 1;
+    await mvCarregar();
+    await esperar(150);
+
+    var larguraJanela = window.innerWidth;
+    nota('viewport desta execução: ' + larguraJanela + 'px' +
+         (larguraJanela <= 768 ? ' (media query de mobile ATIVA)' : ' (desktop)'));
+
+    // ── 1. Nada estoura ────────────────────────────────────────
+    h3('1. A 375px, nada ultrapassa a borda');
+    palco.classList.add('mob');
+    await esperar(200);
+    var fora = estouram(palco);
+    nota(fora.length ? 'estouram: ' + fora.slice(0, 6).map(descreve).join(' · ') : 'nenhum');
+    if (larguraJanela <= 768) {
+      eh(fora.length === 0, 'nenhum elemento passa da borda de 375px fora de um contêiner que rola',
+         fora.length + ' elemento(s)', '0');
+    } else {
+      // NA JANELA LARGA ISTO NÃO É AFIRMAÇÃO, É DIAGNÓSTICO: a media query é
+      // de viewport e não está ativa, então o que se vê aqui é justamente o
+      // layout de desktop espremido em 375 — o estado ANTES da correção.
+      // Afirmar aqui faria o teste cobrar do desktop uma regra que não é dele.
+      nota('janela larga: a media query não está ativa, então o que estoura acima é o');
+      nota('layout de DESKTOP dentro de 375px — o "antes". A afirmação é na execução estreita.');
+    }
+
+    // ── 2. As tabelas rolam por dentro ─────────────────────────
+    h3('2. Tabela larga rola por DENTRO, não empurra a página');
+    var wraps = [].slice.call(palco.querySelectorAll('.tx-tbl-wrap'));
+    nota(wraps.length + ' wrapper(s) de tabela no palco');
+    eh(wraps.every(function (w) {
+      var ov = getComputedStyle(w).overflowX;
+      return ov === 'auto' || ov === 'scroll';
+    }), 'todo .tx-tbl-wrap tem overflow-x que rola',
+       wraps.map(function (w) { return getComputedStyle(w).overflowX; })
+         .filter(function (v, i, a) { return a.indexOf(v) === i; }).join(','));
+    var tabelasSoltas = [].slice.call(palco.querySelectorAll('table')).filter(function (t) {
+      return !t.closest('.tx-tbl-wrap');
+    });
+    eh(tabelasSoltas.length === 0, 'nenhuma <table> fora de um wrapper que rola',
+       tabelasSoltas.map(descreve).join(' · ') || 'nenhuma', 'nenhuma');
+
+    // ── 3. Controles empilham ──────────────────────────────────
+    h3('3. Os seletores empilham em coluna');
+    var ctr = palco.querySelector('#mv-corpo') ? palco.querySelector('.tx-controls') : null;
+    eh(!!ctr, 'o .tx-controls existe');
+    if (ctr && larguraJanela <= 768) {
+      var campos = [].slice.call(ctr.querySelectorAll('.tx-f')).filter(function (f) { return !f.hidden; });
+      var larguraCtr = ctr.getBoundingClientRect().width;
+      var cheios = campos.filter(function (f) {
+        return f.getBoundingClientRect().width >= larguraCtr - 2;
+      });
+      eh(cheios.length === campos.length, 'cada campo visível ocupa a linha inteira',
+         cheios.length + ' de ' + campos.length);
+      var inp = ctr.querySelector('.tx-inp');
+      eh(inp && inp.getBoundingClientRect().width <= larguraCtr + 1,
+         'e o input não estoura o contêiner (o min-width de 180px foi solto)',
+         inp ? Math.round(inp.getBoundingClientRect().width) + 'px' : '(sem input)',
+         '<= ' + Math.round(larguraCtr) + 'px');
+    } else if (ctr) {
+      nota('viewport largo: o empilhamento é conferido na execução estreita.');
+    }
+
+    // ── 4. O botão Atualizar rollup ────────────────────────────
+    h3('4. "Atualizar rollup" funciona no mobile');
+    var btn = document.getElementById('mv-rollup');
+    eh(!!btn && btn.offsetParent !== null, 'o botão está visível',
+       btn ? (btn.hidden ? 'hidden' : 'visível') : '(ausente)');
+    if (btn) {
+      var alt = btn.getBoundingClientRect().height;
+      if (larguraJanela <= 768) {
+        eh(alt >= 40, 'com área de toque de pelo menos 40px de altura',
+           Math.round(alt) + 'px', '>= 40px');
+      } else {
+        nota('janela larga: altura de toque conferida na execução estreita (aqui mede ' +
+             Math.round(alt) + 'px, que é a do desktop).');
+      }
+      eh(btn.getBoundingClientRect().right <= palco.getBoundingClientRect().right + 1,
+         'e dentro da largura do telefone',
+         Math.round(btn.getBoundingClientRect().right) + ' <= ' +
+         Math.round(palco.getBoundingClientRect().right));
+      POST_ROLLUP = null;
+      btn.click();
+      await esperar(250);
+      eh(!!POST_ROLLUP && POST_ROLLUP.metodo === 'POST' && POST_ROLLUP.body.data === DIA,
+         'o clique manda POST /tecnox/rollup-dia com a data',
+         POST_ROLLUP ? POST_ROLLUP.metodo + ' ' + JSON.stringify(POST_ROLLUP.body) : '(não chamou)');
+    }
+
+    // ── 4b. As quatro abas ─────────────────────────────────────
+    h3('4b. As quatro abas continuam alcançáveis');
+    // O DEFEITO ERA ESTE: os quatro botões somavam mais que a largura útil,
+    // a faixa não rolava, e o quarto — "API TecnoX", a aba mais usada —
+    // ficava cortado na borda e SEM como ser clicado.
+    var tabs = palco.querySelector('.ti-tabs');
+    var bts = [].slice.call(tabs.querySelectorAll('.ti-tab'));
+    var limite = tabs.getBoundingClientRect().right + 1;
+    var cortados = bts.filter(function (b) { return b.getBoundingClientRect().right > limite; });
+    nota('abas: ' + bts.map(function (b) {
+      return b.textContent.trim().replace(/[^\wÀ-ÿ ]/g, '').trim(); }).join(' · '));
+    if (larguraJanela <= 768) {
+      eh(cortados.length === 0, 'nenhuma aba passa da borda da faixa',
+         cortados.map(function (b) { return b.id; }).join(',') || 'nenhuma', 'nenhuma');
+    } else {
+      nota('janela larga: ' + (cortados.length ? cortados.map(function (b) { return b.id; }).join(',') +
+        ' passa da borda — é exatamente o defeito, com as regras de desktop em 375px.'
+        : 'nenhuma passa (o palco coube).'));
+    }
+    if (larguraJanela <= 768) {
+      eh(getComputedStyle(tabs).flexWrap === 'wrap',
+         'a faixa quebra em duas linhas em vez de esconder aba atrás de rolagem',
+         getComputedStyle(tabs).flexWrap, 'wrap');
+    }
+
+    // ── 4c. O spinner do botão ─────────────────────────────────
+    h3('4c. O @keyframes do spinner existe');
+    // ACHADO NO CAMINHO, e não é de layout: o arquivo tinha 'keyframes
+    // tx-girar com APÓSTROFO no lugar do arroba. O parser tratava o resto
+    // como string aberta e engolia duas regras — os keyframes (a bolinha de
+    // espera do "Atualizar rollup" nunca girou) e o .tx-btn:disabled logo
+    // abaixo. Nada quebrava alto; só não funcionava.
+    var kf = [];
+    for (var i = 0; i < document.styleSheets.length; i++) {
+      var ss = document.styleSheets[i], rs;
+      if (!/painel-ti\.css/.test(ss.href || '')) continue;
+      try { rs = ss.cssRules; } catch (e) { continue; }
+      for (var k = 0; k < rs.length; k++) {
+        if (rs[k].type === CSSRule.KEYFRAMES_RULE) kf.push(rs[k].name);
+      }
+    }
+    eh(kf.indexOf('tx-girar') >= 0, 'a folha declara @keyframes tx-girar',
+       kf.join(',') || '(nenhum)', 'tx-girar');
+    var dis = document.createElement('button');
+    dis.className = 'tx-btn'; dis.disabled = true;
+    palco.appendChild(dis);
+    await esperar(30);
+    eh(parseFloat(getComputedStyle(dis).opacity) < 1,
+       'e o .tx-btn:disabled voltou a existir (botão desabilitado fica opaco)',
+       getComputedStyle(dis).opacity, '0.55');
+    dis.remove();
+
+    // ── 5. KPIs de Pendências ──────────────────────────────────
+    h3('5. Os KPIs de Pendências não ficam com 5 colunas no telefone');
+    // A ABA PRECISA ESTAR ATIVA para medir: num elemento display:none o
+    // getComputedStyle devolve o valor DECLARADO ("repeat(3, 1fr)"), não o
+    // usado — e contar espaços nessa string dava sempre 2, passando o teste
+    // sem medir nada. Primeira versão deste harness caiu exatamente nisso.
+    var kp = palco.querySelector('#ti-it-kpis');
+    var abaPend = palco.querySelector('#tab-pendencias');
+    if (kp && abaPend) {
+      abaPend.classList.add('active');
+      kp.innerHTML = '<div class="ti-it-kpi"></div>'.repeat(5);
+      await esperar(80);
+      var cols = getComputedStyle(kp).gridTemplateColumns.split(' ').length;
+      nota('grid-template-columns: ' + getComputedStyle(kp).gridTemplateColumns);
+      if (larguraJanela <= 480) {
+        eh(cols === 2, 'duas colunas no telefone', cols + ' coluna(s)', '2');
+      } else if (larguraJanela > 768) {
+        eh(cols === 5, 'cinco colunas no desktop', cols + ' coluna(s)', '5');
+      } else {
+        nota('entre 480 e 768: a regra de 560 que já existia é quem manda.');
+      }
+      kp.innerHTML = '';
+      abaPend.classList.remove('active');
+    }
+
+    // ── 6. Desktop intocado ────────────────────────────────────
+    h3('6. Acima de 768px nada mudou');
+    palco.classList.remove('mob');
+    await esperar(150);
+    if (larguraJanela > 768) {
+      var inp2 = palco.querySelector('.tx-inp');
+      eh(inp2 && parseFloat(getComputedStyle(inp2).minWidth) === 180,
+         'o .tx-inp mantém o min-width de 180px do desktop',
+         inp2 ? getComputedStyle(inp2).minWidth : '(ausente)', '180px');
+      var ctr2 = palco.querySelector('.tx-controls');
+      eh(ctr2 && getComputedStyle(ctr2).flexDirection === 'row',
+         'e os controles seguem em linha', ctr2 ? getComputedStyle(ctr2).flexDirection : '', 'row');
+      var bt2 = palco.querySelector('.tx-btn');
+      eh(bt2 && getComputedStyle(bt2).width !== '100%',
+         'e o botão não é de largura cheia',
+         bt2 ? getComputedStyle(bt2).width : '(ausente)');
+      eh(getComputedStyle(palco.querySelector('.ti-tabs')).flexWrap === 'nowrap',
+         'as abas seguem numa linha só',
+         getComputedStyle(palco.querySelector('.ti-tabs')).flexWrap, 'nowrap');
+    } else {
+      nota('viewport estreito: as regras de desktop são conferidas na execução larga.');
+    }
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — painel TI mobile';
+})();
+</script>

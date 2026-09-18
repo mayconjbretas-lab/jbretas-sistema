@@ -317,7 +317,14 @@
 .tx-spin { display: inline-block; width: .7rem; height: .7rem; margin-right: .45rem;
   vertical-align: -.08rem; border: 2px solid color-mix(in srgb, #1a1206 30%, transparent);
   border-top-color: #1a1206; border-radius: 50%; animation: tx-girar .8s linear infinite; }
-'keyframes tx-girar { to { transform: rotate(360deg); } }
+/* O @ AQUI NÃO É DETALHE: estava escrito 'keyframes (apóstrofo no lugar do
+   arroba), e o parser tratava o resto da linha como string aberta. Duas
+   vítimas, as duas silenciosas: os keyframes NUNCA existiram (o .tx-spin
+   ficava parado — a bolinha de espera do "Atualizar rollup" não girava) e a
+   regra .tx-btn:disabled logo abaixo foi engolida junto com a string, então o
+   botão desabilitado continuava com cara de clicável. Medido no navegador:
+   document.styleSheets desta folha trazia ZERO CSSKeyframesRule. */
+@keyframes tx-girar { to { transform: rotate(360deg); } }
 .tx-btn:disabled { opacity: .55; cursor: not-allowed; }
 .tx-msg { margin-top: .7rem; font-family: var(--mono); font-size: .74rem; padding: .5rem .7rem; border-radius: 8px; }
 .tx-msg-ok  { color: var(--ok);     background: color-mix(in srgb, var(--ok) 12%, transparent); }
@@ -584,3 +591,144 @@
   padding: .4rem .7rem; margin-top: .5rem; cursor: pointer; width: 100%;
 }
 .mv-mais:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ════════════════════════════════════════════════════════════════
+   MOBILE — tudo abaixo de 768px
+   ════════════════════════════════════════════════════════════════
+   O painel-ti nasceu de desktop e no celular ficava ilegível. Isto é SÓ
+   CSS, num bloco só, no fim do arquivo: acima de 768px nada aqui vale, e
+   nenhuma regra de desktop foi tocada para isto existir. Não há módulo
+   mobile separado (como a Logística tem) porque aqui não há tela diferente
+   a desenhar — é a mesma, com as medidas certas.
+
+   POR QUE 768 E NÃO 560: as três media queries que já existiam neste
+   arquivo cortam em 560px, medida de telefone. O que quebrava o painel-ti,
+   porém, quebrava antes disso — os controles da sonda somam 3 campos de
+   180px mais um botão, e isso já não cabe num tablet em pé. 768 é a
+   fronteira do conteúdo, não do aparelho.
+
+   O QUE NÃO ESTÁ AQUI, porque já é do base.css e vale para todos os
+   módulos: a topbar (que aperta em 560, 430 e 360) e o modal (que ganha
+   max-height e rolagem). Repetir isso aqui seria criar uma segunda verdade.
+
+   AS TABELAS NÃO ENCOLHEM, ROLAM. A tabela de campos da sonda tem coluna de
+   exemplo com JSON dentro; espremê-la em 375px não a tornaria legível, só
+   ilegível de outro jeito. O .tx-tbl-wrap já rola por dentro desde sempre —
+   aqui só se garante que a PÁGINA não role junto, que é o defeito de
+   verdade: rolagem horizontal na página faz perder o lugar na vertical.
+   ════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── Respiro da página ──
+     2rem/1.5rem no desktop viram 48px de margem lateral num aparelho de
+     375 — 13% da tela em vão de cada lado. O safe-area continua somado
+     embaixo, para o conteúdo não morrer atrás da barra do iPhone. */
+  .app-main { padding: 1.1rem .85rem calc(1.2rem + env(safe-area-inset-bottom)); }
+  .page-header { margin-bottom: 1.1rem; gap: .6rem; }
+  .page-title { font-size: 1.12rem; }
+  .page-date { font-size: .7rem; line-height: 1.45; }
+  .section { margin-bottom: 1rem; }
+  .section-header { padding: .7rem .8rem; gap: 7px; }
+  .section-title { font-size: .82rem; }
+  .section-body { padding: .8rem; }
+
+  /* ── As quatro abas ──
+     ELAS QUEBRAM EM DUAS LINHAS, não viram uma faixa que rola. Medido: os
+     quatro botões somam 366px de conteúdo em 327px úteis, então o quarto
+     ("API TecnoX") ficava cortado na borda — e, como o .ti-tabs não rolava,
+     ele era INALCANÇÁVEL no celular: a aba mais usada da tela.
+     Faixa rolante resolveria a largura e criaria outro problema, o de
+     esconder navegação atrás de um gesto que nada anuncia. Com wrap, as
+     quatro estão sempre à vista. */
+  .ti-tabs { flex-wrap: wrap; gap: 4px 6px; margin-bottom: 1rem; }
+  .ti-tab { flex: 0 0 auto; font-size: .72rem; padding: 8px 10px; letter-spacing: .02em; }
+
+  /* ── Controles da sonda e da movimentação ──
+     EMPILHAM DE VERDADE (flex-direction: column), e não por acaso do wrap:
+     com `wrap` e min-width de 180px, três campos e um botão se arrumavam
+     em linhas de tamanhos diferentes — um campo de 248px, outro de 180,
+     sobrando 100px de buraco. Em coluna, cada campo ocupa a linha inteira e
+     a leitura é uma só, de cima para baixo. */
+  .tx-controls { flex-direction: column; align-items: stretch; gap: .55rem; }
+  .tx-f { width: 100%; }
+  .tx-inp { min-width: 0; width: 100%; box-sizing: border-box; font-size: .9rem; }
+
+  /* 44px é o alvo de toque mínimo das diretrizes da Apple e do Material; o
+     botão media 33px de altura e 142px de largura, perdido no meio da
+     coluna. Largura cheia porque ele é a única ação do bloco — não há com o
+     que disputar a linha.
+     O `font-size: .9rem` do .tx-inp acima tem a mesma origem prática: no
+     Safari do iPhone, campo com fonte MENOR que 16px faz a página dar zoom
+     ao focar, e o zoom não volta sozinho. 0.9rem não resolve isso sozinho
+     (ver a regra de 16px nos inputs de texto, abaixo), mas encurta o salto. */
+  .tx-btn { width: 100%; min-height: 44px; font-size: .82rem; }
+
+  /* ── Campos de texto: 16px contra o zoom do iOS ──
+     O Safari do iPhone dá zoom em QUALQUER input com fonte abaixo de 16px, e
+     depois não desfaz — a pessoa fica com a tela deslocada e tem de pinçar
+     de volta. Vale para busca, data e select; os que não recebem digitação
+     ficam de fora, e é por isso que a regra é por tipo e não por classe. */
+  .ti-busca,
+  input[type="text"].tx-inp,
+  input[type="date"].tx-inp,
+  input[type="number"].tx-inp,
+  select.tx-inp { font-size: 16px; }
+  .ti-busca { padding: .6rem .8rem; margin-bottom: .8rem; }
+
+  /* ── Chips ── */
+  .ti-chips { gap: 6px; margin-bottom: .8rem; }
+  .ti-chip { font-size: .66rem; padding: 5px 11px; }
+  .ti-it-filtros { gap: 6px; }
+  .ti-it-chip { font-size: .66rem; }
+
+  /* ── Lista de usuários ──
+     O nome e o subtítulo já truncam com reticências (min-width: 0 no
+     .ti-user-info, lá em cima). Aqui só o respiro. */
+  .ti-user { padding: .6rem .7rem; gap: 9px; }
+  .ti-user-nome { font-size: .84rem; }
+
+  /* ── Tabelas: rolam por dentro, nunca empurram a página ──
+     O overflow-x do .tx-tbl-wrap já existia; o que faltava era garantir que
+     ele não fosse ESTICADO pela tabela. `max-width: 100%` e `min-width: 0`
+     são o par que segura isso dentro de um pai flex ou grid, onde o padrão
+     `min-width: auto` faz o item crescer até caber o conteúdo — e é aí que a
+     página inteira ganha rolagem horizontal. */
+  .tx-tbl-wrap { max-width: 100%; min-width: 0; -webkit-overflow-scrolling: touch; }
+  .tx-tbl { font-size: .74rem; }
+  .tx-tbl th, .tx-tbl td { padding: .38rem .5rem; }
+  .tx-tbl th { font-size: .58rem; }
+  /* A coluna de exemplo carrega JSON: 320px dentro de uma tela de 375 come
+     a tabela toda. Encurtada, ela continua sendo a amostra que diz "o campo
+     chegou e é parecido com isto". */
+  .tx-ex { max-width: 150px; }
+
+  /* ── Histórico: a linha vira duas ──
+     Seis pedaços numa linha só (data, tipo, registros, ms, status) não cabem
+     em 375px, e o `margin-left: auto` do status jogava a mensagem de erro
+     para fora. Com wrap, o status cai para a linha de baixo, à esquerda. */
+  .tx-hist-row { flex-wrap: wrap; gap: .3rem .6rem; padding: .55rem .5rem; }
+  .tx-h-ok, .tx-h-erro { margin-left: 0; }
+  .tx-h-erro { max-width: 100%; white-space: normal; }
+
+  /* ── Movimentação do dia ──
+     Os cards já nasceram mobile-first (2 por linha até 620px) — aqui só o
+     gap e o corpo do número, que a 1.5rem estourava o card em telas de 360. */
+  .mv-cards { gap: 8px; }
+  .mv-card-num { font-size: 1.15rem; }
+  .mv-dia-row, .mv-sinal { padding: .55rem .6rem; }
+
+  /* ── KPIs de Pendências ──
+     Cinco colunas no desktop, três abaixo de 560 — e três em 375 dão 100px
+     por card, onde "PENDENTES" não cabe numa linha. Duas colunas leem. */
+  .ti-it-kpis { gap: 8px; margin-bottom: 1rem; }
+  .ti-it-kpi { padding: .6rem .5rem; }
+  .ti-it-kpi-num { font-size: 1.25rem; }
+}
+
+/* Abaixo de 480px o KPI de Pendências passa a duas colunas. Regra separada
+   porque a de 560 que já existia (três colunas) continua valendo entre 480 e
+   560 — e ela é de outro autor e de outra decisão; sobrescrevê-la de dentro
+   do bloco de 768 mudaria o comportamento num tablet em pé sem necessidade. */
+@media (max-width: 480px) {
+  .ti-it-kpis { grid-template-columns: repeat(2, 1fr); }
+}
