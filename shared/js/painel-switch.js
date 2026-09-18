@@ -36,6 +36,16 @@
     { key: 'painel-ti',  rot: 'TI',  titulo: 'Painel TI'  },
   ];
 
+  // O ADM MOBILE (/modulos/admin/) entra como painel reconhecido, e NÃO como
+  // um terceiro item do PAINEIS — item novo ali viraria um terceiro segmento
+  // em TODOS os painéis, e o desktop passaria a mostrar "ADM | TI | ADM".
+  //
+  // NO MOBILE SAI UM SEGMENTO SÓ: o TI. O cabeçalho de lá é uma .tb-right com
+  // display:flex e SEM flex-wrap, já com quatro botões e o "ao vivo" dentro
+  // (Desktop, tema, recarregar, sair). O segmento ADM seria peso morto — a
+  // pessoa já está no ADM — custando a largura que falta a 375px.
+  const ADM_MOBILE = 'admin';
+
   function injetarEstilo() {
     if (document.getElementById('painel-switch-style')) return;
     const st = document.createElement('style');
@@ -78,11 +88,21 @@
     const u = getUsuarioLogado();
     if (!u || u.perfil !== 'ADM' || u.ti !== true) return;
 
-    // Painel atual pelo caminho. Fora dos dois painéis (não deveria
+    // Painel atual pelo caminho. Fora dos painéis reconhecidos (não deveria
     // acontecer, o script só é carregado por eles) não injeta.
+    //
+    // A ORDEM DO TESTE IMPORTA: o PAINEIS vem primeiro porque '/admin/' NÃO
+    // aparece em '/modulos/painel-adm/' (ali é "-adm/", e "admin" com i e n
+    // não está na cadeia) — mas o contrário custaria caro se um dia o nome de
+    // pasta mudar, e testar o específico antes do genérico é a ordem segura.
     const path = location.pathname;
-    const atual = PAINEIS.find(p => path.indexOf('/' + p.key + '/') !== -1);
+    let atual = PAINEIS.find(p => path.indexOf('/' + p.key + '/') !== -1);
+    const noMobile = !atual && path.indexOf('/' + ADM_MOBILE + '/') !== -1;
+    if (noMobile) atual = PAINEIS[0];   // o ADM mobile É o painel ADM
     if (!atual) return;
+
+    // Um segmento no mobile (só o destino), os dois no desktop.
+    const segs = noMobile ? PAINEIS.filter(p => p.key === 'painel-ti') : PAINEIS;
 
     const raiz = (typeof caminhoRaiz === 'function') ? caminhoRaiz() : '/';
     const cx = document.createElement('div');
@@ -90,7 +110,7 @@
     cx.id = 'painel-switch';
     cx.setAttribute('role', 'group');
     cx.setAttribute('aria-label', 'Alternar painel');
-    cx.innerHTML = PAINEIS.map(p => {
+    cx.innerHTML = segs.map(p => {
       // O painel em que já se está sai como <span>, não como link: clicar
       // no que você já está aberto recarregaria a página sem motivo.
       if (p.key === atual.key) {

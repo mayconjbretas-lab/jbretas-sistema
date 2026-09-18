@@ -152,12 +152,24 @@ html:not([data-theme="light"]) body::before{
 
 /* ── TOPBAR ─────────────────────────────────────── */
 .topbar{background:var(--sf);border-bottom:1px solid var(--bd);
-  padding:env(safe-area-inset-top) 1rem 0;height:calc(52px + env(safe-area-inset-top));display:flex;align-items:center;
+  padding:env(safe-area-inset-top) 1rem 0;
+  /* min-height, não height: com altura cravada a segunda linha da .tb-right
+     (ver abaixo) desenhava FORA do cabeçalho, por cima do conteúdo. O
+     .topbar está no fluxo normal, então crescer só empurra a .main para
+     baixo — conferido: main.top acompanha o fim do header. */
+  min-height:calc(52px + env(safe-area-inset-top));display:flex;align-items:center;
   justify-content:space-between;position:relative;z-index:10;flex-shrink:0}
 .tbbrand{font-family:var(--mono);font-size:.95rem;font-weight:700;
   color:var(--ac);letter-spacing:.06em}
 .tbsub{font-size:.56rem;color:var(--tx3);letter-spacing:.14em;text-transform:uppercase}
-.tb-right{display:flex;align-items:center;gap:.4rem}
+/* ENVOLVE EM VEZ DE CORTAR. Medido a 375px com o botão TI: o .sair-btn
+   terminava em 400px — fora da tela. E SEM o TI ele já terminava em 359, a
+   16px do limite: em qualquer aparelho de 360px (linha A da Samsung, muito
+   comum) o SAIR já estava cortado hoje, antes desta mudança. Com o wrap, a
+   linha quebra e os dois cabem; acima de ~700px nada envolve, o cabeçalho
+   segue de uma linha só (conferido a 900px: 52px de altura, uma linha).
+   O justify-content mantém tudo encostado à direita nas duas linhas. */
+.tb-right{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.4rem}
 
 /* Live pill */
 .live{display:inline-flex;align-items:center;gap:5px;background:var(--acd);
