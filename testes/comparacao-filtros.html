@@ -1,0 +1,338 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparação de preços — filtros, resumo e grade</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/shared/css/comparacao.css">
+<style>
+  html, body { height: auto !important; overflow: visible !important; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); margin:10px 0; padding:8px; }
+</style>
+
+<div id="res">rodando…</div>
+<div id="palco"><div id="sl-comparacao"></div></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// A seção "Comparação de preços" da Logística ganhou filtros e mudou de
+// card. Aqui roda o comparacao-logistica.js DE PRODUÇÃO, com o CSS de
+// produção, alimentado por uma comparação de mentira montada à mão — a
+// única coisa dublada é a FONTE (buscarComparacaoDoDia), porque o pedido
+// foi explícito em não tocar na API.
+//
+//  1. A grade é vertical, com minmax(340px) e sem rolagem horizontal.
+//  2. Os cards saem em ordem ALFABÉTICA por nome do posto.
+//  3. O card traz nome + badge de bandeira + tabela
+//     COMBUSTÍVEL · NOSSO · MÉDIA · MENOR · MAIOR, com as cores pedidas.
+//  4. A BUSCA filtra por nome, ignorando acento e caixa.
+//  5. O CHIP de bandeira filtra, "Todos" volta a mostrar tudo, e os chips
+//     saem DOS DADOS (inclusive bandeiras fora da lista de cores).
+//  6. OS DOIS JUNTOS: busca + bandeira ao mesmo tempo.
+//  7. Os quatro cartões de resumo contam certo — e RECONTAM a cada filtro.
+//  8. O lápis de editar nosso preço continua achando a célula.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function carregarJS(src) {
+  return new Promise(function (ok, er) {
+    var s = document.createElement('script');
+    s.src = src;
+    s.onload = ok;
+    s.onerror = function () { er(new Error(src + ' não carregou')); };
+    document.head.appendChild(s);
+  });
+}
+
+// ── A comparação de mentira ─────────────────────────────────────
+// Um concorrente é { nome, registro:{GC,...}, desatualizado }. É a mesma
+// forma que o coletas-service entrega — o que este teste NÃO faz é inventar
+// um formato novo.
+function conc(nome, gc, et) {
+  return { nome: nome, desatualizado: false, registroOntem: null,
+           registro: { GC: gc, GA: null, ET: (et === undefined ? null : et),
+                       S10: null, S500: null, foto: null, hora: null } };
+}
+//  BARBOSA - DUDU (ALE)      nosso 5,90  · conc 6,00 / 6,20 → ABAIXO da média
+//  BRUNA (BR/Petrobras)      nosso 6,30  · conc 6,00 / 6,20 → ACIMA da média
+//  ITAPOA (Shell)            nosso 6,10  · conc 6,00 / 6,20 → empata na média
+//  JA (Ipiranga)             sem preço próprio              → não conta
+var FALSO = {
+  'BARBOSA - DUDU': {
+    proprio: { GC: 5.90, GA: 6.20, ET: 4.50, S10: null, S500: null, foto: null, hora: '08:00' },
+    proprioDesatualizado: false, diferencial_ga: 0.30,
+    concorrentes: [conc('CONC ALFA', 6.00, 4.60), conc('CONC BETA', 6.20, 4.70)],
+  },
+  'BRUNA': {
+    proprio: { GC: 6.30, GA: 6.60, ET: null, S10: null, S500: null, foto: null, hora: '08:00' },
+    proprioDesatualizado: false, diferencial_ga: 0.30,
+    concorrentes: [conc('CONC ALFA', 6.00), conc('CONC GAMA', 6.20)],
+  },
+  'ITAPOA': {
+    proprio: { GC: 6.10, GA: null, ET: null, S10: null, S500: null, foto: null, hora: '08:00' },
+    proprioDesatualizado: false, diferencial_ga: 0.30,
+    concorrentes: [conc('CONC BETA', 6.00), conc('CONC DELTA', 6.20)],
+  },
+  'JA': {
+    proprio: null, proprioDesatualizado: false, diferencial_ga: 0.30,
+    concorrentes: [conc('CONC ALFA', 6.05)],
+  },
+};
+
+// ── Dublês do que o módulo espera encontrar pronto ───────────────
+window.getUsuarioLogado = function () { return { perfil: 'LOGISTICA' }; };
+window.buscarComparacaoDoDia = function () { return Promise.resolve(FALSO); };
+window.normalizarNomePosto = function (s) { return String(s || ''); };
+// apiFetch só é chamado pelo cmpAplicarRevisoes e pelo salvamento de preço;
+// nenhum dos dois faz parte do que se está provando aqui.
+window.apiFetch = function () { return Promise.resolve({ linhas: [] }); };
+
+var host = function () { return document.getElementById('sl-comparacao'); };
+var cards = function () {
+  return Array.prototype.slice.call(host().querySelectorAll('.cl-card'));
+};
+var visiveis = function () {
+  return cards().filter(function (c) { return !c.classList.contains('cl-oculto'); });
+};
+var nomesVisiveis = function () {
+  return visiveis().map(function (c) {
+    return c.querySelector('.cl-card-nome').textContent.trim();
+  });
+};
+var num = function (chave) {
+  var n = host().querySelector('[data-' + chave + ']');
+  return n ? n.textContent.trim() : '(ausente)';
+};
+var chip = function (slug) {
+  return host().querySelector('[data-chip="' + slug + '"]');
+};
+var digitar = function (txt) {
+  var inp = host().querySelector('[data-busca]');
+  inp.value = txt;
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+};
+
+(async function () {
+  try {
+    await carregarJS('/shared/js/postos-mapa.js');
+    await carregarJS('/shared/js/comparacao-card.js');
+    await carregarJS('/shared/js/comparacao-logistica.js');
+    // O módulo se inicializa sozinho no load; um tempinho para o carregar()
+    // assíncrono terminar e pintar.
+    await esperar(200);
+
+    h3('0. A seção montou com os quatro postos do dado');
+    eh(cards().length === 4, 'quatro cards', String(cards().length), '4');
+    eh(visiveis().length === 4, 'todos visíveis sem filtro', String(visiveis().length), '4');
+
+    h3('1. Grade vertical de 340px, sem rolagem horizontal');
+    var rail = host().querySelector('.cl-rail');
+    var cs = getComputedStyle(rail);
+    eh(cs.display === 'grid', 'é grid', cs.display, 'grid');
+    eh(cs.overflowX === 'visible', 'sem overflow-x próprio', cs.overflowX, 'visible');
+    // AS LARGURAS SÃO CRAVADAS, e não herdadas do painel: o Browser pane
+    // chega a reportar innerWidth 0 quando não está sendo pintado, e aí
+    // QUALQUER grade "estoura" porque o contêiner tem 4px. Medir num palco de
+    // largura declarada é o que torna o resultado uma afirmação sobre o CSS.
+    var palco = document.getElementById('palco');
+    palco.style.width = '740px';
+    await esperar(60);
+    var c740 = getComputedStyle(rail).gridTemplateColumns.split(' ').length;
+    var estoura740 = rail.scrollWidth > rail.clientWidth + 1;
+    // A largura mínima efetiva: num palco de 740px têm de caber DUAS colunas
+    // (com o minmax de 560px cabia uma só). É a prova de que ele caiu.
+    palco.style.width = '360px';
+    await esperar(60);
+    var c360 = getComputedStyle(rail).gridTemplateColumns.split(' ').length;
+    var estoura360 = rail.scrollWidth > rail.clientWidth + 1;
+    palco.style.width = '';
+    await esperar(60);
+    eh(c740 >= 2, 'a 740px, duas colunas', String(c740), '>= 2');
+    eh(!estoura740, 'e nada além da própria largura',
+       rail.scrollWidth + ' vs ' + rail.clientWidth);
+    eh(c360 === 1, 'a 360px (celular), uma coluna', String(c360), '1');
+    eh(!estoura360, 'e a 360px ainda não rola na horizontal');
+
+    h3('2. Ordem alfabética por nome do posto');
+    nota('Era "com coleta hoje primeiro"; virou alfabético puro, como pedido.');
+    var ordem = nomesVisiveis();
+    var esperada = ordem.slice().sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
+    eh(ordem.join(' · ') === esperada.join(' · '), 'em ordem', ordem.join(' · '));
+
+    h3('3. O card: nome + badge de bandeira + tabela de 5 colunas');
+    var cBar = cards().filter(function (c) { return c.getAttribute('data-posto') === 'BARBOSA - DUDU'; })[0];
+    eh(!!cBar, 'o card do BARBOSA existe');
+    var badge = cBar.querySelector('.cl-bandeira');
+    eh(!!badge && badge.textContent.trim() === 'ALE', 'com a bandeira do MAP_POSTOS',
+       badge && badge.textContent.trim(), 'ALE');
+    eh(!!badge && badge.classList.contains('cl-b--ale'), 'e a cor da bandeira ALE',
+       badge && badge.className);
+    var bgAle = getComputedStyle(badge).backgroundColor;
+    eh(bgAle === 'rgb(250, 238, 218)', 'fundo #FAEEDA como pedido', bgAle, 'rgb(250, 238, 218)');
+    var ths = Array.prototype.slice.call(cBar.querySelectorAll('.cl-tab thead th'))
+      .map(function (t) { return t.textContent.trim(); });
+    eh(ths.join(' · ') === 'COMB. · NOSSO · MÉDIA · MENOR · MAIOR',
+       'as cinco colunas', ths.join(' · '));
+    // BARBOSA tem GC, GA e ET; ninguém tem S10/S500 → duas linhas a menos.
+    var linhasTab = cBar.querySelectorAll('.cl-tab tbody tr');
+    eh(linhasTab.length === 3, 'combustível que ninguém vende não vira linha de traços',
+       String(linhasTab.length), '3');
+
+    h3('4. As cores de NOSSO / MENOR / MAIOR');
+    // BARBOSA: nosso 5,90 < menor 6,00 → MENOR verde.
+    var tdsBar = cBar.querySelectorAll('.cl-tab tbody tr:first-child .cl-td');
+    eh(tdsBar[0].classList.contains('cl-nosso'), 'a célula NOSSO é a primeira',
+       tdsBar[0].className);
+    eh(tdsBar[0].textContent.indexOf('R$5,90') >= 0, 'com o nosso preço',
+       tdsBar[0].textContent.trim());
+    eh(tdsBar[2].classList.contains('cl-bom'),
+       'MENOR em verde quando somos o menor', tdsBar[2].className);
+    eh(!tdsBar[3].classList.contains('cl-ruim'), 'e MAIOR sem alerta', tdsBar[3].className);
+    // BRUNA: nosso 6,30 > maior 6,20 → MAIOR vermelho.
+    var cBru = cards().filter(function (c) { return c.getAttribute('data-posto') === 'BRUNA'; })[0];
+    var tdsBru = cBru.querySelectorAll('.cl-tab tbody tr:first-child .cl-td');
+    eh(tdsBru[3].classList.contains('cl-ruim'),
+       'MAIOR em vermelho quando somos o maior', tdsBru[3].className);
+    eh(!tdsBru[2].classList.contains('cl-bom'), 'e MENOR sem verde', tdsBru[2].className);
+    // A média mostrada é a mesma que o resumo usa para dizer abaixo/acima.
+    eh(tdsBru[1].textContent.trim() === 'R$6,10', 'a MÉDIA dos concorrentes',
+       tdsBru[1].textContent.trim(), 'R$6,10');
+
+    h3('5. Os cartões de resumo, sem filtro');
+    nota('abaixo = nosso < média dos concorrentes em GC; acima = nosso > média.');
+    nota('ITAPOA empata na média e não conta para nenhum lado; JA não tem preço.');
+    eh(num('r-abaixo') === '1', 'abaixo da região', num('r-abaixo'), '1');
+    eh(num('r-acima') === '1', 'acima da região', num('r-acima'), '1');
+    eh(num('r-postos') === '4', 'postos comparados', num('r-postos'), '4');
+    eh(num('r-conc') === '4', 'concorrentes distintos (ALFA aparece em 3 postos)',
+       num('r-conc'), '4');
+
+    h3('6. Os chips saem DOS DADOS');
+    var rotulos = Array.prototype.slice.call(host().querySelectorAll('[data-chip]'))
+      .map(function (c) { return c.textContent.trim(); });
+    eh(rotulos[0] === 'Todos', '"Todos" é o primeiro', rotulos[0], 'Todos');
+    eh(rotulos.join(' · ') === 'Todos · ALE · BR/Petrobras · Ipiranga · Shell',
+       'e as bandeiras dos postos carregados, em ordem', rotulos.join(' · '));
+    nota('Shell não está na lista de cores do pedido e mesmo assim vira chip —');
+    nota('só com a cor neutra. É o "qualquer outra bandeira que existir nos dados".');
+    eh(chip('shell').classList.contains('cl-b--outra'), 'Shell com a cor neutra',
+       chip('shell').className);
+    eh(chip('br-petrobras').classList.contains('cl-b--vibra'),
+       'e BR/Petrobras com a cor da Vibra (mesma distribuidora)',
+       chip('br-petrobras').className);
+
+    h3('7. A busca filtra por nome, sem acento e sem caixa');
+    digitar('bruna');
+    await esperar(30);
+    eh(nomesVisiveis().join('·') === 'P. BRUNA', 'busca "bruna"', nomesVisiveis().join('·'));
+    digitar('BRÚNA');
+    await esperar(30);
+    eh(nomesVisiveis().join('·') === 'P. BRUNA', 'busca "BRÚNA" (acento e maiúscula)',
+       nomesVisiveis().join('·'));
+    eh(num('r-postos') === '1', 'e o resumo recontou', num('r-postos'), '1');
+    digitar('zzz');
+    await esperar(30);
+    eh(visiveis().length === 0, 'busca sem resultado esconde tudo', String(visiveis().length), '0');
+    var semRes = host().querySelector('[data-sem-resultado]');
+    eh(!!semRes && !semRes.hidden, 'e avisa em vez de deixar a área muda');
+    digitar('');
+    await esperar(30);
+    eh(visiveis().length === 4, 'limpar a busca traz todos de volta',
+       String(visiveis().length), '4');
+    eh(semRes.hidden, 'e o aviso some');
+
+    h3('8. O chip de bandeira filtra');
+    chip('ipiranga').click();
+    await esperar(30);
+    eh(nomesVisiveis().join('·') === 'P. JA', 'só o posto Ipiranga', nomesVisiveis().join('·'));
+    eh(chip('ipiranga').classList.contains('on'), 'o chip fica marcado');
+    eh(num('r-postos') === '1' && num('r-conc') === '1',
+       'o resumo passa a falar só do filtrado',
+       num('r-postos') + ' postos / ' + num('r-conc') + ' concorrentes', '1 / 1');
+    eh(num('r-abaixo') === '0' && num('r-acima') === '0',
+       'e JA, sem preço próprio, não conta para nenhum lado',
+       num('r-abaixo') + ' / ' + num('r-acima'), '0 / 0');
+    chip('').click();
+    await esperar(30);
+    eh(visiveis().length === 4, '"Todos" mostra todos de novo', String(visiveis().length), '4');
+    eh(chip('').classList.contains('on'), 'e "Todos" fica marcado');
+
+    h3('9. Busca e bandeira funcionam JUNTAS');
+    chip('ale').click();
+    digitar('barbosa');
+    await esperar(30);
+    eh(nomesVisiveis().join('·') === 'P. BARBOSA - DUDU', 'ALE + "barbosa"',
+       nomesVisiveis().join('·'));
+    digitar('bruna');
+    await esperar(30);
+    eh(visiveis().length === 0, 'ALE + "bruna" não casa com ninguém (BRUNA não é ALE)',
+       String(visiveis().length), '0');
+    chip('').click();
+    await esperar(30);
+    eh(nomesVisiveis().join('·') === 'P. BRUNA', 'tirar a bandeira deixa só a busca',
+       nomesVisiveis().join('·'));
+    digitar('');
+    await esperar(30);
+
+    h3('10. Filtrar não remonta o HTML (o foco fica no campo)');
+    // É o motivo de aplicarFiltros existir: remontar a cada tecla tiraria o
+    // cursor do campo no meio da digitação.
+    var inp = host().querySelector('[data-busca]');
+    inp.focus();
+    var mesmoNo = inp;
+    digitar('p.');
+    await esperar(30);
+    eh(host().querySelector('[data-busca]') === mesmoNo,
+       'o input é o MESMO nó depois de filtrar');
+    eh(document.activeElement === mesmoNo, 'e continua com o foco');
+    digitar('');
+    await esperar(30);
+
+    h3('11. O lápis do preço próprio continua achando a célula');
+    // O cmpEditarVoce do shared troca por id `cmpm-voce-<posto>-<fuel>`; o
+    // card novo manteve esse id justamente para não quebrá-lo.
+    var alvo = document.getElementById('cmpm-voce-BARBOSA___DUDU-GC');
+    eh(!!alvo, 'a célula NOSSO tem o id que o shared procura',
+       alvo ? alvo.id : '(ausente)');
+    eh(!!alvo && !!alvo.querySelector('.cmpm-pen'), 'e o lápis está nela');
+    cmpEditarVoce('BARBOSA - DUDU', 'GC');
+    await esperar(30);
+    eh(!!document.getElementById('cmpm-inp-BARBOSA___DUDU-GC'),
+       'clicar no lápis abre o input de edição');
+
+    h3('12. O botão "Solicitar alteração" segue no card');
+    eh(!!cBar.querySelector('[data-solicitar]'), 'o botão existe');
+    cBar.querySelector('[data-solicitar]').click();
+    await esperar(60);
+    var form = cBar.querySelector('[data-form]');
+    eh(!!form && !form.hidden && !!form.querySelector('.cl-sel'),
+       'e abre o formulário de sempre', form ? form.innerHTML.slice(0, 40) : '(nada)');
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — Comparação filtros';
+})();
+</script>

@@ -40,6 +40,24 @@
   let _carregando = false;
   let _timer = null;
 
+  // ════════ ESTADO DOS FILTROS ════════
+  // Em memória do módulo, como o resto desta tela: a recarga automática de 5
+  // minutos redesenha a seção inteira, e sem isto ela apagaria a busca que a
+  // pessoa acabou de digitar. Recarregar a PÁGINA devolve tudo ao padrão, que
+  // é o certo — filtro é estado de uma consulta, não preferência gravada.
+  let _busca = '';         // texto cru do campo (normalizado na comparação)
+  let _bandeira = '';      // '' = Todos; senão o slug da bandeira
+  // A lista já preparada da última renderização, para filtrar e recontar sem
+  // remontar o HTML (e sem tirar o foco do campo de busca a cada tecla).
+  let _itens = [];
+
+  // O combustível de referência dos cartões de resumo. É o mesmo GC que o
+  // CMP_OPCOES congela como fuel ativo — a gasolina comum é o preço que
+  // governa a tabela de rua, e é sobre ele que "abaixo/acima da região" diz
+  // alguma coisa. Trocar aqui troca só o resumo; a tabela do card mostra
+  // todos os combustíveis de qualquer jeito.
+  const FUEL_RESUMO = 'GC';
+
   function ehLogistica() {
     try { return (getUsuarioLogado() || {}).perfil === 'LOGISTICA'; }
     catch (e) { return false; }
@@ -49,6 +67,47 @@
   const esc = (s) => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+  // ════════ BANDEIRAS ════════
+  // A bandeira sai do MAP_POSTOS (campo `banda`), que é dado ESTÁTICO deste
+  // repositório — nenhuma chamada nova à API entrou por causa dos filtros
+  // (item 5: não alterar a fonte de dados).
+  //
+  // OS NOMES DO PEDIDO NÃO SÃO OS NOMES DO DADO. O pedido cita Ipiranga,
+  // Vibra, Rio Branco e Ale; o MAP_POSTOS traz "Ipiranga", "Shell",
+  // "BR/Petrobras", "Rede Flex", "Bandeira Branca" e "ALE". Vibra é o nome
+  // novo da BR — mesma distribuidora, mesma cor, e por isso as duas grafias
+  // caem na mesma entrada. "Rio Branco" fica registrada e acende sozinha se
+  // um dia aparecer no dado. Shell, Rede Flex e Bandeira Branca usam a cor
+  // neutra: inventar uma cor para elas seria inventar dado.
+  //
+  // O CHIP, PORÉM, NÃO DEPENDE DESTA LISTA. Os chips saem das bandeiras que
+  // existem nos postos carregados ("e qualquer outra bandeira que existir nos
+  // dados"), então uma bandeira nova aparece como filtro no mesmo dia em que
+  // entra no MAP_POSTOS — só sem cor própria até alguém acrescentá-la aqui.
+  const BANDEIRA_COR = {
+    'ipiranga': 'ip',
+    'vibra': 'vibra', 'br-petrobras': 'vibra', 'br': 'vibra', 'petrobras': 'vibra',
+    'rio-branco': 'riobranco',
+    'ale': 'ale',
+  };
+
+  // Sem acento, minúsculo, separadores virando '-': "BR/Petrobras" →
+  // "br-petrobras". Serve para a cor da bandeira E para a busca por nome.
+  function slug(s) {
+    return String(s == null ? '' : s)
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase().trim()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+  // Busca: mesma normalização, mas sem trocar espaço por '-' — digitar
+  // "santa ines" tem de casar com "P. SANTA INES MINAS".
+  function semAcento(s) {
+    return String(s == null ? '' : s)
+      .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  }
+  const corBandeira = (nome) => BANDEIRA_COR[slug(nome)] || 'outra';
+  const nomeBandeira = (posto) => (posto && posto.banda) ? posto.banda : 'Sem bandeira';
 
   // Preço "6,19" a partir de número; '' quando não há valor.
   const precoInput = (v) => (v === null || v === undefined || isNaN(v))
@@ -78,64 +137,251 @@
     render();
   }
 
-  // Postos na ordem pedida: com coleta própria HOJE primeiro (alfabético),
-  // depois os sem coleta (alfabético). `proprioDesatualizado` é o que o
-  // coletas-service usa para dizer "este dado não é de hoje".
+  // ════════ ORDEM: ALFABÉTICA, E SÓ ════════
+  // Era "com coleta de hoje primeiro, depois os sem coleta, cada grupo em
+  // ordem alfabética". Virou alfabético puro, como pedido (item 3) — e com a
+  // ordem estável a pessoa acha o posto pelo nome em vez de caçá-lo num
+  // agrupamento que muda de um dia para o outro. O que se perde é o destaque
+  // automático de quem coletou hoje; quem procura por isso tem a busca e os
+  // cartões de resumo, e o card sem coleta continua se identificando sozinho.
   function postosOrdenados() {
     const comMapa = (typeof MAP_POSTOS !== 'undefined') ? MAP_POSTOS : [];
-    const lista = comMapa
+    return comMapa
       .filter(p => _comp && _comp[p.k])
-      .map(p => ({ posto: p, dado: _comp[p.k] }));
-    const temHoje = (d) => !!(d && d.proprio && !d.proprioDesatualizado);
-    return lista.sort((a, b) => {
-      const ta = temHoje(a.dado) ? 0 : 1;
-      const tb = temHoje(b.dado) ? 0 : 1;
-      if (ta !== tb) return ta - tb;
-      return a.posto.ap.localeCompare(b.posto.ap);
-    });
+      .map(p => ({
+        posto: p,
+        dado: _comp[p.k],
+        nomeBusca: semAcento(p.ap),
+        bandeira: nomeBandeira(p),
+        bandSlug: slug(nomeBandeira(p)),
+      }))
+      .sort((a, b) => a.posto.ap.localeCompare(b.posto.ap, 'pt-BR'));
   }
+
+  // ── Filtros ─────────────────────────────────────────────────────
+  // Busca e bandeira valem JUNTAS: um item precisa passar nas duas.
+  function passa(item) {
+    if (_bandeira && item.bandSlug !== _bandeira) return false;
+    if (_busca && item.nomeBusca.indexOf(_busca) === -1) return false;
+    return true;
+  }
+
+  // Preço próprio de um combustível, já com o overlay de revisão aplicado.
+  function proprioDe(dado, f) {
+    const v = dado && dado.proprio ? dado.proprio[f] : null;
+    return (v === null || v === undefined) ? null : Number(v);
+  }
+
+  // "Abaixo/acima da região" = nosso preço contra a MÉDIA dos concorrentes
+  // daquele posto no combustível de referência — exatamente a coluna MÉDIA
+  // que o card mostra, para o número do resumo e o número da tabela não
+  // poderem discordar. Posto sem preço próprio ou sem concorrente não conta
+  // para nenhum dos dois lados: ele não está comparado, está ausente.
+  // A folga de meio centavo evita que arredondamento conte um empate como
+  // diferença.
+  function ladoDaRegiao(dado) {
+    const nosso = proprioDe(dado, FUEL_RESUMO);
+    const st = (typeof cmpStatsFuel === 'function') ? cmpStatsFuel(dado, FUEL_RESUMO) : null;
+    if (nosso === null || !st) return 0;
+    if (nosso < st.avg - 0.005) return -1;
+    if (nosso > st.avg + 0.005) return 1;
+    return 0;
+  }
+
+  function resumoDe(itens) {
+    let abaixo = 0, acima = 0;
+    const conc = new Set();
+    itens.forEach(({ dado }) => {
+      const l = ladoDaRegiao(dado);
+      if (l < 0) abaixo++; else if (l > 0) acima++;
+      // Contagem por NOME: o mesmo concorrente aparece na lista de vários
+      // postos vizinhos, e somar as listas contaria a bandeira da esquina
+      // três vezes.
+      (dado.concorrentes || []).forEach(c => { if (c && c.nome) conc.add(c.nome); });
+    });
+    return { abaixo, acima, postos: itens.length, concorrentes: conc.size };
+  }
+
+  // Aplica os filtros SEM REMONTAR O HTML: esconde os cards que não passam e
+  // reescreve só os números. Remontar a cada tecla tiraria o foco do campo de
+  // busca (e fecharia um formulário de solicitação aberto no meio da lista).
+  function aplicarFiltros(el) {
+    const raiz = el || host();
+    if (!raiz) return;
+    const visiveis = [];
+    _itens.forEach(item => {
+      const card = raiz.querySelector('.cl-card[data-posto="' + cssEsc(item.posto.k) + '"]');
+      const ok = passa(item);
+      if (ok) visiveis.push(item);
+      if (card) card.classList.toggle('cl-oculto', !ok);
+    });
+    const r = resumoDe(visiveis);
+    const por = (sel, txt) => { const n = raiz.querySelector(sel); if (n) n.textContent = txt; };
+    por('[data-r-abaixo]', String(r.abaixo));
+    por('[data-r-acima]', String(r.acima));
+    por('[data-r-postos]', String(r.postos));
+    por('[data-r-conc]', String(r.concorrentes));
+    raiz.querySelectorAll('[data-chip]').forEach(c => {
+      c.classList.toggle('on', c.getAttribute('data-chip') === _bandeira);
+    });
+    const vazio = raiz.querySelector('[data-sem-resultado]');
+    if (vazio) vazio.hidden = visiveis.length > 0;
+  }
+
+  // Aspas e barras invertidas escapadas para entrar num seletor de atributo.
+  // As chaves do MAP_POSTOS não têm nenhuma das duas hoje ("BARBOSA - DUDU" é
+  // o pior caso), mas o seletor quebraria em silêncio se um dia tivessem.
+  function cssEsc(s) { return String(s == null ? '' : s).replace(/(["\\])/g, '\\$1'); }
 
   // ── Render ──────────────────────────────────────────────────────
   function render() {
     const el = host();
     if (!el) return;
 
-    const itens = postosOrdenados();
-    const comColeta = itens.filter(i => i.dado.proprio && !i.dado.proprioDesatualizado).length;
+    _itens = postosOrdenados();
+    const comColeta = _itens.filter(i => i.dado.proprio && !i.dado.proprioDesatualizado).length;
 
-    // O CARROSSEL SAIU e com ele a preservação do scrollLeft, que existia
-    // para a recarga de 5 min não jogar a pessoa de volta ao primeiro posto.
-    // Numa grade vertical não há scroll lateral a preservar — e o vertical é
-    // do PAINEL, não deste elemento, então o redesenho já não o move.
+    // Bandeiras DOS DADOS, alfabéticas. Uma bandeira que suma do MAP_POSTOS
+    // some do filtro sozinha; uma nova aparece sozinha.
+    const bandeiras = [];
+    const vistas = {};
+    _itens.forEach(i => {
+      if (vistas[i.bandSlug]) return;
+      vistas[i.bandSlug] = true;
+      bandeiras.push({ nome: i.bandeira, slug: i.bandSlug });
+    });
+    bandeiras.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    // Se a bandeira filtrada sumiu dos dados (posto removido, coleta que não
+    // veio), o filtro volta para Todos em vez de deixar a tela vazia sem
+    // explicação.
+    if (_bandeira && !vistas[_bandeira]) _bandeira = '';
+
+    const chips = '<button type="button" class="cl-chip cl-chip--todos" data-chip="">Todos</button>' +
+      bandeiras.map(b =>
+        '<button type="button" class="cl-chip cl-b--' + esc(corBandeira(b.nome)) +
+          '" data-chip="' + esc(b.slug) + '">' + esc(b.nome) + '</button>').join('');
 
     const cabecalho =
       '<div class="cl-head">' +
         '<span class="cl-h1">Comparação de preços · hoje</span>' +
-        '<span class="cl-count">' + (itens.length
+        '<span class="cl-count">' + (_itens.length
           ? esc(comColeta + ' posto' + (comColeta === 1 ? '' : 's') + ' com coleta')
           : 'Sem coletas hoje') + '</span>' +
         '<button type="button" class="cl-reload" data-recarregar title="Recarregar">↻</button>' +
       '</div>';
 
-    if (!itens.length) {
+    if (!_itens.length) {
       el.innerHTML = cabecalho + '<div class="cl-vazio">Sem coletas hoje.</div>';
       ligar(el);
       return;
     }
 
-    el.innerHTML = cabecalho +
-      '<div class="cl-rail">' + itens.map(cardHtml).join('') + '</div>';
+    const filtros =
+      '<div class="cl-filtros">' +
+        '<input type="search" class="cl-busca" data-busca placeholder="Buscar posto…"' +
+          ' value="' + esc(_busca) + '" autocomplete="off" spellcheck="false">' +
+        '<div class="cl-chips">' + chips + '</div>' +
+      '</div>';
+
+    // Os quatro números saem VAZIOS daqui e quem os escreve é o
+    // aplicarFiltros, logo abaixo: um caminho só para contar, em vez de uma
+    // contagem na montagem e outra no filtro que poderiam divergir.
+    const resumo =
+      '<div class="cl-resumo">' +
+        cardResumo('abaixo', 'Abaixo da região', 'r-abaixo') +
+        cardResumo('acima', 'Acima da região', 'r-acima') +
+        cardResumo('neutro', 'Postos comparados', 'r-postos') +
+        cardResumo('neutro', 'Concorrentes', 'r-conc') +
+      '</div>';
+
+    el.innerHTML = cabecalho + filtros + resumo +
+      '<div class="cl-rail">' + _itens.map(cardHtml).join('') + '</div>' +
+      '<div class="cl-vazio" data-sem-resultado hidden>Nenhum posto com esses filtros.</div>';
 
     ligar(el);
+    aplicarFiltros(el);
   }
 
-  function cardHtml({ posto, dado }) {
-    // Mesma chamada que o admin faz: (posto, dado, pos, opcoes). `pos` é null
-    // porque aqui não há ordenação por preço — no admin ele só vem preenchido
-    // com o ranking ligado.
-    const matriz = cmpCardMatriz(posto, dado, null, CMP_OPCOES);
+  function cardResumo(tom, rotulo, chave) {
+    return '<div class="cl-kpi cl-kpi--' + tom + '">' +
+      '<div class="cl-kpi-num" data-' + chave + '>–</div>' +
+      '<div class="cl-kpi-lbl">' + esc(rotulo) + '</div>' +
+    '</div>';
+  }
+
+  // ════════ O CARD ════════
+  // NÃO É MAIS O cmpCardMatriz. Aquele card é uma MATRIZ (uma linha por
+  // concorrente, cinco colunas de combustível) e a tabela dele tem
+  // `min-width: 580px` — numa grade de 340px ele voltaria a rolar na
+  // horizontal, que é justamente o que se tirou desta tela. Aqui o card é o
+  // RESUMO pedido: nosso preço contra média/menor/maior da região, uma linha
+  // por combustível.
+  //
+  // O QUE ISSO CUSTA: os preços de CADA concorrente, um a um, não aparecem
+  // mais nesta tela. Eles continuam na aba Coleta e no painel ADM, que usam o
+  // cmpCardMatriz intocado — nenhuma outra tela mudou.
+  //
+  // O LÁPIS CONTINUA FUNCIONANDO, e é por isso que a célula "NOSSO" guarda o
+  // id `cmpm-voce-<posto>-<fuel>` e a classe `.cmpm-voce`: é por esse id que o
+  // cmpEditarVoce do shared troca a célula pelo input, sem saber que o card em
+  // volta mudou.
+  function cardHtml(item) {
+    const { posto, dado } = item;
+    const idk = idSafe(posto.k);
+    const kSafe = String(posto.k).replace(/'/g, "\\'");
+
+    const linhas = CMP_FUELS_CARD.map(f => {
+      const nosso = proprioDe(dado, f.key);
+      const st = (typeof cmpStatsFuel === 'function') ? cmpStatsFuel(dado, f.key) : null;
+      // Combustível que ninguém vende (nem nós nem os vizinhos coletados) não
+      // vira linha de traços — vira nada.
+      if (nosso === null && !st) return '';
+
+      const tdNosso = nosso === null
+        ? '<td class="cl-td cl-na" id="cmpm-voce-' + idk + '-' + f.key + '">—</td>'
+        : '<td class="cl-td cl-nosso cmpm-voce" id="cmpm-voce-' + idk + '-' + f.key + '">' +
+            '<span class="cmpm-preco">' + esc(fmtBRL(nosso)) + '</span>' +
+            ' <span class="cmpm-pen" title="Editar nosso preço"' +
+              ' onclick="cmpEditarVoce(&#39;' + esc(kSafe) + '&#39;,&#39;' + f.key + '&#39;)">✏️</span>' +
+          '</td>';
+
+      // Verde no MENOR quando já somos o menor (ou empatamos com ele) e
+      // vermelho no MAIOR quando já somos o maior: o alerta fica na ponta que
+      // a pessoa precisa ver.
+      const cMenor = (nosso !== null && st && nosso <= st.min + 0.005) ? ' cl-bom' : '';
+      const cMaior = (nosso !== null && st && nosso >= st.max - 0.005) ? ' cl-ruim' : '';
+      const cel = (v, cls) => (v === null || v === undefined)
+        ? '<td class="cl-td cl-na">—</td>'
+        : '<td class="cl-td' + cls + '">' + esc(fmtBRL(v)) + '</td>';
+
+      return '<tr>' +
+        '<th class="cl-th-comb" title="' + esc(f.nome) + '">' + esc(f.btn) + '</th>' +
+        tdNosso +
+        cel(st ? st.avg : null, '') +
+        cel(st ? st.min : null, cMenor) +
+        cel(st ? st.max : null, cMaior) +
+      '</tr>';
+    }).join('');
+
+    const tabela = linhas
+      ? '<table class="cl-tab">' +
+          '<thead><tr><th class="cl-th-comb">COMB.</th><th>NOSSO</th>' +
+            '<th>MÉDIA</th><th>MENOR</th><th>MAIOR</th></tr></thead>' +
+          '<tbody>' + linhas + '</tbody>' +
+        '</table>'
+      : '<div class="cl-sem-preco">Sem preço coletado hoje.</div>';
+
+    const selo = (dado.proprioDesatualizado && typeof seloDesatualizado === 'function')
+      ? seloDesatualizado(dado.proprio) : '';
+
     return '<div class="cl-card" data-posto="' + esc(posto.k) + '">' +
-      matriz +
+      '<div class="cl-card-hd">' +
+        '<span class="cl-card-nome">' + esc(posto.ap) + selo + '</span>' +
+        '<span class="cl-bandeira cl-b--' + esc(corBandeira(item.bandeira)) + '">' +
+          esc(item.bandeira) + '</span>' +
+      '</div>' +
+      tabela +
       cmpFotosHtml(posto, dado) +
       '<div class="cl-rodape">' +
         '<button type="button" class="cl-btn-sol" data-solicitar="' + esc(posto.k) + '">Solicitar alteração</button>' +
@@ -282,8 +528,17 @@
   // ── Eventos (delegação: o innerHTML troca os filhos, não o host) ──
   function ligar(el) {
     if (el._clLigado) return;
+    // 'input' e nao 'keyup': pega colar, limpar pelo x do type=search e
+    // autocompletar, que o keyup deixa passar.
+    el.addEventListener('input', (e) => {
+      if (!e.target.closest('[data-busca]')) return;
+      _busca = semAcento(e.target.value);
+      aplicarFiltros(el);
+    });
     el.addEventListener('click', (e) => {
       if (e.target.closest('[data-recarregar]')) { carregar(); return; }
+      const chip = e.target.closest('[data-chip]');
+      if (chip) { _bandeira = chip.getAttribute('data-chip') || ''; aplicarFiltros(el); return; }
       const card = e.target.closest('.cl-card');
       if (!card) return;
       const k = card.getAttribute('data-posto');

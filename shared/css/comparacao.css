@@ -149,26 +149,17 @@
 /* ════════ GRADE VERTICAL, NÃO CARROSSEL ════════
    Era `display:flex` + `overflow-x:auto` + scroll-snap: os postos ficavam
    numa faixa que rolava para o lado, e ver o 20º exigia arrastar por 19.
-   Rolagem horizontal também perde o lugar na vertical — a pessoa desce, vai
-   para o lado, e não sabe mais onde estava.
-
    Agora é grade: os cards ficam lado a lado enquanto couberem e a PÁGINA
    desce. Sem scroll horizontal em nenhum tamanho de tela.
 
-   `auto-fill` com `minmax(560px, 1fr)` E NÃO `repeat(2, 1fr)`: a tabela
-   dentro do card tem `min-width: 580px` (ver .cmpm-table no topo deste
-   arquivo), então duas colunas cravadas espremeriam o card abaixo do que ele
-   aceita e devolveriam a rolagem horizontal pela porta dos fundos — que é
-   justamente o que se está tirando. Com minmax dá DUAS por linha onde há
-   largura (a partir de ~1.150px de área útil) e uma onde não há, sem nunca
-   estourar. Num monitor grande pode dar três, e isso é bom.
-
-   `align-items: start` para o card curto não esticar até a altura do vizinho
-   mais alto: eles têm conteúdo de tamanhos diferentes (posto com foto,
-   posto sem coleta) e esticar criaria vão morto dentro do card. */
+   O MÍNIMO CAIU DE 560px PARA 340px, e isso só é possível porque o card
+   mudou junto. Com o cmpCardMatriz dentro (tabela de `min-width: 580px`)
+   uma célula de 340px estouraria e devolveria a rolagem horizontal pela
+   porta dos fundos; o card de resumo desta tela tem cinco colunas curtas e
+   cabe. Em tela larga dá duas ou três colunas, no celular dá uma. */
 .cl-rail {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   align-items: start;
   gap: 12px;
   padding: 4px 2px 10px;
@@ -176,6 +167,135 @@
 /* min-width: 0 é o que permite o card encolher dentro da célula da grade —
    sem ele, o conteúdo largo empurra a coluna e a grade transborda. */
 .cl-card { min-width: 0; }
+/* Filtrado para fora: `display:none` e não `visibility`, para o card não
+   deixar um buraco na grade. */
+.cl-card.cl-oculto { display: none; }
+
+/* ════════ FILTROS ════════
+   Busca e chips na MESMA linha em tela larga e empilhados no celular — é o
+   que o `flex-wrap` resolve sozinho, sem media query: quando o campo de
+   busca e a fila de chips não cabem juntos, a fila desce inteira. */
+.cl-filtros {
+  display: flex; align-items: center; flex-wrap: wrap; gap: .5rem;
+  margin: 0 0 .6rem;
+}
+.cl-busca {
+  flex: 0 1 240px; min-width: 150px;
+  background: var(--sf2); border: 1px solid var(--bd); border-radius: 8px;
+  color: var(--tx); font-family: var(--mono); font-size: .74rem;
+  padding: 5px 9px; outline: none;
+}
+.cl-busca:focus { border-color: var(--ac); }
+.cl-busca::placeholder { color: var(--tx3); }
+.cl-chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+.cl-chip {
+  border: 1px solid var(--bd); border-radius: 999px;
+  background: var(--sf2); color: var(--tx2);
+  font-family: var(--mono); font-size: .68rem; font-weight: 700;
+  padding: 4px 11px; cursor: pointer; white-space: nowrap;
+}
+.cl-chip:hover { border-color: var(--ac); }
+/* O chip LIGADO ganha contorno, não troca de cor: a cor dele já é a cor da
+   bandeira, e trocá-la no estado ativo apagaria justamente a informação que
+   o chip carrega. */
+.cl-chip.on { border-color: var(--ac); box-shadow: inset 0 0 0 1px var(--ac); }
+
+/* ════════ CARTÕES DE RESUMO ════════
+   auto-fit com mínimo pequeno: quatro em linha no desktop, dois e dois no
+   celular, sem media query. */
+.cl-resumo {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 8px; margin: 0 0 .7rem;
+}
+.cl-kpi {
+  background: var(--sf); border: 1px solid var(--bd); border-radius: var(--rl);
+  padding: .5rem .7rem;
+}
+.cl-kpi-num { font-family: var(--mono); font-size: 1.25rem; font-weight: 700; line-height: 1.1; color: var(--tx); }
+.cl-kpi-lbl { font-family: var(--mono); font-size: .62rem; color: var(--tx2); margin-top: 2px; }
+.cl-kpi--abaixo .cl-kpi-num { color: var(--ok); }
+.cl-kpi--acima  .cl-kpi-num { color: var(--dg); }
+
+/* ════════ O CARD ════════
+   O card NÃO usa mais o .region-card do painel-adm (que nem chega a ser
+   carregado na Logística — o index.html dela não linka o painel-adm.css, e
+   por isso o card vinha sem moldura nenhuma). A moldura agora é dele. */
+.cl-card {
+  background: var(--sf); border: 1px solid var(--bd); border-radius: var(--rl);
+  padding: .7rem .8rem;
+}
+.cl-card-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .5rem; margin-bottom: .45rem;
+}
+.cl-card-nome {
+  font-family: var(--mono); font-size: .78rem; font-weight: 700; color: var(--tx);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cl-bandeira {
+  flex: 0 0 auto;
+  font-family: var(--mono); font-size: .6rem; font-weight: 700;
+  padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+}
+
+/* ════════ CORES DE BANDEIRA ════════
+   Os quatro pares vieram do pedido. Eles são claros (fundo pastel, texto
+   escuro) e foram pensados para o tema CLARO; no tema escuro, que é o
+   padrão do sistema, um fundo pastel com texto escuro continua legível —
+   vira uma pastilha clara sobre o card escuro, que é como um selo de
+   bandeira se parece de verdade. Por isso valem nos dois temas, sem
+   variante.
+   A cor entra pela CLASSE (.cl-b--ip etc.), calculada no JS a partir do
+   nome da bandeira; bandeira sem cor própria cai em .cl-b--outra. */
+.cl-b--ip        { background: #E1F5EE; color: #085041; }
+.cl-b--vibra     { background: #E6F1FB; color: #185FA5; }
+.cl-b--riobranco { background: #FCEBEB; color: #791F1F; }
+.cl-b--ale       { background: #FAEEDA; color: #633806; }
+.cl-b--outra     { background: var(--sf2); color: var(--tx2); }
+/* O chip repete a cor da bandeira, mas com a borda do tema para não virar
+   um bloco de cor sólido na barra de filtros. */
+.cl-chip.cl-b--ip, .cl-chip.cl-b--vibra,
+.cl-chip.cl-b--riobranco, .cl-chip.cl-b--ale { border-color: transparent; }
+
+/* ════════ A TABELA DO CARD ════════
+   Sem min-width: é ela que permite a grade de 340px. As colunas de preço
+   têm largura igual para os números alinharem entre as linhas. */
+.cl-tab { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.cl-tab thead th {
+  font-family: var(--mono); font-size: .56rem; font-weight: 700;
+  letter-spacing: .04em; color: var(--tx3); text-transform: uppercase;
+  text-align: right; padding: 0 0 3px; border-bottom: 1px solid var(--bd);
+}
+.cl-tab thead th.cl-th-comb { text-align: left; }
+.cl-th-comb {
+  font-family: var(--mono); font-size: .66rem; font-weight: 700;
+  color: var(--tx2); text-align: left; padding: 3px 4px 3px 0; width: 22%;
+}
+.cl-td {
+  font-family: var(--mono); font-size: .7rem; text-align: right;
+  color: var(--tx2); padding: 3px 0; white-space: nowrap;
+}
+.cl-tab tbody tr + tr .cl-td, .cl-tab tbody tr + tr .cl-th-comb {
+  border-top: 1px solid var(--accent-dim2);
+}
+.cl-na { color: var(--tx3); opacity: .5; }
+
+/* NOSSO preço: verde e peso 500, como pedido. O #0F6E56 é escuro demais
+   sobre o fundo azul-marinho do tema escuro, então o tema escuro usa o
+   mesmo verde do resto do sistema (--ok) e o claro usa o hex pedido. Os
+   dois dizem a mesma coisa; trocar só o tom é o preço de o texto ser
+   legível nos dois. */
+.cl-nosso .cmpm-preco { color: var(--ok); font-weight: 500; width: auto; }
+html[data-theme="light"] .cl-nosso .cmpm-preco { color: #0F6E56; }
+
+/* MENOR em verde quando já somos o menor; MAIOR em vermelho quando já somos
+   o maior. Mesmo motivo do NOSSO para o tom no tema escuro. */
+.cl-bom  { color: var(--ok); font-weight: 700; }
+.cl-ruim { color: var(--dg); font-weight: 700; }
+html[data-theme="light"] .cl-bom  { color: #0F6E56; }
+html[data-theme="light"] .cl-ruim { color: #A32D2D; }
+
+.cl-sem-preco { font-family: var(--mono); font-size: .68rem; color: var(--tx3); padding: .4rem 0; }
 
 .cl-rodape { margin-top: 8px; }
 .cl-btn-sol { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
@@ -202,6 +322,8 @@
 
 /* A regra que empilhava no mobile SAIU: ela existia para desfazer o carrossel
    horizontal em tela estreita, e o carrossel não existe mais. O
-   `auto-fill`/`minmax` já entrega uma coluna quando não cabem duas, em
-   qualquer largura — inclusive abaixo de 560px, onde a única coluna fica com
-   a largura disponível e o conteúdo do card rola dentro dele se precisar. */
+   `auto-fill`/`minmax(340px, 1fr)` já entrega uma coluna quando não cabem
+   duas, em qualquer largura — e abaixo de 340px a única coluna encolhe com a
+   tela, porque a tabela do card não tem mais largura mínima. Os filtros
+   empilham pelo `flex-wrap` da .cl-filtros. Nenhuma media query é
+   necessária, e é por isso que não há nenhuma aqui. */
