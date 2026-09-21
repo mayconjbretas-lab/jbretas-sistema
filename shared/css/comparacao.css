@@ -146,8 +146,36 @@
 .cl-reload:hover { color: var(--accent); border-color: var(--accent); }
 .cl-vazio { font-family: var(--mono); font-size: .74rem; color: var(--text3); padding: .8rem 0; }
 
-.cl-rail { display: flex; gap: 12px; overflow-x: auto; padding: 4px 2px 10px; scroll-snap-type: x mandatory; }
-.cl-card { flex: 0 0 auto; scroll-snap-align: start; }
+/* ════════ GRADE VERTICAL, NÃO CARROSSEL ════════
+   Era `display:flex` + `overflow-x:auto` + scroll-snap: os postos ficavam
+   numa faixa que rolava para o lado, e ver o 20º exigia arrastar por 19.
+   Rolagem horizontal também perde o lugar na vertical — a pessoa desce, vai
+   para o lado, e não sabe mais onde estava.
+
+   Agora é grade: os cards ficam lado a lado enquanto couberem e a PÁGINA
+   desce. Sem scroll horizontal em nenhum tamanho de tela.
+
+   `auto-fill` com `minmax(560px, 1fr)` E NÃO `repeat(2, 1fr)`: a tabela
+   dentro do card tem `min-width: 580px` (ver .cmpm-table no topo deste
+   arquivo), então duas colunas cravadas espremeriam o card abaixo do que ele
+   aceita e devolveriam a rolagem horizontal pela porta dos fundos — que é
+   justamente o que se está tirando. Com minmax dá DUAS por linha onde há
+   largura (a partir de ~1.150px de área útil) e uma onde não há, sem nunca
+   estourar. Num monitor grande pode dar três, e isso é bom.
+
+   `align-items: start` para o card curto não esticar até a altura do vizinho
+   mais alto: eles têm conteúdo de tamanhos diferentes (posto com foto,
+   posto sem coleta) e esticar criaria vão morto dentro do card. */
+.cl-rail {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
+  align-items: start;
+  gap: 12px;
+  padding: 4px 2px 10px;
+}
+/* min-width: 0 é o que permite o card encolher dentro da célula da grade —
+   sem ele, o conteúdo largo empurra a coluna e a grade transborda. */
+.cl-card { min-width: 0; }
 
 .cl-rodape { margin-top: 8px; }
 .cl-btn-sol { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
@@ -172,9 +200,8 @@
 .cl-form-msg.on { display: block; }
 .cl-form-erro { font-family: var(--mono); font-size: .68rem; color: var(--text3); }
 
-/* Empilha no mobile: a Logística é o único módulo desktop, mas a aba abre em
-   telas menores e o carrossel horizontal esconderia metade dos postos. */
-@media (max-width: 899px) {
-  .cl-rail { flex-direction: column; }
-  .cl-card { width: 100%; }
-}
+/* A regra que empilhava no mobile SAIU: ela existia para desfazer o carrossel
+   horizontal em tela estreita, e o carrossel não existe mais. O
+   `auto-fill`/`minmax` já entrega uma coluna quando não cabem duas, em
+   qualquer largura — inclusive abaixo de 560px, onde a única coluna fica com
+   a largura disponível e o conteúdo do card rola dentro dele se precisar. */

@@ -129,8 +129,40 @@ html, body { height: 100%; overflow: hidden; }
   flex: 1; min-height: 0; display: flex; flex-direction: column;
   overflow: hidden; padding: 1.25rem; gap: 1rem;
 }
-.view-panel { display: none; flex-direction: column; min-height: 0; height: 100%; overflow: hidden; }
+/* ════════ REGRA GERAL: CONTEÚDO CRESCE, O PAINEL ROLA ════════
+   Era `overflow: hidden`, e o efeito disso não era esconder um detalhe: era
+   a aba INTEIRA parar de mostrar o que passasse da altura da tela, sem barra
+   de rolagem nenhuma. Quem tinha histórico longo em Alteração de Preços só
+   via o resto DIMINUINDO A JANELA — o navegador reflowava e cabia mais.
+
+   Por que ficou assim: a Logística é um app de altura travada (html/body com
+   overflow:hidden e #screen-app de 100vh — ver o topo deste arquivo), e cada
+   aba precisava criar o próprio scroller. Matriz criou (.grade-scroll),
+   Escala criou (.esc-body), KPI ganhou um depois, Custo traz o dele
+   (.cm-wrap). Alteração de Preços nunca teve, e por isso era a que sumia.
+
+   AGORA O PADRÃO É ROLAR. Quem já tem scroller interno não muda nada: o
+   filho é flex-constrained (flex:1 + min-height:0), então o painel nunca
+   transborda e a barra não aparece. Quem não tem passa a rolar sozinho. Aba
+   nova nasce certa sem ninguém lembrar desta regra.
+
+   `overflow: auto` e NÃO `overflow-y: auto` com `overflow-x: hidden`: cortar
+   o horizontal esconderia conteúdo largo de verdade (uma tabela de Custo &
+   Margem, por exemplo) em vez de dar como alcançá-lo. O CSS também força o
+   eixo x para auto quando o y é auto, então `overflow-x: hidden` aqui não
+   seria respeitado do jeito que parece. O lugar de resolver largura é a
+   própria lista — que é o que a Comparação passou a fazer, com grade em vez
+   de carrossel. */
+.view-panel { display: none; flex-direction: column; min-height: 0; height: 100%; overflow: auto; }
 .view-panel.active { display: flex; }
+
+/* A MATRIZ É A EXCEÇÃO, e por um motivo concreto: o cabeçalho sticky da
+   tabela precisa de um contêiner de rolagem PRÓPRIO (.spreadsheet-frame).
+   Com o painel rolando também, o thead grudaria no topo do painel e não no
+   da tabela — ou seja, rolaria junto e deixaria de ser sticky. Ela já
+   resolve a própria altura; aqui só se garante que o padrão novo não a
+   alcance. (Pedido explícito: não mexer na Matriz/Medição.) */
+#tab-matriz.view-panel { overflow: hidden; }
 
 /* A aba KPI usa o renderKpi() compartilhado, cuja raiz .kpi-wrap não tem
    scroller próprio — no painel-adm quem rola é a página. Na Logística o

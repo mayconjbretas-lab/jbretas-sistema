@@ -1,0 +1,228 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logística — rolagem e overflow das abas</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  html, body { height: auto !important; overflow: visible !important; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  /* O PALCO IMITA O WORKSPACE da Logística: altura travada, como o
+     .logi-workspace real. É nele que o painel de aba precisa rolar. */
+  #palco { border:1px dashed var(--border); margin:10px 0; height:400px;
+           display:flex; flex-direction:column; overflow:hidden; }
+</style>
+<link rel="stylesheet" href="/shared/css/comparacao.css">
+<link rel="stylesheet" href="/modulos/logistica/logistica.css">
+
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// A Logística é um app de ALTURA TRAVADA: html/body com overflow:hidden e
+// #screen-app de 100vh. Nesse desenho, cada aba precisa criar o próprio
+// scroller — e a que não criava simplesmente PARAVA de mostrar o que passasse
+// da tela, sem barra de rolagem. Era o caso de Alteração de Preços: o
+// histórico só aparecia se a pessoa diminuísse a janela.
+//
+//  1. TODO painel de aba rola quando o conteúdo cresce (o padrão virou
+//     `overflow: auto`), e o conteúdo é ALCANÇÁVEL — scrollHeight maior que
+//     clientHeight E scrollTop chegando ao fim.
+//  2. A MATRIZ É A EXCEÇÃO e continua com overflow:hidden — o cabeçalho
+//     sticky dela depende de o scroller ser o .spreadsheet-frame, não o
+//     painel. (Pedido explícito: não mexer nela.)
+//  3. A COMPARAÇÃO DE PREÇOS virou GRADE: sem overflow-x, sem scroll-snap,
+//     e com os cards lado a lado quando a largura permite.
+//  4. NADA ROLA NA HORIZONTAL: em 1200px e em 900px, nenhum painel tem
+//     scrollWidth maior que clientWidth.
+//  5. AS ABAS QUE JÁ TINHAM SCROLLER interno seguem com ele e NÃO ganham uma
+//     segunda barra (o filho é flex-constrained, então o painel não
+//     transborda).
+//
+// O CSS é o de produção; o DOM é o do index.html de produção.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function baixar(u) {
+  return new Promise(function (ok, er) {
+    var x = new XMLHttpRequest();
+    x.open('GET', u);
+    x.onload = function () { ok(x.responseText); };
+    x.onerror = function () { er(new Error(u + ' não carregou')); };
+    x.send();
+  });
+}
+// Enche um painel com conteúdo mais alto que o palco, para ver se ele rola.
+function encher(painel, n) {
+  var d = document.createElement('div');
+  d.className = 'teste-recheio';
+  d.innerHTML = new Array(n).join('<div style="height:40px;border-bottom:1px solid #333">linha</div>');
+  painel.appendChild(d);
+  return d;
+}
+function rola(el) { return el.scrollHeight > el.clientHeight + 1; }
+
+(async function () {
+  try {
+    var doc = new DOMParser().parseFromString(
+      await baixar('/modulos/logistica/index.html'), 'text/html');
+    var ws = doc.querySelector('.logi-workspace');
+    if (!ws) throw new Error('não achei .logi-workspace no index.html');
+    document.getElementById('palco').appendChild(document.importNode(ws, true));
+    await esperar(80);
+
+    var painel = function (id) { return document.querySelector('#palco #' + id); };
+    var ABAS = ['tab-matriz', 'tab-kpi', 'tab-motorista', 'tab-escala', 'tab-custo', 'tab-precos'];
+    var ativar = function (id) {
+      ABAS.forEach(function (a) { var p = painel(a); if (p) p.classList.remove('active'); });
+      painel(id).classList.add('active');
+    };
+
+    h3('0. As seis abas estão no palco');
+    eh(ABAS.every(function (a) { return !!painel(a); }), 'todas montadas',
+       ABAS.filter(function (a) { return !painel(a); }).join(',') || 'todas');
+
+    h3('1. O padrão do painel de aba é ROLAR');
+    // A regra vale para toda aba que não seja a Matriz.
+    var semMatriz = ABAS.filter(function (a) { return a !== 'tab-matriz'; });
+    var ovs = {};
+    semMatriz.forEach(function (a) {
+      ativar(a);
+      ovs[a] = getComputedStyle(painel(a)).overflowY;
+    });
+    nota('overflow-y por aba: ' + semMatriz.map(function (a) { return a + '=' + ovs[a]; }).join(' · '));
+    eh(semMatriz.every(function (a) { return ovs[a] === 'auto'; }),
+       'todas com overflow-y: auto',
+       semMatriz.filter(function (a) { return ovs[a] !== 'auto'; }).join(',') || 'todas');
+
+    h3('2. Conteúdo maior que a tela FICA ALCANÇÁVEL');
+    // É a afirmação que pega o defeito de verdade: não basta o CSS dizer
+    // "auto", o conteúdo tem de poder ser alcançado com a rolagem.
+    for (var i = 0; i < semMatriz.length; i++) {
+      var id = semMatriz[i];
+      ativar(id);
+      var p = painel(id);
+      var recheio = encher(p, 30);
+      await esperar(40);
+      var temScroll = rola(p);
+      p.scrollTop = 99999;
+      await esperar(20);
+      var chegouAoFim = Math.abs(p.scrollTop + p.clientHeight - p.scrollHeight) < 2;
+      eh(temScroll && chegouAoFim, id + ': rola e chega ao fim',
+         'scrollHeight ' + p.scrollHeight + ' / clientHeight ' + p.clientHeight +
+         ' / scrollTop final ' + p.scrollTop);
+      p.scrollTop = 0;
+      recheio.remove();
+    }
+
+    h3('3. A MATRIZ é a exceção e continua intocada');
+    ativar('tab-matriz');
+    await esperar(40);
+    var m = painel('tab-matriz');
+    eh(getComputedStyle(m).overflowY === 'hidden',
+       'overflow-y segue hidden', getComputedStyle(m).overflowY, 'hidden');
+    nota('O cabeçalho sticky da tabela depende de o scroller ser o');
+    nota('.spreadsheet-frame, não o painel — com o painel rolando, o thead');
+    nota('grudaria no topo do painel e deixaria de ser sticky.');
+
+    h3('4. A Comparação de preços virou GRADE');
+    ativar('tab-precos');
+    var host = document.querySelector('#palco #sl-comparacao');
+    eh(!!host, 'o host da comparação existe');
+    // Monta o rail com a MESMA marcação que o comparacao-logistica.js gera.
+    host.innerHTML = '<div class="cl-rail">' +
+      new Array(7).join('<div class="cl-card"><div style="height:120px">card</div></div>') + '</div>';
+    await esperar(60);
+    var rail = host.querySelector('.cl-rail');
+    var cs = getComputedStyle(rail);
+    eh(cs.display === 'grid', 'é grid, não flex', cs.display, 'grid');
+    eh(cs.overflowX === 'visible', 'sem overflow-x próprio (nada de carrossel)',
+       cs.overflowX, 'visible');
+    eh(cs.scrollSnapType === 'none', 'e sem scroll-snap', cs.scrollSnapType, 'none');
+    eh(rail.scrollWidth <= rail.clientWidth + 1,
+       'o rail não tem conteúdo além da própria largura',
+       rail.scrollWidth + ' <= ' + rail.clientWidth);
+
+    h3('5. Duas por linha quando a largura permite');
+    // O card carrega uma tabela de min-width 580px, então "2 por linha" só é
+    // possível a partir de ~1.150px de área útil. Abaixo disso a grade dá
+    // UMA — que é o certo: espremer devolveria a rolagem horizontal.
+    var palco = document.getElementById('palco');
+    var medirColunas = function () {
+      return getComputedStyle(host.querySelector('.cl-rail')).gridTemplateColumns.split(' ').length;
+    };
+    palco.style.width = '1200px';
+    await esperar(60);
+    var c1200 = medirColunas();
+    palco.style.width = '700px';
+    await esperar(60);
+    var c700 = medirColunas();
+    palco.style.width = '';
+    await esperar(60);
+    nota('colunas a 1200px: ' + c1200 + ' · a 700px: ' + c700);
+    eh(c1200 >= 2, 'a 1200px, duas ou mais colunas', String(c1200), '>= 2');
+    eh(c700 === 1, 'a 700px, uma coluna (em vez de espremer)', String(c700), '1');
+
+    h3('6. Nada rola na horizontal, em nenhuma largura');
+    var larguras = ['1200px', '900px', '700px'];
+    for (var w = 0; w < larguras.length; w++) {
+      palco.style.width = larguras[w];
+      await esperar(60);
+      var estouram = [];
+      for (var k = 0; k < ABAS.length; k++) {
+        ativar(ABAS[k]);
+        await esperar(30);
+        var pp = painel(ABAS[k]);
+        if (pp.scrollWidth > pp.clientWidth + 1) {
+          estouram.push(ABAS[k] + ' (' + pp.scrollWidth + '>' + pp.clientWidth + ')');
+        }
+      }
+      eh(estouram.length === 0, 'a ' + larguras[w] + ': nenhum painel rola na horizontal',
+         estouram.join(' · ') || 'nenhum', 'nenhum');
+    }
+    palco.style.width = '';
+
+    h3('7. Quem já tinha scroller interno não ganha uma segunda barra');
+    // Escala e KPI resolvem a própria altura com um filho flex-constrained
+    // (flex:1 + min-height:0). O painel deles não pode transbordar — se
+    // transbordasse, apareceriam DUAS barras de rolagem uma dentro da outra.
+    ativar('tab-escala');
+    var pe = painel('tab-escala');
+    pe.innerHTML = '<div class="esc-wrap"><div class="esc-head">cabeçalho</div>' +
+      '<div class="esc-body">' +
+      new Array(30).join('<div style="height:40px">linha</div>') + '</div></div>';
+    await esperar(60);
+    var body = pe.querySelector('.esc-body');
+    eh(rola(body), 'o .esc-body rola por dentro',
+       body.scrollHeight + ' > ' + body.clientHeight);
+    eh(!rola(pe), 'e o painel NÃO rola junto (uma barra só)',
+       pe.scrollHeight + ' vs ' + pe.clientHeight);
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — Logística overflow';
+})();
+</script>

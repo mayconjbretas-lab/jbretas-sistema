@@ -103,11 +103,10 @@
     const itens = postosOrdenados();
     const comColeta = itens.filter(i => i.dado.proprio && !i.dado.proprioDesatualizado).length;
 
-    // O SCROLL DO CARROSSEL SOBREVIVE AO REDESENHO. Sem isto a recarga de 5
-    // min (ou a que roda logo após uma solicitação) jogaria o usuário de volta
-    // ao primeiro posto, no meio da leitura.
-    const railAntigo = el.querySelector('.cl-rail');
-    const scrollAntigo = railAntigo ? railAntigo.scrollLeft : 0;
+    // O CARROSSEL SAIU e com ele a preservação do scrollLeft, que existia
+    // para a recarga de 5 min não jogar a pessoa de volta ao primeiro posto.
+    // Numa grade vertical não há scroll lateral a preservar — e o vertical é
+    // do PAINEL, não deste elemento, então o redesenho já não o move.
 
     const cabecalho =
       '<div class="cl-head">' +
@@ -127,8 +126,6 @@
     el.innerHTML = cabecalho +
       '<div class="cl-rail">' + itens.map(cardHtml).join('') + '</div>';
 
-    const rail = el.querySelector('.cl-rail');
-    if (rail) rail.scrollLeft = scrollAntigo;
     ligar(el);
   }
 
