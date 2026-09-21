@@ -261,11 +261,26 @@
     if (ov) ov.classList.remove('open');
   }
 
+  // ════════ ESCAPE DE HTML (M8) ════════
+  // `posto_nome` vem da API e era concatenado CRU em innerHTML, nos dois
+  // cartões abaixo. Não é campo que o ADM digita — vem de `postos.nome`, que
+  // só o TI edita — mas é dado que atravessa banco e rota até virar marcação,
+  // e o custo de fechar isso é uma função de quatro substituições.
+  //
+  // As ASPAS entram junto com os sinais de maior/menor: os dois cartões
+  // também montam atributo (`data-id`, `src`, `data-foto`), e ali é a aspa
+  // que escapa do valor, não o `<`.
+  function esc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
   function pendItemHtml(s) {
     return (
       '<div class="sga-item sga-pend" data-id="' + s.id + '">' +
         '<div class="sga-item-top">' +
-          '<span class="sga-posto">' + (s.posto_nome || '—') + '</span>' +
+          '<span class="sga-posto">' + esc(s.posto_nome || '—') + '</span>' +
           '<span class="sga-quando">' + fmtDiaHora(s.criado_em) + '</span>' +
         '</div>' +
         '<div class="sga-linha"><span class="sga-fuel">' + fuelLabel(s.combustivel) + '</span>' +
@@ -285,7 +300,7 @@
     return (
       '<div class="sga-item sga-conf">' +
         '<div class="sga-item-top">' +
-          '<span class="sga-posto">' + (s.posto_nome || '—') + '</span>' +
+          '<span class="sga-posto">' + esc(s.posto_nome || '—') + '</span>' +
           '<span class="sga-quando">' + fmtHora(s.confirmado_em) + '</span>' +
         '</div>' +
         '<div class="sga-linha"><span class="sga-fuel">' + fuelLabel(s.combustivel) + '</span>' +
