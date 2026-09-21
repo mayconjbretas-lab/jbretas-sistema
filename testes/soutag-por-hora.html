@@ -1,0 +1,353 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Soutag vs TecnoX — cruzamento por hora</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+<link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// A vista "Soutag vs TecnoX" tinha duas formas na vida: cupom a cupom (que
+// saiu, porque sem hora o casamento por valor era sorteio) e por totais. A
+// TecnoX passou a mandar `hra_inicio`, e a detalhada voltou — agora com o par
+// achado pelo INSTANTE.
+//
+//  1. MODO HORA: a tela desenha os quatro cartões de status de volta e a
+//     tabela detalhada, com as DUAS horas em cada linha.
+//  2. MODO TOTAIS: com a mesma tela e outra resposta, volta a tabela de
+//     totais — nada do modo hora aparece.
+//  3. A ESCOLHA É DA ROTA, não da tela: o front lê `consulta.modo` e não
+//     tenta adivinhar pelos dados.
+//  4. OS QUATRO CARTÕES FILTRAM a lista, e clicar de novo solta.
+//  5. A DIFERENÇA DE MINUTOS aparece ao lado da hora da TecnoX — é ela que
+//     diz se o par está no limite da janela ou folgado no meio dela.
+//  6. A LEGENDA DIZ POR QUE o valor não entra na chave, que é a decisão
+//     menos óbvia do cruzamento.
+//  7. A LEITURA DA PLANILHA extrai a hora da coluna "Data/Hora" e a manda
+//     para a rota — sem isso o lado Soutag entraria em 00:00:00 e o modo
+//     hora nunca ligaria.
+//
+// O módulo é o de PRODUÇÃO; a API é dublada.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+var DIA = '2026-09-18';
+var H = function (hhmmss) { return DIA + 'T' + hhmmss + '.000Z'; };
+var MODO = 'hora';
+var CHAMADAS = [], POST_IMPORT = null;
+window.getUsuarioLogado = function () { return { id: 'h', nome: 'HARNESS', perfil: 'ADM' }; };
+window.exigirSessao = window.getUsuarioLogado;
+window.mmFmt = null;
+
+// ── A resposta da GET /app/soutag-comparar nos DOIS modos ───────
+// Números pequenos e escolhidos: dois conferidos, um divergente, um de cada
+// lado sozinho. É o menor conjunto onde os quatro baldes têm conteúdo.
+function respHora() {
+  var conferido = [
+    { status: 'conferido', data: DIA, hora: H('08:00:00'), hora_tecnox: H('08:00:30'),
+      dif_min: 0.5, posto: 'P. BRUNA', comb: 'GC', valor: 100, valor_tecnox: 100,
+      dif: 0, litros: null, litros_tecnox: 16, preco: 6.25, id: '1', id_cupom: 'a',
+      cupom: 'p1|' + DIA + '|a', usuario: 'FULANO', posto_planilha: 'POSTO BRUNA LTDA' },
+    { status: 'conferido', data: DIA, hora: H('09:00:00'), hora_tecnox: H('09:04:00'),
+      dif_min: 4, posto: 'P. BRUNA', comb: 'GC', valor: 100.4, valor_tecnox: 100,
+      dif: 0.4, litros: null, litros_tecnox: 16, preco: 6.25, id: '2', id_cupom: 'b',
+      cupom: 'p1|' + DIA + '|b', usuario: 'FULANO', posto_planilha: 'POSTO BRUNA LTDA' },
+  ];
+  var divergente = [
+    { status: 'divergente', data: DIA, hora: H('10:00:00'), hora_tecnox: H('10:02:00'),
+      dif_min: 2, posto: 'P. BRUNA', comb: 'GC', valor: 150, valor_tecnox: 120,
+      dif: 30, litros: null, litros_tecnox: 19, preco: 6.31, id: '3', id_cupom: 'c',
+      cupom: 'p1|' + DIA + '|c', usuario: 'FULANO', posto_planilha: 'POSTO BRUNA LTDA' },
+  ];
+  var soSoutag = [
+    { status: 'soutag', data: DIA, hora: H('11:00:00'), posto: 'P. BRUNA', comb: 'ET',
+      valor: 70, litros: null, id: '4', usuario: 'FULANO', posto_planilha: 'POSTO BRUNA LTDA' },
+  ];
+  var soTecnox = [
+    { status: 'tecnox', data: DIA, hora_tecnox: H('12:00:00'), posto: 'P. BRUNA',
+      comb: 'S10', valor_tecnox: 80, litros_tecnox: 13, preco: 6.15, id_cupom: 'd',
+      cupom: 'p1|' + DIA + '|d' },
+  ];
+  return {
+    success: true, modo: 'hora',
+    consulta: { de: DIA, ate: DIA, so_app: false, canal: 'SOUTAG',
+                soutag_linhas: 4, tecnox_itens: 4, tecnox_itens_total: 4, itens_placa: 0,
+                tolerancia_placa: 0.02, tolerancia_pct: 2,
+                modo: 'hora', hora_coluna: true,
+                hora: { soutag_com_hora: 4, soutag_total: 4,
+                        tecnox_com_hora: 4, tecnox_total: 4, pode: true },
+                tolerancia_min: 5, tolerancia_valor: 0.5 },
+    preco_placa: {},
+    ultima_importacao: { quando: '2026-09-21T10:00:00.000Z', arquivo: 'soutag.xlsx',
+                         por: 'MAYCON', transacoes: 4 },
+    conferido: conferido, divergente: divergente, soSoutag: soSoutag,
+    soTecnox: soTecnox, semPosto: [],
+    postos: [{ nome: 'P. BRUNA', nao_reconhecido: false, sg_n: 4, sg_v: 420.4, sg_l: null,
+               tx_cupons: 4, tx_itens: 4, tx_v: 400, tx_l: 64, dif: 20.4, dif_pct: 5.1,
+               conferido: 2, divergente: 1, soutag: 1, tecnox: 1, ok: false, linhas: [] }],
+    naoCasou: [],
+    rede: { sg_n: 4, sg_v: 420.4, sg_l: null, sem_posto_n: 0, sem_posto_v: 0,
+            tx_cupons: 4, tx_itens: 4, tx_v: 400, tx_l: 64, dif: 20.4, dif_pct: 5.1,
+            conferido: 2, divergente: 1, so_soutag: 1, so_tecnox: 1,
+            postos: 1, postos_divergentes: 1, ok: false },
+  };
+}
+function respTotais() {
+  return {
+    success: true,
+    consulta: { de: DIA, ate: DIA, so_app: false, canal: 'SOUTAG',
+                soutag_linhas: 4, tecnox_itens: 4, tecnox_itens_total: 4, itens_placa: 0,
+                tolerancia_placa: 0.02, tolerancia_pct: 2,
+                modo: 'totais', hora_coluna: false,
+                hora: { soutag_com_hora: 0, soutag_total: 4,
+                        tecnox_com_hora: 0, tecnox_total: 4, pode: false },
+                tolerancia_min: 5, tolerancia_valor: 0.5 },
+    preco_placa: {},
+    ultima_importacao: { quando: '2026-09-21T10:00:00.000Z', arquivo: 'soutag.xlsx',
+                         por: 'MAYCON', transacoes: 4 },
+    postos: [{ posto_id: 'p1', nome: 'P. BRUNA', nao_reconhecido: false,
+               sg_n: 4, sg_v: 420.4, sg_l: null, tx_cupons: 4, tx_itens: 4,
+               tx_v: 400, tx_l: 64, dif: 20.4, dif_pct: 5.1, ok: false }],
+    naoCasou: [],
+    rede: { sg_n: 4, sg_v: 420.4, sg_l: null, sem_posto_n: 0, sem_posto_v: 0,
+            tx_cupons: 4, tx_itens: 4, tx_v: 400, tx_l: 64, dif: 20.4, dif_pct: 5.1,
+            postos: 1, postos_divergentes: 1, ok: false },
+  };
+}
+
+window.apiFetch = function (url, opts) {
+  var u = String(url);
+  CHAMADAS.push(u);
+  if (u.indexOf('/app/soutag-importar') === 0) {
+    POST_IMPORT = JSON.parse((opts || {}).body || '{}');
+    return Promise.resolve({ success: true, periodo: { de: DIA, ate: DIA },
+      recebidas: POST_IMPORT.transacoes.length, gravadas: POST_IMPORT.transacoes.length,
+      recusadas: 0, apagadas: 0, sem_posto: 0,
+      com_hora: POST_IMPORT.transacoes.filter(function (t) { return !!t.data_hora; }).length,
+      nao_casou: [], arquivo: POST_IMPORT.arquivo, importado_por: 'HARNESS' });
+  }
+  if (u.indexOf('/app/soutag-comparar') === 0) {
+    return Promise.resolve(MODO === 'hora' ? respHora() : respTotais());
+  }
+  if (u.indexOf('/app/cupons-detalhe') === 0) return Promise.resolve({ success: true, itens: [], total: 0 });
+  return Promise.resolve({ success: true, rede: { por_combustivel: [] }, postos: [] });
+};
+
+function js(src) {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { erro(new Error(src + ' não carregou')); };
+    document.body.appendChild(s);
+  });
+}
+function linhasH() { return [].slice.call(document.querySelectorAll('#palco .ap-sgh-linha')); }
+function cel(l) { return [].slice.call(l.children).map(function (e) { return e.textContent.trim(); }); }
+function cardEl(rot) {
+  return [].slice.call(document.querySelectorAll('#palco .ap-sg-cd')).filter(function (e) {
+    return e.querySelector('.ap-sg-cd-r').textContent.trim() === rot;
+  })[0];
+}
+function cardN(rot) {
+  var c = cardEl(rot);
+  return c ? Number(c.querySelector('.ap-sg-cd-v').textContent.trim().replace(/\./g, '')) : null;
+}
+function txt() { var c = document.querySelector('#palco #ap-corpo'); return c ? c.textContent.replace(/\s+/g, ' ') : ''; }
+
+(async function () {
+  try {
+    var sec = document.createElement('section');
+    sec.id = 's-app'; sec.className = 'scr active';
+    document.getElementById('palco').appendChild(sec);
+    await js('/modulos/painel-adm/app-cupons.js');
+
+    // Abre direto na vista Soutag, no dia do fixture.
+    window.renderAppCupons(sec);
+    await esperar(150);
+    window.__apData('de', DIA); window.__apData('ate', DIA);
+    await esperar(150);
+    window.__apVista('soutag');
+    await esperar(250);
+
+    h3('1. Modo HORA: os quatro cartões de status voltaram');
+    eh(cardN('conferidos') === 2, 'conferidos = 2', String(cardN('conferidos')), '2');
+    eh(cardN('valor divergente') === 1, 'valor divergente = 1', String(cardN('valor divergente')), '1');
+    eh(cardN('só TecnoX') === 1, 'só TecnoX = 1', String(cardN('só TecnoX')), '1');
+    eh(cardN('só Soutag') === 1, 'só Soutag = 1', String(cardN('só Soutag')), '1');
+    eh(!cardEl('Postos que divergem'),
+       'e o cartão do modo TOTAIS não aparece', cardEl('Postos que divergem') ? 'aparece' : 'ausente');
+
+    h3('2. A tabela detalhada, com as DUAS horas');
+    var ls = linhasH();
+    eh(ls.length === 5, 'cinco linhas (2+1+1+1)', String(ls.length), '5');
+    nota('linha 1: ' + cel(ls[0]).join(' | '));
+    eh(/^0?8:00/.test(cel(ls[0])[0]) || cel(ls[0])[0] === '08:00:00',
+       'a primeira coluna é a hora da Soutag', cel(ls[0])[0], '08:00:00');
+    eh(/08:00:30/.test(cel(ls[0])[6]), 'e a penúltima é a hora da TecnoX', cel(ls[0])[6]);
+    eh(/0,5 min/.test(cel(ls[0])[6]),
+       'com a diferença entre as duas, em minutos', cel(ls[0])[6]);
+    nota('É ela que diz se o par está no limite da janela ou folgado no meio.');
+    // ORDEM por hora: é assim que se lê o dia.
+    var horas = ls.map(function (l) { return cel(l)[0]; });
+    nota('ordem das horas: ' + horas.join(' · '));
+    eh(horas.join('|') === '08:00:00|09:00:00|10:00:00|11:00:00|—',
+       'ordenadas por hora, com a linha sem hora da Soutag no fim',
+       horas.join('|'), '08:00:00|09:00:00|10:00:00|11:00:00|—');
+
+    h3('3. As quatro etiquetas, com as cores de cada balde');
+    var tags = [].slice.call(document.querySelectorAll('#palco .ap-sgh-tag'))
+      .map(function (t) { return t.textContent.trim(); });
+    nota('etiquetas: ' + tags.join(' · '));
+    eh(tags.filter(function (t) { return t === 'conferido'; }).length === 2, 'dois conferidos');
+    eh(tags.indexOf('valor divergente') >= 0, 'um valor divergente');
+    eh(tags.indexOf('só TecnoX') >= 0 && tags.indexOf('só Soutag') >= 0, 'um de cada lado sozinho');
+    var dv = [].slice.call(document.querySelectorAll('#palco .ap-sgh-tag--divergente'))[0];
+    var cf = [].slice.call(document.querySelectorAll('#palco .ap-sgh-tag--conferido'))[0];
+    eh(getComputedStyle(dv).color !== getComputedStyle(cf).color,
+       'com cores distintas', getComputedStyle(cf).color + ' vs ' + getComputedStyle(dv).color);
+
+    h3('4. A divergência de valor aparece com os dois números');
+    var ld = ls.filter(function (l) { return /valor divergente/.test(l.textContent); })[0];
+    var c = cel(ld);
+    nota('linha divergente: ' + c.join(' | '));
+    eh(/150,00/.test(c[3]) && /120,00/.test(c[4]), 'R$ dos DOIS lados', c[3] + ' x ' + c[4]);
+    eh(/30,00/.test(c[5]), 'e a diferença', c[5]);
+
+    h3('5. Os cartões filtram a lista');
+    cardEl('valor divergente').click();
+    await esperar(150);
+    eh(linhasH().length === 1, 'clicar em "valor divergente" deixa só ela',
+       String(linhasH().length), '1');
+    eh(cardEl('valor divergente').className.indexOf('on') >= 0, 'e o cartão fica aceso');
+    cardEl('valor divergente').click();
+    await esperar(150);
+    eh(linhasH().length === 5, 'clicar de novo solta o filtro', String(linhasH().length), '5');
+    nota('Sem isso, quem clica num dos quatro fica preso e procura um "todos" que não há.');
+
+    h3('6. A legenda explica a decisão menos óbvia');
+    eh(/5 min/.test(txt()), 'diz a janela de tempo');
+    eh(/R\$ 0,50/.test(txt()), 'e a tolerância de valor');
+    eh(/não entra na chave/.test(txt()),
+       'e POR QUE o valor não entra na chave',
+       (txt().match(/O valor não entra[^.]*\./) || ['(não diz)'])[0]);
+    nota('Se entrasse, transação com valor errado não acharia par e viraria');
+    nota('"só Soutag" — escondendo a divergência que a tela procura.');
+
+    h3('7. Modo TOTAIS: a mesma tela, outro desenho');
+    MODO = 'totais';
+    window.__apSgRecarregar();
+    await esperar(250);
+    eh(linhasH().length === 0, 'nenhuma linha do modo hora', String(linhasH().length), '0');
+    eh(!cardEl('conferidos'), 'nem os quatro cartões de status',
+       cardEl('conferidos') ? 'aparecem' : 'ausentes');
+    eh(!!document.querySelector('#palco .ap-sgt-rede'), 'e a linha REDE dos totais voltou');
+    eh(!!cardEl('Postos que divergem'), 'com o cartão de postos que divergem');
+    eh(/totais de cada posto/.test(txt()), 'e a legenda do modo totais');
+
+    h3('8. Quem escolhe o modo é a ROTA');
+    // A tela lê `consulta.modo` e não tenta adivinhar pelos dados: a mesma
+    // resposta com os quatro baldes, mas anunciando 'totais', tem de desenhar
+    // totais. Sem isso, os dois lugares decidiriam e um dia divergiriam.
+    MODO = 'hora';
+    window.__apSgRecarregar();
+    await esperar(250);
+    eh(linhasH().length === 5, 'com modo=hora, volta a detalhada', String(linhasH().length), '5');
+    var mentiroso = respHora();
+    mentiroso.consulta.modo = 'totais';
+    mentiroso.postos[0].posto_id = 'p1';
+    var real = window.apiFetch;
+    window.apiFetch = function (u, o) {
+      if (String(u).indexOf('/app/soutag-comparar') === 0) return Promise.resolve(mentiroso);
+      return real(u, o);
+    };
+    window.__apSgRecarregar();
+    await esperar(250);
+    eh(linhasH().length === 0,
+       'com os MESMOS baldes mas modo=totais, desenha totais', String(linhasH().length), '0');
+    window.apiFetch = real;
+
+    h3('9. A planilha: a hora sai da coluna Data/Hora e vai no POST');
+    // Sem isto o lado Soutag entra em 00:00:00 e o modo hora nunca liga —
+    // meia-noite cravada é lida como "só o dia" (ver horaUtil em lib/soutag.js).
+    var XLSX = null;
+    try {
+      XLSX = await new Promise(function (ok, er) {
+        var sc = document.createElement('script');
+        sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        sc.onload = function () { ok(window.XLSX); };
+        sc.onerror = function () { er(new Error('cdnjs inacessível')); };
+        document.head.appendChild(sc);
+      });
+    } catch (e) { nota('SheetJS não carregou (' + e.message + ') — seção pulada.'); }
+    eh(!!XLSX, 'o SheetJS carregou', XLSX ? 'sim' : 'NÃO');
+    if (XLSX) {
+      var rows = [
+        { 'Posto': 'POSTO BRUNA LTDA', 'Data/Hora': '18/09/2026 08:00:30',
+          'Valor': 100, 'Combustível': 'GASOLINA COMUM', 'ID': 'S1' },
+        { 'Posto': 'POSTO BRUNA LTDA', 'Data/Hora': '18/09/2026',
+          'Valor': 50, 'Combustível': 'ETANOL', 'ID': 'S2' },
+      ];
+      var ws = XLSX.utils.json_to_sheet(rows);
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Transacoes');
+      var buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+      var inp = document.getElementById('ap-sg-file');
+      var dt = new DataTransfer();
+      dt.items.add(new File([buf], 'com-hora.xlsx',
+        { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      inp.files = dt.files;
+      POST_IMPORT = null;
+      await window.__apSgArquivo(inp);
+      await esperar(400);
+      eh(!!POST_IMPORT, 'a importação chamou a rota');
+      var t = (POST_IMPORT || { transacoes: [] }).transacoes;
+      nota('enviado: ' + JSON.stringify(t.map(function (x) { return x.data_hora; })));
+      eh(t[0] && t[0].data_hora === '2026-09-18T08:00:30',
+         'a linha COM hora leva o instante', t[0] && t[0].data_hora, '2026-09-18T08:00:30');
+      eh(t[1] && t[1].data_hora === null,
+         'e a linha SEM hora leva null, não meia-noite',
+         t[1] && JSON.stringify(t[1].data_hora), 'null');
+      nota('Meia-noite é o sinal de "só o dia"; mandá-la aqui faria uma');
+      nota('planilha sem hora parecer transações à 00:00:00.');
+      eh(t[0] && t[0].data === '2026-09-18',
+         'e o campo `data` segue sendo o dia, que é quem manda no recorte',
+         t[0] && t[0].data, '2026-09-18');
+    }
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — Soutag por hora';
+})();
+</script>

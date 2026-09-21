@@ -353,6 +353,27 @@
       '.ap-sg-cd--tx .ap-sg-cd-v{color:#185FA5}' +
       '.ap-sg-cd--sg .ap-sg-cd-v{color:#3C3489}' +
       '.ap-sg-cd--dv .ap-sg-cd-v{color:#A32D2D}' +
+      // TABELA DETALHADA (modo por hora) — oito colunas fixas.
+      // 96+150+64+92+92+92+96+80 = 762px de conteúdo.
+      // AS DUAS HORAS LADO A LADO são o ponto da vista: é com elas que se
+      // confere o par com o olho, em vez de confiar na conta.
+      '.ap-cab-sgh{display:grid;grid-template-columns:96px 150px 64px 92px 92px 92px 96px 80px;' +
+        'justify-content:start;align-items:center;gap:.6rem 8px;width:100%;padding:8px 0;' +
+        'background:transparent;border:0;text-align:left;font:inherit;color:var(--tx)}' +
+      '.ap-cab.ap-cab-sgh{padding:0 0 5px;border-bottom:1px solid var(--bd)}' +
+      '.ap-sgh-linha{border-bottom:1px solid var(--bd);font:.72rem var(--mono)}' +
+      '.ap-sgh-h{font:.7rem var(--mono);color:var(--tx2)}' +
+      '.ap-sgh-h small{color:var(--tx3)}' +
+      // A etiqueta de status, nas quatro cores que a vista tinha antes de o
+      // cruzamento virar por totais.
+      '.ap-sgh-tag{display:inline-block;min-width:74px;text-align:center;' +
+        'font:700 .6rem var(--mono);border-radius:20px;padding:2px 8px}' +
+      '.ap-sgh-tag--conferido{color:#0F6E56;background:#E1F5EE}' +
+      '.ap-sgh-tag--divergente{color:#A32D2D;background:#FBE9E9}' +
+      '.ap-sgh-tag--tecnox{color:#185FA5;background:#E7F0FA}' +
+      '.ap-sgh-tag--soutag{color:#3C3489;background:#EEEDFE}' +
+      '@media (max-width:1100px){.ap-cab-sgh{grid-template-columns:1fr auto}' +
+        '.ap-cab.ap-cab-sgh{display:none}}' +
       // TABELA DE TOTAIS — oito colunas fixas, como todas as listas desta
       // tela. 210+112+102+124+124+124+82+78 = 956px de conteúdo, dentro do
       // teto de 1400 do .ap-wrap.
@@ -1186,6 +1207,45 @@
     }
     return '';
   }
+  // ════════ A HORA DA MESMA CÉLULA ════════
+  // A coluna da planilha chama-se "Data/Hora" e SEMPRE teve a hora — o
+  // diaDaCelula acima é que a descartava, porque o cruzamento era por dia.
+  // Agora a TecnoX manda `hra_inicio` e o cruzamento pode ser por instante;
+  // sem esta leitura, o lado Soutag entraria no banco em 00:00:00 e o
+  // cruzamento por hora nunca ligaria (ver `horaUtil` em lib/soutag.js).
+  //
+  // DEVOLVE ISO SEM FUSO ('2026-09-18T04:30:05'), a hora LOCAL do posto, que
+  // é como a TecnoX manda a dela. Os dois lados carregando a mesma hora local
+  // é o que faz a diferença entre eles fechar sem nenhum dos dois precisar
+  // declarar fuso.
+  //
+  // SERIAL DO EXCEL: a parte fracionária é a hora do dia. `(v % 1) * 86400`
+  // dá os segundos. Arredonda ao SEGUNDO antes de formatar porque o serial é
+  // float e 04:30:05 costuma chegar como 04:30:04,9999.
+  //
+  // SEM HORA DEVOLVE '' — e não meia-noite. Meia-noite cravada é o sinal de
+  // "só o dia" do outro lado; devolvê-la aqui faria uma planilha sem hora
+  // parecer uma planilha de transações à 00:00:00.
+  function horaDaCelula(v) {
+    if (v === null || v === undefined || v === '') return '';
+    var dia = diaDaCelula(v);
+    if (!dia) return '';
+    var hh, mm, ss;
+    if (typeof v === 'number' && isFinite(v)) {
+      var frac = v - Math.floor(v);
+      if (frac <= 0) return '';                 // serial sem parte de hora
+      var seg = Math.round(frac * 86400) % 86400;
+      hh = Math.floor(seg / 3600); mm = Math.floor((seg % 3600) / 60); ss = seg % 60;
+    } else {
+      var m = /(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(String(v));
+      if (!m) return '';
+      hh = Number(m[1]); mm = Number(m[2]); ss = Number(m[3] || 0);
+      if (hh > 23 || mm > 59 || ss > 59) return '';
+    }
+    var p2 = function (n) { return ('0' + n).slice(-2); };
+    return dia + 'T' + p2(hh) + ':' + p2(mm) + ':' + p2(ss);
+  }
+
   function numeroDaCelula(v) {
     if (typeof v === 'number') return v;
     var t = String(v == null ? '' : v).replace(/[^0-9,.-]/g, '');
@@ -1239,6 +1299,10 @@
         i: idx,
         posto_planilha: String(r[de.posto] == null ? '' : r[de.posto]).trim(),
         data: diaDaCelula(r[de.data]),
+        // ADITIVO: '' quando a planilha não traz hora. O `data` acima segue
+        // sendo o dia e continua sendo quem manda no recorte — a hora é
+        // informação a mais, exatamente como do lado da TecnoX.
+        data_hora: horaDaCelula(r[de.data]),
         valor: numeroDaCelula(r[de.valor]),
         combustivel: codComb(r[de.combustivel]),
         usuario: de.usuario ? String(r[de.usuario] == null ? '' : r[de.usuario]).trim() : '',
@@ -1302,6 +1366,126 @@
     '</div>';
   }
 
+  // ════════ VISTA DETALHADA (cruzamento por hora) ════════
+  // Os quatro baldes de volta, agora com base: cada linha mostra a hora dos
+  // DOIS lados e a diferença entre elas, que é o que permite conferir o par
+  // sem acreditar na conta.
+  var ROT_SGH = { conferido: 'conferido', divergente: 'valor divergente',
+                  tecnox: 'só TecnoX', soutag: 'só Soutag' };
+  // Filtro por status: clicar no cartão recorta a lista, clicar de novo solta.
+  // Sem isso os quatro números seriam quatro números; com ele, cada um é a
+  // porta para as linhas que conta.
+  var _sghStatus = '';
+  function hhmm(iso) {
+    if (!iso) return '—';
+    var m = /T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(String(iso));
+    return m ? (m[1] + ':' + m[2] + (m[3] ? ':' + m[3] : '')) : '—';
+  }
+  function htmlSgHora(c) {
+    var R = c.rede, q = c.consulta;
+    var cardSgh = function (chave, rot, n, cls) {
+      var on = (_sghStatus === chave);
+      return '<button type="button" class="ap-sg-cd ap-sg-cd--bt ' + cls + (on ? ' on' : '') + '"' +
+        ' aria-pressed="' + (on ? 'true' : 'false') + '" onclick="__apSghStatus(\'' + chave + '\')">' +
+        '<div class="ap-sg-cd-r">' + esc(rot) + '</div>' +
+        '<div class="ap-sg-cd-v">' + nf(n, 0) + '</div></button>';
+    };
+    var status = '<div class="ap-sg-cards">' +
+      cardSgh('conferido', 'conferidos', R.conferido, 'ap-sg-cd--ok') +
+      cardSgh('divergente', 'valor divergente', R.divergente, 'ap-sg-cd--dv') +
+      cardSgh('tecnox', 'só TecnoX', R.so_tecnox, 'ap-sg-cd--tx') +
+      cardSgh('soutag', 'só Soutag', R.so_soutag, 'ap-sg-cd--sg') +
+    '</div>';
+
+    var blocos = '<div class="ap-sg-blocos">' +
+      '<div class="ap-sg-bloco ap-sg-bloco--sg">' +
+        '<div class="ap-sg-bl-rot">Soutag · planilha</div>' +
+        '<div class="ap-sg-bl-v">' + reais(R.sg_v) + '</div>' +
+        '<div class="ap-sg-bl-l"><span class="ap-sg-bl-i"><b>' + nf(R.sg_n, 0) + '</b> transações</span>' +
+          '<span class="ap-sg-bl-i"><b>' + nf(q.hora.soutag_com_hora, 0) + '</b> com hora</span></div>' +
+        (R.sem_posto_n ? '<div class="ap-sg-bl-s">inclui ' + nf(R.sem_posto_n, 0) +
+          ' de posto não reconhecido (' + reais(R.sem_posto_v) + ')</div>' : '') +
+      '</div>' +
+      '<div class="ap-sg-bloco ap-sg-bloco--tx">' +
+        '<div class="ap-sg-bl-rot">TecnoX · Soutag</div>' +
+        '<div class="ap-sg-bl-v">' + reais(R.tx_v) + '</div>' +
+        '<div class="ap-sg-bl-l"><span class="ap-sg-bl-i"><b>' + nf(R.tx_itens, 0) + '</b> itens</span>' +
+          '<span class="ap-sg-bl-i"><b>' + nf(q.hora.tecnox_com_hora, 0) + '</b> com hora</span></div>' +
+      '</div>' +
+    '</div>';
+
+    // Uma lista só, com os quatro baldes juntos e ordenada por hora: é assim
+    // que se lê o dia. Separar em quatro listas obrigaria a saltar entre elas
+    // para entender uma sequência de abastecimentos.
+    var todas = []
+      .concat(c.conferido || [], c.divergente || [], c.soSoutag || [], c.soTecnox || []);
+    if (_sghStatus) todas = todas.filter(function (l) { return l.status === _sghStatus; });
+    todas.sort(function (a, b) {
+      var ha = a.hora || a.hora_tecnox || '', hb = b.hora || b.hora_tecnox || '';
+      if (ha !== hb) return ha < hb ? -1 : 1;
+      return String(a.posto || '').localeCompare(String(b.posto || ''));
+    });
+
+    var cab = '<div class="ap-cab ap-cab-sgh">' +
+      '<span>Hora SG</span><span>Posto</span><span>Comb.</span>' +
+      '<span class="ap-n">R$ Soutag</span><span class="ap-n">R$ TecnoX</span>' +
+      '<span class="ap-n">Dif R$</span><span>Hora TecnoX</span><span></span>' +
+    '</div>';
+    var CORTE = 400;
+    var linhas = todas.slice(0, CORTE).map(function (l) {
+      return '<div class="ap-cab-sgh ap-sgh-linha">' +
+        '<span class="ap-sgh-h">' + esc(hhmm(l.hora)) + '</span>' +
+        '<span class="ap-nome" title="' + esc(l.posto || l.posto_planilha || '') + '">' +
+          esc(l.posto || l.posto_planilha || '(não reconhecido)') + '</span>' +
+        '<span>' + esc(l.comb || '—') + '</span>' +
+        '<span class="ap-n">' + (l.valor === undefined ? '—' : reais(l.valor)) + '</span>' +
+        '<span class="ap-n">' + (l.valor_tecnox === undefined ? '—' : reais(l.valor_tecnox)) + '</span>' +
+        '<span class="ap-n' + ((l.dif !== undefined && Math.abs(l.dif) > 0.004) ? ' ap-sg-dif--dv' : '') + '">' +
+          (l.dif === undefined ? '—' : comSinal(l.dif, reais)) + '</span>' +
+        '<span class="ap-sgh-h">' + esc(hhmm(l.hora_tecnox)) +
+          // A diferença entre as duas horas, em minutos: é ela que diz se o
+          // par está no limite da janela de 5 min ou folgado no meio dela.
+          (l.dif_min === null || l.dif_min === undefined ? ''
+            : ' <small>' + comSinal(l.dif_min, function (x) { return nf(x, 1) + ' min'; }) + '</small>') +
+        '</span>' +
+        '<span><span class="ap-sgh-tag ap-sgh-tag--' + l.status + '">' +
+          esc(ROT_SGH[l.status]) + '</span></span>' +
+      '</div>';
+    }).join('');
+    var corte = todas.length > CORTE
+      ? '<div class="ap-aviso">mostrando ' + CORTE + ' de ' + nf(todas.length, 0) + ' linhas</div>' : '';
+
+    var avisoNome = c.naoCasou.length
+      ? '<div class="ap-aviso">' + nf(c.naoCasou.length, 0) +
+        (c.naoCasou.length === 1 ? ' nome da planilha não casou' : ' nomes da planilha não casaram') +
+        ' com nenhum posto: ' +
+        c.naoCasou.slice(0, 8).map(function (x) {
+          return esc(x.nome) + ' (' + nf(x.n, 0) + ')';
+        }).join(' · ') + (c.naoCasou.length > 8 ? ' …' : '') + '</div>'
+      : '';
+
+    var legenda = '<div class="ap-sg-legenda">' +
+      'Comparação <b>transação a transação</b>, pelo horário: o par é o mesmo posto e ' +
+      'combustível dentro de <b>' + nf(q.tolerancia_min, 0) + ' min</b>, e o valor é o que se ' +
+      'CONFERE — dentro de ' + reais(q.tolerancia_valor) + ' é conferido, fora é valor divergente.<br>' +
+      'O valor não entra na chave de propósito: se entrasse, uma transação com valor errado não ' +
+      'acharia par e viraria "só Soutag", escondendo justamente a divergência que esta tela procura.<br>' +
+      '<b>só TecnoX</b>: saiu cupom e não há linha na planilha. <b>só Soutag</b>: há linha e ' +
+      'nenhum cupom dentro da janela — inclusive as de posto não reconhecido.<br>' +
+      (q.so_app
+        ? '<b>Só preço de app</b> LIGADO: ' + nf(q.itens_placa, 0) + ' itens saíram no preço da placa e ' +
+          'ficaram de fora. É esta a comparação que fecha.'
+        : '<b>Só preço de app</b> DESLIGADO: o lado TecnoX inclui o convênio cobrado no preço da ' +
+          'placa, que nunca esteve na planilha — some em "só TecnoX". Ligue o filtro para a ' +
+          'comparação real.') +
+    '</div>';
+
+    return blocos + status + avisoNome +
+      '<div class="ap-lista">' + cab +
+      (linhas || '<div class="ap-vazio">Nada neste status.</div>') + '</div>' + corte +
+      legenda;
+  }
+
   function htmlSoutag() {
     var ocupado = _sgLendo || !!_sgPasso;
     var topo = '<div class="ap-sg-topo">' +
@@ -1325,6 +1509,11 @@
         esc(diaCurto(im.periodo.ate)) + ' (substituiu ' + nf(im.apagadas, 0) + ')' +
         (im.recusadas ? ' · ' + nf(im.recusadas, 0) + ' sem data/valor legíveis' : '') +
         (im.sem_posto ? ' · ' + nf(im.sem_posto, 0) + ' de posto não reconhecido' : '') +
+        // A HORA É O QUE DECIDE O MODO do cruzamento, então ela aparece aqui,
+        // no momento em que ainda dá para trocar de arquivo.
+        (im.com_hora === undefined ? ''
+          : (im.com_hora ? ' · ' + nf(im.com_hora, 0) + ' com hora'
+                         : ' · <b>sem hora na planilha</b> — a comparação fica por totais')) +
       '</div>';
     }
     if (_sgCarregando && !_sgSrv) {
@@ -1376,6 +1565,14 @@
         '<div class="ap-sg-bl-s">um cupom pode ter vários itens; a planilha traz um por combustível</div>' +
       '</div>' +
     '</div>';
+
+    // ════════ DOIS DESENHOS, UM POR MODO ════════
+    // `consulta.modo` vem da rota: 'hora' quando os dois lados têm hora
+    // utilizável, 'totais' quando não. A vista detalhada — conferidos, só
+    // TecnoX, só Soutag, valor divergente — voltou com o modo por hora, que é
+    // o que a torna confiável: o par é achado pelo INSTANTE e o valor é o que
+    // se confere, não a chave.
+    if ((c.consulta || {}).modo === 'hora') return topo + htmlSgHora(c);
 
     // ── As três diferenças da rede ──
     var R = c.rede;
@@ -1519,7 +1716,12 @@
           // `litros` vai mesmo sem a coluna existir: a rota o descarta
           // sozinho enquanto ela não estiver lá (ver o bloco OPCIONAL em
           // sql/soutag_transacao.sql). Assim, criar a coluna basta.
-          return { posto_nome: l.posto_planilha, data: l.data, valor: l.valor,
+          return { posto_nome: l.posto_planilha, data: l.data,
+                   // `data_hora` vai mesmo vazia: a rota decide entre gravar o
+                   // instante e gravar o dia à meia-noite, e é lá que essa
+                   // regra mora — uma só, em vez de uma em cada tela.
+                   data_hora: l.data_hora || null,
+                   valor: l.valor,
                    combustivel: l.combustivel, usuario: l.usuario, id_soutag: l.id,
                    litros: isFinite(l.litros) ? l.litros : null };
         }),
@@ -1546,6 +1748,14 @@
   };
   // Relê do banco sem importar nada.
   window.__apSgRecarregar = function () { carregarSoutag(true); };
+  // Filtro por status na vista detalhada. Recorte LOCAL: os quatro baldes já
+  // estão na memória, e clicar não refaz chamada. Clicar no cartão aceso
+  // solta o filtro — sem isso, quem clica num dos quatro fica preso nele e
+  // vai procurar um botão "todos" que não existe.
+  window.__apSghStatus = function (v) {
+    _sghStatus = (_sghStatus === v) ? '' : (v || '');
+    pintar();
+  };
   // __apSgPosto e __apSgStatus saíram junto com o detalhe por posto e os
   // quatro cartões de status: a tabela de totais não expande nem filtra.
   // A comparação depende do recorte da TecnoX; trocar período/canal invalida
