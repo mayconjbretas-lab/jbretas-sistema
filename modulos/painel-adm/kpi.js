@@ -249,6 +249,49 @@
     if (semMedicao(i)) return '<span class="kpi-giro" style="color:var(--text3)">sem medição</span>';
     return '<span class="kpi-giro" style="color:' + corGiro(i.giro) + '">' + esc(fmtGiro(i.giro)) + '</span>';
   }
+  // ════════ OS COMPARTIMENTOS DO CAMINHÃO ════════
+  // A rota passou a devolver `compartimentos`: a combinação de compartimentos
+  // que soma a sugestão (15 + 3 = 18.000). Mostrar isso é o que transforma o
+  // número numa instrução carregável — "18.000 L" não diz ao motorista o que
+  // abrir; "compartimento 18" diz.
+  //
+  // DUAS FORMAS, POR CAUSA DO ESPAÇO. Na tabela, larga, vai o texto inteiro
+  // ("compartimento 18"). No bloco da Logística, onde a coluna tem 60 ou 70
+  // pixels, vai só a conta ("15 + 3") e o texto completo fica no title.
+  // Resposta antiga, sem o campo: os dois caminhos devolvem '' e a tela fica
+  // exatamente como era — é o que permite subir o front antes da API.
+  function compLista(i) {
+    return (i && Array.isArray(i.compartimentos)) ? i.compartimentos : [];
+  }
+  function compTexto(i) {
+    const c = compLista(i);
+    if (!c.length) return '';
+    return c.length === 1 ? 'compartimento ' + c[0] : c.join(' + ');
+  }
+  function compLongo(i) {
+    const t = compTexto(i);
+    return t ? ' <span class="kpi-comp" title="Compartimentos do caminhão">(' + esc(t) + ')</span>' : '';
+  }
+  function compCurto(i) {
+    const c = compLista(i);
+    if (!c.length) return '';
+    return '<span class="kpi-comp" title="Compartimentos do caminhão: ' + esc(compTexto(i)) + '">' +
+      esc(c.join(' + ')) + '</span>';
+  }
+  // O chip de limite. 'espaco' é o teto do tanque (já existia); 'caminhao' é
+  // novo e diz outra coisa: o pedido desceu porque o caminhão encheu em
+  // 45.000 L, não porque o tanque não aguenta. Confundir os dois manda o
+  // operador conferir o tanque errado.
+  function chipLimite(i) {
+    if (i.limitado_por === 'espaco') {
+      return '<span class="kpi-teto" title="Limitado pelo espaço do tanque">teto</span>';
+    }
+    if (i.limitado_por === 'caminhao') {
+      return '<span class="kpi-teto kpi-teto--cam" title="Reduzido: o caminhão fechou em 45.000 L">cheio</span>';
+    }
+    return '';
+  }
+
   // Uma linha da tabela. `comSug` inclui a coluna SUGERIDO. No mobile, COMB e
   // TANQUE (classes kpi-c-*) somem e reaparecem na sub-linha cinza sob o posto.
   function linhaHtml(i, comSug) {
@@ -261,9 +304,9 @@
       '<td class="kpi-num kpi-c-venda">' + fmtL(i.venda_media) + '</td>' +
       '<td class="kpi-td-giro">' + giroCelula(i) + '</td>';
     if (comSug) {
-      const teto = (i.limitado_por === 'espaco')
-        ? ' <span class="kpi-teto" title="Limitado pelo espaço do tanque">teto</span>' : '';
-      html += '<td class="kpi-num kpi-td-sug">' + fmtL(i.sugestao) + teto + '</td>';
+      const chip = chipLimite(i);
+      html += '<td class="kpi-num kpi-td-sug">' + fmtL(i.sugestao) + compLongo(i) +
+        (chip ? ' ' + chip : '') + '</td>';
     }
     return html + '</tr>';
   }
@@ -296,8 +339,7 @@
     const comPedido = !!(_sec && _sec.id === 'tab-kpi');
 
     const linhas = b.combs.map(i => {
-      const chipTeto = (i.limitado_por === 'espaco')
-        ? '<span class="kpi-teto" title="Limitado pelo espaço do tanque">teto</span>' : '';
+      const chipTeto = chipLimite(i);
       if (comPedido) {
         // Δ = pedido − sugestão; "—" se não há pedido OU se Δ==0; senão com sinal
         // (verde --ok / vermelho --danger). teto vai na 6ª coluna, DEPOIS do Δ,
@@ -315,14 +357,22 @@
           '<span class="kpi-bl-sug">' + fmtL(i.sugestao) + '<span class="kpi-hb-un"> L</span></span>' +
           '<span class="kpi-bl-ped">' + fmtL(ped) + '</span>' +
           '<span class="kpi-bl-delta ' + dCls + '">' + dTxt + '</span>' +
-          '<span class="kpi-bl-teto">' + chipTeto + '</span>' +
+          // A última coluna já era `auto` e existia só para o chip; agora ela
+          // carrega a combinação de compartimentos junto. Quando os dois
+          // aparecem, o chip vem depois — ele é a exceção, a combinação é a
+          // informação de todo dia.
+          '<span class="kpi-bl-teto">' + compCurto(i) +
+            (chipTeto ? ' ' + chipTeto : '') + '</span>' +
         '</div>';
       }
       const teto = chipTeto ? ' ' + chipTeto : '';
+      // Aqui a linha tem três colunas e nenhuma sobra: a combinação entra
+      // dentro do próprio número, depois do "L".
       return '<div class="kpi-bl-lin">' +
         '<span class="kpi-bl-comb">' + esc(i.combustivel) + '</span>' +
         '<span class="kpi-bl-giro">' + giroCelula(i) + '</span>' +
-        '<span class="kpi-bl-sug">' + fmtL(i.sugestao) + '<span class="kpi-hb-un"> L</span>' + teto + '</span>' +
+        '<span class="kpi-bl-sug">' + fmtL(i.sugestao) + '<span class="kpi-hb-un"> L</span>' +
+          compLongo(i) + teto + '</span>' +
       '</div>';
     }).join('');
 
@@ -330,7 +380,7 @@
     const head = comPedido
       ? '<div class="kpi-bl-head"><span>COMB</span><span>GIRO</span>' +
         '<span class="kpi-bl-h-num">SUG</span><span class="kpi-bl-h-num">PED</span>' +
-        '<span class="kpi-bl-h-num">Δ</span><span></span></div>'
+        '<span class="kpi-bl-h-num">Δ</span><span>COMP</span></div>'
       : '';
 
     // Total do posto: sempre o SUG total; na Logística soma também o PED (só os

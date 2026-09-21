@@ -114,6 +114,18 @@
 .kpi-chip-neutro { background: var(--surface2); color: var(--text3); border: 1px solid var(--border); }
 
 /* Marcador "teto" (limitado pelo espaço do tanque) */
+/* A combinação de compartimentos ao lado do volume. Discreta de propósito:
+   o número continua sendo o protagonista, e a combinação é a leitura de
+   apoio — quem carrega o caminhão olha, quem confere o pedido não tropeça. */
+.kpi-comp { font-family: var(--mono); font-size: .58rem; font-weight: 500;
+  color: var(--text3); white-space: nowrap; }
+/* Na coluna estreita do bloco da Logística ela é o conteúdo principal da
+   célula, então ganha um pouco mais de presença. */
+#tab-kpi .kpi-bl-teto .kpi-comp { font-size: .6rem; color: var(--text2); }
+/* "cheio" (corte do caminhão) se distingue de "teto" (limite do tanque) pela
+   cor: são causas diferentes e levam a ações diferentes. */
+.kpi-teto--cam { color: var(--info) !important; border-color: var(--info) !important; }
+
 .kpi-teto { font-family: var(--mono); font-size: .56rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
   color: var(--warning); border: 1px solid var(--warning); border-radius: 4px; padding: 0 3px; margin-left: 4px; }
 

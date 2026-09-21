@@ -1,0 +1,242 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sugestão de pedido — compartimentos do caminhão</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/modulos/painel-adm/kpi.css">
+<style>
+  html, body { height: auto !important; overflow: visible !important; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  /* Os dois palcos imitam os DOIS hosts do mesmo componente: a Logística
+     (#tab-kpi, com as colunas PEDIDO/Δ) e o painel ADM (#s-mais, sem elas).
+     O kpi.js decide o layout pelo id do container — por isso eles são reais. */
+  .palco { border:1px dashed var(--border); margin:10px 0; padding:8px; }
+</style>
+
+<div id="res">rodando…</div>
+<div class="palco"><div id="tab-kpi"></div></div>
+<div class="palco"><div id="s-mais"></div></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// A sugestão de pedido passou a sair em volumes que o CAMINHÃO monta, e a
+// tela passou a dizer COM QUAIS COMPARTIMENTOS. Aqui roda o kpi.js de
+// produção nos seus dois hosts, alimentado por uma resposta de
+// /sugestao-pedido montada à mão — no formato que a rota nova devolve.
+//
+//  1. Um compartimento só → "(compartimento 18)".
+//  2. Vários → "(15 + 3)".
+//  3. O volume mostrado é o que a combinação soma (nada de 18.000 escrito
+//     ao lado de "15 + 5").
+//  4. O chip "cheio" (corte do caminhão) é DIFERENTE do "teto" (limite do
+//     tanque) — são causas diferentes.
+//  5. RESPOSTA ANTIGA, sem o campo `compartimentos`, não quebra a tela nem
+//     imprime "()" vazio. É o que permite o front subir antes da API.
+//  6. Os dois hosts mostram a combinação, cada um no seu lugar.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function carregarJS(src) {
+  return new Promise(function (ok, er) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { er(new Error(src + ' não carregou')); };
+    document.head.appendChild(s);
+  });
+}
+
+// ── A resposta da rota ──────────────────────────────────────────
+// Mesmos campos que o GET /sugestao-pedido devolve. Os quatro itens cobrem
+// os quatro casos que interessam.
+function item(o) {
+  return Object.assign({
+    posto_id: 1, posto_nome: 'P. TESTE', bandeira: 'IPIRANGA', combustivel: 'GC',
+    medicao_atual: 5000, medicao_data: '2026-09-20', capacidade: 30000, espaco: 25000,
+    venda_media: 4000, venda_total_30d: 120000, fator: 1, fator_origem: 'posto',
+    giro: 1.2, alvo: 18000, pedido_tipico: null, pedidos_base: 0,
+    sugestao: 18000, compartimentos: [18], limitado_por: 'venda', pedido: null,
+  }, o);
+}
+var RESPOSTA = {
+  success: true, data_entrega: '2026-09-22', dia_semana: 'terça-feira', bandeira: null,
+  fatores: { GC: { valor: 1, base: 40, teto: false } },
+  fatores_semana: {},
+  caminhao: { compartimentos: [3,5,8,10,12,13,15,18,20,23,25], capacidade: 45000 },
+  itens: [
+    // 1) um compartimento só
+    item({ combustivel: 'GC', sugestao: 18000, compartimentos: [18], posto_nome: 'P. UM' }),
+    // 2) soma de dois
+    item({ combustivel: 'ET', sugestao: 18000, compartimentos: [15, 3], posto_nome: 'P. UM' }),
+    // 3) cortado pelo caminhão
+    item({ combustivel: 'S10', sugestao: 8000, compartimentos: [5, 3], posto_nome: 'P. UM',
+           limitado_por: 'caminhao', alvo: 14000 }),
+    // 4) limitado pelo tanque
+    item({ combustivel: 'S500', sugestao: 5000, compartimentos: [5], posto_nome: 'P. DOIS',
+           espaco: 5200, limitado_por: 'espaco', alvo: 12000 }),
+  ],
+  totais: { sugerido: 50000, postos_criticos: 0, rede_venda_30d: 900000 },
+  sem_medicao: [], sem_tanque: [],
+};
+// A resposta VELHA: os mesmos itens sem o campo novo. É o que uma API ainda
+// não atualizada devolve.
+function respostaAntiga() {
+  var r = JSON.parse(JSON.stringify(RESPOSTA));
+  delete r.caminhao;
+  r.itens.forEach(function (i) { delete i.compartimentos; });
+  return r;
+}
+
+var _resposta = RESPOSTA;
+window.apiFetch = function (url) {
+  if (String(url).indexOf('/sugestao-pedido') === 0) {
+    return Promise.resolve(JSON.parse(JSON.stringify(_resposta)));
+  }
+  return Promise.resolve({ success: true });
+};
+window.getUsuarioLogado = function () { return { perfil: 'LOGISTICA' }; };
+window.mostrarToast = function () {};
+
+// ── Ajudantes de leitura ────────────────────────────────────────
+var host = function (id) { return document.getElementById(id); };
+// A linha do bloco de um combustível, em qualquer host.
+function linhaComb(id, comb) {
+  var lins = host(id).querySelectorAll('.kpi-bl-lin');
+  for (var i = 0; i < lins.length; i++) {
+    var c = lins[i].querySelector('.kpi-bl-comb');
+    if (c && c.textContent.trim() === comb) return lins[i];
+  }
+  return null;
+}
+function txtComp(id, comb) {
+  var l = linhaComb(id, comb);
+  var c = l && l.querySelector('.kpi-comp');
+  return c ? c.textContent.trim() : '(sem)';
+}
+function txtLinha(id, comb) {
+  var l = linhaComb(id, comb);
+  return l ? l.textContent.replace(/\s+/g, ' ').trim() : '(sem linha)';
+}
+
+(async function () {
+  try {
+    await carregarJS('/modulos/painel-adm/kpi.js');
+    eh(typeof window.renderKpi === 'function', 'o kpi.js expõe renderKpi');
+
+    // HOST 1 — Logística (#tab-kpi): blocos com PEDIDO/Δ e a coluna da direita.
+    renderKpi(host('tab-kpi'));
+    await esperar(250);
+
+    h3('0. A tela montou com os quatro itens');
+    eh(host('tab-kpi').querySelectorAll('.kpi-bl-lin').length === 4,
+       'quatro linhas de combustível',
+       String(host('tab-kpi').querySelectorAll('.kpi-bl-lin').length), '4');
+
+    h3('1. Um compartimento só');
+    eh(txtComp('tab-kpi', 'GC') === '18', 'GC de 18.000 L mostra "18"',
+       txtComp('tab-kpi', 'GC'), '18');
+    var elGC = linhaComb('tab-kpi', 'GC').querySelector('.kpi-comp');
+    eh(elGC.getAttribute('title') === 'Compartimentos do caminhão: compartimento 18',
+       'e o title traz o texto por extenso', elGC.getAttribute('title'));
+    eh(/18\.000/.test(txtLinha('tab-kpi', 'GC')), 'ao lado do volume',
+       txtLinha('tab-kpi', 'GC'));
+
+    h3('2. Soma de compartimentos');
+    eh(txtComp('tab-kpi', 'ET') === '15 + 3', 'ET de 18.000 L mostra "15 + 3"',
+       txtComp('tab-kpi', 'ET'), '15 + 3');
+    nota('18.000 sai de um compartimento de 18 OU de 15+3 — o número é o mesmo,');
+    nota('e é a combinação que diz ao motorista o que abrir.');
+
+    h3('3. O volume bate com a soma da combinação');
+    // É a afirmação que pega o erro de verdade: um rótulo que não soma o
+    // volume mandaria o caminhão sair errado.
+    var confere = true, detalhe = [];
+    _resposta.itens.forEach(function (i) {
+      var soma = (i.compartimentos || []).reduce(function (a, b) { return a + b; }, 0) * 1000;
+      if (soma !== i.sugestao) { confere = false; detalhe.push(i.combustivel + ': ' + soma + '≠' + i.sugestao); }
+    });
+    eh(confere, 'toda combinação soma exatamente a sugestão', detalhe.join(' ') || 'todas');
+
+    h3('4. "cheio" (caminhão) é diferente de "teto" (tanque)');
+    var chipS10 = linhaComb('tab-kpi', 'S10').querySelector('.kpi-teto');
+    eh(!!chipS10 && chipS10.textContent.trim() === 'cheio',
+       'o cortado pelo caminhão mostra "cheio"', chipS10 && chipS10.textContent.trim(), 'cheio');
+    eh(!!chipS10 && /45\.000/.test(chipS10.getAttribute('title') || ''),
+       'com o motivo no title', chipS10 && chipS10.getAttribute('title'));
+    eh(chipS10.classList.contains('kpi-teto--cam'), 'e uma classe própria (cor diferente)',
+       chipS10.className);
+    var chipS500 = linhaComb('tab-kpi', 'S500').querySelector('.kpi-teto');
+    eh(!!chipS500 && chipS500.textContent.trim() === 'teto',
+       'o limitado pelo tanque continua "teto"', chipS500 && chipS500.textContent.trim(), 'teto');
+    eh(!chipS500.classList.contains('kpi-teto--cam'), 'sem a classe do caminhão',
+       chipS500.className);
+    nota('São ações diferentes: "teto" manda olhar o tanque, "cheio" manda');
+    nota('pensar numa segunda viagem.');
+
+    h3('5. Os dois convivem na mesma célula');
+    eh(txtComp('tab-kpi', 'S10') === '5 + 3' && !!chipS10,
+       'S10 mostra a combinação E o chip', txtComp('tab-kpi', 'S10') + ' + chip');
+
+    h3('6. O cabeçalho ganhou a coluna');
+    var head = host('tab-kpi').querySelector('.kpi-bl-head');
+    eh(!!head && /COMP/.test(head.textContent), 'a coluna se chama COMP',
+       head ? head.textContent.replace(/\s+/g, ' ').trim() : '(sem header)');
+
+    h3('7. O painel ADM (outro host) também mostra');
+    renderKpi(host('s-mais'));
+    await esperar(250);
+    eh(host('s-mais').querySelectorAll('.kpi-bl-lin').length === 4,
+       'o mesmo componente montou no outro host',
+       String(host('s-mais').querySelectorAll('.kpi-bl-lin').length), '4');
+    eh(txtComp('s-mais', 'ET') === '(15 + 3)',
+       'ali a combinação vai por extenso, dentro do número',
+       txtComp('s-mais', 'ET'), '(15 + 3)');
+    eh(!host('s-mais').querySelector('.kpi-bl-head'),
+       'e o host do ADM segue sem o cabeçalho de colunas (nada mudou lá)');
+
+    h3('8. Resposta ANTIGA (sem compartimentos) não quebra');
+    // A API pode estar um deploy atrás. A tela tem de continuar mostrando o
+    // volume, sem parênteses vazios pendurados.
+    _resposta = respostaAntiga();
+    renderKpi(host('tab-kpi'));
+    await esperar(250);
+    eh(host('tab-kpi').querySelectorAll('.kpi-bl-lin').length === 4,
+       'a tela continua montando', String(host('tab-kpi').querySelectorAll('.kpi-bl-lin').length), '4');
+    eh(txtComp('tab-kpi', 'GC') === '(sem)', 'sem o campo, nenhum rótulo de compartimento',
+       txtComp('tab-kpi', 'GC'), '(sem)');
+    eh(!/\(\s*\)/.test(host('tab-kpi').textContent), 'e nenhum "()" vazio na tela');
+    eh(/18\.000/.test(txtLinha('tab-kpi', 'GC')), 'o volume continua lá',
+       txtLinha('tab-kpi', 'GC'));
+    var chipVelho = linhaComb('tab-kpi', 'S500').querySelector('.kpi-teto');
+    eh(!!chipVelho && chipVelho.textContent.trim() === 'teto',
+       'e o chip "teto", que já existia, segue funcionando',
+       chipVelho && chipVelho.textContent.trim());
+    _resposta = RESPOSTA;
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — Compartimentos';
+})();
+</script>
