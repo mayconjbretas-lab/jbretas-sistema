@@ -286,6 +286,67 @@ html, body { height: 100%; overflow: hidden; }
   border-radius: 12px; padding: .8rem 1rem; margin-bottom: 1rem;
 }
 .fx-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+/* ════════ CABEÇALHO RECOLHÍVEL (só com posto selecionado) ════════
+   A linha inteira é o alvo do clique, não só a seta: é o gesto que a pessoa
+   tenta primeiro, e uma seta de 12px é alvo pequeno demais para uma ação
+   usada o tempo todo. O <input type="date"> dentro dela para a propagação no
+   próprio onclick — sem isso, escolher uma data recolheria o bloco junto. */
+.fx-head--bt { cursor: pointer; user-select: none; }
+.fx-toggle {
+  margin-left: auto; display: inline-flex; align-items: center; gap: .5rem;
+  background: transparent; border: 1px solid var(--border); border-radius: 8px;
+  padding: .3rem .6rem; cursor: pointer; color: var(--text);
+}
+.fx-head--bt:hover .fx-toggle { border-color: var(--accent); }
+.fx-toggle-tot { font-family: var(--mono); font-size: .82rem; font-weight: 700; color: var(--accent); }
+/* line-height 1 e largura fixa: ▾ e ▸ têm métricas diferentes, e sem a
+   largura o total dança um pixel para o lado a cada clique. */
+.fx-seta { font-size: .7rem; line-height: 1; width: .7rem; text-align: center; color: var(--text3); }
+
+/* O CORPO QUE ANIMA. max-height em vez de height porque a altura real varia
+   com a quantidade de combustíveis do posto (e com a quebra de linha dos
+   cards em tela estreita) — e `height: auto` não é animável.
+
+   O TETO É APERTADO (320px) DE PROPÓSITO, e isto é o que faz a animação ser
+   vista. max-height interpola do TETO até zero, não da altura real: com um
+   teto de 1000px sobre um bloco de ~98px, 90% da transição acontece acima da
+   altura do conteúdo — nada se move — e o fecho vira um solavanco nos
+   últimos milissegundos. Medido: 98px com uma linha de cards, ~190px com
+   duas (tela estreita, seis combustíveis). 320px cobre o pior caso com folga
+   e mantém o trajeto visível.
+
+   SE UM POSTO PASSAR DE 320px, o excesso fica cortado no estado EXPANDIDO —
+   por isso a folga de 1,7x sobre o maior caso medido. É o único risco deste
+   valor, e ele é o preço de a animação existir.
+
+   overflow: hidden é o que faz o recorte durante a animação — e aqui ele NÃO
+   esconde conteúdo alcançável: o que está dentro volta inteiro ao expandir. */
+.fx-corpo {
+  overflow: hidden;
+  max-height: 320px;
+  opacity: 1;
+  transition: max-height .24s ease, opacity .18s ease;
+}
+.fx-recolhida .fx-corpo { max-height: 0; opacity: 0; }
+/* margin-bottom da sub-linha zerado no recolhido: sem isso ele sobra como
+   um vão de 11px sob o cabeçalho, com o corpo já em altura zero. */
+.fx-recolhida .fx-sub { margin-bottom: 0; }
+
+/* Os botões de folha (#matriz-acoes) somem junto — eles pertencem ao bloco,
+   e deixá-los boiando sobre a tabela seria pior que escondê-los. */
+#matriz-acoes {
+  overflow: hidden;
+  max-height: 200px;
+  opacity: 1;
+  transition: max-height .24s ease, opacity .18s ease, margin .24s ease;
+}
+#matriz-acoes.fx-oculto { max-height: 0; opacity: 0; margin: 0; }
+
+/* Quem prefere menos movimento não recebe movimento nenhum: o estado final é
+   o mesmo, só sem o trajeto. */
+@media (prefers-reduced-motion: reduce) {
+  .fx-corpo, #matriz-acoes { transition: none; }
+}
 .fx-title {
   font-family: var(--mono); font-size: .82rem; font-weight: 700; color: var(--accent);
   letter-spacing: .04em; text-transform: uppercase;

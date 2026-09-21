@@ -618,10 +618,84 @@ function voltarAosCards() {
   atualizarFaixa();   // restaura a faixa de escopo (REDE/bandeira) + re-renderiza a grade
 }
 
-function faixaHead(titulo, dataISO) {
-  return '<div class="fx-head">' +
+// ════════ O BLOCO DE PEDIDO FINAL RECOLHE (só no posto) ════════
+// Ele ocupa a faixa inteira do topo — cabeçalho, sub-linha, os cards de cada
+// combustível e os dois botões de folha — e quem está conferindo a matriz de
+// um posto passa a maior parte do tempo olhando a TABELA, não o pedido. Com
+// ele recolhido sobra a altura dele para as linhas do mês.
+//
+// EM MEMÓRIA, NÃO EM localStorage, como pedido. A consequência é deliberada:
+// recarregar a página devolve o bloco aberto. É o estado de uma sessão de
+// conferência, não uma preferência do usuário — e uma preferência gravada
+// esconderia o pedido de quem abrisse a tela semanas depois sem lembrar de
+// tê-la marcado.
+//
+// SÓ NO POSTO. Em "Todos os postos" o bloco fala da REDE inteira e é o
+// resumo que justifica a tela; ali não há seta e nada recolhe (item 6).
+let _faixaRecolhida = false;
+
+// Os dois botões de folha vivem em #matriz-acoes, que é IRMÃO da faixa (quem
+// os monta é o medicao-pdf.js). Recolher a faixa tem de levá-los junto —
+// senão eles ficam boiando sobre a tabela, sem o bloco a que pertencem.
+// Mexer aqui, e não no medicao-pdf.js, mantém aquele arquivo sem saber que
+// existe um bloco recolhível.
+function fxAplicarAcoes() {
+  const acoes = document.getElementById('matriz-acoes');
+  if (!acoes) return;
+  // A classe só entra quando há posto: na vista de rede os botões seguem
+  // como sempre estiveram.
+  acoes.classList.toggle('fx-oculto', !!POSTO_ATUAL && _faixaRecolhida);
+}
+
+// Alterna SEM re-renderizar: o render refaria o fetch da faixa e piscaria a
+// tela por causa de um clique que não muda dado nenhum.
+function __fxToggle() {
+  _faixaRecolhida = !_faixaRecolhida;
+  const host = document.getElementById('faixa-pedido');
+  if (host) {
+    host.classList.toggle('fx-recolhida', _faixaRecolhida);
+    const bt = host.querySelector('.fx-toggle');
+    if (bt) {
+      bt.setAttribute('aria-expanded', _faixaRecolhida ? 'false' : 'true');
+      const seta = bt.querySelector('.fx-seta');
+      if (seta) seta.textContent = _faixaRecolhida ? '▸' : '▾';
+    }
+  }
+  fxAplicarAcoes();
+}
+
+// `opts.total` presente = cabeçalho recolhível. O total sobe para a linha do
+// cabeçalho porque ele é o número que a pessoa quer ver mesmo com o bloco
+// fechado — sem ele, recolher esconderia justamente o que o bloco existe
+// para dizer.
+//
+// O INPUT DE DATA PARA O CLIQUE de propagar: ele fica DENTRO da linha
+// clicável, e sem o stopPropagation escolher uma data recolheria o bloco no
+// mesmo gesto.
+function faixaHead(titulo, dataISO, opts) {
+  const o = opts || {};
+  const recolhivel = o.total !== undefined && o.total !== null;
+  const dir = recolhivel
+    // stopPropagation NO BOTÃO, e não é detalhe: ele fica DENTRO da linha
+    // clicável, e sem isto o clique dispara o onclick do botão E sobe para o
+    // da linha — dois toggles, estado final igual ao inicial, e o bloco
+    // parecendo que não responde. Pegado pelo testes/pedido-final-recolhivel.
+    //
+    // O BOTÃO CONTINUA SENDO O CONTROLE de verdade (foco, Enter, espaço e o
+    // aria-expanded); a linha é só um alvo maior para o mouse.
+    ? '<button type="button" class="fx-toggle" onclick="event.stopPropagation(); __fxToggle()"' +
+        ' aria-expanded="' + (_faixaRecolhida ? 'false' : 'true') + '"' +
+        ' title="Recolher/expandir o pedido final">' +
+        '<span class="fx-toggle-tot">' + fmtNum(o.total) + ' L</span>' +
+        '<span class="fx-seta">' + (_faixaRecolhida ? '▸' : '▾') + '</span>' +
+      '</button>'
+    : '';
+  return '<div class="fx-head' + (recolhivel ? ' fx-head--bt' : '') + '"' +
+      (recolhivel ? ' onclick="__fxToggle()"' : '') + '>' +
       '<div class="fx-title">PEDIDO FINAL — ' + esc(titulo) + '</div>' +
-      '<input type="date" class="fx-data" value="' + esc(dataISO) + '" onchange="onFaixaData(this)">' +
+      '<input type="date" class="fx-data" value="' + esc(dataISO) + '"' +
+        ' onchange="onFaixaData(this)" onclick="event.stopPropagation()">' +
+      dir +
     '</div>';
 }
 function onFaixaData(input) { FAIXA_DATA = input.value || hojeISO(); atualizarFaixa(); }
@@ -638,13 +712,24 @@ function renderFaixa(host, titulo, dataISO, resp) {
   const blocos = cods.map(k => bloco(k, pc[k])).join('');
   const total = (resp && resp.total) || 0;   // total vem da rota
   const n = (resp && resp.postos_com_pedido) || 0;
+  // Recolhível SÓ com posto selecionado (item 6). O `total` no cabeçalho é o
+  // que sinaliza isso para o faixaHead.
+  const recolhivel = !!POSTO_ATUAL;
+  host.classList.toggle('fx-recolhida', recolhivel && _faixaRecolhida);
   host.innerHTML =
-    faixaHead(titulo, dataISO) +
-    '<div class="fx-sub">' + n + ' postos com pedido · ' + fmtDataBR(dataISO) + '</div>' +
-    '<div class="fx-blocos">' + blocos +
-      '<div class="fx-bloco fx-bloco-total"><div class="fx-bl-lbl">TOTAL</div>' +
-        '<div class="fx-bl-val">' + fmtNum(total) + '</div></div>' +
+    faixaHead(titulo, dataISO, recolhivel ? { total } : null) +
+    // O CORPO É UM WRAPPER NOVO e nada dentro dele mudou: a sub-linha e os
+    // cards são os mesmos, na mesma ordem. Ele existe só para haver UM
+    // elemento cuja altura anima — animar dois irmãos separados daria dois
+    // tempos ligeiramente diferentes e um solavanco no meio.
+    '<div class="fx-corpo">' +
+      '<div class="fx-sub">' + n + ' postos com pedido · ' + fmtDataBR(dataISO) + '</div>' +
+      '<div class="fx-blocos">' + blocos +
+        '<div class="fx-bloco fx-bloco-total"><div class="fx-bl-lbl">TOTAL</div>' +
+          '<div class="fx-bl-val">' + fmtNum(total) + '</div></div>' +
+      '</div>' +
     '</div>';
+  fxAplicarAcoes();
 }
 function bloco(label, val) {
   return '<div class="fx-bloco"><div class="fx-bl-lbl">' + esc(label) + '</div>' +

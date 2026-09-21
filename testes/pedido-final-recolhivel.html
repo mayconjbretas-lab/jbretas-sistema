@@ -1,0 +1,325 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logística — pedido final recolhível</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  html, body { height: auto !important; overflow: visible !important; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+<link rel="stylesheet" href="/shared/css/matriz.css">
+<link rel="stylesheet" href="/modulos/logistica/logistica.css">
+
+<div id="res">rodando…</div>
+<div id="palco">
+  <div id="faixa-pedido" class="faixa-pedido"></div>
+  <div id="matriz-acoes" class="matriz-acoes">
+    <button type="button" class="matriz-btn-pdf" id="btn-folha-posto">🖨️ Folha do posto</button>
+    <button type="button" class="matriz-btn-pdf" id="btn-folha-rede">🖨️ Folhas da rede</button>
+  </div>
+  <div id="matriz-host"></div>
+  <div id="matriz-vazio" style="display:none"></div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// O bloco "PEDIDO FINAL — P. NOME" ocupa a faixa do topo da Matriz, e quem
+// confere a tabela do mês passa a maior parte do tempo olhando a TABELA.
+// Agora ele recolhe.
+//
+//  1. COM POSTO: o cabeçalho ganha o TOTAL e a seta, e a linha inteira é
+//     clicável.
+//  2. EXPANDIDO É O PADRÃO na primeira abertura: cards e botões visíveis,
+//     seta ▾.
+//  3. RECOLHIDO: o corpo vai a altura zero, os dois botões de folha somem
+//     junto (eles pertencem ao bloco), e o TOTAL continua à vista — recolher
+//     não pode esconder o número que o bloco existe para dizer.
+//  4. O ESTADO SOBREVIVE À TROCA DE POSTO, e está em MEMÓRIA: nada é escrito
+//     em localStorage.
+//  5. "TODOS OS POSTOS" NÃO TEM SETA e nada recolhe — ali o bloco é o resumo
+//     da rede que justifica a tela.
+//  6. O INPUT DE DATA NÃO RECOLHE o bloco: ele fica dentro da linha clicável,
+//     e sem o stopPropagation escolher uma data fecharia tudo no mesmo gesto.
+//  7. NADA ABAIXO DO BLOCO É TOCADO: #matriz-host sai do render intacto.
+//
+// As funções são as de PRODUÇÃO (modulos/logistica/app.js), com a API dublada.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+// ── dublês de sessão e de API ───────────────────────────────────
+var DIA = '2026-09-21';
+var POSTOS_FIX = [
+  { id: 'p1', nome: 'P. ALEX', bandeira: 'BR' },
+  { id: 'p2', nome: 'P. BRUNA', bandeira: 'Shell' },
+];
+function respPosto(nome, total) {
+  return { success: true, posto_nome: nome, total: total,
+    por_combustivel: { GC: 8000, GA: 2000, ET: 5000, S10: 3000 },
+    combustiveis: ['GC', 'GA', 'ET', 'S10'],
+    postos_com_pedido: 1, postos: [], tanques: {}, comentarios_disponiveis: true };
+}
+function respRede() {
+  return { success: true, total: 420000,
+    por_combustivel: { GC: 200000, GA: 40000, ET: 120000, S10: 60000 },
+    combustiveis: ['GC', 'GA', 'ET', 'S10'],
+    postos_com_pedido: 31, postos: [], tanques: {}, comentarios_disponiveis: true };
+}
+var CHAMADAS = [];
+window.apiFetch = function (url) {
+  var u = String(url);
+  CHAMADAS.push(u);
+  if (u.indexOf('/medicao/pedido-dia') === 0) {
+    var m = /posto_id=([^&]+)/.exec(u);
+    if (!m) return Promise.resolve(respRede());
+    var p = POSTOS_FIX.filter(function (x) { return x.id === decodeURIComponent(m[1]); })[0];
+    return Promise.resolve(respPosto(p.nome, p.id === 'p1' ? 18000 : 25000));
+  }
+  return Promise.resolve({ success: true, postos: POSTOS_FIX });
+};
+window.exigirSessao = function () { return { id: 'h', nome: 'H', perfil: 'LOGISTICA' }; };
+window.getUsuarioLogado = window.exigirSessao;
+window.redirecionarPorPerfil = function () {};
+window.caminhoRaiz = function () { return '/'; };
+window.matrizMedicao = { carregar: function () {}, montar: function () {},
+  ajustarSticky: function () {}, salvar: function () {}, desfazer: function () {} };
+window.medicaoFabs = { setVisivel: function () {} };
+
+function js(src) {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { erro(new Error(src + ' não carregou')); };
+    document.body.appendChild(s);
+  });
+}
+function faixa() { return document.getElementById('faixa-pedido'); }
+function acoes() { return document.getElementById('matriz-acoes'); }
+function corpo() { return faixa().querySelector('.fx-corpo'); }
+function toggle() { return faixa().querySelector('.fx-toggle'); }
+function seta() { var b = toggle(); return b ? b.querySelector('.fx-seta').textContent.trim() : null; }
+function alturaCorpo() { var c = corpo(); return c ? Math.round(c.getBoundingClientRect().height) : null; }
+function alturaAcoes() { return Math.round(acoes().getBoundingClientRect().height); }
+// ════════ ESTADO SEM ANIMAÇÃO, ANIMAÇÃO SEM ESTADO ════════
+// Medir altura no meio de uma transição é um teste que mente das duas
+// formas: acusa falha com o código certo e passa com o errado, conforme o
+// milissegundo. E `max-height` piora isso — ela interpola do TETO até zero,
+// então a altura REAL fica parada durante boa parte do trajeto e um "esperar
+// assentar" ingênuo dá por terminado o que mal começou. Foi exatamente o que
+// aconteceu na primeira versão deste arquivo: 86px lido como final.
+//
+// Aqui as duas perguntas são separadas:
+//   · O ESTADO FINAL é medido com as transições DESLIGADAS (o <style> abaixo),
+//     onde 0 é 0 e não há meio-caminho.
+//   · A EXISTÊNCIA DA ANIMAÇÃO é afirmada sobre o CSS (bloco 4), que é onde
+//     ela está declarada — não sobre um cronômetro.
+var semAnim = document.createElement('style');
+semAnim.textContent = '.fx-corpo, #matriz-acoes { transition: none !important; }';
+document.head.appendChild(semAnim);
+// Timers e um reflow forçado, e NÃO requestAnimationFrame: rAF não dispara em
+// aba que o navegador não está pintando (painel em segundo plano), e ali o
+// teste ficaria pendurado para sempre — foi o que aconteceu antes de esta
+// linha existir. O `offsetHeight` força o recálculo de layout sem depender
+// de quadro nenhum.
+async function animou() {
+  await esperar(30);
+  void document.body.offsetHeight;
+  await esperar(30);
+}
+
+(async function () {
+  try {
+    await js('/modulos/logistica/app.js');
+    await esperar(60);
+
+    // Estado do módulo: POSTO_ATUAL e FAIXA_DATA são `let` de escopo de
+    // script, como no app real.
+    POSTO_ATUAL = 'P. ALEX';
+    TODOS_POSTOS = POSTOS_FIX;
+    FAIXA_DATA = DIA;
+    await atualizarFaixa();
+    await esperar(150);
+
+    h3('1. Com posto: cabeçalho com total e seta, linha clicável');
+    eh(!!faixa().querySelector('.fx-title'), 'o título existe',
+       (faixa().querySelector('.fx-title') || {}).textContent);
+    eh(/PEDIDO FINAL — P\. ALEX/.test(faixa().textContent), 'dizendo "PEDIDO FINAL — P. ALEX"');
+    eh(!!toggle(), 'a seta/botão existe');
+    eh(/18\.000 L/.test(toggle().textContent), 'com o TOTAL do posto ao lado',
+       toggle().textContent.replace(/\s+/g, ' ').trim(), '18.000 L');
+    eh(faixa().querySelector('.fx-head').classList.contains('fx-head--bt'),
+       'e a linha inteira é clicável (não só a seta)',
+       faixa().querySelector('.fx-head').className);
+
+    h3('2. Expandido é o padrão na primeira abertura');
+    eh(seta() === '▾', 'seta ▾', seta(), '▾');
+    eh(!faixa().classList.contains('fx-recolhida'), 'sem a classe de recolhido');
+    eh(alturaCorpo() > 40, 'o corpo (sub-linha + cards) está aberto',
+       alturaCorpo() + 'px');
+    eh(alturaAcoes() > 10, 'e os botões de folha aparecem', alturaAcoes() + 'px');
+    var nCards = faixa().querySelectorAll('.fx-bloco').length;
+    eh(nCards === 5, 'com os 5 cards (GC, GA, ET, S10 e TOTAL)', String(nCards), '5');
+
+    h3('3. Recolhido: corpo e botões somem, total fica');
+    toggle().click();
+    await animou();
+    eh(seta() === '▸', 'a seta vira ▸', seta(), '▸');
+    eh(faixa().classList.contains('fx-recolhida'), 'a faixa ganha .fx-recolhida');
+    eh(alturaCorpo() === 0, 'o corpo vai a altura ZERO', alturaCorpo() + 'px', '0px');
+    eh(alturaAcoes() === 0, 'e os botões de folha somem junto', alturaAcoes() + 'px', '0px');
+    nota('Eles pertencem ao bloco; deixá-los boiando sobre a tabela seria pior.');
+    eh(/18\.000 L/.test(toggle().textContent),
+       'mas o TOTAL continua à vista no cabeçalho', toggle().textContent.replace(/\s+/g, ' ').trim());
+    nota('Recolher não pode esconder o número que o bloco existe para dizer.');
+    eh(/PEDIDO FINAL — P\. ALEX/.test(faixa().textContent), 'e o título também');
+    eh(toggle().getAttribute('aria-expanded') === 'false',
+       'aria-expanded acompanha', toggle().getAttribute('aria-expanded'), 'false');
+
+    h3('4. Há transição declarada (não é corte seco)');
+    // Lida do ARQUIVO, não do elemento: o <style> lá de cima desliga as
+    // transições para as medições de altura ficarem determinísticas, então
+    // perguntar ao elemento devolveria 'none' e provaria o contrário do que
+    // se quer. A declaração está no logistica.css e é lá que ela é conferida.
+    var regras = [];
+    for (var si = 0; si < document.styleSheets.length; si++) {
+      var ss = document.styleSheets[si], rs;
+      if (!/logistica\.css/.test(ss.href || '')) continue;
+      try { rs = ss.cssRules; } catch (e) { continue; }
+      for (var ri = 0; ri < rs.length; ri++) {
+        var sel = rs[ri].selectorText || '';
+        if (sel === '.fx-corpo' || sel === '.fx-recolhida .fx-corpo' ||
+            sel === '#matriz-acoes' || sel === '#matriz-acoes.fx-oculto') {
+          regras.push({ sel: sel, css: rs[ri].style });
+        }
+      }
+    }
+    var rCorpo = regras.filter(function (r) { return r.sel === '.fx-corpo'; })[0];
+    var rFechado = regras.filter(function (r) { return r.sel === '.fx-recolhida .fx-corpo'; })[0];
+    var rAcoes = regras.filter(function (r) { return r.sel === '#matriz-acoes'; })[0];
+    var rAcoesOff = regras.filter(function (r) { return r.sel === '#matriz-acoes.fx-oculto'; })[0];
+    eh(!!rCorpo && /max-height/.test(rCorpo.css.transitionProperty || ''),
+       'o .fx-corpo declara transição de max-height',
+       rCorpo && rCorpo.css.transitionProperty);
+    eh(!!rCorpo && parseFloat(rCorpo.css.transitionDuration) > 0,
+       'com duração maior que zero', rCorpo && rCorpo.css.transitionDuration);
+    eh(!!rFechado && rFechado.css.maxHeight === '0px',
+       'e o estado recolhido leva max-height a 0', rFechado && rFechado.css.maxHeight, '0px');
+    // O TETO IMPORTA e por isso é afirmado: max-height interpola do teto até
+    // zero, então um teto muito acima da altura real deixa a animação
+    // invisível durante quase todo o trajeto. 320px cobre o pior caso medido
+    // (~190px) com folga e mantém o movimento à vista.
+    var teto = rCorpo && parseFloat(rCorpo.css.maxHeight);
+    eh(teto >= 200 && teto <= 400, 'com teto apertado o bastante para a animação ser vista',
+       (rCorpo && rCorpo.css.maxHeight), 'entre 200px e 400px');
+    eh(!!rAcoes && !!rAcoesOff && rAcoesOff.css.maxHeight === '0px',
+       'e os botões de folha têm o mesmo par de regras',
+       rAcoesOff && rAcoesOff.css.maxHeight, '0px');
+
+    h3('5. O estado sobrevive à troca de posto');
+    POSTO_ATUAL = 'P. BRUNA';
+    await atualizarFaixa();
+    await esperar(200);
+    eh(/PEDIDO FINAL — P\. BRUNA/.test(faixa().textContent), 'trocou de posto',
+       (faixa().querySelector('.fx-title') || {}).textContent);
+    eh(faixa().classList.contains('fx-recolhida'), 'e continua RECOLHIDO');
+    eh(seta() === '▸', 'com a seta ▸', seta(), '▸');
+    eh(alturaCorpo() === 0, 'corpo ainda em zero', alturaCorpo() + 'px', '0px');
+    eh(/25\.000 L/.test(toggle().textContent),
+       'e o total é o do posto NOVO', toggle().textContent.replace(/\s+/g, ' ').trim(), '25.000 L');
+    eh(alturaAcoes() === 0, 'os botões seguem escondidos', alturaAcoes() + 'px', '0px');
+
+    h3('6. Está em MEMÓRIA, não em localStorage');
+    var chaves = [];
+    for (var i = 0; i < localStorage.length; i++) chaves.push(localStorage.key(i));
+    var suspeitas = chaves.filter(function (k) { return /faixa|recolh|pedido/i.test(k); });
+    eh(suspeitas.length === 0, 'nada de faixa/recolhido gravado em localStorage',
+       suspeitas.join(',') || 'nenhuma chave');
+    nota('Recarregar devolve o bloco aberto — é estado de sessão, não preferência.');
+
+    h3('7. Expandir de volta');
+    toggle().click();
+    await animou();
+    eh(seta() === '▾', 'seta ▾', seta(), '▾');
+    eh(alturaCorpo() > 40, 'o corpo volta inteiro', alturaCorpo() + 'px');
+    eh(alturaAcoes() > 10, 'e os botões também', alturaAcoes() + 'px');
+    eh(faixa().querySelectorAll('.fx-bloco').length === 5, 'com os 5 cards de novo');
+
+    h3('8. "Todos os postos": sem seta, nada recolhe');
+    POSTO_ATUAL = '';
+    await atualizarFaixa();
+    await esperar(200);
+    eh(/PEDIDO FINAL — REDE/.test(faixa().textContent), 'o bloco vira o da REDE',
+       (faixa().querySelector('.fx-title') || {}).textContent);
+    eh(!toggle(), 'sem seta nenhuma', toggle() ? 'tem seta' : 'sem seta');
+    eh(!faixa().classList.contains('fx-recolhida'), 'e sem a classe de recolhido');
+    eh(alturaAcoes() > 10, 'os botões de folha aparecem normalmente', alturaAcoes() + 'px');
+    nota('Na rede o bloco é o resumo que justifica a tela — não há o que recolher.');
+
+    h3('9. Voltar ao posto com o estado de antes');
+    // Estava EXPANDIDO quando saímos do posto (passo 7), e é assim que tem de
+    // voltar: a vista de rede não mexe no estado do posto.
+    POSTO_ATUAL = 'P. ALEX';
+    await atualizarFaixa();
+    await esperar(200);
+    eh(!!toggle() && seta() === '▾', 'volta expandido, como estava', seta(), '▾');
+    // E recolhido sobrevive à ida e volta pela rede.
+    toggle().click();
+    await animou();
+    POSTO_ATUAL = '';
+    await atualizarFaixa();
+    await esperar(200);
+    POSTO_ATUAL = 'P. BRUNA';
+    await atualizarFaixa();
+    await esperar(200);
+    eh(faixa().classList.contains('fx-recolhida') && seta() === '▸',
+       'e recolhido sobrevive a passar pela vista de rede', seta(), '▸');
+
+    h3('10. O input de data NÃO recolhe o bloco');
+    // Ele fica dentro da linha clicável; sem o stopPropagation, escolher uma
+    // data fecharia o bloco no mesmo gesto.
+    var antes = faixa().classList.contains('fx-recolhida');
+    faixa().querySelector('.fx-data').click();
+    await esperar(120);
+    eh(faixa().classList.contains('fx-recolhida') === antes,
+       'clicar no campo de data não muda o estado',
+       'antes ' + antes + ' / depois ' + faixa().classList.contains('fx-recolhida'));
+
+    h3('11. Nada abaixo do bloco foi tocado');
+    eh(document.getElementById('matriz-host').innerHTML === '',
+       'o #matriz-host sai do render intacto',
+       document.getElementById('matriz-host').innerHTML || '(vazio)', '(vazio)');
+    eh(CHAMADAS.every(function (u) { return u.indexOf('/medicao/pedido-dia') === 0 || u.indexOf('/postos') === 0; }),
+       'e o recolher/expandir não gerou chamada nova à API',
+       CHAMADAS.filter(function (u, i, a) { return a.indexOf(u) === i; }).length + ' URLs distintas');
+    nota('O toggle não re-renderiza: refazer o fetch piscaria a tela por um');
+    nota('clique que não muda dado nenhum.');
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — pedido final recolhível';
+})();
+</script>
