@@ -296,6 +296,13 @@ html[data-theme="light"] .cl-bom  { color: #0F6E56; }
 html[data-theme="light"] .cl-ruim { color: #A32D2D; }
 
 .cl-sem-preco { font-family: var(--mono); font-size: .68rem; color: var(--tx3); padding: .4rem 0; }
+/* O aviso do posto sem concorrente (ou sem coleta nenhuma). Discreto de
+   propósito: ele aparece em 21 dos 37 cards, e um alerta colorido repetido
+   21 vezes viraria ruído em vez de informação. */
+.cl-sem-comp {
+  font-family: var(--mono); font-size: .64rem; color: var(--tx3);
+  padding: .4rem 0 .1rem;
+}
 
 .cl-rodape { margin-top: 8px; }
 .cl-btn-sol { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;

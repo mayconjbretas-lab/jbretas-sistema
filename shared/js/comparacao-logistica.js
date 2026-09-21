@@ -68,23 +68,18 @@
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-  // ════════ BANDEIRAS ════════
-  // A bandeira sai do MAP_POSTOS (campo `banda`), que é dado ESTÁTICO deste
-  // repositório — nenhuma chamada nova à API entrou por causa dos filtros
-  // (item 5: não alterar a fonte de dados).
+  // ════════ BANDEIRAS: A FONTE É A TABELA `postos` ════════
+  // ERA o campo `banda` do MAP_POSTOS, e ele está ERRADO. Aquele arquivo veio
+  // do AppPainel e traz Shell (10 postos), Rede Flex e Bandeira Branca — que
+  // são bandeiras de CONCORRENTE, não da rede. A tabela `postos` do banco, que
+  // é o que a própria Logística já usa no filtro de bandeira do topo da tela,
+  // diz o certo: IPIRANGA (20), VIBRA (14), RIO BRANCO (2) e ALE (1), 37 no
+  // total. O `banda` do MAP_POSTOS ficou onde estava, intocado: ele ainda
+  // alimenta outras duas telas e corrigi-lo é outra conversa.
   //
-  // OS NOMES DO PEDIDO NÃO SÃO OS NOMES DO DADO. O pedido cita Ipiranga,
-  // Vibra, Rio Branco e Ale; o MAP_POSTOS traz "Ipiranga", "Shell",
-  // "BR/Petrobras", "Rede Flex", "Bandeira Branca" e "ALE". Vibra é o nome
-  // novo da BR — mesma distribuidora, mesma cor, e por isso as duas grafias
-  // caem na mesma entrada. "Rio Branco" fica registrada e acende sozinha se
-  // um dia aparecer no dado. Shell, Rede Flex e Bandeira Branca usam a cor
-  // neutra: inventar uma cor para elas seria inventar dado.
-  //
-  // O CHIP, PORÉM, NÃO DEPENDE DESTA LISTA. Os chips saem das bandeiras que
-  // existem nos postos carregados ("e qualquer outra bandeira que existir nos
-  // dados"), então uma bandeira nova aparece como filtro no mesmo dia em que
-  // entra no MAP_POSTOS — só sem cor própria até alguém acrescentá-la aqui.
+  // NENHUMA ROTA NOVA. GET /postos já existe, já devolve `bandeira` e já é
+  // chamado por esta mesma tela (modulos/logistica/app.js, carregarPostos) —
+  // quando o TODOS_POSTOS de lá já está preenchido, nem se pede de novo.
   const BANDEIRA_COR = {
     'ipiranga': 'ip',
     'vibra': 'vibra', 'br-petrobras': 'vibra', 'br': 'vibra', 'petrobras': 'vibra',
@@ -92,11 +87,18 @@
     'ale': 'ale',
   };
 
+  // BR → VIBRA no rótulo. O banco já gravou VIBRA em todos os postos hoje, mas
+  // o nome antigo sobrevive em planilha e em base velha; quem escrever "BR" ou
+  // "BR/Petrobras" continua vendo "Vibra" na tela, sem migração de dado.
+  const BANDEIRA_ROTULO = {
+    'br': 'Vibra', 'br-petrobras': 'Vibra', 'petrobras': 'Vibra', 'vibra': 'Vibra',
+  };
+
   // Sem acento, minúsculo, separadores virando '-': "BR/Petrobras" →
-  // "br-petrobras". Serve para a cor da bandeira E para a busca por nome.
+  // "br-petrobras". Serve para a cor, para o rótulo e para a chave do chip.
   function slug(s) {
     return String(s == null ? '' : s)
-      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .toLowerCase().trim()
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   }
@@ -104,12 +106,55 @@
   // "santa ines" tem de casar com "P. SANTA INES MINAS".
   function semAcento(s) {
     return String(s == null ? '' : s)
-      .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
   const corBandeira = (nome) => BANDEIRA_COR[slug(nome)] || 'outra';
-  const nomeBandeira = (posto) => (posto && posto.banda) ? posto.banda : 'Sem bandeira';
 
-  // Preço "6,19" a partir de número; '' quando não há valor.
+  // O banco grava em MAIÚSCULA ("RIO BRANCO"); a tela mostra "Rio Branco".
+  function rotuloBandeira(bruto) {
+    if (!bruto) return 'Sem bandeira';
+    const sl = slug(bruto);
+    if (BANDEIRA_ROTULO[sl]) return BANDEIRA_ROTULO[sl];
+    return String(bruto).toLowerCase().replace(/(^|[\s\/-])([a-zà-ú])/g,
+      (m, sep, ch) => sep + ch.toUpperCase());
+  }
+
+  // Mapa chave-do-MAP_POSTOS → bandeira do banco. Preenchido uma vez.
+  let _bandPorK = null;
+
+  async function carregarBandeiras() {
+    if (_bandPorK) return _bandPorK;
+    // O app.js da Logística já carregou /postos para o seletor do topo; reusar
+    // o array dele poupa uma requisição e garante que os dois filtros da MESMA
+    // tela falem da mesma lista.
+    let lista = (typeof TODOS_POSTOS !== 'undefined' && TODOS_POSTOS && TODOS_POSTOS.length)
+      ? TODOS_POSTOS : null;
+    if (!lista) {
+      try {
+        const r = await apiFetch('/postos');
+        lista = r.postos || [];
+      } catch (e) {
+        // NÃO-FATAL e NÃO CACHEADO: sem as bandeiras os cards saem sem badge e
+        // sem chips, mas os preços aparecem. A próxima recarga tenta de novo.
+        console.warn('Bandeiras dos postos indisponíveis:', e && e.message);
+        return {};
+      }
+    }
+    const m = {};
+    lista.forEach(p => {
+      if (!p || p.nome == null) return;
+      const k = (typeof chavePostoParaK === 'function')
+        ? chavePostoParaK(p.nome) : String(p.nome).replace(/^P\.\s*/i, '').toUpperCase();
+      m[k] = p.bandeira || null;
+    });
+    if (Object.keys(m).length) _bandPorK = m;
+    return m;
+  }
+
+  const bandeiraDoPosto = (posto) =>
+    (_bandPorK && posto) ? (_bandPorK[posto.k] || null) : null;
+
+  // Preço "6,19" a partir de número  // Preço "6,19" a partir de número; '' quando não há valor.
   const precoInput = (v) => (v === null || v === undefined || isNaN(v))
     ? '' : Number(v).toFixed(2).replace('.', ',');
 
@@ -124,7 +169,12 @@
     if (_carregando) return;
     _carregando = true;
     try {
-      const comp = await buscarComparacaoDoDia({ dias: 15 });
+      // As bandeiras vêm junto e não em série: uma não depende da outra, e
+      // esperar as duas em sequência dobraria o tempo até a primeira pintura.
+      const [comp] = await Promise.all([
+        buscarComparacaoDoDia({ dias: 15 }),
+        carregarBandeiras(),
+      ]);
       // Mesmo overlay do admin: sobrepõe no "Você" os preços já revisados hoje.
       await cmpAplicarRevisoes(comp);
       _comp = comp;
@@ -137,24 +187,40 @@
     render();
   }
 
-  // ════════ ORDEM: ALFABÉTICA, E SÓ ════════
-  // Era "com coleta de hoje primeiro, depois os sem coleta, cada grupo em
-  // ordem alfabética". Virou alfabético puro, como pedido (item 3) — e com a
-  // ordem estável a pessoa acha o posto pelo nome em vez de caçá-lo num
-  // agrupamento que muda de um dia para o outro. O que se perde é o destaque
-  // automático de quem coletou hoje; quem procura por isso tem a busca e os
-  // cartões de resumo, e o card sem coleta continua se identificando sozinho.
+  // ════════ TODOS OS POSTOS DA REDE, EM ORDEM ALFABÉTICA ════════
+  // ANTES SÓ APARECIA QUEM TINHA COLETA no período — 16 cards de 37. O posto
+  // sem coleta simplesmente não existia na tela, e "não coletaram lá" é
+  // exatamente a informação que alguém precisa ver para ir atrás. Agora a
+  // lista é o MAP_POSTOS inteiro e quem não tem dado ganha um card que diz
+  // isso.
+  //
+  // DADO VAZIO EM VEZ DE `null`: o card, o resumo e o cmpStatsFuel esperam um
+  // objeto com `concorrentes` array. Montá-lo aqui evita espalhar `if (!dado)`
+  // por todo o caminho — e é o mesmo formato, só sem nada dentro.
+  const DADO_VAZIO = { proprio: null, proprioDesatualizado: false, concorrentes: [] };
+
   function postosOrdenados() {
     const comMapa = (typeof MAP_POSTOS !== 'undefined') ? MAP_POSTOS : [];
     return comMapa
-      .filter(p => _comp && _comp[p.k])
-      .map(p => ({
-        posto: p,
-        dado: _comp[p.k],
-        nomeBusca: semAcento(p.ap),
-        bandeira: nomeBandeira(p),
-        bandSlug: slug(nomeBandeira(p)),
-      }))
+      .map(p => {
+        const bruta = bandeiraDoPosto(p);
+        return {
+          posto: p,
+          dado: (_comp && _comp[p.k]) ? _comp[p.k] : DADO_VAZIO,
+          temDado: !!(_comp && _comp[p.k]),
+          nomeBusca: semAcento(p.ap),
+          bandeira: rotuloBandeira(bruta),
+          // A CHAVE DO CHIP SAI DO RÓTULO, NÃO DO VALOR CRU. "BR/Petrobras" e
+          // "VIBRA" são a mesma bandeira e recebem o mesmo rótulo; sem isto
+          // virariam DOIS chips escritos "Vibra", e clicar num deles esconderia
+          // os postos do outro. Pela mesma razão qualquer grafia futura que
+          // caia no mesmo rótulo se funde sozinha.
+          // '' quando o banco não disse a bandeira: sem chave, sem chip, e o
+          // posto some de qualquer filtro de bandeira em vez de entrar num
+          // grupo inventado.
+          bandSlug: bruta ? slug(rotuloBandeira(bruta)) : '',
+        };
+      })
       .sort((a, b) => a.posto.ap.localeCompare(b.posto.ap, 'pt-BR'));
   }
 
@@ -246,7 +312,9 @@
     const bandeiras = [];
     const vistas = {};
     _itens.forEach(i => {
-      if (vistas[i.bandSlug]) return;
+      // Sem bandeira no banco não vira chip: um chip "Sem bandeira" seria um
+      // filtro para um buraco de cadastro, não para uma bandeira.
+      if (!i.bandSlug || vistas[i.bandSlug]) return;
       vistas[i.bandSlug] = true;
       bandeiras.push({ nome: i.bandeira, slug: i.bandSlug });
     });
@@ -364,13 +432,20 @@
       '</tr>';
     }).join('');
 
+    // SEM COMPARAÇÃO × SEM COLETA são coisas diferentes e a tela diz qual é:
+    // "sem comparação" é o posto que tem o nosso preço mas nenhum concorrente
+    // coletado; "sem coleta" é o posto de que não veio nada. Antes os dois
+    // simplesmente não apareciam na lista.
+    const temConc = CMP_FUELS_CARD.some(f => !!(
+      (typeof cmpStatsFuel === 'function') ? cmpStatsFuel(dado, f.key) : null));
     const tabela = linhas
       ? '<table class="cl-tab">' +
           '<thead><tr><th class="cl-th-comb">COMB.</th><th>NOSSO</th>' +
             '<th>MÉDIA</th><th>MENOR</th><th>MAIOR</th></tr></thead>' +
           '<tbody>' + linhas + '</tbody>' +
-        '</table>'
-      : '<div class="cl-sem-preco">Sem preço coletado hoje.</div>';
+        '</table>' +
+        (temConc ? '' : '<div class="cl-sem-comp">Sem comparação — nenhum concorrente coletado.</div>')
+      : '<div class="cl-sem-comp">Sem coleta no período — nada a comparar.</div>';
 
     const selo = (dado.proprioDesatualizado && typeof seloDesatualizado === 'function')
       ? seloDesatualizado(dado.proprio) : '';
@@ -378,11 +453,17 @@
     return '<div class="cl-card" data-posto="' + esc(posto.k) + '">' +
       '<div class="cl-card-hd">' +
         '<span class="cl-card-nome">' + esc(posto.ap) + selo + '</span>' +
-        '<span class="cl-bandeira cl-b--' + esc(corBandeira(item.bandeira)) + '">' +
-          esc(item.bandeira) + '</span>' +
+        (item.bandSlug
+          ? '<span class="cl-bandeira cl-b--' + esc(corBandeira(item.bandeira)) + '">' +
+              esc(item.bandeira) + '</span>'
+          : '') +
       '</div>' +
       tabela +
-      cmpFotosHtml(posto, dado) +
+      // A faixa de fotos só entra onde HOUVE coleta. No card do posto sem
+      // coleta ela diria "Sem fotos nesta coleta" logo abaixo de "Sem coleta
+      // no período" — duas linhas para dizer a mesma ausência, em 21 dos 37
+      // cards.
+      (linhas ? cmpFotosHtml(posto, dado) : '') +
       '<div class="cl-rodape">' +
         '<button type="button" class="cl-btn-sol" data-solicitar="' + esc(posto.k) + '">Solicitar alteração</button>' +
       '</div>' +

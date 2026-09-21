@@ -39,6 +39,12 @@
 //  6. OS DOIS JUNTOS: busca + bandeira ao mesmo tempo.
 //  7. Os quatro cartões de resumo contam certo — e RECONTAM a cada filtro.
 //  8. O lápis de editar nosso preço continua achando a célula.
+//  9. A BANDEIRA VEM DA TABELA `postos`, não do `banda` do MAP_POSTOS: o
+//     ITAPOA, que o MAP_POSTOS chama de Shell, aparece com a bandeira do
+//     banco, e Shell não vira chip.
+// 10. "BR/Petrobras" no banco vira "Vibra" na tela, chip e badge.
+// 11. TODOS os postos da rede viram card, com coleta ou sem — o sem coleta
+//     diz que não tem, em vez de sumir da lista.
 // ════════════════════════════════════════════════════════════════
 var linhas = [], falhas = 0;
 function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
@@ -96,15 +102,48 @@ var FALSO = {
     proprio: null, proprioDesatualizado: false, diferencial_ga: 0.30,
     concorrentes: [conc('CONC ALFA', 6.05)],
   },
+  // Nosso preço, nenhum concorrente coletado: é o card que tem de dizer
+  // "sem comparação" em vez de sumir.
+  'JOCA': {
+    proprio: { GC: 6.15, GA: null, ET: null, S10: null, S500: null, foto: null, hora: '08:00' },
+    proprioDesatualizado: false, diferencial_ga: 0.30, concorrentes: [],
+  },
 };
+// Quantos postos a rede tem, segundo o MAP_POSTOS — é o número de cards.
+var NA_REDE = 37;
 
 // ── Dublês do que o módulo espera encontrar pronto ───────────────
 window.getUsuarioLogado = function () { return { perfil: 'LOGISTICA' }; };
-window.buscarComparacaoDoDia = function () { return Promise.resolve(FALSO); };
-window.normalizarNomePosto = function (s) { return String(s || ''); };
-// apiFetch só é chamado pelo cmpAplicarRevisoes e pelo salvamento de preço;
-// nenhum dos dois faz parte do que se está provando aqui.
-window.apiFetch = function () { return Promise.resolve({ linhas: [] }); };
+// buscarComparacaoDoDia e normalizarNomePosto NÃO são dublados aqui: o
+// coletas-service.js real é carregado logo abaixo (é dele que sai o
+// chavePostoParaK, que resolve "P. DUDU" do banco para a chave
+// "BARBOSA - DUDU" do MAP_POSTOS). A dublagem da fonte entra DEPOIS dele,
+// sobrescrevendo só o buscarComparacaoDoDia.
+// A TABELA `postos` É A FONTE DA BANDEIRA. Os valores abaixo são os do banco
+// de verdade (MAIÚSCULA, como ele grava), com duas exceções propositais:
+//   · P. ITAPOA é IPIRANGA aqui e no banco — o MAP_POSTOS insiste que é Shell,
+//     e é justamente isso que este teste pega.
+//   · P. JA entra como "BR/Petrobras" (o nome velho, que o banco já não usa)
+//     para provar a renomeação BR → Vibra.
+// Os outros 32 postos da rede ficam SEM bandeira: eles têm de aparecer como
+// card mesmo assim, só sem badge e sem virar chip.
+var POSTOS_DB = [
+  { nome: 'P. DUDU',     bandeira: 'ALE' },          // .k BARBOSA - DUDU (alias)
+  { nome: 'P. BRUNA',    bandeira: 'IPIRANGA' },
+  { nome: 'P. ITAPOA',   bandeira: 'IPIRANGA' },
+  { nome: 'P. JA',       bandeira: 'BR/Petrobras' },
+  { nome: 'P. TRANCOSO', bandeira: 'VIBRA' },
+  { nome: 'P. ALEX',     bandeira: 'RIO BRANCO' },
+  { nome: 'P. JOCA',     bandeira: 'VIBRA' },
+];
+// apiFetch responde /postos; o resto (cmpAplicarRevisoes, salvamento) não faz
+// parte do que se está provando aqui.
+window.apiFetch = function (url) {
+  if (String(url).indexOf('/postos') === 0) {
+    return Promise.resolve({ success: true, postos: POSTOS_DB });
+  }
+  return Promise.resolve({ linhas: [] });
+};
 
 var host = function () { return document.getElementById('sl-comparacao'); };
 var cards = function () {
@@ -134,15 +173,23 @@ var digitar = function (txt) {
 (async function () {
   try {
     await carregarJS('/shared/js/postos-mapa.js');
+    await carregarJS('/shared/js/coletas-service.js');
     await carregarJS('/shared/js/comparacao-card.js');
+    // Só agora a fonte é trocada — o arquivo real já definiu a dela.
+    window.buscarComparacaoDoDia = function () { return Promise.resolve(FALSO); };
     await carregarJS('/shared/js/comparacao-logistica.js');
     // O módulo se inicializa sozinho no load; um tempinho para o carregar()
     // assíncrono terminar e pintar.
     await esperar(200);
 
-    h3('0. A seção montou com os quatro postos do dado');
-    eh(cards().length === 4, 'quatro cards', String(cards().length), '4');
-    eh(visiveis().length === 4, 'todos visíveis sem filtro', String(visiveis().length), '4');
+    h3('0. TODOS os postos da rede viram card, não só os com coleta');
+    nota('Só 5 dos 37 têm dado neste teste; os outros 32 têm de aparecer assim mesmo.');
+    eh(MAP_POSTOS.length === NA_REDE, 'o MAP_POSTOS tem os 37 da rede',
+       String(MAP_POSTOS.length), String(NA_REDE));
+    eh(cards().length === NA_REDE, 'um card por posto da rede',
+       String(cards().length), String(NA_REDE));
+    eh(visiveis().length === NA_REDE, 'todos visíveis sem filtro',
+       String(visiveis().length), String(NA_REDE));
 
     h3('1. Grade vertical de 340px, sem rolagem horizontal');
     var rail = host().querySelector('.cl-rail');
@@ -178,12 +225,52 @@ var digitar = function (txt) {
     var esperada = ordem.slice().sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
     eh(ordem.join(' · ') === esperada.join(' · '), 'em ordem', ordem.join(' · '));
 
+    h3('2b. A bandeira do badge vem do BANCO, não do `banda` do MAP_POSTOS');
+    var badgeDe = function (k) {
+      var c = cards().filter(function (x) { return x.getAttribute('data-posto') === k; })[0];
+      var b = c && c.querySelector('.cl-bandeira');
+      return { card: c, txt: b ? b.textContent.trim() : '(sem badge)', cls: b ? b.className : '' };
+    };
+    var bMap = (MAP_POSTOS.filter(function (p) { return p.k === 'ITAPOA'; })[0] || {}).banda;
+    nota('O MAP_POSTOS diz que o ITAPOA é "' + bMap + '"; o banco diz IPIRANGA.');
+    eh(badgeDe('ITAPOA').txt === 'Ipiranga', 'o badge segue o banco',
+       badgeDe('ITAPOA').txt, 'Ipiranga');
+    eh(bMap === 'Shell', 'e o MAP_POSTOS continua intocado (item 4: não mexer em mais nada)',
+       bMap, 'Shell');
+    nota('"BR/Petrobras" no banco vira "Vibra" na tela — sem migrar dado.');
+    eh(badgeDe('JA').txt === 'Vibra', 'o badge do JA', badgeDe('JA').txt, 'Vibra');
+    eh(badgeDe('JA').cls.indexOf('cl-b--vibra') >= 0, 'com a cor da Vibra', badgeDe('JA').cls);
+    eh(badgeDe('BRUNA').txt === 'Ipiranga', 'IPIRANGA do banco vira "Ipiranga"',
+       badgeDe('BRUNA').txt, 'Ipiranga');
+    eh(badgeDe('ALEX').txt === 'Rio Branco', 'e "RIO BRANCO" vira "Rio Branco"',
+       badgeDe('ALEX').txt, 'Rio Branco');
+    eh(badgeDe('GLORIA').txt === '(sem badge)',
+       'posto sem bandeira no banco fica sem badge, não com um rótulo inventado',
+       badgeDe('GLORIA').txt);
+
+    h3('2c. Posto sem coleta aparece e DIZ que não tem');
+    var cAlex = badgeDe('ALEX').card;
+    eh(!!cAlex, 'o ALEX, sem nenhuma coleta, tem card');
+    eh(/Sem coleta no período/.test(cAlex.textContent),
+       'e avisa em vez de mostrar uma tabela vazia',
+       cAlex.textContent.replace(/\s+/g, ' ').trim().slice(0, 60));
+    var cJoca = badgeDe('JOCA').card;
+    eh(!!cJoca.querySelector('.cl-tab'), 'o JOCA, com nosso preço e sem concorrente, tem tabela');
+    eh(/Sem comparação/.test(cJoca.textContent), 'e diz "sem comparação"',
+       cJoca.textContent.replace(/\s+/g, ' ').trim().slice(0, 70));
+    var tdsJoca = cJoca.querySelectorAll('.cl-tab tbody tr:first-child .cl-td');
+    eh(tdsJoca[0].textContent.indexOf('R$6,15') >= 0, 'com o nosso preço na coluna NOSSO',
+       tdsJoca[0].textContent.trim());
+    eh(tdsJoca[1].textContent.trim() === '—' && tdsJoca[2].textContent.trim() === '—' &&
+       tdsJoca[3].textContent.trim() === '—', 'e traço em média/menor/maior',
+       [tdsJoca[1], tdsJoca[2], tdsJoca[3]].map(function (t) { return t.textContent.trim(); }).join(' '));
+
     h3('3. O card: nome + badge de bandeira + tabela de 5 colunas');
     var cBar = cards().filter(function (c) { return c.getAttribute('data-posto') === 'BARBOSA - DUDU'; })[0];
     eh(!!cBar, 'o card do BARBOSA existe');
     var badge = cBar.querySelector('.cl-bandeira');
-    eh(!!badge && badge.textContent.trim() === 'ALE', 'com a bandeira do MAP_POSTOS',
-       badge && badge.textContent.trim(), 'ALE');
+    eh(!!badge && badge.textContent.trim() === 'Ale', 'com a bandeira do banco',
+       badge && badge.textContent.trim(), 'Ale');
     eh(!!badge && badge.classList.contains('cl-b--ale'), 'e a cor da bandeira ALE',
        badge && badge.className);
     var bgAle = getComputedStyle(badge).backgroundColor;
@@ -219,26 +306,45 @@ var digitar = function (txt) {
 
     h3('5. Os cartões de resumo, sem filtro');
     nota('abaixo = nosso < média dos concorrentes em GC; acima = nosso > média.');
-    nota('ITAPOA empata na média e não conta para nenhum lado; JA não tem preço.');
+    nota('ITAPOA empata na média e não conta; JA não tem preço; JOCA não tem');
+    nota('concorrente; e os 32 sem coleta não entram em nenhum dos dois lados.');
     eh(num('r-abaixo') === '1', 'abaixo da região', num('r-abaixo'), '1');
     eh(num('r-acima') === '1', 'acima da região', num('r-acima'), '1');
-    eh(num('r-postos') === '4', 'postos comparados', num('r-postos'), '4');
+    eh(num('r-postos') === String(NA_REDE), 'postos comparados (a rede toda)',
+       num('r-postos'), String(NA_REDE));
     eh(num('r-conc') === '4', 'concorrentes distintos (ALFA aparece em 3 postos)',
        num('r-conc'), '4');
 
-    h3('6. Os chips saem DOS DADOS');
+    h3('6. Os chips são SÓ as bandeiras da rede, tiradas da tabela `postos`');
     var rotulos = Array.prototype.slice.call(host().querySelectorAll('[data-chip]'))
       .map(function (c) { return c.textContent.trim(); });
     eh(rotulos[0] === 'Todos', '"Todos" é o primeiro', rotulos[0], 'Todos');
-    eh(rotulos.join(' · ') === 'Todos · ALE · BR/Petrobras · Ipiranga · Shell',
-       'e as bandeiras dos postos carregados, em ordem', rotulos.join(' · '));
-    nota('Shell não está na lista de cores do pedido e mesmo assim vira chip —');
-    nota('só com a cor neutra. É o "qualquer outra bandeira que existir nos dados".');
-    eh(chip('shell').classList.contains('cl-b--outra'), 'Shell com a cor neutra',
-       chip('shell').className);
-    eh(chip('br-petrobras').classList.contains('cl-b--vibra'),
-       'e BR/Petrobras com a cor da Vibra (mesma distribuidora)',
-       chip('br-petrobras').className);
+    eh(rotulos.join(' · ') === 'Todos · Ale · Ipiranga · Rio Branco · Vibra',
+       'e as bandeiras da rede, em ordem', rotulos.join(' · '));
+    nota('O MAP_POSTOS marca ITAPOA/MANGABEIRAS/BERNARDO... como Shell, e');
+    nota('DIFERENCIAL como Rede Flex — bandeiras de CONCORRENTE. Nenhuma delas');
+    nota('pode virar chip: a bandeira agora vem do banco.');
+    eh(!chip('shell') && !chip('rede-flex') && !chip('bandeira-branca'),
+       'Shell, Rede Flex e Bandeira Branca NÃO viram chip',
+       ['shell', 'rede-flex', 'bandeira-branca'].filter(function (x) { return !!chip(x); })
+         .join(',') || 'nenhuma');
+    eh(rotulos.indexOf('BR') === -1 && rotulos.indexOf('BR/Petrobras') === -1,
+       'e "BR"/"BR/Petrobras" não aparece como rótulo', rotulos.join(' · '));
+    nota('Os 32 postos sem bandeira no banco não viram um chip "Sem bandeira".');
+    eh(rotulos.indexOf('Sem bandeira') === -1, 'não há chip "Sem bandeira"',
+       rotulos.join(' · '));
+    nota('E "VIBRA" e "BR/Petrobras", que são a mesma bandeira, dão UM chip só —');
+    nota('senão clicar num esconderia os postos do outro.');
+    eh(rotulos.filter(function (r) { return r === 'Vibra'; }).length === 1,
+       'um único chip "Vibra"',
+       String(rotulos.filter(function (r) { return r === 'Vibra'; }).length), '1');
+
+    h3('6b. A cor de cada chip');
+    eh(chip('ale').classList.contains('cl-b--ale'), 'Ale', chip('ale').className);
+    eh(chip('ipiranga').classList.contains('cl-b--ip'), 'Ipiranga', chip('ipiranga').className);
+    eh(chip('rio-branco').classList.contains('cl-b--riobranco'), 'Rio Branco',
+       chip('rio-branco').className);
+    eh(chip('vibra').classList.contains('cl-b--vibra'), 'Vibra', chip('vibra').className);
 
     h3('7. A busca filtra por nome, sem acento e sem caixa');
     digitar('bruna');
@@ -256,24 +362,33 @@ var digitar = function (txt) {
     eh(!!semRes && !semRes.hidden, 'e avisa em vez de deixar a área muda');
     digitar('');
     await esperar(30);
-    eh(visiveis().length === 4, 'limpar a busca traz todos de volta',
-       String(visiveis().length), '4');
+    eh(visiveis().length === NA_REDE, 'limpar a busca traz todos de volta',
+       String(visiveis().length), String(NA_REDE));
     eh(semRes.hidden, 'e o aviso some');
 
     h3('8. O chip de bandeira filtra');
     chip('ipiranga').click();
     await esperar(30);
-    eh(nomesVisiveis().join('·') === 'P. JA', 'só o posto Ipiranga', nomesVisiveis().join('·'));
+    eh(nomesVisiveis().join('·') === 'P. BRUNA·P. ITAPOA', 'só os postos Ipiranga',
+       nomesVisiveis().join('·'));
     eh(chip('ipiranga').classList.contains('on'), 'o chip fica marcado');
-    eh(num('r-postos') === '1' && num('r-conc') === '1',
-       'o resumo passa a falar só do filtrado',
-       num('r-postos') + ' postos / ' + num('r-conc') + ' concorrentes', '1 / 1');
-    eh(num('r-abaixo') === '0' && num('r-acima') === '0',
-       'e JA, sem preço próprio, não conta para nenhum lado',
-       num('r-abaixo') + ' / ' + num('r-acima'), '0 / 0');
+    eh(num('r-postos') === '2', 'o resumo passa a falar só do filtrado',
+       num('r-postos'), '2');
+    eh(num('r-acima') === '1' && num('r-abaixo') === '0',
+       'e só a BRUNA está acima da região', num('r-abaixo') + ' / ' + num('r-acima'), '0 / 1');
+    // O JA (BR/Petrobras) e o TRANCOSO/JOCA (VIBRA) têm de cair no MESMO chip.
+    chip('vibra').click();
+    await esperar(30);
+    eh(nomesVisiveis().join('·') === 'P. JA·P. JOCA·P. TRANCOSO',
+       'o chip Vibra pega tanto VIBRA quanto BR/Petrobras', nomesVisiveis().join('·'));
+    chip('rio-branco').click();
+    await esperar(30);
+    eh(nomesVisiveis().join('·') === 'P. ALEX',
+       'Rio Branco pega o ALEX, que não tem coleta nenhuma', nomesVisiveis().join('·'));
     chip('').click();
     await esperar(30);
-    eh(visiveis().length === 4, '"Todos" mostra todos de novo', String(visiveis().length), '4');
+    eh(visiveis().length === NA_REDE, '"Todos" mostra todos de novo',
+       String(visiveis().length), String(NA_REDE));
     eh(chip('').classList.contains('on'), 'e "Todos" fica marcado');
 
     h3('9. Busca e bandeira funcionam JUNTAS');
