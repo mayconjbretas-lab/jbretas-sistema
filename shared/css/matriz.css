@@ -391,6 +391,24 @@ th.sticky-col { top: 0; z-index: 25 !important; background: var(--surface2); }
 }
 @media (hover: none) { .gm-add { display: none; } }
 
+/* ── A MESMA MARCA NA CÉLULA DA MATRIZ ──────────────────────────────
+   A <td> de MEDIÇÃO da matriz do posto recebe o mesmo comentário da célula
+   do card — é o mesmo registro em medicao.comentario, chaveado por
+   (posto_id, data, combustivel). Aqui só o triângulo e o cursor; NADA de
+   display/padding/tamanho, porque a geometria da tabela já funciona e mexer
+   nela seria trocar um problema por outro.
+
+   position: relative é o que o .gm-tri (absolute) precisa para se ancorar no
+   canto da própria célula. Numa <td> sem posição, ele escaparia para o
+   primeiro ancestral posicionado — que aqui é a tabela inteira, e o
+   triângulo apareceria no canto dela, uma vez só. */
+.mx-com { position: relative; }
+.mx-com--tem { cursor: pointer; }
+/* A <td> tem padding próprio e o input ocupa a célula: 1px afasta o
+   triângulo da borda o bastante para ele não encostar na linha da grade. */
+.mx-com .gm-tri { top: 1px; right: 1px; }
+.mx-com.gm-cel--salvando { opacity: .5; }
+
 /* ── Flutuantes: tooltip, menu de contexto e editor ── */
 /* position:fixed e presos ao <body>: dentro do card seriam cortados pelo
    overflow do .grade-scroll. */

@@ -38,6 +38,16 @@
   let HISTORICO_UNDO = [];
   // Valor da célula ao ganhar foco (pra registrar o undo no blur).
   let _valorAoFocar = null;
+  // ── Comentário de célula na matriz ──────────────────────────────
+  // O posto carregado, em ID: a POST /logistica/comentario-medicao grava por
+  // posto_id, e até aqui a matriz só conhecia o NOME (é por nome que ela
+  // carrega). Vem da resposta, campo novo e aditivo.
+  let _postoId = '';
+  // O editor, o menu e o POST são os MESMOS do card da grade
+  // (shared/js/grade-card.js). Aqui só se marca a célula com `gm-alvo` e os
+  // três data-*; o resto é de lá. Duas cópias da mesma conversa com a API
+  // divergiriam na primeira correção feita só de um lado.
+  let _comDisponivel = false;
 
   // Categorias editáveis: Medição/Venda/Carga (2A) + Pedido Final (2B).
   // Pré-pedido continua SOMENTE LEITURA (virá do Painel ADM).
@@ -357,7 +367,18 @@
       const dados = await apiFetch('/medicao/' + encodeURIComponent(posto) +
         '?mes=' + _mes + '&ano=' + _ano + '&margem=2');
       DADOS_ATUAIS = dados;
-      _subTxt.textContent = dados.posto + ' — ';
+      _postoId = dados.posto_id || '';
+      _comDisponivel = !!dados.comentarios_disponiveis;
+      // _gradeComentarios é o que o menu de grade-card.js consulta para
+      // decidir entre abrir o editor e avisar que falta a migração. Ele é
+      // `let` de escopo de script no app.js do módulo, e a matriz é a única
+      // fonte dele quando há um posto selecionado — sem esta linha, o menu na
+      // matriz diria "indisponível" mesmo com a coluna aplicada, porque quem
+      // o preenchia era o renderGrade, que só roda em "Todos os postos".
+      // typeof antes de atribuir: se um dia a matriz for montada numa página
+      // que não declare a variável, isto vira no-op em vez de ReferenceError.
+      try { if (typeof _gradeComentarios !== 'undefined') _gradeComentarios = _comDisponivel; }
+      catch (e) {}
       atualizarMesNav();
       montarCabecalhoMedicao(dados.grupos, dados.combustiveisVenda);
       montarLinhasMedicao(dados);
@@ -403,6 +424,47 @@
   // Um motivo só: com a trava unificada por mês da linha, 'mês anterior' e
   // 'mês fechado' deixaram de ser casos distintos.
   const MOTIVO_MES_FECHADO = 'Mês fechado — somente leitura';
+
+  // ════════ A CÉLULA DE MEDIÇÃO ACEITA COMENTÁRIO ════════
+  // Mesma (posto_id, data, combustivel) da grade de cards — é o MESMO
+  // registro no banco, e é por isso que comentar aqui aparece lá e vice-versa.
+  // O menu, o editor e o POST são de shared/js/grade-card.js; aqui só se
+  // marca a <td> com `gm-alvo` e os três data-*.
+  //
+  // O ALVO É A <td>, NÃO O <input> dela: o botão direito dentro de um campo
+  // de texto é onde o navegador oferece recortar/colar, e roubá-lo ali seria
+  // tirar o menu que a pessoa espera enquanto digita o número. Na borda da
+  // célula, ao redor do campo, não há nada a perder.
+  //
+  // SÓ NA MEDIÇÃO. Venda, carga e pedido não ganham comentário porque a
+  // coluna é `medicao.comentario`, uma por (posto, data, combustível) — não
+  // há onde guardar um comentário de venda sem outra coluna, e inventar uma
+  // aqui seria decidir schema de fora da conversa.
+  // esc próprio, e não o do app.js do módulo: esta folha é compartilhada e o
+  // escape tem de existir mesmo que um consumidor futuro não declare o dele.
+  function escAttr(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  // dd/mm/aaaa -> aaaa-mm-dd. A data da LINHA, não a da tela: cada linha da
+  // matriz é um dia, e é esse dia que vai para o banco.
+  function isoDoDia(d) {
+    var pt = String(d && d.data).split('/');
+    return pt.length === 3 ? (pt[2] + '-' + pt[1] + '-' + pt[0]) : '';
+  }
+  // Devolve os atributos PRONTOS, já com o espaço da frente, ou '' quando a
+  // célula não pode receber comentário (sem posto_id ou sem data legível).
+  // Fora da string de `class` de propósito: emendar atributo dentro do
+  // class="" é o tipo de coisa que funciona e quebra no primeiro que editar.
+  function attrsComentario(d, comb, txt) {
+    var iso = isoDoDia(d);
+    if (!_postoId || !iso) return '';
+    return ' data-pid="' + escAttr(_postoId) + '"' +
+           ' data-comb="' + escAttr(comb) + '"' +
+           ' data-data="' + escAttr(iso) + '"' +
+           (txt ? ' data-com="' + escAttr(txt) + '" title="' + escAttr(txt) + '"' : '');
+  }
 
   // Uma linha por dia; cada categoria com uma célula por combustível.
   function montarLinhasMedicao(dados) {
@@ -470,11 +532,22 @@
             // Célula editável (Medição/Venda/Carga/Pedido) — mesmo padrão do app antigo.
             BASELINE[diaIdx + '|' + cat.chave + '|' + col.comb] = (val === undefined ? null : val);
             const combAttr = String(col.comb).replace(/"/g, '&quot;');
-            html += '<td class="' + grpEnd + '"' + dg + '><input type="text" inputmode="numeric" class="cell-in"' +
+            // Só a MEDIÇÃO aceita comentário — ver o bloco acima.
+            const ehMed = cat.chave === 'medicao';
+            const txtCom = ehMed ? ((d.comentario || [])[i] || null) : null;
+            const attrsCom = ehMed ? attrsComentario(d, col.comb, txtCom) : '';
+            // gm-alvo é a marca que grade-card.js procura (o menu, o editor e o
+            // POST são de lá); mx-com é só nossa, para o CSS da <td>.
+            const clsCom = ehMed && attrsCom ? ' gm-alvo mx-com' + (txtCom ? ' mx-com--tem' : '') : '';
+            const handlers = (ehMed && attrsCom)
+              ? ' oncontextmenu="__gmMenu(event, this)" onclick="__gmClique(event, this)"' : '';
+            html += '<td class="' + grpEnd + clsCom + '"' + attrsCom + dg + handlers +
+              '><input type="text" inputmode="numeric" class="cell-in"' +
               ' data-dia="' + diaIdx + '" data-campo="' + cat.chave + '" data-comb="' + combAttr + '"' +
               ' value="' + fmtLitrosEdit(val) + '"' +
               ' onfocus="onCelulaFocus(this)" oninput="onCelulaDigito(this)"' +
-              ' onkeydown="onCelulaTecla(event,this)" onblur="onCelulaBlur(this)"></td>';
+              ' onkeydown="onCelulaTecla(event,this)" onblur="onCelulaBlur(this)">' +
+              (txtCom ? '<span class="gm-tri" aria-hidden="true"></span>' : '') + '</td>';
           } else {
             // Somente leitura: o pré-pedido (definido no Painel ADM) e TODA a
             // linha do mês anterior. Mesma marcação visual dos dois casos —
@@ -484,8 +557,16 @@
             const motivo = soLeitura
               ? MOTIVO_MES_FECHADO
               : 'Somente leitura — definido no Painel ADM';
-            html += '<td class="' + grpEnd + ' td-ro"' + dg + ' title="' + motivo + '">' +
-              '<span class="cell-val cell-ro' + vazia + '">' + fmtL(val) + '</span></td>';
+            // MÊS FECHADO MOSTRA O COMENTÁRIO, mas não deixa editar: travar o
+            // lançamento é uma decisão sobre o NÚMERO, e apagar o registro de
+            // por que ele é aquele seria perder justamente o que explica o
+            // mês fechado. Sem `gm-alvo`, o clique e o botão direito não
+            // abrem nada — só o triângulo e o title ficam.
+            const txtRo = (cat.chave === 'medicao') ? ((d.comentario || [])[i] || null) : null;
+            html += '<td class="' + grpEnd + ' td-ro' + (txtRo ? ' mx-com mx-com--tem' : '') + '"' + dg +
+              ' title="' + (txtRo ? escAttr(txtRo) : motivo) + '">' +
+              '<span class="cell-val cell-ro' + vazia + '">' + fmtL(val) + '</span>' +
+              (txtRo ? '<span class="gm-tri" aria-hidden="true"></span>' : '') + '</td>';
           }
         });
         if (ehVenda) {
@@ -971,6 +1052,37 @@
   }
 
   // ── Exposição ───────────────────────────────────────────────────
+  // ════════ O GANCHO DE SINCRONIZAÇÃO ════════
+  // grade-card.js chama isto depois de gravar, venha o clique de onde vier.
+  // Serve para dois casos, e os dois são reais:
+  //  · salvou NA MATRIZ → atualiza DADOS_ATUAIS, senão o próximo render do
+  //    mês (trocar de grupo, navegar e voltar) ressuscita o comentário antigo;
+  //  · salvou NA GRADE de cards com a matriz carregada por baixo → a matriz
+  //    já fica certa sem refetch.
+  // Não re-renderiza a tabela: a pintura da célula quem faz é o
+  // gmPintarCelula, e refazer o tbody perderia foco e rolagem por causa de
+  // um comentário.
+  window.gmAoSalvar = function (ev) {
+    if (!DADOS_ATUAIS || !ev || !ev.posto_id) return;
+    if (String(ev.posto_id) !== String(_postoId)) return;
+    var pt = String(ev.data || '').split('-');
+    if (pt.length !== 3) return;
+    var dataBR = pt[2] + '/' + pt[1] + '/' + pt[0];
+    var combs = (DADOS_ATUAIS.grupos || []).map(function (g) { return g.comb; });
+    var i = combs.indexOf(ev.combustivel);
+    if (i < 0) return;
+    (DADOS_ATUAIS.dias || []).forEach(function (d) {
+      if (String(d.data) !== dataBR) return;
+      if (!d.comentario) d.comentario = combs.map(function () { return null; });
+      d.comentario[i] = ev.comentario || null;
+    });
+  };
+
+  // Porta só de leitura do cache, para o harness poder afirmar que o gancho
+  // acima mexeu no lugar certo sem ter de inferir pelo DOM (o gancho, de
+  // propósito, NÃO re-renderiza a tabela).
+  window.__mxDados = function () { return DADOS_ATUAIS; };
+
   // Handlers de célula: as células usam handlers inline (onfocus/oninput/...),
   // então precisam ser globais (o markup é preservado verbatim).
   window.onCelulaFocus  = onCelulaFocus;

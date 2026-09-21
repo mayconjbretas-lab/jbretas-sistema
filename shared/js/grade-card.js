@@ -76,9 +76,12 @@ function celulaMedicao(p, cod, valor, comentario, capacidade) {
     ? '<span class="gm-litros">' + fmtNum(valor) + ' L / ' + fmtNum(cap) + ' L</span>' +
       ' · <span class="gm-pct ' + faixaPct(pct) + '">' + Math.round(pct) + '%</span>'
     : '<span class="gm-litros">' + fmtNum(valor) + ' L</span>';
-  return '<div class="gm-cel' + (tem ? ' gm-cel--com' : '') + '"' +
+  return '<div class="gm-cel gm-alvo' + (tem ? ' gm-cel--com' : '') + '"' +
     ' data-pid="' + esc(String(p.posto_id)) + '"' +
     ' data-comb="' + esc(cod) + '"' +
+    // A data explícita na célula, mesmo aqui onde ela é sempre _gradeData:
+    // com ela, gmSalvar não precisa saber de que tela veio o clique.
+    ' data-data="' + esc(String(_gradeData || '')) + '"' +
     (temCap ? ' data-cap="' + esc(String(cap)) + '" data-pct="' + esc(String(Math.round(pct))) + '"' : '') +
     (tem ? ' data-com="' + esc(comentario) + '" title="' + esc(comentario) + '"' : '') +
     ' oncontextmenu="__gmMenu(event, this)" onclick="__gmClique(event, this)">' +
@@ -166,6 +169,22 @@ function montarCard(p, montado) {
 //
 // TUDO PARA stopPropagation: o card inteiro tem onclick que alterna
 // "montado". Sem isso, comentar uma célula marcaria o posto como montado.
+//
+// ════════ SERVE DUAS TELAS, NÃO UMA ════════
+// Isto nasceu para a célula do card da grade ("Todos os postos") e agora
+// atende TAMBÉM a célula de medição da matriz do posto (shared/js/
+// matriz-medicao.js), que é uma <td> de tabela e não um bloco flex.
+//
+// O QUE AS DUAS PRECISAM TER EM COMUM é só isto: a classe `gm-alvo` e os
+// atributos data-pid / data-comb / data-data. Tudo o mais — layout, onde o
+// triângulo entra, se há ícone 🗨 — é de cada tela. Foi por `gm-alvo`, e não
+// por `gm-cel`, que os seletores passaram: `gm-cel` carrega o layout do card
+// (display:flex), e vesti-la numa <td> quebraria a tabela.
+//
+// A DATA VEM DA CÉLULA, com _gradeData de reserva. No card a data é uma só
+// (a do pedido do dia, no estado do módulo); na matriz cada LINHA é um dia,
+// então ela tem de viajar na própria célula. Sem isto, comentar 03/09 na
+// matriz gravaria no dia que a grade estivesse mostrando.
 var _gmMenuEl = null, _gmPopEl = null;
 
 function gmFechar() {
@@ -177,7 +196,7 @@ function gmFechar() {
 // posicionado em coordenada de tela, então rolar o deixaria órfão no lugar.
 document.addEventListener('click', function (e) {
   if (_gmMenuEl && !_gmMenuEl.contains(e.target)) gmFechar();
-  else if (_gmPopEl && !_gmPopEl.contains(e.target) && !(e.target.closest && e.target.closest('.gm-cel'))) gmFechar();
+  else if (_gmPopEl && !_gmPopEl.contains(e.target) && !(e.target.closest && e.target.closest('.gm-alvo'))) gmFechar();
 }, true);
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') gmFechar(); });
 window.addEventListener('scroll', function () { gmFechar(); }, true);
@@ -242,7 +261,7 @@ document.addEventListener('click', function (e) {
   if (!add) return;
   e.stopPropagation();
   e.preventDefault();
-  var cel = add.closest('.gm-cel');
+  var cel = add.closest('.gm-alvo');
   if (!cel) return;
   if (!_gradeComentarios) { __gmMenu(e, cel); return; }
   gmFechar();
@@ -282,6 +301,9 @@ function gmEditor(cel) {
 async function gmSalvar(cel, texto) {
   var pid = cel.getAttribute('data-pid');
   var comb = cel.getAttribute('data-comb');
+  // A DATA DA PRÓPRIA CÉLULA. _gradeData só entra como reserva, para a célula
+  // antiga que ainda não a carregue — ver o cabeçalho do bloco.
+  var data = cel.getAttribute('data-data') || _gradeData;
   var txt = (texto === null || texto === undefined) ? null : String(texto).trim();
   if (txt === '') txt = null;
   gmFechar();
@@ -289,14 +311,25 @@ async function gmSalvar(cel, texto) {
   try {
     await apiFetch('/logistica/comentario-medicao', {
       method: 'POST',
-      body: JSON.stringify({ posto_id: pid, data: _gradeData, combustivel: comb, comentario: txt }),
+      body: JSON.stringify({ posto_id: pid, data: data, combustivel: comb, comentario: txt }),
     });
     gmPintarCelula(cel, txt);
-    // O cache também, senão o próximo render da grade ressuscita o antigo.
-    var p = _gradePostos.filter(function (x) { return String(x.posto_id) === String(pid); })[0];
-    if (p) {
-      if (!p.comentarios) p.comentarios = {};
-      if (txt) p.comentarios[comb] = txt; else delete p.comentarios[comb];
+    // O cache da GRADE de cards, senão o próximo render ressuscita o antigo.
+    // Só vale para o dia que a grade está mostrando: comentar 03/09 na matriz
+    // não pode mexer no card de hoje, que fala de outro dia.
+    if (typeof _gradePostos !== 'undefined' && data === _gradeData) {
+      var p = _gradePostos.filter(function (x) { return String(x.posto_id) === String(pid); })[0];
+      if (p) {
+        if (!p.comentarios) p.comentarios = {};
+        if (txt) p.comentarios[comb] = txt; else delete p.comentarios[comb];
+      }
+    }
+    // Quem mais estiver mostrando esta célula atualiza o próprio cache. É o
+    // que faz a matriz e a grade não divergirem sem uma conhecer a outra: a
+    // matriz registra este gancho e mexe no DADOS_ATUAIS dela.
+    if (typeof window.gmAoSalvar === 'function') {
+      try { window.gmAoSalvar({ posto_id: pid, data: data, combustivel: comb, comentario: txt }); }
+      catch (e) { console.warn('gmAoSalvar falhou:', e && e.message); }
     }
   } catch (err) {
     window.alert('Não foi possível salvar o comentário: ' + ((err && err.message) ? err.message : err));
@@ -315,7 +348,11 @@ function gmPintarCelula(cel, txt) {
       var t = document.createElement('span');
       t.className = 'gm-tri';
       t.setAttribute('aria-hidden', 'true');
-      cel.insertBefore(t, cel.querySelector('.gm-add'));
+      // Antes do ícone 🗨 quando ele existe (card); no fim quando não existe
+      // (a <td> da matriz não tem ícone — insertBefore com null já anexa,
+      // mas deixar explícito evita que alguém "conserte" isso depois).
+      var add = cel.querySelector('.gm-add');
+      if (add) cel.insertBefore(t, add); else cel.appendChild(t);
     }
   } else {
     cel.removeAttribute('data-com');

@@ -1,0 +1,367 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comentário de medição — todas as vistas</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+<link rel="stylesheet" href="/shared/css/matriz.css">
+<link rel="stylesheet" href="/modulos/logistica/logistica.css">
+
+<div id="res">rodando…</div>
+<div id="palco">
+  <div id="grade-host"></div>
+  <div id="matriz-host"></div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// O comentário de célula existia só na vista "Todos os postos" (o card da
+// grade). Na vista do POSTO — a matriz do mês — o botão direito não fazia
+// nada e o triângulo não aparecia, embora fosse o MESMO registro no banco.
+//
+//  1. A MATRIZ DESENHA O TRIÂNGULO no que já tem comentário, lido do campo
+//     novo `comentario` da GET /medicao/:posto.
+//  2. O BOTÃO DIREITO ABRE O MENU na célula de medição da matriz — inserir,
+//     editar e excluir, os mesmos três de grade-card.js.
+//  3. O POST VAI COM A DATA DA LINHA, não com a data da tela. É o ponto que
+//     mais podia dar errado: na grade a data é uma só, na matriz cada linha
+//     é um dia.
+//  4. O CARD MANDA A DATA COM QUE FOI DESENHADO — mudar a variável do
+//     módulo sem redesenhar não reescreve o que ele já significa.
+//  5. O GANCHO DE SINCRONIZAÇÃO acerta o cache da matriz sem refetch, e não
+//     encosta em salve de outro posto.
+//  5b. RECARREGAR a matriz relê os comentários do campo novo da rota.
+//  6. EDITAR E EXCLUIR na matriz, com o triângulo sumindo no excluir.
+//  7. SÓ A MEDIÇÃO aceita comentário — venda, carga e pedido não, porque a
+//     coluna é medicao.comentario e não há onde guardar os outros.
+//  8. NADA DO QUE JÁ FUNCIONAVA MUDOU: a célula segue editável, com os
+//     mesmos handlers, e o valor continua lá.
+//  9. SEM A COLUNA no banco, o menu avisa em vez de prometer e falhar.
+//
+// UMA DIFERENÇA REAL, medida aqui e não escondida: o CARD fala em CÓDIGO de
+// combustível ('GC') e a MATRIZ em NOME ('GASOLINA COMUM') — é assim que cada
+// rota entrega. Comentar no card, por isso, não repinta a matriz carregada
+// por baixo; o dado grava e aparece na próxima leitura do mês. O caminho que
+// o pedido pede — comentar NA MATRIZ — não passa por esse descompasso.
+//
+// As duas telas são montadas JUNTAS no mesmo documento, que é como elas
+// convivem na Logística de verdade (a matriz fica sob a grade).
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+// ── O que os dois módulos declaram e o compartilhado lê ─────────
+// Mesmos nomes e mesmo escopo de script do app.js da Logística — ver o
+// contrato no cabeçalho de shared/js/grade-card.js.
+var PID = '11111111-1111-1111-1111-111111111111';
+var POSTO = 'P. BRUNA';
+var DIA_GRADE = '2026-09-18';       // a data da grade de cards
+var DIA_MATRIZ = '2026-09-03';      // uma linha QUALQUER da matriz, outro dia
+let _gradePostos = [];
+let _gradeData = DIA_GRADE;
+let _gradeComentarios = false;
+let _gradeTanques = {};
+function fmtNum(v) { return String(v == null ? '' : v); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+  return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+
+var POSTS = [];          // tudo que foi para POST /logistica/comentario-medicao
+var COMENTARIOS = {};    // "data|comb" -> texto, o "banco" deste teste
+window.apiFetch = function (url, opts) {
+  var u = String(url);
+  if (u.indexOf('/logistica/comentario-medicao') === 0) {
+    var b = JSON.parse((opts || {}).body || '{}');
+    POSTS.push(b);
+    var k = b.data + '|' + b.combustivel;
+    if (b.comentario) COMENTARIOS[k] = b.comentario; else delete COMENTARIOS[k];
+    return Promise.resolve({ success: true });
+  }
+  if (u.indexOf('/medicao/' + encodeURIComponent(POSTO)) === 0) return Promise.resolve(matrizResp());
+  return Promise.resolve({ success: true });
+};
+
+// ── A resposta da GET /medicao/:posto, no formato de produção ───
+// Dois dias e dois combustíveis, que é o menor recorte onde "a data da linha"
+// pode sair errada.
+var COMBS = ['GASOLINA COMUM', 'ETANOL'];
+function diaResp(dataBR) {
+  var iso = dataBR.split('/').reverse().join('-');
+  return {
+    dia: Number(dataBR.slice(0, 2)), data: dataBR,
+    medicao: [12000, 8000], venda: [900, 400], carga: [null, null],
+    previsao: [null, null], diferenca: [null, null],
+    prePedido: [null, null], pedido: [null, null],
+    comentario: COMBS.map(function (c) { return COMENTARIOS[iso + '|' + c] || null; }),
+  };
+}
+function matrizResp() {
+  return {
+    success: true, posto: POSTO, posto_id: PID,
+    comentarios_disponiveis: true,
+    mes: 'SETEMBRO', ano: 2026,
+    grupos: COMBS.map(function (c, i) { return { comb: c, abv: i ? 'ET' : 'GC', idx: i, capacidade: 30000 }; }),
+    combustiveisVenda: COMBS.map(function (c, i) { return { comb: c, abv: i ? 'ET' : 'GC', idx: i }; }),
+    dias: [diaResp('03/09/2026'), diaResp('04/09/2026')],
+  };
+}
+
+function js(src) {
+  return new Promise(function (ok, erro) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { erro(new Error(src + ' não carregou')); };
+    document.body.appendChild(s);
+  });
+}
+// A célula de MEDIÇÃO da matriz, por dia (dd/mm/aaaa) e combustível.
+function celMatriz(dataBR, comb) {
+  var iso = dataBR.split('/').reverse().join('-');
+  return document.querySelector('#matriz-host td[data-data="' + iso + '"][data-comb="' + comb + '"]');
+}
+function celGrade(comb) {
+  return document.querySelector('#grade-host .gm-cel[data-comb="' + comb + '"]');
+}
+// Clique com o botão direito, do jeito que o navegador manda.
+function botaoDireito(el) {
+  var ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 50 });
+  el.dispatchEvent(ev);
+  return ev;
+}
+function menu() { return document.querySelector('.gm-menu'); }
+// O cache interno da matriz não é público; o teste lê pelo que está no DOM
+// mais o que o gancho gravou. Para afirmar sobre o cache, a matriz expõe o
+// DADOS_ATUAIS por uma porta só de leitura (window.__mxDados), adicionada
+// junto com o gancho — ver o fim de shared/js/matriz-medicao.js.
+function DADOS_MATRIZ() { return window.__mxDados(); }
+function itensMenu() {
+  return [].slice.call(document.querySelectorAll('.gm-menu .gm-menu-item'))
+    .map(function (b) { return b.textContent.trim(); });
+}
+function clicarItem(rot) {
+  var b = [].slice.call(document.querySelectorAll('.gm-menu .gm-menu-item'))
+    .filter(function (x) { return x.textContent.trim() === rot; })[0];
+  if (!b) throw new Error('item "' + rot + '" não está no menu: ' + itensMenu().join(','));
+  b.click();
+}
+
+(async function () {
+  try {
+    await js('/shared/js/matriz-medicao.js');
+    await js('/shared/js/grade-card.js');
+
+    // ── A grade de cards, com o card do MESMO posto ──
+    _gradeTanques[PID] = { GC: 30000, ET: 20000 };
+    _gradePostos = [{
+      posto_id: PID, posto_nome: POSTO, bandeira: 'BR', total: 5000,
+      por_combustivel: { GC: 5000 }, medicao_por_combustivel: { GC: 12000, ET: 8000 },
+      medicao_total: 20000, data_medicao: DIA_GRADE, comentarios: {},
+    }];
+    _gradeComentarios = true;
+    document.getElementById('grade-host').innerHTML =
+      '<div class="grade-cards">' + montarCard(_gradePostos[0], new Set()) + '</div>';
+
+    // ── A matriz do posto ──
+    window.matrizMedicao.montar(document.getElementById('matriz-host'), {});
+    await window.matrizMedicao.carregar(POSTO);
+    await esperar(150);
+
+    h3('0. As duas telas estão montadas');
+    eh(!!celGrade('GC'), 'o card da grade tem a célula de GC');
+    eh(!!celMatriz('03/09/2026', 'GASOLINA COMUM'),
+       'e a matriz tem a célula de medição de 03/09',
+       celMatriz('03/09/2026', 'GASOLINA COMUM') ? 'existe' : '(ausente)');
+    var cm = celMatriz('03/09/2026', 'GASOLINA COMUM');
+    eh(cm && cm.classList.contains('gm-alvo'),
+       'marcada com gm-alvo (a marca que grade-card.js procura)',
+       cm ? cm.className : '');
+    eh(cm && cm.getAttribute('data-pid') === PID, 'com o posto_id da resposta',
+       cm && cm.getAttribute('data-pid'), PID);
+    eh(!!cm.querySelector('input.cell-in'), 'e o campo editável continua dentro dela');
+
+    h3('1. Botão direito na matriz abre o menu');
+    var ev = botaoDireito(cm);
+    await esperar(60);
+    eh(ev.defaultPrevented, 'o menu do navegador é impedido', String(ev.defaultPrevented), 'true');
+    eh(!!menu(), 'e o nosso menu abre');
+    eh(itensMenu().join('|') === 'Inserir comentário',
+       'sem comentário, só "Inserir"', itensMenu().join('|'), 'Inserir comentário');
+
+    h3('2. Inserir na matriz manda a DATA DA LINHA');
+    POSTS = [];
+    clicarItem('Inserir comentário');
+    await esperar(60);
+    var ta = document.querySelector('.gm-editor .gm-ta');
+    eh(!!ta, 'o editor abre com o textarea');
+    ta.value = 'tanque aferido pelo Felipe';
+    document.querySelector('.gm-editor .gm-salvar').click();
+    await esperar(150);
+    eh(POSTS.length === 1, 'um POST', String(POSTS.length), '1');
+    var p1 = POSTS[0] || {};
+    eh(p1.data === DIA_MATRIZ, 'com a data da LINHA (03/09), não a da grade (18/09)',
+       p1.data, DIA_MATRIZ);
+    nota('É o ponto que mais podia dar errado: a grade tem uma data só, a matriz tem uma por linha.');
+    eh(p1.posto_id === PID && p1.combustivel === 'GASOLINA COMUM',
+       'e com (posto_id, combustivel) da célula',
+       p1.posto_id + ' / ' + p1.combustivel, PID + ' / GASOLINA COMUM');
+    eh(p1.comentario === 'tanque aferido pelo Felipe', 'e o texto digitado', p1.comentario);
+
+    h3('3. A célula da matriz ganha o triângulo, sem re-render');
+    cm = celMatriz('03/09/2026', 'GASOLINA COMUM');
+    eh(!!cm.querySelector('.gm-tri'), 'o triângulo aparece');
+    eh(cm.getAttribute('data-com') === 'tanque aferido pelo Felipe',
+       'o texto fica na célula', cm.getAttribute('data-com'));
+    eh(cm.getAttribute('title') === 'tanque aferido pelo Felipe', 'e no title (passar o mouse mostra)');
+    eh(!!cm.querySelector('input.cell-in') && cm.querySelector('input.cell-in').value !== '',
+       'e o VALOR da medição continua lá, editável',
+       cm.querySelector('input.cell-in').value);
+
+    h3('4. GRADE → MATRIZ: o card manda a data COM QUE FOI DESENHADO');
+    // A data vai no data-data da célula no momento do render, e é assim que
+    // tem de ser: o card fala de um dia, e mudar a variável do módulo depois
+    // não pode reescrever o que ele já significa. Para as duas telas falarem
+    // do mesmo dia, o card é REDESENHADO com a data nova — que é o que o
+    // atualizarFaixa() faz em produção ao trocar o dia.
+    _gradeData = DIA_MATRIZ;
+    document.getElementById('grade-host').innerHTML =
+      '<div class="grade-cards">' + montarCard(_gradePostos[0], new Set()) + '</div>';
+    var celG = celGrade('GC');
+    eh(celG.getAttribute('data-data') === DIA_MATRIZ,
+       'redesenhado, o card carrega a data nova', celG.getAttribute('data-data'), DIA_MATRIZ);
+    POSTS = [];
+    botaoDireito(celG);
+    await esperar(60);
+    eh(!!menu(), 'o menu abre no card também (o que já funcionava)');
+    clicarItem('Inserir comentário');
+    await esperar(60);
+    document.querySelector('.gm-editor .gm-ta').value = 'conferido na grade';
+    document.querySelector('.gm-editor .gm-salvar').click();
+    await esperar(150);
+    eh(POSTS.length === 1 && POSTS[0].data === DIA_MATRIZ,
+       'e o POST sai com a data do card', POSTS[0] && POSTS[0].data, DIA_MATRIZ);
+    eh(POSTS[0].combustivel === 'GC', 'e o combustível dele (código, como o card usa)',
+       POSTS[0].combustivel, 'GC');
+
+    h3('5. O gancho de sincronização: a matriz acompanha SEM refetch');
+    // ATENÇÃO À DIFERENÇA DE VOCABULÁRIO, que é real e está registrada aqui
+    // para não virar surpresa: o CARD trabalha com o CÓDIGO do combustível
+    // ('GC') e a MATRIZ com o NOME ('GASOLINA COMUM') — cada uma recebe assim
+    // da rota dela. O gancho casa pelo que a matriz conhece, então um salve
+    // vindo do card só encontra a coluna quando os dois nomes coincidem.
+    //
+    // O QUE ISSO CUSTA NA PRÁTICA: comentar no card não repinta a matriz que
+    // esteja carregada por baixo. O dado está gravado e aparece na próxima
+    // leitura do mês — o triângulo é que não nasce sozinho. O caminho que o
+    // pedido pede (comentar na matriz) não passa por aqui.
+    var antesGC = (DADOS_MATRIZ().dias[0].comentario || [])[0];
+    nota('o card mandou "GC"; a matriz conhece ' + COMBS.join(' e ') + '.');
+    window.gmAoSalvar({ posto_id: PID, data: DIA_MATRIZ,
+                        combustivel: 'GASOLINA COMUM', comentario: 'veio da grade' });
+    await esperar(60);
+    eh((DADOS_MATRIZ().dias[0].comentario || [])[0] === 'veio da grade',
+       'com o NOME do combustível, o gancho atualiza o cache da matriz',
+       (DADOS_MATRIZ().dias[0].comentario || [])[0], 'veio da grade');
+    window.gmAoSalvar({ posto_id: PID, data: DIA_MATRIZ,
+                        combustivel: 'GC', comentario: 'não deve entrar' });
+    await esperar(60);
+    eh((DADOS_MATRIZ().dias[0].comentario || [])[0] === 'veio da grade',
+       'com o CÓDIGO, não encontra a coluna e não estraga nada',
+       (DADOS_MATRIZ().dias[0].comentario || [])[0], 'veio da grade');
+    window.gmAoSalvar({ posto_id: 'outro-posto', data: DIA_MATRIZ,
+                        combustivel: 'GASOLINA COMUM', comentario: 'de outro posto' });
+    await esperar(60);
+    eh((DADOS_MATRIZ().dias[0].comentario || [])[0] === 'veio da grade',
+       'e salve de OUTRO posto não encosta nesta matriz',
+       (DADOS_MATRIZ().dias[0].comentario || [])[0], 'veio da grade');
+
+    h3('5b. Recarregar a matriz relê do banco');
+    await window.matrizMedicao.carregar(POSTO);
+    await esperar(150);
+    var cmGC = celMatriz('03/09/2026', 'GASOLINA COMUM');
+    eh(!!cmGC && !!cmGC.querySelector('.gm-tri'),
+       'o triângulo volta, agora do campo `comentario` da rota',
+       cmGC && cmGC.getAttribute('data-com'));
+    eh(cmGC.getAttribute('data-com') === 'tanque aferido pelo Felipe',
+       'com o texto que ESTÁ gravado (o do passo 2)',
+       cmGC.getAttribute('data-com'), 'tanque aferido pelo Felipe');
+
+    h3('6. Editar e excluir, na matriz');
+    botaoDireito(cmGC);
+    await esperar(60);
+    eh(itensMenu().join('|') === 'Editar comentário|Excluir comentário',
+       'com comentário, o menu oferece editar e excluir',
+       itensMenu().join('|'), 'Editar comentário|Excluir comentário');
+    POSTS = [];
+    clicarItem('Excluir comentário');
+    await esperar(150);
+    eh(POSTS.length === 1 && POSTS[0].comentario === null,
+       'excluir manda comentario: null', POSTS[0] && JSON.stringify(POSTS[0].comentario), 'null');
+    cmGC = celMatriz('03/09/2026', 'GASOLINA COMUM');
+    eh(!cmGC.querySelector('.gm-tri'), 'e o triângulo some da célula');
+    eh(!cmGC.getAttribute('data-com'), 'com o texto fora dela');
+
+    h3('7. Só a MEDIÇÃO aceita comentário');
+    var tdVenda = document.querySelector('#matriz-host td[data-grupo="venda"]');
+    eh(!!tdVenda, 'a matriz tem célula de venda');
+    eh(tdVenda && !tdVenda.classList.contains('gm-alvo'),
+       'e ela NÃO é alvo de comentário (a coluna é medicao.comentario)',
+       tdVenda ? (tdVenda.className || '(sem classe)') : '');
+    var evV = botaoDireito(tdVenda);
+    await esperar(60);
+    eh(!evV.defaultPrevented && !menu(),
+       'o botão direito nela segue sendo o do navegador',
+       (evV.defaultPrevented ? 'impedido' : 'livre') + ' / ' + (menu() ? 'menu nosso' : 'sem menu'));
+
+    h3('8. O campo de digitar não perde o menu do navegador');
+    var inp = celMatriz('04/09/2026', 'ETANOL').querySelector('input.cell-in');
+    eh(!!inp, 'a célula tem input');
+    // O alvo do oncontextmenu é a <td>; disparar NO INPUT sobe por bubbling e
+    // o handler da <td> roda — é inevitável e aceitável. O que importa é que
+    // o input continua editável e com os handlers dele.
+    eh(inp.getAttribute('oninput') && inp.getAttribute('onblur'),
+       'e segue com os handlers de edição de sempre',
+       (inp.getAttribute('oninput') || '') + ' / ' + (inp.getAttribute('onblur') || ''));
+    eh(!inp.disabled && !inp.readOnly, 'editável', inp.disabled ? 'disabled' : 'editável');
+
+    h3('9. Sem a coluna no banco, o menu avisa em vez de prometer');
+    _gradeComentarios = false;
+    botaoDireito(celMatriz('04/09/2026', 'ETANOL'));
+    await esperar(60);
+    var pop = document.querySelector('.gm-pop--erro');
+    eh(!!pop && /medicao_comentario\.sql/.test(pop.textContent),
+       'aparece o aviso da migração, e não o editor',
+       pop ? pop.textContent.trim() : '(nenhum)');
+    eh(!menu(), 'e o menu de inserir não abre');
+    _gradeComentarios = true;
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — comentário todas as vistas';
+})();
+</script>
