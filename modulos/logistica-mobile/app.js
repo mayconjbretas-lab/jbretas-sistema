@@ -242,6 +242,11 @@ async function atualizarFaixaMobile() {
 // Lidos pelo shared/js/grade-card.js — ver o contrato no cabeçalho dele.
 let _gradePostos = [];
 let _gradeComentarios = false;   // a coluna medicao.comentario existe?
+// Idem para medicao.comentario_dif, que guarda o comentário da coluna
+// Δ DIFERENÇA da matriz. SEPARADA porque as duas migrações são
+// independentes: uma bandeira só faria a tela oferecer o comentário de
+// diferença num banco onde só a primeira foi aplicada.
+let _gradeComentariosDif = false;
 let _gradeTanques = {};          // { posto_id: { COD: capacidade } }
 let _gradeData = '';
 let _reduzidaNome = '';

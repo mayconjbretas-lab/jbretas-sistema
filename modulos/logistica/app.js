@@ -442,6 +442,11 @@ let _gradePostos = [];
 let _gradeData = '';
 let _reduzidaNome = '';   // posto aberto na matriz reduzida (p/ o lápis re-renderizar)
 let _gradeComentarios = false;   // a coluna medicao.comentario existe?
+// Idem para medicao.comentario_dif, que guarda o comentário da coluna
+// Δ DIFERENÇA da matriz. SEPARADA porque as duas migrações são
+// independentes: uma bandeira só faria a tela oferecer o comentário de
+// diferença num banco onde só a primeira foi aplicada.
+let _gradeComentariosDif = false;
 let _gradeTanques = {};          // { posto_id: { COD: capacidade } }
 
 // Marcação "montado" POR DATA em localStorage (jb_logi_montado_<data>) — é

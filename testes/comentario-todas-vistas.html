@@ -49,6 +49,10 @@
 //  8. NADA DO QUE JÁ FUNCIONAVA MUDOU: a célula segue editável, com os
 //     mesmos handlers, e o valor continua lá.
 //  9. SEM A COLUNA no banco, o menu avisa em vez de prometer e falhar.
+// 10-15. A COLUNA Δ DIFERENÇA aceita comentário do mesmo jeito, gravando em
+//     `comentario_dif` — a MESMA linha de `medicao`, outra coluna. As duas
+//     células não se misturam, cada uma guarda o seu, e o aviso de migração
+//     ausente nomeia o arquivo certo de cada uma.
 //
 // UMA DIFERENÇA REAL, medida aqui e não escondida: o CARD fala em CÓDIGO de
 // combustível ('GC') e a MATRIZ em NOME ('GASOLINA COMUM') — é assim que cada
@@ -83,6 +87,7 @@ var DIA_MATRIZ = '2026-09-03';      // uma linha QUALQUER da matriz, outro dia
 let _gradePostos = [];
 let _gradeData = DIA_GRADE;
 let _gradeComentarios = false;
+let _gradeComentariosDif = false;
 let _gradeTanques = {};
 function fmtNum(v) { return String(v == null ? '' : v); }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
@@ -95,7 +100,10 @@ window.apiFetch = function (url, opts) {
   if (u.indexOf('/logistica/comentario-medicao') === 0) {
     var b = JSON.parse((opts || {}).body || '{}');
     POSTS.push(b);
-    var k = b.data + '|' + b.combustivel;
+    // A CHAVE INCLUI A COLUNA: as duas células vivem na mesma linha de
+    // `medicao`, e sem a coluna na chave o "banco" deste teste guardaria uma
+    // por cima da outra — escondendo justamente o erro que ele procura.
+    var k = b.data + '|' + b.combustivel + '|' + (b.coluna || 'medicao');
     if (b.comentario) COMENTARIOS[k] = b.comentario; else delete COMENTARIOS[k];
     return Promise.resolve({ success: true });
   }
@@ -112,15 +120,17 @@ function diaResp(dataBR) {
   return {
     dia: Number(dataBR.slice(0, 2)), data: dataBR,
     medicao: [12000, 8000], venda: [900, 400], carga: [null, null],
-    previsao: [null, null], diferenca: [null, null],
+    previsao: [null, null], diferenca: [-120, 45],
     prePedido: [null, null], pedido: [null, null],
-    comentario: COMBS.map(function (c) { return COMENTARIOS[iso + '|' + c] || null; }),
+    comentario: COMBS.map(function (c) { return COMENTARIOS[iso + '|' + c + '|medicao'] || null; }),
+    comentario_dif: COMBS.map(function (c) { return COMENTARIOS[iso + '|' + c + '|dif'] || null; }),
   };
 }
 function matrizResp() {
   return {
     success: true, posto: POSTO, posto_id: PID,
     comentarios_disponiveis: true,
+    comentarios_dif_disponiveis: true,
     mes: 'SETEMBRO', ano: 2026,
     grupos: COMBS.map(function (c, i) { return { comb: c, abv: i ? 'ET' : 'GC', idx: i, capacidade: 30000 }; }),
     combustiveisVenda: COMBS.map(function (c, i) { return { comb: c, abv: i ? 'ET' : 'GC', idx: i }; }),
@@ -139,7 +149,16 @@ function js(src) {
 // A célula de MEDIÇÃO da matriz, por dia (dd/mm/aaaa) e combustível.
 function celMatriz(dataBR, comb) {
   var iso = dataBR.split('/').reverse().join('-');
-  return document.querySelector('#matriz-host td[data-data="' + iso + '"][data-comb="' + comb + '"]');
+  return document.querySelector('#matriz-host td[data-data="' + iso + '"][data-comb="' + comb +
+    '"][data-coluna="medicao"]');
+}
+// A célula de Δ DIFERENÇA da matriz. Mesmo (dia, combustível) da de medição —
+// é a MESMA linha de `medicao`, outra coluna — e por isso o seletor precisa
+// do data-coluna para não pegar a vizinha.
+function celDif(dataBR, comb) {
+  var iso = dataBR.split('/').reverse().join('-');
+  return document.querySelector('#matriz-host td[data-data="' + iso + '"][data-comb="' + comb +
+    '"][data-coluna="dif"]');
 }
 function celGrade(comb) {
   return document.querySelector('#grade-host .gm-cel[data-comb="' + comb + '"]');
@@ -180,6 +199,7 @@ function clicarItem(rot) {
       medicao_total: 20000, data_medicao: DIA_GRADE, comentarios: {},
     }];
     _gradeComentarios = true;
+    _gradeComentariosDif = true;
     document.getElementById('grade-host').innerHTML =
       '<div class="grade-cards">' + montarCard(_gradePostos[0], new Set()) + '</div>';
 
@@ -355,6 +375,114 @@ function clicarItem(rot) {
        pop ? pop.textContent.trim() : '(nenhum)');
     eh(!menu(), 'e o menu de inserir não abre');
     _gradeComentarios = true;
+    h3('10. A coluna Δ DIFERENÇA também aceita comentário');
+    var cd = celDif('03/09/2026', 'GASOLINA COMUM');
+    eh(!!cd, 'a célula de diferença existe e é alvo de comentário',
+       cd ? cd.className : '(ausente)');
+    eh(!!cd && cd.classList.contains('gm-alvo'), 'marcada com gm-alvo');
+    eh(!!cd && cd.getAttribute('data-coluna') === 'dif',
+       'e declarada como coluna "dif"', cd && cd.getAttribute('data-coluna'), 'dif');
+    // A MESMA chave da medição — é a mesma linha de `medicao`.
+    var cm2 = celMatriz('03/09/2026', 'GASOLINA COMUM');
+    eh(cd.getAttribute('data-pid') === cm2.getAttribute('data-pid') &&
+       cd.getAttribute('data-data') === cm2.getAttribute('data-data') &&
+       cd.getAttribute('data-comb') === cm2.getAttribute('data-comb'),
+       'com (posto, data, combustível) IGUAIS aos da medição',
+       cd.getAttribute('data-data') + ' / ' + cd.getAttribute('data-comb'));
+    eh(cd.getAttribute('data-coluna') !== cm2.getAttribute('data-coluna'),
+       'e só a coluna diferente — é a mesma linha, outra célula',
+       cm2.getAttribute('data-coluna') + ' x ' + cd.getAttribute('data-coluna'));
+    eh(!!cd.querySelector('.cell-diff'),
+       'o número da diferença continua na célula, no span que o recálculo pinta');
+
+    h3('11. Inserir na diferença grava em comentario_dif');
+    POSTS = [];
+    botaoDireito(cd);
+    await esperar(60);
+    eh(!!menu(), 'o menu abre na célula de diferença');
+    eh(itensMenu().join('|') === 'Inserir comentário', 'sem comentário, só "Inserir"',
+       itensMenu().join('|'), 'Inserir comentário');
+    clicarItem('Inserir comentário');
+    await esperar(60);
+    document.querySelector('.gm-editor .gm-ta').value = 'bomba parada, verificar bico 3';
+    document.querySelector('.gm-editor .gm-salvar').click();
+    await esperar(150);
+    eh(POSTS.length === 1, 'um POST', String(POSTS.length), '1');
+    eh(POSTS[0] && POSTS[0].coluna === 'dif', 'com coluna: "dif"',
+       POSTS[0] && POSTS[0].coluna, 'dif');
+    eh(POSTS[0] && POSTS[0].data === DIA_MATRIZ && POSTS[0].combustivel === 'GASOLINA COMUM',
+       'e a mesma chave da linha', POSTS[0] && (POSTS[0].data + ' / ' + POSTS[0].combustivel));
+    cd = celDif('03/09/2026', 'GASOLINA COMUM');
+    eh(!!cd.querySelector('.gm-tri'), 'o triângulo aparece na célula de diferença');
+    eh(cd.getAttribute('data-com') === 'bomba parada, verificar bico 3',
+       'com o texto', cd.getAttribute('data-com'));
+    eh(!!cd.querySelector('.cell-diff'), 'e o número da diferença continua lá');
+
+    h3('12. As duas células da MESMA linha não se misturam');
+    // É o erro que a coluna existe para evitar: comentar a diferença não pode
+    // sobrescrever o comentário da medição, e vice-versa.
+    POSTS = [];
+    var cmed = celMatriz('03/09/2026', 'GASOLINA COMUM');
+    botaoDireito(cmed);
+    await esperar(60);
+    clicarItem('Inserir comentário');
+    await esperar(60);
+    document.querySelector('.gm-editor .gm-ta').value = 'medicao conferida';
+    document.querySelector('.gm-editor .gm-salvar').click();
+    await esperar(150);
+    eh(POSTS[0] && POSTS[0].coluna === 'medicao',
+       'comentar a medição manda coluna: "medicao"', POSTS[0] && POSTS[0].coluna, 'medicao');
+    eh(celMatriz('03/09/2026', 'GASOLINA COMUM').getAttribute('data-com') === 'medicao conferida',
+       'a medição fica com o texto dela',
+       celMatriz('03/09/2026', 'GASOLINA COMUM').getAttribute('data-com'));
+    eh(celDif('03/09/2026', 'GASOLINA COMUM').getAttribute('data-com') === 'bomba parada, verificar bico 3',
+       'e a diferença mantém o dela, intacto',
+       celDif('03/09/2026', 'GASOLINA COMUM').getAttribute('data-com'));
+    nota('É o que a coluna separada existe para garantir: mesma linha, dois textos.');
+
+    h3('13. Recarregar traz os dois de volta, cada um na sua célula');
+    await window.matrizMedicao.carregar(POSTO);
+    await esperar(150);
+    eh(celMatriz('03/09/2026', 'GASOLINA COMUM').getAttribute('data-com') === 'medicao conferida',
+       'medição', celMatriz('03/09/2026', 'GASOLINA COMUM').getAttribute('data-com'));
+    eh(celDif('03/09/2026', 'GASOLINA COMUM').getAttribute('data-com') === 'bomba parada, verificar bico 3',
+       'diferença', celDif('03/09/2026', 'GASOLINA COMUM').getAttribute('data-com'));
+
+    h3('14. Excluir só apaga a célula comentada');
+    POSTS = [];
+    botaoDireito(celDif('03/09/2026', 'GASOLINA COMUM'));
+    await esperar(60);
+    eh(itensMenu().join('|') === 'Editar comentário|Excluir comentário',
+       'com comentário, oferece editar e excluir', itensMenu().join('|'));
+    clicarItem('Excluir comentário');
+    await esperar(150);
+    eh(POSTS[0] && POSTS[0].coluna === 'dif' && POSTS[0].comentario === null,
+       'excluir manda coluna "dif" e comentario null',
+       POSTS[0] && (POSTS[0].coluna + ' / ' + JSON.stringify(POSTS[0].comentario)));
+    eh(!celDif('03/09/2026', 'GASOLINA COMUM').querySelector('.gm-tri'),
+       'o triângulo some da diferença');
+    eh(!!celMatriz('03/09/2026', 'GASOLINA COMUM').querySelector('.gm-tri'),
+       'e o da medição continua lá');
+
+    h3('15. Sem a coluna no banco, a diferença avisa o arquivo CERTO');
+    _gradeComentariosDif = false;
+    botaoDireito(celDif('04/09/2026', 'ETANOL'));
+    await esperar(60);
+    var popD = document.querySelector('.gm-pop--erro');
+    eh(!!popD && /medicao_comentario_dif\.sql/.test(popD.textContent),
+       'a mensagem nomeia sql/medicao_comentario_dif.sql',
+       popD ? popD.textContent.trim() : '(nenhum)');
+    eh(!menu(), 'e o editor não abre');
+    // A medição, no mesmo banco, continua funcionando: as migrações são
+    // independentes e a mensagem tem de refletir isso.
+    gmFechar();
+    botaoDireito(celMatriz('04/09/2026', 'ETANOL'));
+    await esperar(60);
+    eh(!!menu(), 'a MEDIÇÃO segue funcionando (a migração dela já foi aplicada)',
+       menu() ? itensMenu().join('|') : '(sem menu)');
+    gmFechar();
+    _gradeComentariosDif = true;
+
   } catch (e) {
     falhas++;
     linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));

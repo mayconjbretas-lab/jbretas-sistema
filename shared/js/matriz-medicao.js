@@ -48,6 +48,10 @@
   // três data-*; o resto é de lá. Duas cópias da mesma conversa com a API
   // divergiriam na primeira correção feita só de um lado.
   let _comDisponivel = false;
+  // Flag SEPARADA da de cima: as duas migrações são independentes, e uma só
+  // faria a matriz oferecer o comentário de diferença num banco onde só a
+  // primeira foi aplicada — prometendo o que falha no salvar.
+  let _comDifDisponivel = false;
 
   // Categorias editáveis: Medição/Venda/Carga (2A) + Pedido Final (2B).
   // Pré-pedido continua SOMENTE LEITURA (virá do Painel ADM).
@@ -369,6 +373,7 @@
       DADOS_ATUAIS = dados;
       _postoId = dados.posto_id || '';
       _comDisponivel = !!dados.comentarios_disponiveis;
+      _comDifDisponivel = !!dados.comentarios_dif_disponiveis;
       // _gradeComentarios é o que o menu de grade-card.js consulta para
       // decidir entre abrir o editor e avisar que falta a migração. Ele é
       // `let` de escopo de script no app.js do módulo, e a matriz é a única
@@ -377,8 +382,10 @@
       // o preenchia era o renderGrade, que só roda em "Todos os postos".
       // typeof antes de atribuir: se um dia a matriz for montada numa página
       // que não declare a variável, isto vira no-op em vez de ReferenceError.
-      try { if (typeof _gradeComentarios !== 'undefined') _gradeComentarios = _comDisponivel; }
-      catch (e) {}
+      try {
+        if (typeof _gradeComentarios !== 'undefined') _gradeComentarios = _comDisponivel;
+        if (typeof _gradeComentariosDif !== 'undefined') _gradeComentariosDif = _comDifDisponivel;
+      } catch (e) {}
       atualizarMesNav();
       montarCabecalhoMedicao(dados.grupos, dados.combustiveisVenda);
       montarLinhasMedicao(dados);
@@ -457,12 +464,13 @@
   // célula não pode receber comentário (sem posto_id ou sem data legível).
   // Fora da string de `class` de propósito: emendar atributo dentro do
   // class="" é o tipo de coisa que funciona e quebra no primeiro que editar.
-  function attrsComentario(d, comb, txt) {
+  function attrsComentario(d, comb, txt, coluna) {
     var iso = isoDoDia(d);
     if (!_postoId || !iso) return '';
     return ' data-pid="' + escAttr(_postoId) + '"' +
            ' data-comb="' + escAttr(comb) + '"' +
            ' data-data="' + escAttr(iso) + '"' +
+           ' data-coluna="' + escAttr(coluna || 'medicao') + '"' +
            (txt ? ' data-com="' + escAttr(txt) + '" title="' + escAttr(txt) + '"' : '');
   }
 
@@ -527,7 +535,28 @@
             // Preenchido por recalcularPrevisaoEDiff após montar as linhas.
             html += '<td class="' + grpEnd + '"' + dg + '><span class="cell-val" id="prev_' + diaIdx + '_' + i + '">—</span></td>';
           } else if (cat.chave === 'diferenca') {
-            html += '<td class="' + grpEnd + '"' + dg + '><span class="cell-val cell-diff" id="diff_' + diaIdx + '_' + i + '">—</span></td>';
+            // ════════ A Δ DIFERENÇA TAMBÉM ACEITA COMENTÁRIO ════════
+            // É a coluna onde aparece o que não fecha, e o comentário é onde
+            // se registra o motivo — "bomba parada", "aferição", "verificar
+            // bico 3". Sem ele, o número torto de um dia volta a ser
+            // investigado do zero no mês seguinte.
+            //
+            // MESMA LINHA DE `medicao`, OUTRA COLUNA: a diferença é calculada
+            // a partir da medição, então a chave (posto, data, combustível) é
+            // a mesma — só muda em qual coluna o texto é gravado, e é isso que
+            // o `data-coluna` carrega.
+            //
+            // O VALOR DA CÉLULA É PINTADO DEPOIS, por recalcularPrevisaoEDiff,
+            // que escreve no <span id="diff_…">. O triângulo é IRMÃO do span,
+            // não filho — assim o repintar do número não o apaga.
+            const txtDif = _comDifDisponivel ? ((d.comentario_dif || [])[i] || null) : null;
+            const attrsDif = attrsComentario(d, col.comb, txtDif, 'dif');
+            const clsDif = attrsDif ? ' gm-alvo mx-com' + (txtDif ? ' mx-com--tem' : '') : '';
+            const hDif = attrsDif
+              ? ' oncontextmenu="__gmMenu(event, this)" onclick="__gmClique(event, this)"' : '';
+            html += '<td class="' + grpEnd + clsDif + '"' + attrsDif + dg + hDif +
+              '><span class="cell-val cell-diff" id="diff_' + diaIdx + '_' + i + '">—</span>' +
+              (txtDif ? '<span class="gm-tri" aria-hidden="true"></span>' : '') + '</td>';
           } else if (EDITAVEIS.includes(cat.chave) && !soLeitura) {
             // Célula editável (Medição/Venda/Carga/Pedido) — mesmo padrão do app antigo.
             BASELINE[diaIdx + '|' + cat.chave + '|' + col.comb] = (val === undefined ? null : val);
@@ -535,7 +564,7 @@
             // Só a MEDIÇÃO aceita comentário — ver o bloco acima.
             const ehMed = cat.chave === 'medicao';
             const txtCom = ehMed ? ((d.comentario || [])[i] || null) : null;
-            const attrsCom = ehMed ? attrsComentario(d, col.comb, txtCom) : '';
+            const attrsCom = ehMed ? attrsComentario(d, col.comb, txtCom, 'medicao') : '';
             // gm-alvo é a marca que grade-card.js procura (o menu, o editor e o
             // POST são de lá); mx-com é só nossa, para o CSS da <td>.
             const clsCom = ehMed && attrsCom ? ' gm-alvo mx-com' + (txtCom ? ' mx-com--tem' : '') : '';
@@ -1071,10 +1100,14 @@
     var combs = (DADOS_ATUAIS.grupos || []).map(function (g) { return g.comb; });
     var i = combs.indexOf(ev.combustivel);
     if (i < 0) return;
+    // O campo do cache acompanha a COLUNA comentada. Sem isto, comentar a
+    // diferença sobrescreveria o comentário da medição no cache e o próximo
+    // render do mês mostraria o texto na célula errada.
+    var campo = ev.coluna === 'dif' ? 'comentario_dif' : 'comentario';
     (DADOS_ATUAIS.dias || []).forEach(function (d) {
       if (String(d.data) !== dataBR) return;
-      if (!d.comentario) d.comentario = combs.map(function () { return null; });
-      d.comentario[i] = ev.comentario || null;
+      if (!d[campo]) d[campo] = combs.map(function () { return null; });
+      d[campo][i] = ev.comentario || null;
     });
   };
 

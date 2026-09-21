@@ -18,6 +18,9 @@
 //   _gradeData        a data selecionada (ISO), para o rótulo e o POST
 //   _gradeTanques     { posto_id: { COD: capacidade } } da resposta
 //   _gradeComentarios a coluna medicao.comentario existe?
+//   _gradeComentariosDif  idem para medicao.comentario_dif (OPCIONAL: módulo
+//                     que não a declare simplesmente não oferece o
+//                     comentário da coluna Δ diferença)
 //   _gradePostos      os postos em mão, para o cache do comentário
 //
 // São `let` no topo do app.js de cada módulo — escopo de script, que scripts
@@ -82,6 +85,9 @@ function celulaMedicao(p, cod, valor, comentario, capacidade) {
     // A data explícita na célula, mesmo aqui onde ela é sempre _gradeData:
     // com ela, gmSalvar não precisa saber de que tela veio o clique.
     ' data-data="' + esc(String(_gradeData || '')) + '"' +
+    // Explícito, embora seja o padrão: a célula do card diz o que ela é, em
+    // vez de depender de quem lê saber que a ausência significa medição.
+    ' data-coluna="medicao"' +
     (temCap ? ' data-cap="' + esc(String(cap)) + '" data-pct="' + esc(String(Math.round(pct))) + '"' : '') +
     (tem ? ' data-com="' + esc(comentario) + '" title="' + esc(comentario) + '"' : '') +
     ' oncontextmenu="__gmMenu(event, this)" onclick="__gmClique(event, this)">' +
@@ -185,7 +191,30 @@ function montarCard(p, montado) {
 // (a do pedido do dia, no estado do módulo); na matriz cada LINHA é um dia,
 // então ela tem de viajar na própria célula. Sem isto, comentar 03/09 na
 // matriz gravaria no dia que a grade estivesse mostrando.
+//
+// A COLUNA TAMBÉM VEM DA CÉLULA (`data-coluna`), pelo mesmo motivo. A matriz
+// do posto tem DUAS células comentáveis por linha — a medição e a Δ
+// diferença — e as duas vivem na MESMA linha de `medicao`, em colunas
+// distintas (`comentario` e `comentario_dif`). Sem o atributo, o editor não
+// teria como saber qual das duas está sendo comentada; com ele, o menu, o
+// textarea e o POST continuam sendo um só para as duas.
+//
+// AUSENTE VALE 'medicao': a célula do card não carrega o atributo e não
+// precisa carregar — ela só tem medição.
 var _gmMenuEl = null, _gmPopEl = null;
+
+// A célula pode ser comentada? Depende da COLUNA dela: `_gradeComentarios`
+// vale para a medição e `_gradeComentariosDif` para a diferença. As duas são
+// `let` no app.js do módulo (ver o contrato no topo) e preenchidas por quem
+// carrega os dados. `typeof` antes de ler porque a segunda é nova: um módulo
+// que ainda não a declare não pode explodir por causa dela — ele só não
+// oferece o comentário de diferença, que é o que ele já fazia.
+function gmDisponivel(cel) {
+  if (cel && cel.getAttribute('data-coluna') === 'dif') {
+    return (typeof _gradeComentariosDif !== 'undefined') && !!_gradeComentariosDif;
+  }
+  return !!_gradeComentarios;
+}
 
 function gmFechar() {
   if (_gmMenuEl && _gmMenuEl.parentNode) _gmMenuEl.parentNode.removeChild(_gmMenuEl);
@@ -229,10 +258,16 @@ function __gmMenu(ev, cel) {
   ev.preventDefault();
   ev.stopPropagation();
   gmFechar();
-  if (!_gradeComentarios) {
+  // A MIGRAÇÃO É POR COLUNA: são dois arquivos independentes, e a célula de
+  // diferença pode estar indisponível num banco onde a de medição já funciona.
+  // A mensagem nomeia o arquivo certo — mandar aplicar o errado faz perder a
+  // viagem.
+  if (!gmDisponivel(cel)) {
     var r0 = cel.getBoundingClientRect();
     _gmPopEl = gmFlutuante('gm-pop gm-pop--erro', r0.left, r0.bottom + 4);
-    _gmPopEl.textContent = 'comentário indisponível: falta aplicar sql/medicao_comentario.sql';
+    _gmPopEl.textContent = 'comentário indisponível: falta aplicar sql/' +
+      (cel.getAttribute('data-coluna') === 'dif' ? 'medicao_comentario_dif' : 'medicao_comentario') +
+      '.sql';
     return;
   }
   var tem = !!cel.getAttribute('data-com');
@@ -263,7 +298,7 @@ document.addEventListener('click', function (e) {
   e.preventDefault();
   var cel = add.closest('.gm-alvo');
   if (!cel) return;
-  if (!_gradeComentarios) { __gmMenu(e, cel); return; }
+  if (!gmDisponivel(cel)) { __gmMenu(e, cel); return; }
   gmFechar();
   gmEditor(cel);
 }, true);
@@ -304,6 +339,8 @@ async function gmSalvar(cel, texto) {
   // A DATA DA PRÓPRIA CÉLULA. _gradeData só entra como reserva, para a célula
   // antiga que ainda não a carregue — ver o cabeçalho do bloco.
   var data = cel.getAttribute('data-data') || _gradeData;
+  // Qual célula da linha: 'medicao' (padrão) ou 'dif'.
+  var coluna = cel.getAttribute('data-coluna') || 'medicao';
   var txt = (texto === null || texto === undefined) ? null : String(texto).trim();
   if (txt === '') txt = null;
   gmFechar();
@@ -311,13 +348,17 @@ async function gmSalvar(cel, texto) {
   try {
     await apiFetch('/logistica/comentario-medicao', {
       method: 'POST',
-      body: JSON.stringify({ posto_id: pid, data: data, combustivel: comb, comentario: txt }),
+      body: JSON.stringify({ posto_id: pid, data: data, combustivel: comb,
+                             coluna: coluna, comentario: txt }),
     });
     gmPintarCelula(cel, txt);
     // O cache da GRADE de cards, senão o próximo render ressuscita o antigo.
     // Só vale para o dia que a grade está mostrando: comentar 03/09 na matriz
     // não pode mexer no card de hoje, que fala de outro dia.
-    if (typeof _gradePostos !== 'undefined' && data === _gradeData) {
+    // O cache da grade só guarda o da MEDIÇÃO: o card não tem célula de
+    // diferença para desenhar, então guardar o outro ali seria guardar o que
+    // ninguém lê.
+    if (typeof _gradePostos !== 'undefined' && data === _gradeData && coluna === 'medicao') {
       var p = _gradePostos.filter(function (x) { return String(x.posto_id) === String(pid); })[0];
       if (p) {
         if (!p.comentarios) p.comentarios = {};
@@ -328,7 +369,8 @@ async function gmSalvar(cel, texto) {
     // que faz a matriz e a grade não divergirem sem uma conhecer a outra: a
     // matriz registra este gancho e mexe no DADOS_ATUAIS dela.
     if (typeof window.gmAoSalvar === 'function') {
-      try { window.gmAoSalvar({ posto_id: pid, data: data, combustivel: comb, comentario: txt }); }
+      try { window.gmAoSalvar({ posto_id: pid, data: data, combustivel: comb,
+                                coluna: coluna, comentario: txt }); }
       catch (e) { console.warn('gmAoSalvar falhou:', e && e.message); }
     }
   } catch (err) {
