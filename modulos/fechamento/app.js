@@ -511,6 +511,26 @@ async function salvarFechamento() {
   // /fechamento), que é a trava de verdade; esta aqui só avisa antes da
   // viagem, e evita que o supervisor receba push por um erro que o gerente
   // podia ver na hora.
+  // TRAVA DA CARGA MÍNIMA (ver mascara-litros.js). Antes da trava de
+  // soma-zero abaixo, porque 1 L passa por aquela e é justamente o caso que
+  // esta pega: "SIM, recebi" com um litro para vencer a validação.
+  if (cargaRespondida === 'sim' && typeof cargaAbaixoDoMinimo === 'function') {
+    const baixo = combustiveisAtuais
+      .map(c => ({ c, input: document.getElementById('carga-' + c.nome.replace(/\s+/g, '_')) }))
+      .find(x => cargaAbaixoDoMinimo(parseInt(x.input?.dataset.val) || 0));
+    if (baixo) {
+      alert(CARGA_MIN_MSG + '\n\n' + baixo.c.nome + ': ' +
+            (parseInt(baixo.input?.dataset.val) || 0) + ' L');
+      if (baixo.input) {
+        baixo.input.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        baixo.input.focus(); baixo.input.select();
+      }
+      btn.disabled = false;
+      btn.textContent = '💾 SALVAR FECHAMENTO';
+      return;
+    }
+  }
+
   if (cargaRespondida === 'sim') {
     const totalCarga = combustiveisAtuais.reduce((t, c) => {
       const input = document.getElementById('carga-' + c.nome.replace(/\s+/g, '_'));

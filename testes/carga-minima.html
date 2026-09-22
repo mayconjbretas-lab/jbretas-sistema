@@ -1,0 +1,198 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carga mínima — 1.000 litros nas telas que editam carga</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/shared/css/matriz.css">
+<style>
+  html, body { height: auto !important; overflow: visible !important; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+
+<div id="res">rodando…</div>
+<div id="palco"><div id="matriz-host"></div></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// Carga é ou nada, ou pelo menos 1.000 L. O valor entre 1 e 999 nunca é
+// entrega: é marcador de quem está passando por uma trava — foi o que
+// aconteceu no P. SANTA INES MINAS, onde o fechamento gravou
+// "GASOLINA COMUM: 1L" em 19 e 20/09 e a Logística corrigiu à mão.
+//
+//  1. A regra (mascara-litros.js) recusa 1..999, aceita vazio e ≥1.000, e
+//     transforma 0 em NULO.
+//  2. Na MATRIZ (Logística desktop e mobile usam o mesmo arquivo): digitar
+//     500 na carga avisa, NÃO salva e devolve o campo ao valor anterior.
+//  3. E não fica nada pendente para salvar — o que a tela mostra é o que o
+//     banco tem.
+//  4. MEDIÇÃO, VENDA e PEDIDO não foram tocados: 500 passa neles.
+//  5. Na carga, 1.000 passa (a fronteira é inclusiva) e 0 vira vazio.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function js(src) {
+  return new Promise(function (ok, er) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { er(new Error(src + ' não carregou')); };
+    document.head.appendChild(s);
+  });
+}
+
+// O alert é a via de aviso desta tela (mesma do Fechamento). Aqui ele é
+// capturado em vez de bloquear o teste.
+var ALERTAS = [];
+window.alert = function (m) { ALERTAS.push(String(m)); };
+
+// ── Dublê da API ────────────────────────────────────────────────
+var POSTS = [];
+var POSTO = 'P. TESTE';
+var COMBS = ['GASOLINA COMUM', 'ETANOL'];
+// Mesmo formato do comentario-todas-vistas.html, que já monta a matriz de
+// produção: `grupos` com abv/idx/capacidade é o que o cabeçalho lê.
+function diaResp(dataBR, carga) {
+  return { dia: Number(dataBR.slice(0, 2)), data: dataBR,
+    medicao: [11364, 15113], venda: [7775, 6646],
+    carga: carga, previsao: [null, null], diferenca: [null, null],
+    prePedido: [null, null], pedido: [10000, 10000],
+    comentario: [null, null], comentario_dif: [null, null] };
+}
+window.apiFetch = function (url, opts) {
+  var u = String(url);
+  if (u === '/medicao' && opts && opts.method === 'POST') {
+    POSTS.push(JSON.parse(opts.body));
+    return Promise.resolve({ success: true });
+  }
+  if (u.indexOf('/medicao/') === 0) {
+    return Promise.resolve({ success: true, posto: POSTO, posto_id: 'p1',
+      mes: 'SETEMBRO', ano: 2026,
+      comentarios_disponiveis: true, comentarios_dif_disponiveis: true,
+      grupos: COMBS.map(function (c, i) { return { comb: c, abv: i ? 'ET' : 'GC', idx: i, capacidade: 30000 }; }),
+      combustiveisVenda: COMBS.map(function (c, i) { return { comb: c, abv: i ? 'ET' : 'GC', idx: i }; }),
+      dias: [diaResp('21/09/2026', [8000, 5000])] });
+  }
+  return Promise.resolve({ success: true });
+};
+window.getUsuarioLogado = function () { return { perfil: 'LOGISTICA', nome: 'HARNESS' }; };
+
+function cel(campo, comb) {
+  return Array.prototype.slice.call(document.querySelectorAll('#matriz-host .cell-in'))
+    .find(function (el) { return el.dataset.campo === campo && el.dataset.comb === comb; }) || null;
+}
+// Digita e sai do campo, como a pessoa faz.
+async function digitar(input, texto) {
+  input.focus();
+  if (typeof onCelulaFocus === 'function') onCelulaFocus(input);
+  input.value = texto;
+  input.blur();
+  if (typeof onCelulaBlur === 'function') onCelulaBlur(input);
+  await esperar(60);
+}
+
+(async function () {
+  try {
+    await js('/shared/js/mascara-litros.js');
+    await js('/shared/js/grade-card.js');
+    await js('/shared/js/matriz-medicao.js');
+
+    h3('1. A regra, sozinha');
+    eh(typeof cargaAbaixoDoMinimo === 'function', 'cargaAbaixoDoMinimo existe no shared');
+    eh(CARGA_MIN_LITROS === 1000, 'o mínimo é 1.000', String(CARGA_MIN_LITROS), '1000');
+    eh(CARGA_MIN_MSG === 'Carga mínima: 1.000 litros. Deixe vazio se não recebeu carga.',
+       'a mensagem é a pedida', CARGA_MIN_MSG);
+    [[1, true], [500, true], [999, true], [1000, false], [8000, false],
+     [0, false], [null, false]].forEach(function (p) {
+      eh(cargaAbaixoDoMinimo(p[0]) === p[1],
+         JSON.stringify(p[0]) + (p[1] ? ' é recusado' : ' passa'),
+         String(cargaAbaixoDoMinimo(p[0])), String(p[1]));
+    });
+    eh(cargaParaGravar(0) === null, '0 vira null', JSON.stringify(cargaParaGravar(0)), 'null');
+    eh(cargaParaGravar(1000) === 1000, '1.000 continua 1.000', String(cargaParaGravar(1000)));
+
+    h3('2. A matriz montou');
+    window.matrizMedicao.montar(document.getElementById('matriz-host'), {});
+    await window.matrizMedicao.carregar(POSTO);
+    await esperar(300);
+    var cargaGC = cel('carga', 'GASOLINA COMUM');
+    eh(!!cargaGC, 'a célula de carga da GC existe', cargaGC ? cargaGC.value : '(ausente)');
+    eh(cargaGC.value === '8000', 'com o valor carregado', cargaGC.value, '8000');
+
+    h3('3. 500 L na carga: avisa, não salva, devolve o valor');
+    ALERTAS = []; POSTS = [];
+    await digitar(cargaGC, '500');
+    eh(ALERTAS.length === 1, 'avisou uma vez', String(ALERTAS.length), '1');
+    eh(ALERTAS[0] === CARGA_MIN_MSG, 'com a mensagem pedida', ALERTAS[0]);
+    cargaGC = cel('carga', 'GASOLINA COMUM');
+    eh(cargaGC.value === '8000', 'o campo voltou ao valor anterior', cargaGC.value, '8000');
+    nota('Deixar o 500 na tela sem gravar faria a matriz mostrar um número');
+    nota('que o banco não tem — pior que recusar.');
+    eh(!cargaGC.classList.contains('cell-dirty'),
+       'e a célula não ficou marcada como pendente', cargaGC.className);
+
+    h3('4. Nada foi para o servidor');
+    if (typeof window.matrizMedicao.salvar === 'function') {
+      await window.matrizMedicao.salvar();
+      await esperar(150);
+    }
+    var itensCarga = POSTS.reduce(function (n, p) {
+      return n + (p.itens || []).filter(function (i) { return i.campo === 'carga'; }).length;
+    }, 0);
+    eh(itensCarga === 0, 'nenhum item de carga no POST', String(itensCarga), '0');
+
+    h3('5. 1.000 passa (a fronteira é inclusiva)');
+    ALERTAS = []; POSTS = [];
+    await digitar(cel('carga', 'GASOLINA COMUM'), '1000');
+    eh(ALERTAS.length === 0, 'sem aviso', ALERTAS.join(' | ') || 'nenhum');
+    eh(cel('carga', 'GASOLINA COMUM').value === '1000', 'e o valor ficou',
+       cel('carga', 'GASOLINA COMUM').value, '1000');
+
+    h3('6. Zero vira vazio, e não 0');
+    ALERTAS = [];
+    await digitar(cel('carga', 'ETANOL'), '0');
+    eh(ALERTAS.length === 0, 'zero não é erro — é "não recebi"', ALERTAS.join(' | ') || 'nenhum');
+    eh(cel('carga', 'ETANOL').value === '', 'o campo fica VAZIO',
+       JSON.stringify(cel('carga', 'ETANOL').value), '""');
+
+    h3('7. Medição, venda e pedido não foram tocados');
+    nota('A regra é só da carga: 500 L de venda é um dia fraco, não um erro.');
+    ['medicao', 'venda', 'pedido'].forEach(function (campo) { /* montado abaixo */ });
+    for (var k = 0; k < 3; k++) {
+      var campo = ['medicao', 'venda', 'pedido'][k];
+      var c = cel(campo, 'GASOLINA COMUM');
+      if (!c) { eh(false, campo + ': célula não encontrada'); continue; }
+      ALERTAS = [];
+      await digitar(c, '500');
+      eh(ALERTAS.length === 0, campo + ' aceita 500 sem aviso', ALERTAS.join(' | ') || 'nenhum');
+      eh(cel(campo, 'GASOLINA COMUM').value === '500', 'e o valor ficou',
+         cel(campo, 'GASOLINA COMUM').value, '500');
+    }
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — Carga mínima';
+})();
+</script>

@@ -825,9 +825,31 @@
     if (proximo) { proximo.focus(); proximo.select(); }
   }
 
+  // Trava do alert dentro do blur: o alert tira o foco do input, o que
+  // dispara OUTRO blur, que abriria um segundo alert. Sem esta guarda a tela
+  // entra em laço e o usuário não consegue sair do campo.
+  let _avisandoCarga = false;
+
   function onCelulaBlur(input) {
     const num = parseLitros(input.value);
     const valorNovo = (num && num > 0) ? num : null;
+
+    // ════════ CARGA MÍNIMA (ver mascara-litros.js) ════════
+    // Não salva e devolve o campo ao valor que ele tinha ao ganhar o foco —
+    // deixar o 1 na tela sem gravar faria a matriz mostrar um número que o
+    // banco não tem. A API recusa o mesmo valor (trava de verdade); esta
+    // avisa aqui, onde a pessoa ainda está com o cursor.
+    if (input.dataset.campo === 'carga' && typeof cargaAbaixoDoMinimo === 'function'
+        && cargaAbaixoDoMinimo(valorNovo) && !_avisandoCarga) {
+      _avisandoCarga = true;
+      const anterior = _valorAoFocar;
+      input.value = anterior === null || anterior === undefined ? '' : fmtLitrosEdit(anterior);
+      try { alert(CARGA_MIN_MSG); } finally { _avisandoCarga = false; }
+      _valorAoFocar = null;
+      setTimeout(() => { try { input.focus(); input.select(); } catch (e) { /* saiu da tela */ } }, 0);
+      return;
+    }
+
     input.value = valorNovo === null ? '' : fmtLitrosEdit(valorNovo);
     _salvarCelula(input, valorNovo);
     // Registra o net da edição desta célula na pilha de undo (só se mudou).
