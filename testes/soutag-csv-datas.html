@@ -1,0 +1,281 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Soutag — CSV do portal, datas DD/MM e recorte de postos</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:10px; margin:12px 0; }
+</style>
+
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// O arquivo que o portal Soutag entrega tem extensão .xls e NÃO é um .xls:
+// é um CSV com ponto-e-vírgula. O SheetJS reconhece o CSV e, ao converter,
+// adivinhava datas no formato AMERICANO — e os dias 1 a 12 viravam o dia 09
+// dos 12 meses do ano. No "ANA LUCIA.xls" real, 591 de 901 transações saíram
+// de setembro e a tela mostrava 309, parecendo importação incompleta.
+//
+// A planilha deste teste é montada com os MESMOS bytes daquele arquivo: CSV
+// com ";", campos entre aspas, "R$ 85,69" no valor, datas DD/MM/AAAA HH:MM:SS
+// e uma linha com "N/A" na data. O código é o app-cupons.js de produção.
+//
+//  1. TODAS as datas caem no dia certo — inclusive 01 a 12, que eram as que
+//     se espalhavam. A prova é o corpo do POST /app/soutag-importar, que é o
+//     contrato entre a tela e a rota.
+//  2. A HORA sobrevive junto (é ela que decide o modo do cruzamento).
+//  3. A linha com data ilegível é DESCARTADA e DITA na tela, com o número da
+//     linha no arquivo. Antes ela sumia em silêncio.
+//  4. Um .xlsx de verdade, com data em SERIAL, continua sendo lido — o
+//     `raw: true` não pode quebrar o formato que já funcionava.
+//  5. A tela diz contra quantos postos está comparando quando a rota recorta.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function js(src) {
+  return new Promise(function (ok, er) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { er(new Error(src + ' não carregou')); };
+    document.head.appendChild(s);
+  });
+}
+
+// ── O que a tela mandou para a rota ─────────────────────────────
+var SG_POST = null;
+var RESP_COMPARAR = null;
+window.apiFetch = function (url, opts) {
+  var u = String(url);
+  if (u.indexOf('/app/soutag-importar') === 0) {
+    SG_POST = JSON.parse(opts.body);
+    return Promise.resolve({ success: true, periodo: { de: '2026-09-01', ate: '2026-09-17' },
+      recebidas: SG_POST.transacoes.length, gravadas: SG_POST.transacoes.length,
+      recusadas: 0, apagadas: 0, sem_posto: 0, nao_casou: [], arquivo: SG_POST.arquivo,
+      com_hora: SG_POST.transacoes.filter(function (t) { return !!t.data_hora; }).length });
+  }
+  if (u.indexOf('/app/soutag-comparar') === 0) return Promise.resolve(RESP_COMPARAR);
+  if (u.indexOf('/app/cupons') === 0) {
+    return Promise.resolve({ success: true, periodo: { de: '2026-09-01', ate: '2026-09-17' },
+      rede: { total_cupons: 0, total_litros: 0, total_valor: 0, ticket_medio: 0, postos: 0 },
+      postos: [] });
+  }
+  return Promise.resolve({ success: true });
+};
+window.getUsuarioLogado = function () { return { perfil: 'ADM', nome: 'HARNESS' }; };
+window.mostrarToast = function () {};
+
+// ── O arquivo do portal, byte a byte ────────────────────────────
+// Campos entre aspas, separador ';', valor em "R$ 1.234,56", data
+// DD/MM/AAAA HH:MM:SS. É como o "ANA LUCIA.xls" real começa:
+//   "Posto";"Data/Hora";"Valor";"Combustível";"Usuário";"ID"
+function montarCsvSoutag() {
+  var out = ['"Posto";"Data/Hora";"Valor";"Combustível";"Usuário";"ID"'];
+  var esperado = [];
+  var id = 14400000;
+  // Um dia de 01 a 17/09 — os dias 1 a 12 são exatamente os que se
+  // espalhavam pelos 12 meses.
+  for (var d = 1; d <= 17; d++) {
+    var dd = ('0' + d).slice(-2);
+    var hora = ('0' + (7 + (d % 12))).slice(-2) + ':' + ('0' + (d * 3 % 60)).slice(-2) + ':00';
+    out.push('"POSTO ANA LUCIA LTDA";"' + dd + '/09/2026 ' + hora + '";"R$ ' +
+             (80 + d) + ',5' + (d % 10) + '";"etanol comum";"F AL TESTE";' + (id + d));
+    esperado.push({ data: '2026-09-' + dd, hora: '2026-09-' + dd + 'T' + hora });
+  }
+  // A linha que o parser não consegue ler — ela existe no arquivo real.
+  out.push('"POSTO ANA LUCIA LTDA";"N/A";"R$ 222,54";"gasolina comum";"N/A";14379180');
+  return { texto: out.join('\r\n') + '\r\n', esperado: esperado, linhaRuim: out.length };
+}
+
+(async function () {
+  try {
+    var sec = document.createElement('section');
+    sec.className = 'scr active';
+    sec.id = 's-app';
+    document.getElementById('palco').appendChild(sec);
+    await js('/modulos/painel-adm/app-cupons.js');
+    renderAppCupons(sec);
+    await esperar(300);
+
+    // Entra na vista Soutag (é ela que tem o botão de importar).
+    if (window.__apVista) window.__apVista('soutag');
+    await esperar(200);
+
+    var csv = montarCsvSoutag();
+    nota('CSV montado: 17 transações (01 a 17/09) + 1 linha com "N/A" na data');
+    nota('primeira linha de dado: ' + csv.texto.split('\r\n')[1]);
+
+    // .xls NA EXTENSÃO, CSV NO CONTEÚDO — o ponto do teste.
+    //
+    // E EM LATIN-1, como o arquivo do portal. Isto não é detalhe de teste: o
+    // SheetJS decodifica CSV como latin-1 por padrão, e um arquivo em UTF-8
+    // faria "Combustível" chegar como "CombustÃ­vel" e o cabeçalho não casar.
+    // O arquivo real tem os acentos em um byte só — foi conferido nos bytes
+    // do "ANA LUCIA.xls".
+    var bytes = new Uint8Array(csv.texto.length);
+    for (var bi = 0; bi < csv.texto.length; bi++) bytes[bi] = csv.texto.charCodeAt(bi) & 0xff;
+    var file = new File([bytes], 'ANA LUCIA.xls', { type: 'application/vnd.ms-excel' });
+    var inp = document.getElementById('ap-sg-file');
+    eh(!!inp, 'o input de arquivo existe na tela');
+    var dt = new DataTransfer();
+    dt.items.add(file);
+    inp.files = dt.files;
+
+    RESP_COMPARAR = null;   // a comparação vem depois; aqui só a importação
+    await window.__apSgArquivo(inp);
+    await esperar(500);
+
+    h3('0. A planilha foi lida');
+    var err = document.querySelector('#palco .ap-erro');
+    eh(!err, 'sem erro de leitura', err ? err.textContent : 'sem erro');
+    eh(!!SG_POST, 'a tela chamou POST /app/soutag-importar');
+
+    h3('1. As 17 transações caem no dia certo');
+    nota('Era aqui que 01 a 12/09 viravam 09/JAN, 09/FEV … 09/DEZ.');
+    var ts = (SG_POST || {}).transacoes || [];
+    eh(ts.length === 17, 'as 17 linhas boas foram enviadas', String(ts.length), '17');
+    var meses = {};
+    ts.forEach(function (t) { var m = String(t.data).slice(0, 7); meses[m] = (meses[m] || 0) + 1; });
+    eh(Object.keys(meses).length === 1 && meses['2026-09'] === 17,
+       'TODAS em 2026-09, nenhuma espalhada', JSON.stringify(meses), '{"2026-09":17}');
+    var errados = [];
+    ts.forEach(function (t, i) {
+      if (t.data !== csv.esperado[i].data) errados.push(csv.esperado[i].data + '→' + t.data);
+    });
+    eh(errados.length === 0, 'e cada uma no SEU dia, de 01 a 17',
+       errados.join(' ') || 'todas certas');
+    eh(ts[0].data === '2026-09-01' && ts[16].data === '2026-09-17',
+       'primeira 01/09, última 17/09', ts[0].data + ' .. ' + ts[16].data);
+
+    h3('2. A hora veio junto');
+    nota('É a hora que decide se o cruzamento é por instante ou por totais.');
+    var semHora = ts.filter(function (t) { return !t.data_hora; }).length;
+    eh(semHora === 0, 'nenhuma transação sem hora', String(semHora), '0');
+    eh(ts[0].data_hora === csv.esperado[0].hora, 'e com a hora do arquivo',
+       ts[0].data_hora, csv.esperado[0].hora);
+
+    h3('3. A linha ilegível é descartada E DITA');
+    var aviso = document.querySelector('#palco .ap-aviso--alerta');
+    eh(!!aviso, 'a tela mostra o aviso de linha descartada',
+       aviso ? aviso.textContent.trim() : '(nenhum aviso)');
+    eh(!!aviso && /1 linha/.test(aviso.textContent), 'dizendo que foi 1',
+       aviso && aviso.textContent.trim());
+    eh(!!aviso && /data ileg/i.test(aviso.textContent), 'e por quê',
+       aviso && aviso.textContent.trim());
+    eh(!!aviso && new RegExp('linha ' + csv.linhaRuim + '\\b').test(aviso.textContent),
+       'com o número da linha NO ARQUIVO (' + csv.linhaRuim + ')',
+       aviso && aviso.textContent.trim());
+    eh(ts.length === 17, 'e ela não foi enviada para a rota', String(ts.length), '17');
+
+    h3('4. O .xlsx de verdade continua funcionando');
+    // O `raw: true` não pode quebrar o formato que já era lido: num .xlsx a
+    // data é um SERIAL numérico, e o diaDaCelula tem de continuar resolvendo.
+    var XLSX = window.XLSX;
+    eh(!!XLSX, 'o SheetJS está carregado');
+    if (XLSX) {
+      var ws = XLSX.utils.json_to_sheet([
+        // HORA LOCAL, e não Date.UTC: o SheetJS escreve o serial a partir da
+        // hora local do navegador, e montar a fixture em UTC faria o teste
+        // esperar 09:30 e receber 06:30 — falha do teste, não do código.
+        { 'Posto': 'POSTO ANA LUCIA LTDA', 'Data/Hora': new Date(2026, 8, 4, 9, 30, 0),
+          'Valor': 91.5, 'Combustível': 'gasolina comum', 'Usuário': 'X', 'ID': 1 },
+      ], { cellDates: true });
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'T');
+      var buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx', cellDates: false });
+      var f2 = new File([buf], 'soutag-de-verdade.xlsx',
+        { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      SG_POST = null;
+      var dt2 = new DataTransfer(); dt2.items.add(f2);
+      document.getElementById('ap-sg-file').files = dt2.files;
+      await window.__apSgArquivo(document.getElementById('ap-sg-file'));
+      await esperar(500);
+      var t2 = SG_POST && SG_POST.transacoes && SG_POST.transacoes[0];
+      eh(!!t2, 'o .xlsx foi lido', t2 ? 'sim' : 'não');
+      eh(!!t2 && t2.data === '2026-09-04', 'com a data do serial resolvida',
+         t2 && t2.data, '2026-09-04');
+      // A HORA DO SERIAL CHEGA COM ATÉ ~30 SEGUNDOS DE DESVIO, e isso é do
+      // formato, não do nosso leitor: o serial do Excel é um float de dias, e
+      // a conversão Date→serial do SheetJS arredonda. O mesmo desvio aparece
+      // no arquivo real — uma transação cujo texto diz 09:01:00 tem serial
+      // que decodifica 09:00:32. Por isso a tolerância de um minuto: exigir o
+      // segundo exato seria testar o SheetJS, não o app-cupons.
+      var hs = /T(\d{2}):(\d{2}):(\d{2})/.exec(String(t2 && t2.data_hora));
+      var segDoDia = hs ? (Number(hs[1]) * 3600 + Number(hs[2]) * 60 + Number(hs[3])) : -1;
+      eh(segDoDia >= 0 && Math.abs(segDoDia - (9 * 3600 + 30 * 60)) <= 60,
+         'e a hora do serial, a menos de 1 min (o serial arredonda)',
+         t2 && t2.data_hora, '~2026-09-04T09:30:00');
+    }
+
+    h3('5. A tela diz contra quantos postos compara');
+    RESP_COMPARAR = {
+      success: true,
+      consulta: { de: '2026-09-01', ate: '2026-09-17', so_app: true, canal: 'SOUTAG',
+                  postos_planilha: 1, postos_rede: 37, postos_filtrados: true,
+                  soutag_linhas: 900, tecnox_itens: 1606, tecnox_itens_total: 1606,
+                  itens_placa: 0, tolerancia_placa: 0.02, tolerancia_pct: 2,
+                  modo: 'totais', hora: { pode: false }, hora_coluna: true,
+                  tolerancia_min: 5, tolerancia_valor: 0.5 },
+      preco_placa: {},
+      ultima_importacao: null,
+      rede: { sg_n: 900, sg_v: 81000, sg_l: null, tx_cupons: 800, tx_itens: 1606,
+              tx_v: 80500, tx_l: 14000, dif: 500, dif_pct: 0.62, ok: true,
+              postos: 1, postos_divergentes: 0 },
+      linhas: [{ posto_id: 'x', nome: 'P. ANA LUCIA', nao_reconhecido: false,
+                 sg_n: 900, sg_v: 81000, sg_l: null, tx_cupons: 800, tx_itens: 1606,
+                 tx_v: 80500, tx_l: 14000, dif: 500, dif_pct: 0.62, ok: true }],
+      naoCasou: [],
+    };
+    window.__apSgRecarregar();
+    await esperar(400);
+    var rec = document.querySelector('#palco .ap-sg-recorte');
+    eh(!!rec, 'a frase do recorte aparece', rec ? rec.textContent.trim() : '(nenhuma)');
+    eh(!!rec && /Comparando 1 posto\b/.test(rec.textContent),
+       'dizendo quantos postos', rec && rec.textContent.trim());
+    eh(!!rec && /planilha importada/.test(rec.textContent),
+       'e de onde eles saíram', rec && rec.textContent.trim());
+
+    h3('6. Com a rede inteira, a frase muda');
+    RESP_COMPARAR = JSON.parse(JSON.stringify(RESP_COMPARAR));
+    RESP_COMPARAR.consulta.postos_filtrados = false;
+    RESP_COMPARAR.consulta.postos_planilha = 37;
+    window.__apSgRecarregar();
+    await esperar(400);
+    rec = document.querySelector('#palco .ap-sg-recorte');
+    eh(!!rec && /rede inteira/.test(rec.textContent),
+       'a tela diz que não recortou', rec ? rec.textContent.trim() : '(nenhuma)');
+    nota('É o comportamento de antes, preservado: planilha que cobre a rede');
+    nota('toda não restringe nada.');
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — Soutag CSV/datas';
+})();
+</script>

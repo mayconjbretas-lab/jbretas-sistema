@@ -288,6 +288,10 @@
       '.ap-th:hover{color:var(--tx)}' +
       '.ap-seta-in{color:var(--ac);margin-left:3px}' +
       '.ap-aviso{font:.7rem var(--mono);color:var(--wn,var(--ac));padding:.5rem 0 0}' +
+      /* Linha descartada e perda de dado, nao recado: vermelha, como os
+         outros erros desta tela. */
+      '.ap-aviso--alerta{color:var(--dg,#ff4d6d)}' +
+      '.ap-sg-recorte{padding:.35rem 0 .1rem}' +
       // ── Detalhe do cupom ──
       // Mesmo desenho do detalhe do posto da Movimentação: painel no primeiro
       // nível de superfície, canto de 12px, seções com rótulo e régua, e a
@@ -507,6 +511,10 @@
   // incrementa o _seq, a primeira volta com o numero velho, cai no descarte e
   // NUNCA desliga o _carregando dela — a tela fica em "Carregando…" para
   // sempre, sem erro nenhum no console. Pegado pelo testes/app-cupons.html.
+  // Linhas que a planilha trouxe e o parser não conseguiu usar. Guardadas
+  // desta leitura para a tela poder dizer QUAIS foram — some uma linha, some
+  // o dinheiro dela da comparação, e antes isso não aparecia em lugar nenhum.
+  var _sgDescartadas = [];
   var _seqSg = 0;
   async function carregarSoutag(forcar) {
     var chave = chaveSoutag();
@@ -1276,7 +1284,26 @@
       .replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, '');
   }
   function lerPlanilha(XLSX, buffer) {
-    var wb = XLSX.read(buffer, { type: 'array' });
+    // ════════ raw: true — NÃO DEIXE A BIBLIOTECA ADIVINHAR DATA ════════
+    // O arquivo do portal Soutag chega com extensão .xls e NÃO é um .xls: é
+    // um CSV com ponto-e-vírgula ("Posto";"Data/Hora";...). O SheetJS
+    // reconhece o CSV e, ao converter, tenta adivinhar datas no formato
+    // AMERICANO (MM/DD). O estrago, medido no arquivo "ANA LUCIA.xls" de
+    // 901 transações de 01 a 17/09:
+    //
+    //   "01/09/2026 09:01:00" → virou o serial 46031,375 → 09/JAN/2026
+    //   "03/09/2026 08:29:32" → virou o serial 46090,354 → 09/MAR/2026
+    //   "16/09/2026 16:36:00" → 16 não existe como mês, ficou TEXTO → certo
+    //
+    // Ou seja: os dias 1 a 12 se espalharam pelos 12 meses do ano, todos no
+    // dia 09, e só os dias 13 a 17 sobreviveram. 591 das 901 linhas saíram do
+    // período. A tela mostrava 309 e parecia importação incompleta.
+    //
+    // Com `raw: true` as células vêm como o TEXTO original e o diaDaCelula
+    // abaixo — que sempre leu DD/MM corretamente — resolve as 901. O serial
+    // continua tratado: numa planilha .xlsx de verdade a data é número, e o
+    // `raw` não muda isso (ele não desfaz tipo de célula do OOXML).
+    var wb = XLSX.read(buffer, { type: 'array', raw: true, cellDates: false });
     var aba = wb.SheetNames[0];
     if (!aba) throw new Error('a planilha não tem nenhuma aba');
     var cru = XLSX.utils.sheet_to_json(wb.Sheets[aba], { defval: '', raw: true });
@@ -1309,10 +1336,29 @@
         id: de.id ? String(r[de.id] == null ? '' : r[de.id]).trim() : '',
         litros: de.litros ? numeroDaCelula(r[de.litros]) : NaN,
       };
-    }).filter(function (l) { return l.data && isFinite(l.valor); });
+    });
+    // ════════ O QUE FOI DESCARTADO TEM DE APARECER ════════
+    // Este filtro sempre existiu e sempre foi silencioso: a linha sem data
+    // legível ou sem valor numérico simplesmente não entrava, e ninguém
+    // ficava sabendo. No "ANA LUCIA.xls" havia uma linha com "N/A" na data
+    // (linha 865 do arquivo) que sumia assim — e some uma linha, some o
+    // dinheiro dela da comparação.
+    //
+    // `linha` é o número NO ARQUIVO (1 = cabeçalho), que é como quem abrir a
+    // planilha para conferir vai procurar.
+    var descartadas = [];
+    linhas = linhas.filter(function (l) {
+      if (l.data && isFinite(l.valor)) return true;
+      descartadas.push({
+        linha: l.i + 2,
+        motivo: !l.data ? 'data ilegível' : 'valor ilegível',
+        posto: l.posto_planilha, id: l.id,
+      });
+      return false;
+    });
     if (!linhas.length) throw new Error('nenhuma linha da planilha tem data e valor legíveis');
     return { linhas: linhas, colunas: de, abas: wb.SheetNames.length, aba: aba,
-             cruas: cru.length, temLitros: !!de.litros };
+             cruas: cru.length, temLitros: !!de.litros, descartadas: descartadas };
   }
 
   // ── Render da vista ─────────────────────────────────────────────
@@ -1516,6 +1562,22 @@
                          : ' · <b>sem hora na planilha</b> — a comparação fica por totais')) +
       '</div>';
     }
+    // ════════ AS LINHAS DESCARTADAS NA LEITURA ════════
+    // Separado do aviso do POST acima de propósito: aquele fala do que a API
+    // recusou, este do que o PARSER não conseguiu ler — são momentos
+    // diferentes e causas diferentes. Nomeia as linhas pelo número NO
+    // ARQUIVO, que é como quem for conferir vai procurar.
+    if (_sgDescartadas.length) {
+      var ds = _sgDescartadas.slice(0, 5).map(function (d) {
+        return 'linha ' + d.linha + ' (' + d.motivo + ')';
+      }).join(', ');
+      topo += '<div class="ap-aviso ap-aviso--alerta">' +
+        nf(_sgDescartadas.length, 0) + ' linha' + (_sgDescartadas.length === 1 ? '' : 's') +
+        ' da planilha ' + (_sgDescartadas.length === 1 ? 'não entrou' : 'não entraram') +
+        ': ' + esc(ds) +
+        (_sgDescartadas.length > 5 ? ' e mais ' + nf(_sgDescartadas.length - 5, 0) : '') +
+        '</div>';
+    }
     if (_sgCarregando && !_sgSrv) {
       return topo + '<div class="ap-estado">Carregando a comparação…</div>';
     }
@@ -1529,6 +1591,24 @@
         'Usuário e ID entram se existirem.' +
         '<br>A planilha é lida no navegador e GRAVADA: quem abrir esta tela depois ' +
         'vê a mesma comparação sem precisar do arquivo.</span></div>';
+    }
+
+    // ════════ CONTRA O QUÊ SE ESTÁ COMPARANDO ════════
+    // Uma planilha de um posto só era comparada contra a rede inteira, e os
+    // dois números apareciam lado a lado como se fossem comparáveis (900
+    // transações contra 57 mil itens). Agora a rota recorta a TecnoX nos
+    // postos da planilha, e a tela DIZ isso — sem a frase, o número menor
+    // pareceria dado faltando.
+    var cq = c.consulta || {};
+    var recorte = '';
+    if (cq.postos_filtrados) {
+      recorte = '<div class="ap-sub ap-sg-recorte">Comparando ' +
+        nf(cq.postos_planilha, 0) + ' posto' + (cq.postos_planilha === 1 ? '' : 's') +
+        ' (da planilha importada) — a TecnoX está recortada nele' +
+        (cq.postos_planilha === 1 ? '' : 's') + ', não na rede inteira.</div>';
+    } else if (cq.postos_planilha) {
+      recorte = '<div class="ap-sub ap-sg-recorte">Comparando a rede inteira · ' +
+        nf(cq.postos_planilha, 0) + ' postos na planilha.</div>';
     }
 
     // ── Os dois lados ──
@@ -1572,7 +1652,7 @@
     // TecnoX, só Soutag, valor divergente — voltou com o modo por hora, que é
     // o que a torna confiável: o par é achado pelo INSTANTE e o valor é o que
     // se confere, não a chave.
-    if ((c.consulta || {}).modo === 'hora') return topo + htmlSgHora(c);
+    if ((c.consulta || {}).modo === 'hora') return topo + recorte + htmlSgHora(c);
 
     // ── As três diferenças da rede ──
     var R = c.rede;
@@ -1664,7 +1744,7 @@
           'ligue o filtro para a comparação real.') +
     '</div>';
 
-    return topo + blocos + difs + avisoNome +
+    return topo + recorte + blocos + difs + avisoNome +
       '<div class="ap-lista">' + cab + linhaRede +
       (linhas || '<div class="ap-vazio">Nenhum posto com movimento no período.</div>') + '</div>' +
       legenda;
@@ -1692,12 +1772,13 @@
     // O PARSE CONTINUA NO NAVEGADOR: o SheetJS não sobe para a API só por
     // causa de um upload de arquivo. O que vai para a rota são as linhas já
     // lidas — e é a rota que resolve o posto, apaga o período e grava.
-    _sgLendo = true; _sgErro = ''; _sgImportou = null; pintar();
+    _sgLendo = true; _sgErro = ''; _sgImportou = null; _sgDescartadas = []; pintar();
     var r;
     try {
       var XLSX = await carregarXlsx();
       var buf = new Uint8Array(await file.arrayBuffer());
       r = lerPlanilha(XLSX, buf);
+      _sgDescartadas = r.descartadas || [];
       _sg = { linhas: r.linhas, arquivo: file.name, quando: new Date(),
               colunas: r.colunas, cruas: r.cruas, temLitros: r.temLitros };
     } catch (e) {
