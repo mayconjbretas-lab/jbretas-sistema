@@ -1,0 +1,295 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Soutag por hora — toggle, datas na lista e detalhe do par</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:10px; margin:12px 0; }
+</style>
+
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+//  1. O TOGGLE "só preço de app" desenha LIGADO desde a primeira pintura, e
+//     o primeiro clique DESLIGA. Era aqui que ele parecia invertido: ele
+//     dependia de um dado que só chegava depois, então nascia desligado na
+//     tela com a requisição já tendo ido ligada — e o primeiro clique
+//     desligava o que a pessoa achava que estava ligando.
+//  2. LIGADO manda so_app=1, e é o recorte com MENOS itens da TecnoX.
+//  3. A LISTA mostra DD/MM HH:MM nas duas colunas de hora.
+//  4. CLICAR NA LINHA abre o par em detalhe, com os dois lados e o centro.
+//  5. "só TecnoX" diz "sem par na Soutag"; "só Soutag" diz "sem par na
+//     TecnoX" — em vez de uma coluna de travessões.
+//  6. Clicar de novo fecha; abrir outra fecha a primeira.
+//  7. Trocar o filtro de status FECHA o detalhe (o índice mudaria de dono).
+//
+// Os horários entram como o banco devolve: hora LOCAL do posto rotulada
+// +00:00. A tela não pode convertê-los — 06:35 tem de sair 06:35, não 03:35.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function js(src) {
+  return new Promise(function (ok, er) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { er(new Error(src + ' não carregou')); };
+    document.head.appendChild(s);
+  });
+}
+
+// ── A resposta da rota, no modo HORA ────────────────────────────
+var CHAMADAS = [];
+// Quatro linhas: um conferido, um divergente, um só Soutag e um só TecnoX.
+var CONFERIDO = { status: 'conferido', data: '2026-09-16',
+  hora: '2026-09-16T06:35:00+00:00', hora_tecnox: '2026-09-16T06:35:40+00:00',
+  dif_min: 0.7, posto: 'P. ANA LUCIA', comb: 'GC',
+  valor: 99.99, valor_tecnox: 99.99, dif: 0,
+  litros: null, litros_tecnox: 16.1, preco: 6.2106,
+  id: '14590011', id_cupom: '27143627', cupom: 'x|2026-09-16|27143627',
+  usuario: 'JOSE DA SILVA', posto_planilha: 'POSTO ANA LUCIA LTDA' };
+var DIVERGENTE = { status: 'divergente', data: '2026-09-17',
+  hora: '2026-09-17T07:14:00+00:00', hora_tecnox: '2026-09-17T07:15:13+00:00',
+  dif_min: 1.2, posto: 'P. ANA LUCIA', comb: 'ET',
+  valor: 76.20, valor_tecnox: 50.14, dif: 26.06,
+  litros: null, litros_tecnox: 12.5, preco: 4.0112,
+  id: '14590022', id_cupom: '27143700', cupom: 'x|2026-09-17|27143700',
+  usuario: 'MARIA SOUZA', posto_planilha: 'POSTO ANA LUCIA LTDA' };
+var SO_SOUTAG = { status: 'soutag', data: '2026-09-15',
+  hora: '2026-09-15T09:02:00+00:00', posto: 'P. ANA LUCIA', comb: 'GC',
+  valor: 40, litros: null, id: '14590033', usuario: 'ANA PAULA',
+  posto_planilha: 'POSTO ANA LUCIA LTDA' };
+var SO_TECNOX = { status: 'tecnox', data: '2026-09-14',
+  hora_tecnox: '2026-09-14T18:40:12+00:00', posto: 'P. ANA LUCIA', comb: 'S10',
+  valor_tecnox: 250, litros_tecnox: 41.3, preco: 6.0533,
+  id_cupom: '27143800', cupom: 'x|2026-09-14|27143800' };
+
+function resposta(soApp) {
+  return { success: true,
+    consulta: { de: '2026-09-14', ate: '2026-09-17', so_app: soApp, canal: 'SOUTAG',
+      postos_planilha: 1, postos_rede: 37, postos_filtrados: true,
+      soutag_linhas: 3, tecnox_itens: soApp ? 1214 : 1606, tecnox_itens_total: 1606,
+      itens_placa: soApp ? 392 : 0, tolerancia_placa: 0.02, tolerancia_pct: 2,
+      modo: 'hora', hora: { pode: true, soutag_com_hora: 3, soutag_total: 3,
+                            tecnox_com_hora: 3, tecnox_total: 3 },
+      hora_coluna: true, tolerancia_min: 5, tolerancia_valor: 0.5 },
+    preco_placa: {}, ultima_importacao: null,
+    modo: 'hora',
+    conferido: [CONFERIDO], divergente: [DIVERGENTE],
+    soSoutag: [SO_SOUTAG], soTecnox: [SO_TECNOX], semPosto: [],
+    rede: { sg_n: 3, sg_v: 216.19, sg_l: null, sem_posto_n: 0, sem_posto_v: 0,
+            tx_cupons: 3, tx_itens: soApp ? 1214 : 1606, tx_v: 400.13, tx_l: 69.9,
+            dif: -183.94, dif_pct: -45, conferido: 1, divergente: 1,
+            so_soutag: 1, so_tecnox: 1, postos: 1, postos_divergentes: 1, ok: false },
+    postos: [], naoCasou: [] };
+}
+window.apiFetch = function (url) {
+  var u = String(url);
+  CHAMADAS.push(u);
+  if (u.indexOf('/app/soutag-comparar') === 0) {
+    return Promise.resolve(resposta(u.indexOf('so_app=1') >= 0));
+  }
+  return Promise.resolve({ success: true });
+};
+window.getUsuarioLogado = function () { return { perfil: 'ADM', nome: 'HARNESS' }; };
+window.mostrarToast = function () {};
+
+var corpo = function () { return document.querySelector('#palco #ap-corpo'); };
+var linhasLista = function () {
+  return Array.prototype.slice.call(corpo().querySelectorAll('.ap-sgh-linha'));
+};
+var colunas = function (el) {
+  return Array.prototype.slice.call(el.children).map(function (c) {
+    return c.textContent.replace(/\s+/g, ' ').trim();
+  });
+};
+var detalhe = function () { return corpo().querySelector('.ap-sgd'); };
+var campos = function (col) {
+  var m = {};
+  Array.prototype.slice.call(col.querySelectorAll('.ap-sgd-l')).forEach(function (l) {
+    var r = l.querySelector('.ap-sgd-r');
+    var v = l.querySelector('b') || l.querySelector('.ap-sgh-tag');
+    if (r && v) m[r.textContent.trim()] = v.textContent.replace(/\s+/g, ' ').trim();
+  });
+  return m;
+};
+var ultimaUrlSg = function () {
+  for (var i = CHAMADAS.length - 1; i >= 0; i--) {
+    if (CHAMADAS[i].indexOf('/app/soutag-comparar') === 0) return CHAMADAS[i];
+  }
+  return '';
+};
+
+(async function () {
+  try {
+    var sec = document.createElement('section');
+    sec.className = 'scr active';
+    sec.id = 's-app';
+    document.getElementById('palco').appendChild(sec);
+    await js('/modulos/painel-adm/app-cupons.js');
+    renderAppCupons(sec);
+    await esperar(200);
+    window.__apVista('soutag');
+    await esperar(300);
+
+    h3('1. O toggle nasce LIGADO — e a requisição também foi ligada');
+    nota('Era a inversão: ele nascia desligado na tela com a chamada já ligada,');
+    nota('e o primeiro clique desligava o que a pessoa achava que ligava.');
+    var bt = corpo().querySelector('.ap-so');
+    eh(!!bt, 'o botão existe', bt ? bt.className : '(ausente)');
+    eh(!!bt && bt.classList.contains('on'), 'desenhado LIGADO', bt && bt.className);
+    eh(!!bt && bt.getAttribute('aria-pressed') === 'true', 'e anunciado como ligado',
+       bt && bt.getAttribute('aria-pressed'), 'true');
+    eh(/so_app=1/.test(ultimaUrlSg()), 'a chamada foi com so_app=1', ultimaUrlSg());
+    eh(!bt.disabled, 'e ele é clicável', String(bt.disabled), 'false');
+
+    h3('2. LIGADO = MENOS itens da TecnoX');
+    var txt = corpo().textContent.replace(/\s+/g, ' ');
+    eh(/1\.214/.test(txt), 'a tela mostra 1.214 itens (o recorte filtrado)',
+       (txt.match(/[\d.]+ itens/g) || []).join(' · '));
+    bt.click();
+    await esperar(300);
+    eh(/so_app=0/.test(ultimaUrlSg()), 'o clique desliga e manda so_app=0', ultimaUrlSg());
+    bt = corpo().querySelector('.ap-so');
+    eh(!bt.classList.contains('on'), 'e o botão fica desenhado DESLIGADO', bt.className);
+    txt = corpo().textContent.replace(/\s+/g, ' ');
+    eh(/1\.606/.test(txt), 'com 1.606 itens — desligado mostra MAIS',
+       (txt.match(/[\d.]+ itens/g) || []).join(' · '));
+    bt.click();      // volta para o estado ligado
+    await esperar(300);
+
+    h3('3. A lista mostra DD/MM HH:MM nas duas colunas de hora');
+    nota('Sem o dia, não dá para saber de qual data é a linha num período longo.');
+    var ls = linhasLista();
+    eh(ls.length === 4, 'quatro linhas na lista', String(ls.length), '4');
+    var conf = ls.filter(function (l) { return /conferido/.test(l.textContent); })[0];
+    var cc = colunas(conf);
+    eh(cc[0] === '16/09 06:35', 'Hora SG do conferido', cc[0], '16/09 06:35');
+    eh(cc[6].indexOf('16/09 06:35') === 0, 'Hora TecnoX idem', cc[6], '16/09 06:35 …');
+    nota('06:35 e não 03:35: a hora é local do posto, e a tela não converte fuso.');
+    // A linha SÓ TECNOX não tem hora da Soutag: ali o travessão é a resposta
+    // certa, e a data tem de aparecer do lado que existe.
+    var cst = colunas(ls.filter(function (l) { return /só TecnoX/.test(l.textContent); })[0]);
+    eh(cst[0] === '—', 'sem par na Soutag, a coluna Hora SG fica em travessão',
+       cst[0], '—');
+    eh(cst[6].indexOf('14/09 18:40') === 0, 'e a Hora TecnoX traz dia e hora',
+       cst[6], '14/09 18:40');
+    var css = colunas(ls.filter(function (l) { return /só Soutag/.test(l.textContent); })[0]);
+    eh(css[0] === '15/09 09:02', 'na só Soutag é o contrário', css[0], '15/09 09:02');
+    eh(css[6] === '—', 'e a Hora TecnoX fica em travessão', css[6], '—');
+
+    h3('4. Clicar na linha abre o detalhe');
+    conf.click();
+    await esperar(150);
+    var d = detalhe();
+    eh(!!d, 'o bloco do detalhe apareceu', d ? 'sim' : 'não');
+    var cols = d.querySelectorAll('.ap-sgd-col');
+    eh(cols.length === 3, 'com três colunas (Soutag · comparação · TecnoX)',
+       String(cols.length), '3');
+    var sg = campos(cols[0]), meio = campos(cols[1]), tx = campos(cols[2]);
+    eh(sg['Data/Hora'] === '16/09/2026 06:35:00', 'Soutag: data e hora completas',
+       sg['Data/Hora'], '16/09/2026 06:35:00');
+    eh(sg['Posto'] === 'P. ANA LUCIA', 'Soutag: posto', sg['Posto']);
+    eh(sg['Combustível'] === 'GC', 'Soutag: combustível', sg['Combustível']);
+    eh(sg['Valor'] === 'R$ 99,99', 'Soutag: valor', sg['Valor']);
+    eh(sg['Usuário'] === 'JOSE DA SILVA', 'Soutag: usuário', sg['Usuário']);
+    eh(sg['ID Soutag'] === '14590011', 'Soutag: id', sg['ID Soutag']);
+    eh(tx['Data/Hora'] === '16/09/2026 06:35:40', 'TecnoX: data e hora completas',
+       tx['Data/Hora'], '16/09/2026 06:35:40');
+    eh(tx['Litros'] === '16,1 L', 'TecnoX: litros com uma casa', tx['Litros'], '16,1 L');
+    eh(tx['R$/Litro'] === 'R$ 6,21', 'TecnoX: preço por litro', tx['R$/Litro'], 'R$ 6,21');
+    eh(tx['Valor'] === 'R$ 99,99', 'TecnoX: valor', tx['Valor']);
+    eh(tx['ID cupom'] === '27143627', 'TecnoX: id do cupom', tx['ID cupom']);
+    eh(meio['Diferença de hora'] === '+0,7 min', 'centro: diferença de hora',
+       meio['Diferença de hora'], '+0,7 min');
+    eh(meio['Diferença de valor'] === 'R$ 0,00', 'centro: diferença de valor',
+       meio['Diferença de valor'], 'R$ 0,00');
+    eh(meio['Status'] === 'conferido', 'centro: status', meio['Status'], 'conferido');
+
+    h3('5. Divergente: o centro aponta a diferença');
+    conf.click(); await esperar(120);          // fecha
+    var div = linhasLista().filter(function (l) { return /divergente/.test(l.textContent); })[0];
+    div.click(); await esperar(150);
+    var cd = detalhe().querySelectorAll('.ap-sgd-col');
+    eh(campos(cd[1])['Diferença de valor'] === '+R$ 26,06', 'com sinal e valor',
+       campos(cd[1])['Diferença de valor'], '+R$ 26,06');
+    eh(campos(cd[1])['Status'] === 'valor divergente', 'e o selo', campos(cd[1])['Status']);
+
+    h3('6. Sem par, o lado que falta DIZ isso');
+    div.click(); await esperar(120);
+    var st = linhasLista().filter(function (l) { return /só TecnoX/.test(l.textContent); })[0];
+    st.click(); await esperar(150);
+    var ct = detalhe().querySelectorAll('.ap-sgd-col');
+    eh(/sem par na Soutag/.test(ct[0].textContent), 'só TecnoX: o lado esquerdo avisa',
+       ct[0].textContent.replace(/\s+/g, ' ').trim());
+    eh(!!ct[0].querySelector('.ap-sgd-vazio'), 'com o estilo de vazio (cinza)');
+    eh(campos(ct[2])['ID cupom'] === '27143800', 'e o lado direito traz o cupom',
+       campos(ct[2])['ID cupom']);
+    eh(!campos(ct[1])['Diferença de hora'],
+       'sem diferença de hora — não há dois lados para comparar',
+       JSON.stringify(campos(ct[1])));
+    st.click(); await esperar(120);
+
+    var ss = linhasLista().filter(function (l) { return /só Soutag/.test(l.textContent); })[0];
+    ss.click(); await esperar(150);
+    var cs = detalhe().querySelectorAll('.ap-sgd-col');
+    eh(/sem par na TecnoX/.test(cs[2].textContent), 'só Soutag: o lado direito avisa',
+       cs[2].textContent.replace(/\s+/g, ' ').trim());
+    eh(campos(cs[0])['Usuário'] === 'ANA PAULA', 'e o esquerdo traz o usuário',
+       campos(cs[0])['Usuário']);
+
+    h3('7. Abrir outra fecha a primeira; clicar de novo fecha');
+    var antes = corpo().querySelectorAll('.ap-sgd').length;
+    linhasLista().filter(function (l) { return /conferido/.test(l.textContent); })[0].click();
+    await esperar(150);
+    eh(corpo().querySelectorAll('.ap-sgd').length === 1,
+       'só um detalhe aberto por vez', String(corpo().querySelectorAll('.ap-sgd').length), '1');
+    eh(antes === 1, 'e antes também era um', String(antes), '1');
+    linhasLista().filter(function (l) { return /conferido/.test(l.textContent); })[0].click();
+    await esperar(150);
+    eh(!detalhe(), 'clicar na mesma linha fecha', detalhe() ? 'ainda aberta' : 'fechou');
+
+    h3('8. Filtrar por status fecha o detalhe');
+    // O detalhe é preso ao ÍNDICE da linha; filtrando, o índice 0 passa a ser
+    // outra linha, e deixar aberto mostraria o par errado.
+    linhasLista()[0].click();
+    await esperar(150);
+    eh(!!detalhe(), 'abriu uma linha');
+    window.__apSghStatus('divergente');
+    await esperar(200);
+    eh(!detalhe(), 'e o filtro fechou o detalhe', detalhe() ? 'continuou aberto' : 'fechou');
+    eh(linhasLista().length === 1, 'com a lista já filtrada',
+       String(linhasLista().length), '1');
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — Soutag detalhe';
+})();
+</script>

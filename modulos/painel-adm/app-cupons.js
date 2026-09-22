@@ -367,6 +367,29 @@
       '.ap-cab.ap-cab-sgh{padding:0 0 5px;border-bottom:1px solid var(--bd)}' +
       '.ap-sgh-linha{border-bottom:1px solid var(--bd);font:.72rem var(--mono)}' +
       '.ap-sgh-h{font:.7rem var(--mono);color:var(--tx2)}' +
+      '.ap-sgh-linha{cursor:pointer}' +
+      '.ap-sgh-linha:hover{background:var(--sf2)}' +
+      '.ap-sgh-linha--on{background:var(--sf2)}' +
+      /* O detalhe do par: mesma linguagem do detalhe de posto da
+         Movimentacao — fundo de superficie, cantos de 12px, colunas lado a
+         lado. auto-fit para as tres virarem uma so no celular sem media
+         query. */
+      '.ap-sgd{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));' +
+        'gap:10px;background:var(--sf);border:1px solid var(--bd);border-radius:12px;' +
+        'padding:12px 14px;margin:6px 0 10px}' +
+      '.ap-sgd-col--meio{border-left:1px solid var(--bd);border-right:1px solid var(--bd);' +
+        'padding:0 12px}' +
+      '.ap-sgd-t{font:700 .6rem var(--mono);letter-spacing:.06em;text-transform:uppercase;' +
+        'color:var(--tx3);padding-bottom:6px;margin-bottom:4px;border-bottom:1px solid var(--bd)}' +
+      '.ap-sgd-l{display:flex;align-items:baseline;justify-content:space-between;gap:10px;' +
+        'padding:3px 0;font:.72rem var(--mono)}' +
+      '.ap-sgd-r{color:var(--tx3);font-size:.66rem;white-space:nowrap}' +
+      '.ap-sgd-l b{color:var(--tx);font-weight:700;text-align:right;word-break:break-word}' +
+      '.ap-sgd-vazio{font:.7rem var(--mono);color:var(--tx3);padding:14px 0;text-align:center}' +
+      /* No celular a coluna do meio perde as bordas laterais (elas viram
+         separadores horizontais) para nao ficar uma barra solta. */
+      '@media(max-width:700px){.ap-sgd-col--meio{border-left:0;border-right:0;padding:0;' +
+        'border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)}}' +
       '.ap-sgh-h small{color:var(--tx3)}' +
       // A etiqueta de status, nas quatro cores que a vista tinha antes de o
       // cruzamento virar por totais.
@@ -485,8 +508,20 @@
   // desabilitado — apagando um controle que funciona. Na Soutag quem prova
   // que o servidor sabe filtrar é a resposta DELA, que traz o mesmo `so_app`
   // na consulta.
+  // ════════ O TOGGLE NA SOUTAG ESTÁ SEMPRE DISPONÍVEL ════════
+  // Ali ele é PARÂMETRO DA ROTA (?so_app=), e a rota sempre o respeita — não
+  // existe "a API ainda não manda o bloco filtrado", que é o caso das outras
+  // duas vistas, onde o filtro vem pronto dentro do JSON.
+  //
+  // E ERA O QUE FAZIA O BOTÃO PARECER INVERTIDO. `_soApp` começa TRUE, mas o
+  // botão desenha `_soApp && temFiltro()`; com temFiltro() falso até a
+  // resposta chegar, a primeira pintura mostrava DESLIGADO enquanto a
+  // requisição já tinha ido com so_app=1 (1.214 itens). O primeiro clique
+  // então DESLIGAVA o que a pessoa achava que estava ligando, e a tela ia
+  // para 1.606 — que se lê como "ligado mostra mais", o inverso do esperado.
+  // Os números sempre estiveram certos: ligado = menos itens.
   function temFiltro() {
-    if (_vista === 'soutag') return !!_sgSrv;
+    if (_vista === 'soutag') return true;
     return !!(_dados && _dados.so_app);
   }
   // posto_id -> o posto NA VISTA. A lista percorre os postos do bloco CHEIO
@@ -545,6 +580,12 @@
   // Linhas que a planilha trouxe e o parser não conseguiu usar. Guardadas
   // desta leitura para a tela poder dizer QUAIS foram — some uma linha, some
   // o dinheiro dela da comparação, e antes isso não aparecia em lugar nenhum.
+  // Índice da linha aberta na lista da comparação por hora, ou null. É
+  // ÍNDICE e não chave porque a lista é montada e ordenada na hora; qualquer
+  // coisa que a remonte (filtro de status, período, recarga) fecha o detalhe,
+  // que é o comportamento certo — a linha de índice 7 depois do filtro não é
+  // a mesma de antes.
+  var _sghAberta = null;
   var _sgDescartadas = [];
   var _seqSg = 0;
   async function carregarSoutag(forcar) {
@@ -758,8 +799,8 @@
     var on = _soApp && temFiltro();
     // Na Soutag o title sai da consulta DELA: mesmos campos (itens_placa,
     // tolerancia_placa), outro total — lá o universo é `tecnox_itens_total`.
-    var ehSg = (_vista === 'soutag' && _sgSrv);
-    var q = ehSg ? (_sgSrv.consulta || {}) : ((_dados && _dados.consulta) || {});
+    var ehSg = (_vista === 'soutag');
+    var q = (ehSg && _sgSrv) ? (_sgSrv.consulta || {}) : ((_dados && _dados.consulta) || {});
     if (ehSg) q = { itens_placa: q.itens_placa, linhas: q.tecnox_itens_total,
                     tolerancia_placa: q.tolerancia_placa };
     // O title diz quantos itens saem e com que régua. É o que responde
@@ -1469,6 +1510,33 @@
     var m = /T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(String(iso));
     return m ? (m[1] + ':' + m[2] + (m[3] ? ':' + m[3] : '')) : '—';
   }
+  // ════════ LER A DATA SEM CONVERTER FUSO ════════
+  // As duas pontas gravam a hora LOCAL DO POSTO numa coluna timestamptz, e
+  // ela volta rotulada +00:00. Passar por `new Date()` deslocaria tudo em 3
+  // horas — por isso estas funções leem os dígitos do texto, como o hhmm
+  // acima sempre fez.
+  function ddmm(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+    return m ? (m[3] + '/' + m[2]) : '';
+  }
+  // "16/09 06:35" — o dia na lista, que sem ele obriga a adivinhar de qual
+  // dia é a linha quando o período tem vários.
+  function ddmmhhmm(iso) {
+    if (!iso) return '—';
+    var d = ddmm(iso), m = /T(\d{2}):(\d{2})/.exec(String(iso));
+    if (!m) return d || '—';
+    return (d ? d + ' ' : '') + m[1] + ':' + m[2];
+  }
+  // "16/09/2026 06:35:00" — o detalhe mostra tudo, inclusive os segundos, que
+  // são o que explica a diferença de hora entre os dois lados.
+  function dataHoraCheia(iso) {
+    if (!iso) return '—';
+    var d = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+    var h = /T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(String(iso));
+    if (!d) return '—';
+    return d[3] + '/' + d[2] + '/' + d[1] +
+      (h ? ' ' + h[1] + ':' + h[2] + ':' + (h[3] || '00') : '');
+  }
   function htmlSgHora(c) {
     var R = c.rede, q = c.consulta;
     var cardSgh = function (chave, rot, n, cls) {
@@ -1519,10 +1587,73 @@
       '<span class="ap-n">R$ Soutag</span><span class="ap-n">R$ TecnoX</span>' +
       '<span class="ap-n">Dif R$</span><span>Hora TecnoX</span><span></span>' +
     '</div>';
+    // ════════ O DETALHE DO PAR ════════
+    // Os dois cupons lado a lado, cada um com o que a SUA fonte sabe. O
+    // centro é a conta entre eles: quanto de hora e quanto de dinheiro os
+    // separa, e o selo que isso produziu.
+    //
+    // O LADO QUE NÃO EXISTE DIZ ISSO, em cinza, em vez de mostrar campos
+    // vazios: "só TecnoX" é um cupom sem linha na planilha, e um bloco de
+    // travessões faria parecer dado faltando em vez de par ausente.
+    var campo = function (rot, val, cls) {
+      return '<div class="ap-sgd-l"><span class="ap-sgd-r">' + esc(rot) + '</span>' +
+        '<b class="' + (cls || '') + '">' + val + '</b></div>';
+    };
+    var vazio = function (txt) {
+      return '<div class="ap-sgd-vazio">' + esc(txt) + '</div>';
+    };
+    var detalhe = function (l) {
+      var temSg = (l.status !== 'tecnox');
+      var temTx = (l.status !== 'soutag');
+      var esq = temSg
+        ? campo('Data/Hora', esc(dataHoraCheia(l.hora))) +
+          campo('Posto', esc(l.posto || l.posto_planilha || '(não reconhecido)')) +
+          campo('Combustível', esc(l.comb || '—')) +
+          campo('Valor', reais(l.valor)) +
+          campo('Usuário', esc(l.usuario || '—')) +
+          campo('ID Soutag', esc(l.id || '—'))
+        : vazio('sem par na Soutag');
+      var dir = temTx
+        ? campo('Data/Hora', esc(dataHoraCheia(l.hora_tecnox))) +
+          campo('Posto', esc(l.posto || '—')) +
+          campo('Combustível', esc(l.comb || '—')) +
+          // UMA CASA NOS LITROS, e não o litros() da lista, que arredonda
+          // para inteiro: aqui é o volume de UM abastecimento (16,1 L), e a
+          // casa decimal é o que permite conferir contra o cupom em papel.
+          campo('Litros', l.litros_tecnox === undefined || l.litros_tecnox === null
+            ? '—' : nf(l.litros_tecnox, 1) + ' L') +
+          campo('R$/Litro', l.preco === undefined || l.preco === null
+            ? '—' : reais(l.preco)) +
+          campo('Valor', l.valor_tecnox === undefined ? '—' : reais(l.valor_tecnox)) +
+          campo('ID cupom', esc(l.id_cupom || '—'))
+        : vazio('sem par na TecnoX');
+      // O CENTRO só tem as duas contas quando há os dois lados — diferença
+      // contra um lado ausente não é zero, é inexistente.
+      var meio = (temSg && temTx)
+        ? campo('Diferença de hora', l.dif_min === null || l.dif_min === undefined
+            ? '—' : comSinal(l.dif_min, function (x) { return nf(x, 1) + ' min'; })) +
+          campo('Diferença de valor',
+            l.dif === undefined ? '—' : comSinal(l.dif, reais),
+            (l.dif !== undefined && Math.abs(l.dif) > 0.004) ? 'ap-sg-dif--dv' : '')
+        : '';
+      return '<div class="ap-sgd">' +
+          '<div class="ap-sgd-col"><div class="ap-sgd-t">Soutag · planilha</div>' + esq + '</div>' +
+          '<div class="ap-sgd-col ap-sgd-col--meio"><div class="ap-sgd-t">Comparação</div>' + meio +
+            '<div class="ap-sgd-l"><span class="ap-sgd-r">Status</span>' +
+              '<span class="ap-sgh-tag ap-sgh-tag--' + l.status + '">' +
+              esc(ROT_SGH[l.status]) + '</span></div>' +
+          '</div>' +
+          '<div class="ap-sgd-col"><div class="ap-sgd-t">TecnoX · cupom</div>' + dir + '</div>' +
+        '</div>';
+    };
+
     var CORTE = 400;
-    var linhas = todas.slice(0, CORTE).map(function (l) {
-      return '<div class="ap-cab-sgh ap-sgh-linha">' +
-        '<span class="ap-sgh-h">' + esc(hhmm(l.hora)) + '</span>' +
+    var linhas = todas.slice(0, CORTE).map(function (l, i) {
+      var aberta = (_sghAberta === i);
+      return '<div class="ap-cab-sgh ap-sgh-linha' + (aberta ? ' ap-sgh-linha--on' : '') + '"' +
+        ' onclick="__apSghLinha(' + i + ')" role="button" tabindex="0"' +
+        ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();__apSghLinha(' + i + ');}">' +
+        '<span class="ap-sgh-h">' + esc(ddmmhhmm(l.hora)) + '</span>' +
         '<span class="ap-nome" title="' + esc(l.posto || l.posto_planilha || '') + '">' +
           esc(l.posto || l.posto_planilha || '(não reconhecido)') + '</span>' +
         '<span>' + esc(l.comb || '—') + '</span>' +
@@ -1530,7 +1661,7 @@
         '<span class="ap-n">' + (l.valor_tecnox === undefined ? '—' : reais(l.valor_tecnox)) + '</span>' +
         '<span class="ap-n' + ((l.dif !== undefined && Math.abs(l.dif) > 0.004) ? ' ap-sg-dif--dv' : '') + '">' +
           (l.dif === undefined ? '—' : comSinal(l.dif, reais)) + '</span>' +
-        '<span class="ap-sgh-h">' + esc(hhmm(l.hora_tecnox)) +
+        '<span class="ap-sgh-h">' + esc(ddmmhhmm(l.hora_tecnox)) +
           // A diferença entre as duas horas, em minutos: é ela que diz se o
           // par está no limite da janela de 5 min ou folgado no meio dela.
           (l.dif_min === null || l.dif_min === undefined ? ''
@@ -1538,7 +1669,7 @@
         '</span>' +
         '<span><span class="ap-sgh-tag ap-sgh-tag--' + l.status + '">' +
           esc(ROT_SGH[l.status]) + '</span></span>' +
-      '</div>';
+      '</div>' + (aberta ? detalhe(l) : '');
     }).join('');
     var corte = todas.length > CORTE
       ? '<div class="ap-aviso">mostrando ' + CORTE + ' de ' + nf(todas.length, 0) + ' linhas</div>' : '';
@@ -1877,6 +2008,15 @@
   // vai procurar um botão "todos" que não existe.
   window.__apSghStatus = function (v) {
     _sghStatus = (_sghStatus === v) ? '' : (v || '');
+    _sghAberta = null;        // a lista vai mudar: o índice aberto perde o sentido
+    pintar();
+  };
+  // Clicar na linha abre o par em detalhe; clicar de novo fecha. Uma por vez:
+  // duas abertas empurrariam a lista para longe e o objetivo é COMPARAR uma
+  // linha, não navegar por várias.
+  window.__apSghLinha = function (i) {
+    var n = Number(i);
+    _sghAberta = (_sghAberta === n) ? null : n;
     pintar();
   };
   // __apSgPosto e __apSgStatus saíram junto com o detalhe por posto e os
