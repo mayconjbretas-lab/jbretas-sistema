@@ -431,7 +431,30 @@
 
   // ── Dados ───────────────────────────────────────────────────────
   // Só período e canal vão à rota. O combustível é recorte local.
+  // ════════ A VISTA SOUTAG NÃO PRECISA DA /app/cupons ════════
+  // Ela lê os DOIS lados da /app/soutag-comparar; a /app/cupons é o agregado
+  // por posto que só as vistas "Por posto" e "Por cupom" desenham.
+  //
+  // E não era só desperdício: a /app/cupons lê a tecnox_cupom_app sem filtro
+  // de posto nem de canal — 86.904 linhas em 17 dias — e o "ORDER BY id" que
+  // a paginação por offset exige estoura o statement timeout do Postgres
+  // nesse volume (medido: timeout em 2 de 2 tentativas para 01–17/09,
+  // enquanto a soutag-comparar do mesmo período responde em ~770 ms). Abrir a
+  // vista Soutag disparava as duas, e a que travava era a que ela não usa.
+  //
+  // A GUARDA FICA DENTRO DO carregar(), e não nos seis pontos que o chamam:
+  // um lugar só, e quem for escrever a sétima chamada não precisa lembrar
+  // desta regra. Quem volta para "Por posto"/"Por cupom" carrega ali
+  // (ver __apVista) — é o item 2 do pedido.
+  function precisaDeCupons() { return _vista !== 'soutag'; }
+
   async function carregar() {
+    // PULAR A BUSCA INVALIDA O QUE ESTÁ EM MÃO. Todo chamador de carregar() é
+    // um momento em que o recorte MUDOU (período, canal, atalho) — se a busca
+    // não acontece, o _dados que sobrou é de outro recorte. Deixá-lo ali faria
+    // "Por posto" mostrar o período anterior ao voltar da Soutag, sem nada na
+    // tela dizendo isso. Zerado, o __apVista busca de novo (item 2).
+    if (!precisaDeCupons()) { _dados = null; return; }
     _carregando = true; _erro = ''; pintar();
     var meu = ++_seq;
     try {
@@ -457,7 +480,15 @@
     if (!_dados) return null;
     return (_soApp && _dados.so_app) ? _dados.so_app : _dados;
   }
-  function temFiltro() { return !!(_dados && _dados.so_app); }
+  // O TOGGLE "SÓ APP" NA VISTA SOUTAG não pode depender do _dados: ele é da
+  // /app/cupons, que ali não é mais chamada, e sem isto o botão apareceria
+  // desabilitado — apagando um controle que funciona. Na Soutag quem prova
+  // que o servidor sabe filtrar é a resposta DELA, que traz o mesmo `so_app`
+  // na consulta.
+  function temFiltro() {
+    if (_vista === 'soutag') return !!_sgSrv;
+    return !!(_dados && _dados.so_app);
+  }
   // posto_id -> o posto NA VISTA. A lista percorre os postos do bloco CHEIO
   // (para o posto não desaparecer quando todos os cupons dele são de placa) e
   // lê os números daqui.
@@ -592,8 +623,14 @@
     // agregado em mão. carregarDetalhe() pinta no acerto de cache também.
     // A vista Soutag NÃO depende mais do _det: o cruzamento inteiro vem da
     // /app/soutag-comparar, que lê os dois lados no servidor.
-    if (v === 'soutag') carregarSoutag();
-    else if (v === 'cupom') carregarDetalhe();
+    // VOLTAR PARA "POR POSTO"/"POR CUPOM" BUSCA O QUE NÃO VEIO. Enquanto a
+    // tela esteve na Soutag, a /app/cupons não foi chamada — então aqui é o
+    // momento de chamá-la, e não antes (item 2 do pedido). O carregar() já
+    // pinta ao terminar; o pintar() imediato mostra "Carregando…" em vez de
+    // deixar a tela na vista antiga durante a viagem.
+    if (v === 'soutag') { carregarSoutag(); return; }
+    if (!_dados && !_carregando) { pintar(); carregar(); }
+    if (v === 'cupom') carregarDetalhe();
     else pintar();
   };
   // Clique no cabeçalho ordena. Mesma coluna inverte o sentido; coluna nova
@@ -719,7 +756,12 @@
   // um liga/desliga. Juntos, pareceria um quinto combustível.
   function htmlSoApp() {
     var on = _soApp && temFiltro();
-    var q = (_dados && _dados.consulta) || {};
+    // Na Soutag o title sai da consulta DELA: mesmos campos (itens_placa,
+    // tolerancia_placa), outro total — lá o universo é `tecnox_itens_total`.
+    var ehSg = (_vista === 'soutag' && _sgSrv);
+    var q = ehSg ? (_sgSrv.consulta || {}) : ((_dados && _dados.consulta) || {});
+    if (ehSg) q = { itens_placa: q.itens_placa, linhas: q.tecnox_itens_total,
+                    tolerancia_placa: q.tolerancia_placa };
     // O title diz quantos itens saem e com que régua. É o que responde
     // "por que o número mudou" sem gastar uma linha da tela.
     var tit = temFiltro()
@@ -1850,14 +1892,20 @@
     // a ordenação e o detalhe leem.
     _idx = idxVista();
     var cab = htmlBarra();
+    // A VISTA SOUTAG SAI ANTES DOS TRÊS GUARDAS ABAIXO, e a ordem é o que faz
+    // ela funcionar: _carregando/_erro/_dados falam da /app/cupons, que esta
+    // vista não chama mais. Deixada depois do `if (!_dados)`, ela mostraria
+    // "—" para sempre. Ela tem os estados dela — _sgCarregando e _sgErro —
+    // dentro do htmlSoutag.
+    //
+    // A vista Soutag NÃO mostra os cards: eles falam do recorte da TecnoX, e
+    // ali a pergunta é o cruzamento com a planilha — o resumo dela é outro.
+    if (_vista === 'soutag') { alvo.innerHTML = cab + htmlSoutag(); return; }
     if (_carregando) { alvo.innerHTML = cab + '<div class="ap-estado">Carregando…</div>'; return; }
     if (_erro) { alvo.innerHTML = cab + '<div class="ap-erro">' + esc(_erro) + '</div>'; return; }
     if (!_dados) { alvo.innerHTML = cab + '<div class="ap-estado">—</div>'; return; }
     // Os CARDS são os mesmos nas duas vistas: eles falam do recorte, não da
     // forma da lista. Só a lista troca.
-    // A vista Soutag NÃO mostra os cards: eles falam do recorte da TecnoX, e
-    // ali a pergunta é o cruzamento com a planilha — o resumo dela é outro.
-    if (_vista === 'soutag') { alvo.innerHTML = cab + htmlSoutag(); return; }
     alvo.innerHTML = cab + htmlCards() +
       (_vista === 'cupom' ? htmlListaCupom() : htmlLista());
   }
@@ -1874,15 +1922,21 @@
     if (!_de || !_ate) {
       var ontem = somaDias(hojeISO(), -1);
       _de = ontem; _ate = ontem;    // padrão: ontem
-      carregar();
+    }
+    // A VISTA SOUTAG É DECIDIDA PRIMEIRO. Ela é estado de módulo: quem sai da
+    // tela na Soutag volta nela. E como o carregar() não faz nada nessa vista
+    // (ver precisaDeCupons), deixá-lo antes daqui devolveria uma tela que
+    // nunca busca nada — nem a /app/cupons, que ela não usa, nem a
+    // comparação, que é a única de que ela precisa.
+    //
+    // É o caminho do Felipe: ele abre a tela, não importa nada, e tem de ver
+    // o que a última importação gravou.
+    if (_vista === 'soutag') {
+      if (!_sgSrv && !_sgCarregando) carregarSoutag();
+      else pintar();
       return;
     }
     if (!_dados && !_carregando) { carregar(); return; }
-    // Reabrir NA VISTA SOUTAG busca a comparação se ela não estiver em mão.
-    // É o caminho do Felipe: ele abre a tela, não importa nada, e tem de ver
-    // o que a última importação gravou. Sem isto, a vista abriria vazia até
-    // alguém clicar em algo.
-    if (_vista === 'soutag' && !_sgSrv && !_sgCarregando) { carregarSoutag(); return; }
     pintar();     // reabertura: não refaz a chamada
   };
 })();

@@ -1,0 +1,223 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vista Soutag — sem chamar /app/cupons</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:10px; margin:12px 0; }
+</style>
+
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// A vista "Soutag vs TecnoX" lê os dois lados da /app/soutag-comparar. A
+// /app/cupons é o agregado por posto, que só "Por posto" e "Por cupom"
+// desenham — e é ela que trava: lê a tecnox_cupom_app sem filtro de posto nem
+// de canal (86.904 linhas em 17 dias) e o ORDER BY id que a paginação por
+// offset exige estoura o statement timeout do Postgres nesse volume.
+//
+//  1. Entrar na vista Soutag NÃO chama /app/cupons.
+//  2. Trocar o período na Soutag também não.
+//  3. A vista PINTA mesmo sem a /app/cupons ter rodado — era a armadilha: o
+//     `if (!_dados)` do pintar() fica ANTES do desenho da Soutag, e a tela
+//     mostraria "—" para sempre.
+//  4. Voltar para "Por posto" chama a /app/cupons ALI, e a lista aparece.
+//  5. "Por cupom" idem.
+//  6. O toggle "só app" continua habilitado na Soutag (ele depende do
+//     _dados, que ali não existe mais).
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function js(src) {
+  return new Promise(function (ok, er) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { er(new Error(src + ' não carregou')); };
+    document.head.appendChild(s);
+  });
+}
+
+// ── Toda chamada é registrada; é sobre esta lista que o teste afirma ──
+var CHAMADAS = [];
+function contar(re) {
+  return CHAMADAS.filter(function (u) { return re.test(u); }).length;
+}
+window.apiFetch = function (url) {
+  var u = String(url);
+  CHAMADAS.push(u);
+  if (u.indexOf('/app/soutag-comparar') === 0) {
+    return Promise.resolve({
+      success: true,
+      consulta: { de: '2026-09-01', ate: '2026-09-17', so_app: true, canal: 'SOUTAG',
+                  postos_planilha: 1, postos_rede: 37, postos_filtrados: true,
+                  soutag_linhas: 900, tecnox_itens: 1214, tecnox_itens_total: 1606,
+                  itens_placa: 392, tolerancia_placa: 0.02, tolerancia_pct: 2,
+                  modo: 'totais', hora: { pode: false }, hora_coluna: true,
+                  tolerancia_min: 5, tolerancia_valor: 0.5 },
+      preco_placa: {}, ultima_importacao: null,
+      rede: { sg_n: 900, sg_v: 82875, sg_l: null, tx_cupons: 800, tx_itens: 1214,
+              tx_v: 80500, tx_l: 14000, dif: 2375, dif_pct: 2.9, ok: false,
+              postos: 1, postos_divergentes: 1 },
+      linhas: [{ posto_id: 'x', nome: 'P. ANA LUCIA', nao_reconhecido: false,
+                 sg_n: 900, sg_v: 82875, sg_l: null, tx_cupons: 800, tx_itens: 1214,
+                 tx_v: 80500, tx_l: 14000, dif: 2375, dif_pct: 2.9, ok: false }],
+      naoCasou: [],
+    });
+  }
+  if (u.indexOf('/app/cupons-detalhe') === 0) {
+    return Promise.resolve({ success: true, total: 0, itens: [], aviso: null });
+  }
+  if (u.indexOf('/app/cupons') === 0) {
+    return Promise.resolve({ success: true,
+      periodo: { de: '2026-09-01', ate: '2026-09-17' },
+      consulta: { linhas: 1606, itens_placa: 392, tolerancia_placa: 0.02 },
+      rede: { total_cupons: 800, total_litros: 14000, total_valor: 80500,
+              ticket_medio: 100, postos: 1 },
+      postos: [{ posto_id: 'x', nome: 'P. ANA LUCIA', cupons: 800, litros: 14000,
+                 valor: 80500, ticket: 100, combustiveis: {} }],
+      so_app: { rede: { total_cupons: 700, total_litros: 12000, total_valor: 70000,
+                        ticket_medio: 100, postos: 1 },
+                postos: [{ posto_id: 'x', nome: 'P. ANA LUCIA', cupons: 700,
+                           litros: 12000, valor: 70000, ticket: 100, combustiveis: {} }] } });
+  }
+  return Promise.resolve({ success: true });
+};
+window.getUsuarioLogado = function () { return { perfil: 'ADM', nome: 'HARNESS' }; };
+window.mostrarToast = function () {};
+
+var corpo = function () { return document.querySelector('#palco #ap-corpo'); };
+
+(async function () {
+  try {
+    var sec = document.createElement('section');
+    sec.className = 'scr active';
+    sec.id = 's-app';
+    document.getElementById('palco').appendChild(sec);
+    await js('/modulos/painel-adm/app-cupons.js');
+
+    // Abre na vista PADRÃO (Por posto) — é ela que precisa da /app/cupons.
+    renderAppCupons(sec);
+    await esperar(300);
+
+    h3('0. A vista padrão continua chamando /app/cupons');
+    nota('Nada aqui pode mudar: "Por posto" depende do agregado.');
+    eh(contar(/^\/app\/cupons\?/) === 1, 'uma chamada a /app/cupons',
+       String(contar(/^\/app\/cupons\?/)), '1');
+    eh(!!corpo().querySelector('.ap-lista, .ap-cards, .ap-cab'),
+       'e a lista foi desenhada', corpo().innerHTML.length + ' chars de HTML');
+
+    h3('1. Entrar na vista Soutag NÃO chama /app/cupons');
+    CHAMADAS = [];
+    window.__apVista('soutag');
+    await esperar(300);
+    eh(contar(/^\/app\/cupons\?/) === 0, 'nenhuma chamada a /app/cupons',
+       String(contar(/^\/app\/cupons\?/)), '0');
+    eh(contar(/^\/app\/soutag-comparar/) === 1, 'e uma à /app/soutag-comparar',
+       String(contar(/^\/app\/soutag-comparar/)), '1');
+    nota('Era a chamada que travava: 86.904 linhas sem filtro de posto nem canal.');
+
+    h3('2. A vista PINTA, sem depender do /app/cupons');
+    // A armadilha: o `if (!_dados)` do pintar() vinha ANTES do desenho da
+    // Soutag. Sem mover, a tela mostraria "—" para sempre.
+    var txt = corpo().textContent;
+    eh(/Soutag . planilha|Importar planilha Soutag/.test(txt),
+       'a vista Soutag está na tela', txt.replace(/\s+/g, ' ').slice(0, 70));
+    eh(!/^\s*—\s*$/.test(txt.trim()), 'e não é o travessão de "sem dados"',
+       txt.replace(/\s+/g, ' ').slice(0, 40));
+    eh(/82\.875|900/.test(txt), 'com os números da comparação',
+       txt.replace(/\s+/g, ' ').slice(0, 120));
+
+    h3('3. Trocar o período na Soutag também não chama /app/cupons');
+    CHAMADAS = [];
+    window.__apData('de', '2026-09-01');
+    await esperar(300);
+    eh(contar(/^\/app\/cupons\?/) === 0, 'nenhuma /app/cupons',
+       CHAMADAS.join(' | ') || 'nenhuma chamada');
+    eh(contar(/^\/app\/soutag-comparar/) === 1, 'só a comparação',
+       String(contar(/^\/app\/soutag-comparar/)), '1');
+
+    h3('4. O atalho de período idem');
+    CHAMADAS = [];
+    window.__apAtalho('7');
+    await esperar(300);
+    eh(contar(/^\/app\/cupons\?/) === 0, 'nenhuma /app/cupons',
+       CHAMADAS.join(' | ') || 'nenhuma chamada');
+
+    h3('5. O toggle "só app" continua vivo na Soutag');
+    // Ele lê o `so_app` do _dados, que nesta vista não existe mais. Sem o
+    // desvio, o botão apareceria desabilitado — apagando um controle que
+    // funciona, e que na Soutag é PARÂMETRO DA ROTA.
+    var bt = corpo().querySelector('.ap-so');
+    eh(!!bt, 'o botão existe', bt ? bt.className : '(ausente)');
+    eh(!!bt && !bt.disabled, 'e está habilitado', bt && String(bt.disabled), 'false');
+    CHAMADAS = [];
+    if (bt) bt.click();
+    await esperar(300);
+    eh(contar(/^\/app\/soutag-comparar.*so_app=0/) === 1,
+       'clicar rebusca a comparação com so_app=0', CHAMADAS.join(' | '));
+    eh(contar(/^\/app\/cupons\?/) === 0, 'e segue sem /app/cupons',
+       String(contar(/^\/app\/cupons\?/)), '0');
+
+    h3('6. Voltar para "Por posto" chama a /app/cupons ALI');
+    CHAMADAS = [];
+    window.__apVista('posto');
+    await esperar(400);
+    eh(contar(/^\/app\/cupons\?/) === 1, 'uma chamada, no momento da troca',
+       String(contar(/^\/app\/cupons\?/)), '1');
+    eh(!!corpo().querySelector('.ap-lista, .ap-cards, .ap-cab'),
+       'e a lista aparece', corpo().textContent.replace(/\s+/g, ' ').slice(0, 60));
+    eh(/ANA LUCIA/.test(corpo().textContent), 'com o posto do agregado');
+
+    h3('7. E não rebusca de graça ao voltar de novo');
+    CHAMADAS = [];
+    window.__apVista('soutag');
+    await esperar(200);
+    window.__apVista('posto');
+    await esperar(300);
+    eh(contar(/^\/app\/cupons\?/) === 0,
+       'o agregado já estava em mão — nenhuma chamada nova',
+       String(contar(/^\/app\/cupons\?/)), '0');
+
+    h3('8. "Por cupom" também recebe o agregado');
+    // Ela desenha os mesmos cards do "Por posto", então precisa do _dados.
+    CHAMADAS = [];
+    window.__apVista('cupom');
+    await esperar(400);
+    eh(!!corpo().querySelector('.ap-cards, .ap-cab'), 'a vista montou',
+       corpo().textContent.replace(/\s+/g, ' ').slice(0, 60));
+    eh(contar(/^\/app\/cupons-detalhe/) >= 1, 'e buscou o detalhe',
+       String(contar(/^\/app\/cupons-detalhe/)));
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — Soutag sem /app/cupons';
+})();
+</script>
