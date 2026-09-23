@@ -114,6 +114,25 @@ var RESP = {
   ],
   por_turno: POR_TURNO,
   por_turno_combustivel: TC,
+  // ── As três dimensões CRUZADAS que o rollup passou a gravar ──
+  // A rota devolve turno e chave já separados; a chave do pagamento vem
+  // 'ind_tipo|cod|desc' (o turno saiu da frente).
+  cruzado_disponivel: true,
+  por_turno_frentista: [
+    { turno: '1', chave: 'JOAO DA SILVA', litros: 4000, liquido: 25000, itens: 30, cupons_aprox: 28, cupons_exato: false },
+    { turno: '1', chave: 'MARIA SOUZA',   litros: 1601, liquido: 9753,  itens: 12, cupons_aprox: 12, cupons_exato: true },
+    { turno: '2', chave: 'JOAO DA SILVA', litros: 21334, liquido: 131764, itens: 417, cupons_aprox: 385, cupons_exato: false },
+  ],
+  por_turno_canal: [
+    { turno: '1', chave: 'NORMAL', litros: 5000, liquido: 30000, itens: 38, cupons_aprox: 36, cupons_exato: false },
+    { turno: '1', chave: 'SOUTAG', litros: 601,  liquido: 4753,  itens: 4,  cupons_aprox: 4,  cupons_exato: true },
+    { turno: '2', chave: 'NORMAL', litros: 21334, liquido: 131764, itens: 417, cupons_aprox: 385, cupons_exato: false },
+  ],
+  por_turno_pagamento: [
+    { turno: '1', chave: 'CC|2|CARTAO CREDITO', litros: 0, liquido: 20000, itens: 25, cupons_aprox: 25, cupons_exato: true },
+    { turno: '1', chave: 'DI|1|DINHEIRO',       litros: 0, liquido: 14753, itens: 18, cupons_aprox: 18, cupons_exato: true },
+    { turno: '2', chave: 'CC|2|CARTAO CREDITO', litros: 0, liquido: 90000, itens: 200, cupons_aprox: 200, cupons_exato: true },
+  ],
   // O formato é o que o mvBlocoPagamento lê: `pagamento_disponivel` no topo
   // da resposta (não dentro do objeto) e os campos ind_tipo/cod/pct_valor.
   pagamento_disponivel: true,
@@ -247,17 +266,81 @@ function soNum(txt) {
     // R$/L do turno = 23868.38 / 3734.82 = 6.391 — não o 6,42 do dia.
     eh(/6[.,]391/.test(t1), 'o R$/L é recalculado do turno (6,391)', t1.slice(0, 200));
 
-    h3('6. As três quebras que o turno NÃO alcança dizem isso');
-    nota('O rollup agrega frentista, canal e pagamento SEM o turno dentro.');
-    nota('Mostrar o dia inteiro sob o rótulo "Turno 1" faria alguém anotar o');
-    nota('frentista errado — some da tela é melhor que errado na tela.');
+    h3('6. As outras três quebras TAMBÉM recortam');
+    nota('Desde que o rollup passou a gravar TURNO_FRENTISTA, TURNO_CANAL e');
+    nota('TURNO_PAGAMENTO, o filtro alcança a tela inteira.');
+    var bf = blocoPorTitulo('Por frentista');
+    var tf = bf.textContent.replace(/\s+/g, ' ');
+    eh(/JOAO DA SILVA/.test(tf) && /MARIA SOUZA/.test(tf),
+       'frentista: os dois que trabalharam no turno 1', tf.slice(0, 90));
+    eh(/25\.000/.test(tf), 'com o líquido DO TURNO (R$ 25.000)', tf.slice(0, 120));
+    eh(!/70\.000/.test(tf), 'e não o do dia (R$ 70.000)',
+       /70\.000/.test(tf) ? 'mostrou o do dia' : 'só o do turno');
+    eh(!bf.querySelector('.mv-sem-turno'), 'e sem o aviso de dia antigo');
+
+    var bcan = blocoPorTitulo('Por canal');
+    var tcan = bcan.textContent.replace(/\s+/g, ' ');
+    eh(/Pista/.test(tcan), 'canal: usa o rótulo que a ROTA deu (NORMAL -> Pista)',
+       tcan.slice(0, 80));
+    nota('O de-para não é duplicado no front: sai do por_canal do dia.');
+    eh(/30\.000/.test(tcan), 'e o valor é o do turno', tcan.slice(0, 110));
+
+    var bp = blocoPorTitulo('Por forma de pagamento');
+    var tp = bp.textContent.replace(/\s+/g, ' ');
+    eh(/CARTAO CREDITO/.test(tp) && /DINHEIRO/.test(tp),
+       'pagamento: as formas do turno', tp.slice(0, 110));
+    eh(/Crédito/.test(tp), 'com a categoria rotulada (CC -> Crédito)', tp.slice(0, 110));
+    eh(bp.querySelectorAll('.mv-tipo').length === 2,
+       'e os subtotais por categoria, remontados sobre o recorte',
+       String(bp.querySelectorAll('.mv-tipo').length), '2');
+    eh(!/60\.000/.test(tp), 'sem o dinheiro do dia inteiro (R$ 60.000)',
+       /60\.000/.test(tp) ? 'mostrou o do dia' : 'só o do turno');
+
+    h3('6b. Turno sem movimento numa quebra diz isso');
+    // O turno 3 não tem linha cruzada nenhuma na fixture: é turno que não
+    // vendeu naquela quebra, e não dia sem cruzamento. São coisas diferentes.
+    chipDe('3').click();
+    await esperar(200);
+    var b3 = blocoPorTitulo('Por frentista');
+    eh(/Nenhum frentista com venda no turno 3/.test(b3.textContent),
+       'diz "nenhum frentista no turno 3"',
+       b3.textContent.replace(/\s+/g, ' ').slice(0, 70));
+    eh(!b3.querySelector('.mv-sem-turno'),
+       'e NÃO confunde com "dia sem cruzamento"');
+    chipDe('1').click();
+    await esperar(200);
+
+    h3('6c. Dia coletado ANTES do cruzamento avisa');
+    // Sem as linhas cruzadas a quebra mostraria o dia inteiro; sem o aviso,
+    // alguém leria "Turno 1" e anotaria o frentista errado.
+    var semCruz = JSON.parse(JSON.stringify(RESP));
+    semCruz.cruzado_disponivel = false;
+    semCruz.por_turno_frentista = [];
+    semCruz.por_turno_canal = [];
+    semCruz.por_turno_pagamento = [];
+    window.mvPintar(semCruz);
+    await esperar(200);
+    window.mvSetTurno('1');
+    await esperar(200);
     ['Por forma de pagamento', 'Por frentista', 'Por canal'].forEach(function (t) {
       var b = blocoPorTitulo(t);
-      eh(!!b && !!b.querySelector('.mv-sem-turno'), t + ': avisa que não filtra',
+      eh(!!b && !!b.querySelector('.mv-sem-turno'),
+         t + ': avisa que o dia é anterior ao cruzamento',
          b && b.querySelector('.mv-sem-turno')
-           ? b.querySelector('.mv-sem-turno').textContent.replace(/\s+/g, ' ').slice(0, 55)
+           ? b.querySelector('.mv-sem-turno').textContent.replace(/\s+/g, ' ').slice(0, 60)
            : '(sem aviso)');
     });
+    var av = blocoPorTitulo('Por frentista').querySelector('.mv-sem-turno');
+    eh(/refazer/.test(av.textContent), 'e diz como resolver (--refazer)',
+       av.textContent.replace(/\s+/g, ' ').slice(0, 90));
+    // Os cards e o combustível continuam recortando: eles não dependem do
+    // cruzamento, saem do por_turno_combustivel.
+    eh(soNum(cards()[1].num) === 42, 'e os cards seguem recortando o turno',
+       cards()[1].num, '42');
+    window.mvPintar(RESP);
+    await esperar(200);
+    window.mvSetTurno('1');
+    await esperar(200);
 
     h3('7. Trocar de turno troca o recorte');
     chipDe('2').click();

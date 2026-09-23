@@ -1260,24 +1260,21 @@ async function mvCarregar() {
 // ════════════════════════════════════════════════════════════════
 // FILTRO POR TURNO
 //
-// O QUE DÁ PARA FILTRAR, E POR QUÊ SÓ ISSO. Cada dimensão de
-// tecnox_venda_dim_dia é agregada INDEPENDENTE: a linha de TURNO tem turno +
-// combustível, a de FRENTISTA tem só o nome, a de CANAL só o canal, a de
-// PAGAMENTO só a forma. Não existe, no rollup, o cruzamento turno×frentista,
-// turno×canal ou turno×pagamento — e não dá para deduzi-lo somando as
-// quebras.
+// O filtro recorta a tela INTEIRA: cards, combustível, pagamento, frentista
+// e canal. As três últimas dependem das dimensões CRUZADAS que o rollup passou
+// a gravar em 23/09/2026 — TURNO_FRENTISTA, TURNO_CANAL e TURNO_PAGAMENTO.
+// Antes disso elas eram agregadas independentes (a linha de FRENTISTA tinha só
+// o nome), e nenhuma soma informava a outra.
 //
-// Então o filtro alcança os CARDS e o FATURAMENTO POR COMBUSTÍVEL (que vêm do
-// `por_turno_combustivel` que a rota passou a devolver, do mesmo dado que já
-// estava na tabela), e as outras três quebras dizem que não são filtráveis.
+// DIA COLETADO ANTES NÃO TEM O CRUZAMENTO, e isso não some sozinho: as linhas
+// novas só entram em dia coletado depois — pelo rollup noturno ou por
+// --refazer. Quando faltam, `consulta.cruzado_disponivel` vem falso e a quebra
+// DIZ que aquele dia é anterior, em vez de aparecer vazia como se o turno não
+// tivesse vendido nada.
 //
 // MOSTRAR O DIA INTEIRO SOB UM RÓTULO DE TURNO SERIA MENTIR NA TELA — alguém
-// leria "Turno 2" e anotaria o frentista errado. Some da tela é melhor que
-// errado na tela.
-//
-// Para destravá-las, o rollup precisaria emitir uma dimensão cruzada (ex.:
-// chave 'TURNO|FRENTISTA'), o que mexe no CHECK de tecnox_venda_dim_dia e
-// pede backfill dos dias já coletados.
+// leria "Turno 2" e anotaria o frentista errado. É por isso que a quebra sem
+// cruzamento avisa em vez de exibir o número do dia.
 let _mvTurno = '';          // '' = Todos; senão a chave do turno
 
 // A venda do turno é SÓ COMBUSTÍVEL. As dimensões recebem item de
@@ -1289,6 +1286,21 @@ function mvTurnoLinhas(d) {
 }
 function mvTurnoAtual(d) {
   return (d.por_turno || []).find(t => String(t.chave) === _mvTurno) || null;
+}
+// As linhas de uma quebra cruzada, já recortadas no turno escolhido. A rota
+// devolve turno e chave separados, então aqui não se conhece o formato da
+// chave gravada.
+function mvCruzada(d, campo) {
+  if (!_mvTurno) return null;
+  return (d[campo] || []).filter(r => String(r.turno) === _mvTurno);
+}
+// O dia tem cruzamento? É a bandeira da rota, não a ausência de linhas: turno
+// que não vendeu num canal e dia antigo sem a dimensão produzem os dois uma
+// lista vazia, e são coisas diferentes de dizer.
+function mvTemCruzado(d) {
+  // NO TOPO DA RESPOSTA, e não dentro de `consulta`: o `consulta` guarda o que
+  // foi PEDIDO (posto, data, recorte), e isto é propriedade do que VEIO.
+  return !!d.cruzado_disponivel;
 }
 
 // Os chips. Saem do por_turno — só os turnos que EXISTEM no dia/período, na
@@ -1328,12 +1340,13 @@ function mvAvisoTurno(d) {
     'ver o dia inteiro</button></div>';
 }
 
-// Marca de quebra que o turno não alcança. Some no modo "Todos".
-function mvNaoFiltravel() {
-  return _mvTurno
-    ? '<div class="mv-sem-turno">Sem recorte por turno — o rollup agrega esta ' +
-      'quebra separada, sem o turno dentro. Os números abaixo são do dia inteiro.</div>'
-    : '';
+// Marca do dia que foi coletado ANTES das dimensões cruzadas existirem.
+// Some no modo "Todos" e nos dias que têm o cruzamento.
+function mvSemCruzado(d) {
+  if (!_mvTurno || mvTemCruzado(d)) return '';
+  return '<div class="mv-sem-turno">Este dia foi coletado antes do cruzamento ' +
+    'por turno — os números abaixo são do <b>dia inteiro</b>. Para recortar, ' +
+    'refaça o rollup deste dia (<code>--refazer</code>).</div>';
 }
 
 window.mvSetTurno = function (v) {
@@ -1625,6 +1638,51 @@ function mvBlocoPagamento(d) {
       '<b>01/09/2026</b>. Dia anterior a isso tem venda no rollup, mas não tem quebra por forma — ' +
       'não é falha da coleta.</div>');
   }
+  // COM TURNO E COM CRUZAMENTO: as formas usadas naquele turno, do
+  // por_turno_pagamento. A chave vem 'ind_tipo|cod|desc' — a MESMA da
+  // PAGAMENTO, porque a rota já descartou o turno da frente. As categorias
+  // (CC/DI/CD/NP) e os subtotais são remontados sobre o recorte.
+  const cruzP = mvTemCruzado(d) ? mvCruzada(d, 'por_turno_pagamento') : null;
+  if (cruzP) {
+    if (!cruzP.length) {
+      return mvBloco('Por forma de pagamento', null, null,
+        '<div class="empty-state">Nenhuma forma de pagamento no turno ' +
+        escapeHtml(_mvTurno) + '.</div>');
+    }
+    const totP = cruzP.reduce((a, r) => a + r.liquido, 0);
+    const porTipo = new Map();
+    cruzP.forEach(f => {
+      const t = String(f.chave).split('|')[0] || '??';
+      const a = porTipo.get(t) || { ind_tipo: t, valor: 0, formas: 0 };
+      a.valor += f.liquido; a.formas++;
+      porTipo.set(t, a);
+    });
+    // Mesma regra do canal: o nome da categoria (CC -> "crédito (tem taxa)")
+    // sai do por_pagamento do DIA, que é quem a rota rotulou.
+    const rotTipo = {};
+    (((d.por_pagamento || {}).tipos) || []).forEach(t => { rotTipo[t.ind_tipo] = t.rotulo; });
+    const chipsP = [...porTipo.values()].sort((a, b) => b.valor - a.valor).map(t =>
+      '<div class="mv-tipo"><span class="mv-tipo-cod">' + escapeHtml(t.ind_tipo) + '</span>' +
+      escapeHtml(rotTipo[t.ind_tipo] || t.ind_tipo) + ' <b>' + mvBRL0(t.valor) + '</b> ' +
+      '<span style="color:var(--text3)">' + (totP > 0 ? mvPct(t.valor / totP * 100) : '—') +
+      ' · ' + t.formas + ' forma(s)</span></div>').join('');
+    const linP = cruzP.map(f => {
+      const p3 = String(f.chave).split('|');
+      const desc = p3.slice(2).join('|') || '(sem descrição)';
+      return mvRow(desc, p3[0] + '|' + p3[1], [
+        mvMet(mvBRL0(f.liquido), '', 'rs'),
+        mvMet(mvInt(f.cupons_aprox), 'cup'),
+        mvMet(mvInt(f.itens), 'pernas'),
+        mvMet(totP > 0 ? mvPct(f.liquido / totP * 100) : '—', ''),
+      ], totP > 0 ? f.liquido / totP * 100 : null);
+    }).join('');
+    return mvBloco('Por forma de pagamento',
+      cruzP.length + ' formas · ' + porTipo.size + ' categorias · turno ' + escapeHtml(_mvTurno),
+      'Sem coluna de litros: pagamento paga o cupom inteiro e o rollup <b>não rateia litro</b> ' +
+      'entre as pernas. cup = cupons que usaram a forma · pernas = nº de pagamentos',
+      '<div class="mv-tipos">' + chipsP + '</div>' + linP);
+  }
+
   const p = d.por_pagamento;
   // Totais por ind_tipo primeiro: é o balde do DRE e é o que responde "quanto
   // foi cartão" sem ler 17 linhas de operadora.
@@ -1671,11 +1729,34 @@ function mvBlocoPagamento(d) {
   return mvBloco('Por forma de pagamento', p.formas.length + ' formas · ' + p.tipos.length + ' categorias',
     'Sem coluna de litros: pagamento paga o cupom inteiro e o rollup <b>não rateia litro</b> entre as pernas. ' +
     'cup = cupons que usaram a forma (exato) · pernas = nº de pagamentos',
-    mvNaoFiltravel() + '<div class="mv-tipos">' + chips + '</div>' + linhas, avisos.join(''));
+    mvSemCruzado(d) + '<div class="mv-tipos">' + chips + '</div>' + linhas, avisos.join(''));
 }
 
 // ── Quebra por frentista ──
 function mvBlocoFrentista(d) {
+  // COM TURNO E COM CRUZAMENTO: os frentistas daquele turno, do
+  // por_turno_frentista. O `pct` é recalculado sobre o líquido DO TURNO —
+  // usar o percentual do dia diria que o frentista fez 12% de um total que
+  // não é o que está na tela.
+  const cruz = mvTemCruzado(d) ? mvCruzada(d, 'por_turno_frentista') : null;
+  if (cruz) {
+    if (!cruz.length) {
+      return mvBloco('Por frentista', null, null,
+        '<div class="empty-state">Nenhum frentista com venda no turno ' +
+        escapeHtml(_mvTurno) + '.</div>');
+    }
+    const tot = cruz.reduce((a, r) => a + r.liquido, 0);
+    const lin = cruz.map(f => mvRow(f.chave, null, [
+      mvMet(mvInt(f.litros), 'L'),
+      mvMet(mvBRL0(f.liquido), '', 'rs'),
+      mvMet(mvInt(f.itens), 'ab'),
+      mvMet(mvCup(f), 'cup'),
+      mvMet(tot > 0 ? mvPct(f.liquido / tot * 100) : '—', ''),
+    ], tot > 0 ? f.liquido / tot * 100 : null)).join('');
+    return mvBloco('Por frentista', cruz.length + ' no turno ' + escapeHtml(_mvTurno),
+      'ab = abastecimentos · cup = cupons (<b>~</b> = aproximado) · % do líquido DO TURNO',
+      lin);
+  }
   const todos = d.por_frentista;
   if (!todos.length) {
     return mvBloco('Por frentista', null, null,
@@ -1715,11 +1796,35 @@ function mvBlocoFrentista(d) {
     : '';
   return mvBloco('Por frentista', todos.length + ' frentistas',
     'ab = abastecimentos · cup = cupons (<b>~</b> = aproximado) · % do líquido de combustível',
-    mvNaoFiltravel() + linhas, mais + nota);
+    mvSemCruzado(d) + linhas, mais + nota);
 }
 
 // ── Quebra por canal ──
 function mvBlocoCanal(d) {
+  const cruzC = mvTemCruzado(d) ? mvCruzada(d, 'por_turno_canal') : null;
+  if (cruzC) {
+    if (!cruzC.length) {
+      return mvBloco('Por canal', null, null,
+        '<div class="empty-state">Nenhum canal com venda no turno ' +
+        escapeHtml(_mvTurno) + '.</div>');
+    }
+    const totC = cruzC.reduce((a, r) => a + r.liquido, 0);
+    // O RÓTULO VEM DO por_canal DO DIA, que a rota já traduziu ('NORMAL' ->
+    // 'Pista'). Duplicar o de-para aqui faria a mesma chave sair com nome
+    // diferente nas duas vistas no dia em que a rota ganhasse um canal novo.
+    const rotCanal = {};
+    (d.por_canal || []).forEach(c => { rotCanal[c.chave] = c.rotulo; });
+    const linC = cruzC.map(c => mvRow(rotCanal[c.chave] || c.chave, null, [
+      mvMet(mvInt(c.litros), 'L'),
+      mvMet(mvBRL0(c.liquido), '', 'rs'),
+      mvMet(mvInt(c.itens), 'ab'),
+      mvMet(mvCup(c), 'cup'),
+      mvMet(totC > 0 ? mvPct(c.liquido / totC * 100) : '—', ''),
+    ], totC > 0 ? c.liquido / totC * 100 : null)).join('');
+    return mvBloco('Por canal', cruzC.length + ' no turno ' + escapeHtml(_mvTurno),
+      'ab = abastecimentos · cup = cupons (<b>~</b> = aproximado) · % do líquido DO TURNO',
+      linC);
+  }
   if (!d.por_canal.length) {
     return mvBloco('Por canal', null, null,
       '<div class="empty-state">Sem quebra por canal neste dia.</div>');
@@ -1739,7 +1844,7 @@ function mvBlocoCanal(d) {
     'são forma de pagamento, e estão na quebra acima.</div>';
   return mvBloco('Por canal', d.por_canal.length + ' canais',
     'ab = abastecimentos · cup = cupons (<b>~</b> = aproximado) · % do líquido de combustível',
-    mvNaoFiltravel() + linhas, nota);
+    mvSemCruzado(d) + linhas, nota);
 }
 
 function txRenderHistorico() {
