@@ -84,6 +84,20 @@ window.addEventListener('hashchange', aplicarHash);
 // Custo & Margem — aberto pelo Mais+ (NÃO é aba do bnav). Espelha o
 // modulos/admin/app.js: fecha o modal, limpa .active de .scr/.nbtn, ativa
 // #s-custo e renderiza. LOGISTICA edita; o read-only é por perfil no módulo.
+// Mesmo desenho do abrirCustoMobile logo abaixo — fecha o Mais+, apaga a aba
+// ativa do bnav (o Mercado não é aba dele) e monta no #s-mercado. O
+// renderMercado escolhe sozinho o shell: abaixo de 800px vem o só-painel, em
+// leitura, que é o certo para o celular.
+function abrirMercadoMobile() {
+  document.getElementById('modal-mais').classList.remove('open');
+  document.querySelectorAll('.scr').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.nbtn').forEach(x => x.classList.remove('active'));
+  document.getElementById('s-mercado').classList.add('active');
+  if (window.medicaoFabs) window.medicaoFabs.setVisivel(false);   // saiu da Medição
+  document.querySelector('.main')?.classList.remove('sem-reserva-bnav');
+  if (window.renderMercado) renderMercado(document.getElementById('s-mercado'));
+}
+
 function abrirCustoMobile() {
   document.getElementById('modal-mais').classList.remove('open');
   document.querySelectorAll('.scr').forEach(x => x.classList.remove('active'));

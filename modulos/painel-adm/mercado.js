@@ -206,13 +206,40 @@
     // sobrariam ~320px dos 380. Detecta o host pela AUSÊNCIA do token LONGO: o
     // admin.css não declara --surface global (só escopado em #s-medicao/#s-kpi),
     // o painel-adm.css declara via alias. Mesmo truque do fornecedores.js.
-    // NÃO declaramos alias nenhum aqui: este módulo usa só tokens CURTOS
-    // (--sf/--bd/--ac/--tx…), que o admin.css já tem no :root — nada a vazar.
     const emAdmin = getComputedStyle(document.documentElement)
       .getPropertyValue('--surface').trim() === '';
     const st = document.createElement('style');
     st.id = 'mercado-style';
     st.textContent =
+      // ════════ OS TOKENS CURTOS VÊM COM O MÓDULO ════════
+      // Este arquivo é escrito em tokens curtos (--sf/--bd/--ac/--tx…), e até
+      // 23/09/2026 ele DEPENDIA de o host declará-los: o painel-adm.css e o
+      // admin.css têm a camada de alias no :root, e a conta fechava porque os
+      // dois eram os únicos hosts.
+      //
+      // A LOGÍSTICA NÃO TEM essa camada — nem o logistica.css, nem o
+      // logistica-mobile.css declaram esses nomes. Montar o Mercado lá sem
+      // isto renderiza a tela SEM COR: todo var(--sf), var(--tx), var(--ac)
+      // resolve vazio, o fundo fica transparente e as bordas somem. E não
+      // seria erro visível no console — só uma tela feia, que é o tipo de
+      // coisa que se descobre com o usuário dentro.
+      //
+      // Declarar aqui, escopado no próprio wrapper, torna o módulo
+      // AUTOSSUFICIENTE: ele leva o que precisa para qualquer host, em vez de
+      // exigir que cada host novo lembre de uma dependência invisível. É o
+      // mesmo caminho do shared/css/comparacao.css, que declara os aliases
+      // dele em #sl-comparacao.
+      //
+      // NÃO MUDA NADA no painel-adm e no admin: os valores são os mesmos que o
+      // :root deles já dá, só que num seletor mais específico. E como apontam
+      // para os tokens do base.css, seguem o tema claro/escuro sozinhos.
+      '.mrc-wrap{' +
+        '--ac:var(--accent);--ac2:var(--accent2);--acd:var(--accent-dim);' +
+        '--dg:var(--danger);--wn:var(--warning);--inf:var(--info);--pu:#a78bfa;' +
+        '--tx:var(--text);--tx2:var(--text2);--tx3:var(--text3);' +
+        '--sf:var(--surface);--sf2:var(--surface2);--sf3:var(--surface3);' +
+        '--bd:var(--border);--bd2:var(--border2);' +
+        '--r:var(--radius);--rl:var(--radius-lg)}' +
       '#s-mercado{height:auto;min-height:100%}' +
       '#s-mercado.active{display:block}' +
       (emAdmin ? '.scr .mrc-wrap{padding:.2rem 0}' : '') +

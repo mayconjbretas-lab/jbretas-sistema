@@ -1,0 +1,241 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mercado na Logística — mesmo módulo, três hosts</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  html, body { height: auto !important; overflow: visible !important; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+
+<div id="res">rodando…</div>
+<!-- O palco NÃO carrega painel-adm.css de propósito: é assim que a Logística
+     é: sem a camada de alias dos tokens curtos. Se o Mercado depender dela,
+     é aqui que aparece. -->
+<div id="palco"><section id="tab-mercado" class="view-panel"></section></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// O Mercado passou a existir na Logística (desktop e mobile) SEM FORK: é o
+// mesmo modulos/painel-adm/mercado.js que o painel-adm e o admin carregam.
+//
+//  1. O módulo monta num host que NÃO carrega painel-adm.css. Era a única
+//     dependência real: ele é escrito em tokens curtos (--sf/--tx/--ac…) e
+//     dependia de o host declará-los. Sem isso a tela subia SEM COR — sem
+//     erro no console, só feia.
+//  2. Os tokens resolvem para valores de verdade (não string vazia).
+//  3. Abaixo de 800px ele troca sozinho para o shell só-painel (leitura):
+//     lançar ~20 preços não cabe no celular. É o que faz o mobile funcionar
+//     sem uma linha de código própria.
+//  4. As três telas estão LIGADAS: o index.html de cada uma carrega o mesmo
+//     arquivo, tem o host e chama o render. É o que quebra em silêncio.
+//  5. Um arquivo só: nenhuma cópia de mercado.js no repositório.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function js(src) {
+  return new Promise(function (ok, er) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { er(new Error(src + ' não carregou')); };
+    document.head.appendChild(s);
+  });
+}
+function baixar(u) {
+  return new Promise(function (ok, er) {
+    var x = new XMLHttpRequest();
+    x.open('GET', u);
+    x.onload = function () { ok(x.responseText); };
+    x.onerror = function () { er(new Error(u + ' não carregou')); };
+    x.send();
+  });
+}
+
+// ── Dublês das três rotas do Mercado ────────────────────────────
+var CHAMADAS = [];
+window.apiFetch = function (url) {
+  var u = String(url);
+  CHAMADAS.push(u);
+  if (u.indexOf('/mercado-dashboard') === 0) {
+    return Promise.resolve({ success: true, dias: 30, combustiveis: {}, series: [],
+                             distribuidoras: [], ranking: [] });
+  }
+  if (u.indexOf('/custos-mercado') === 0) {
+    return Promise.resolve({ success: true, data: '2026-09-23', linhas: [],
+                             distribuidoras: [] });
+  }
+  return Promise.resolve({ success: true });
+};
+// PERFIL LOGISTICA: é o que o guard do módulo (PERFIS_EDITAM) e o do backend
+// (ehAdmOuLogistica) aceitam. Se um dos dois esquecer a Logística, a tela
+// abre em leitura e este teste pega.
+window.getUsuarioLogado = function () { return { perfil: 'LOGISTICA', nome: 'HARNESS' }; };
+window.mostrarToast = function () {};
+
+var sec = function () { return document.getElementById('tab-mercado'); };
+var wrap = function () { return sec().querySelector('.mrc-wrap'); };
+function token(nome) {
+  var w = wrap();
+  return w ? getComputedStyle(w).getPropertyValue(nome).trim() : '(sem wrap)';
+}
+
+(async function () {
+  try {
+    // ── 4 e 5: a ligação nos três hosts, ANTES de montar nada ──
+    h3('4. As três telas carregam o MESMO arquivo');
+    var hosts = [
+      { nome: 'painel-adm', url: '/modulos/painel-adm/index.html',
+        src: 'mercado.js', host: 's-mercado' },
+      { nome: 'admin', url: '/modulos/admin/index.html',
+        src: '../painel-adm/mercado.js', host: 's-mercado' },
+      { nome: 'logistica', url: '/modulos/logistica/index.html',
+        src: '../painel-adm/mercado.js', host: 'tab-mercado' },
+      { nome: 'logistica-mobile', url: '/modulos/logistica-mobile/index.html',
+        src: '../painel-adm/mercado.js', host: 's-mercado' },
+    ];
+    for (var i = 0; i < hosts.length; i++) {
+      var h = hosts[i];
+      var html = await baixar(h.url);
+      eh(html.indexOf('<script src="' + h.src) >= 0,
+         h.nome + ': carrega ' + h.src,
+         html.indexOf('<script src="' + h.src) >= 0 ? 'sim' : 'NÃO');
+      eh(new RegExp('id="' + h.host + '"').test(html),
+         h.nome + ': tem o host #' + h.host);
+    }
+    var appLog = await baixar('/modulos/logistica/app.js');
+    eh(/renderMercado\(document\.getElementById\('tab-mercado'\)\)/.test(appLog),
+       'logistica/app.js chama renderMercado no switchMainTab');
+    var htmlLog = await baixar('/modulos/logistica/index.html');
+    eh(/data-tab="tab-mercado"/.test(htmlLog), 'e a Logística tem o item de menu');
+    nota('O hash #mercado sai de graça: o aplicarHash acha o item pelo data-tab.');
+    var appMob = await baixar('/modulos/logistica-mobile/app.js');
+    eh(/function abrirMercadoMobile\(\)/.test(appMob),
+       'logistica-mobile/app.js tem o abrirMercadoMobile');
+    var htmlMob = await baixar('/modulos/logistica-mobile/index.html');
+    eh(/onclick="abrirMercadoMobile\(\)"/.test(htmlMob),
+       'e o Mais+ do mobile chama ele');
+
+    h3('5. Um arquivo só — nenhuma cópia');
+    // Uma cópia em modulos/logistica/mercado.js passaria despercebida e
+    // divergiria na primeira correção feita só de um lado.
+    var copia = await new Promise(function (ok) {
+      var x = new XMLHttpRequest();
+      x.open('GET', '/modulos/logistica/mercado.js');
+      x.onload = function () { ok(x.status); };
+      x.onerror = function () { ok(0); };
+      x.send();
+    });
+    eh(copia === 404, 'não existe modulos/logistica/mercado.js', 'HTTP ' + copia, '404');
+
+    // ── agora monta, no host SEM painel-adm.css ──
+    await js('/modulos/painel-adm/mercado.js');
+    eh(typeof window.renderMercado === 'function', 'o módulo expõe renderMercado');
+
+    h3('1. Monta num host que não tem a camada de alias');
+    nota('O palco não carrega painel-adm.css — é assim que a Logística é.');
+    // Confirma a premissa: o :root aqui NÃO tem os tokens curtos.
+    var raizTx = getComputedStyle(document.documentElement).getPropertyValue('--tx').trim();
+    eh(raizTx === '', 'o :root desta página não declara --tx',
+       JSON.stringify(raizTx), '""');
+    renderMercado(sec());
+    await esperar(400);
+    eh(!!wrap(), 'a tela montou (.mrc-wrap existe)', wrap() ? 'sim' : 'NÃO');
+    eh(CHAMADAS.some(function (u) { return u.indexOf('/mercado-dashboard') === 0; }),
+       'e buscou o painel', CHAMADAS.join(' | ') || '(nenhuma chamada)');
+
+    h3('2. Os tokens curtos resolvem para valor de verdade');
+    nota('Era a dependência invisível: sem eles a tela sobe SEM COR, e nada');
+    nota('no console avisa — var(--sf) vazio não é erro, é transparente.');
+    [['--sf', 'fundo'], ['--tx', 'texto'], ['--ac', 'destaque'],
+     ['--bd', 'borda'], ['--dg', 'erro'], ['--rl', 'raio']].forEach(function (p) {
+      var v = token(p[0]);
+      eh(v !== '' && v !== '(sem wrap)', p[0] + ' (' + p[1] + ') tem valor', JSON.stringify(v));
+    });
+    // E o valor tem de ser o MESMO do token longo do base.css — alias que
+    // aponta para outro lugar seria pior que alias faltando.
+    var raiz = getComputedStyle(document.documentElement);
+    eh(token('--sf') === raiz.getPropertyValue('--surface').trim(),
+       '--sf é exatamente var(--surface)', token('--sf'),
+       raiz.getPropertyValue('--surface').trim());
+    eh(token('--tx') === raiz.getPropertyValue('--text').trim(),
+       '--tx é exatamente var(--text)', token('--tx'));
+    // A cor CHEGA no elemento: token certo e regra não aplicada dá o mesmo
+    // resultado visual que token errado.
+    var titulo = sec().querySelector('.mrc-title');
+    if (titulo) {
+      eh(getComputedStyle(titulo).color !== 'rgba(0, 0, 0, 0)',
+         'e o título sai com cor pintada', getComputedStyle(titulo).color);
+    }
+
+    h3('3. Abaixo de 800px vira o shell só-painel');
+    nota('É o que faz o mobile funcionar sem uma linha de código própria.');
+    var palco = document.getElementById('palco');
+    var larguraReal = window.innerWidth;
+    nota('janela do teste: ' + larguraReal + 'px → shell ' +
+         (larguraReal >= 800 ? 'completo (lançamento)' : 'só-painel (leitura)'));
+    var temLanc = !!sec().querySelector('#mrc-lanc');
+    if (larguraReal >= 800) {
+      eh(temLanc, 'nesta largura veio o shell COMPLETO, com lançamento',
+         temLanc ? 'sim' : 'não');
+    } else {
+      eh(!temLanc, 'nesta largura veio o só-painel, sem lançamento',
+         temLanc ? 'tem lançamento' : 'sem lançamento');
+    }
+    // O painel existe nos DOIS modos — é a metade que o celular precisa.
+    eh(!!sec().querySelector('#mrc-painel'), 'o painel existe nos dois modos');
+    nota('O módulo decide pelo window.innerWidth, então o mesmo arquivo serve');
+    nota('desktop e celular — e girar o aparelho remonta o shell certo.');
+    h3('6. E o painel-adm/admin NÃO mudaram');
+    // A mudança acrescentou os aliases DENTRO do módulo, num seletor mais
+    // específico que o :root do painel-adm.css. Como os valores são os
+    // mesmos, nada pode mudar ali — mas "não pode" é hipótese até medir.
+    var antes = { sf: token('--sf'), tx: token('--tx'), ac: token('--ac'),
+                  bd: token('--bd'), rl: token('--rl') };
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '/modulos/painel-adm/painel-adm.css';
+    await new Promise(function (ok) { link.onload = ok; link.onerror = ok;
+                                      document.head.appendChild(link); });
+    await esperar(200);
+    var raizAgora = getComputedStyle(document.documentElement)
+      .getPropertyValue('--tx').trim();
+    eh(raizAgora !== '', 'com o painel-adm.css, o :root passa a ter --tx',
+       JSON.stringify(raizAgora));
+    var depois = { sf: token('--sf'), tx: token('--tx'), ac: token('--ac'),
+                   bd: token('--bd'), rl: token('--rl') };
+    var iguais = Object.keys(antes).every(function (k) { return antes[k] === depois[k]; });
+    eh(iguais, 'e os tokens do Mercado continuam idênticos',
+       JSON.stringify(depois), JSON.stringify(antes));
+    nota('Ou seja: nos dois hosts antigos o resultado é o mesmo de antes — a');
+    nota('declaração do módulo só cobre o buraco onde não havia nenhuma.');
+
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — Mercado na Logística';
+})();
+</script>

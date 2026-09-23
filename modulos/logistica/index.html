@@ -142,6 +142,10 @@
           <li class="nav-item" data-tab="tab-motorista" onclick="switchMainTab('tab-motorista', this)">🚚 Motorista / Conciliação</li>
           <li class="nav-item" data-tab="tab-escala" onclick="switchMainTab('tab-escala', this)">🗓️ Escala</li>
           <li class="nav-item" data-tab="tab-custo" onclick="switchMainTab('tab-custo', this)">💰 Custo &amp; Margem</li>
+          <!-- Mercado — MESMO mercado.js do painel-adm e do admin, sem fork.
+               Fica ao lado de Custo & Margem porque as duas falam de custo de
+               compra; o hash #mercado sai de graça do data-tab. -->
+          <li class="nav-item" data-tab="tab-mercado" onclick="switchMainTab('tab-mercado', this)">🏷️ Mercado</li>
           <li class="nav-item" data-tab="tab-precos" onclick="switchMainTab('tab-precos', this)">💲 Alteração de Preços<span id="sl-nav-count"></span></li>
         </ul>
       </nav>
@@ -180,6 +184,12 @@
         <div class="em-construcao">💰 Custo &amp; Margem — em construção (Fase 2)</div>
       </section>
 
+      <!-- Mercado — renderizado por window.renderMercado()
+           (../painel-adm/mercado.js), o MESMO arquivo do painel-adm e do
+           admin. Abaixo de 800px ele monta sozinho o shell só-painel
+           (leitura), então não há nada de responsivo a fazer aqui. -->
+      <section id="tab-mercado" class="view-panel"></section>
+
       <section id="tab-precos" class="view-panel">
         <!-- Comparação de preços do dia (shared/js/comparacao-logistica.js).
              Fica ACIMA da lista de solicitações: primeiro se olha o mercado,
@@ -206,6 +216,7 @@
 <script src="../../shared/js/matriz-medicao.js?v=202609231217"></script>
 <script src="escala.js?v=202609231217"></script>
 <script src="../painel-adm/kpi.js?v=202609231217"></script>
+<script src="../painel-adm/mercado.js?v=202609231217"></script>
 <script src="../../shared/js/medicao-fabs.js?v=202609231217"></script>
 <script src="../../shared/js/clipboard.js?v=202609231217"></script>
 <script src="../../shared/js/medicao-alteracoes.js?v=202609231217"></script>

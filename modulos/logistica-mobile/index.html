@@ -99,6 +99,14 @@
     <section class="scr" id="s-escala"><div id="mb-escala"></div></section>
     <!-- Custo & Margem — não é aba do bnav; entra pelo Mais+ (abrirCustoMobile). -->
     <section class="scr" id="s-custo"></section>
+    <!-- Mercado — renderizado por window.renderMercado()
+         (../painel-adm/mercado.js), o MESMO arquivo do desktop. Entra pelo
+         Mais+ (abrirMercadoMobile), como Custo e Sugestão: o bnav tem cinco
+         lugares e nenhum sobrando.
+         AQUI ELE MONTA SOZINHO O SHELL SÓ-PAINEL: o próprio mercado.js troca
+         de shell abaixo de 800px de janela, porque lançar ~20 preços não cabe
+         no celular. Não há nada de responsivo a fazer deste lado. -->
+    <section class="scr" id="s-mercado"></section>
     <!-- Sugestão de Pedido — não é aba do bnav; entra pelo Mais+
          (abrirSugestaoMobile, sugestao-mobile.js). -->
     <section class="scr" id="s-sugestao"></section>
@@ -133,6 +141,10 @@
     <div class="mitem" onclick="abrirSugestaoMobile()">
       <span class="mic">🎯</span>
       Sugestão de Pedido
+    </div>
+    <div class="mitem" onclick="abrirMercadoMobile()">
+      <span class="mic">🏷️</span>
+      Mercado
     </div>
     <div class="mitem mitem-off" aria-disabled="true">
       <span class="mic">🚚</span>
@@ -169,6 +181,7 @@
 <script src="../../shared/js/coletas-service.js?v=202609231217"></script>
 <script src="../../shared/js/comparacao-card.js?v=202609231217"></script>
 <script src="../../shared/js/comparacao-logistica.js?v=202609231217"></script>
+<script src="../painel-adm/mercado.js?v=202609231217"></script>
 <script src="sugestao-mobile.js?v=202609231217"></script>
 <script src="app.js?v=202609231217"></script>
 </body>

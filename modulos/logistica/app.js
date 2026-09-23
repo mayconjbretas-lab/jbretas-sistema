@@ -48,6 +48,10 @@ function switchMainTab(tabId, el) {
   // Sugestão de Pedido (KPI) — componente compartilhado do painel-adm (kpi.js
   // expõe renderKpi), sem fork. Mesmo padrão de Custo/Escala.
   if (tabId === 'tab-kpi' && window.renderKpi) renderKpi(document.getElementById('tab-kpi'));
+  // Mercado — idem: o mercado.js do painel-adm expõe renderMercado. O guard de
+  // edição dele é por PERFIL (ADM + LOGISTICA, os mesmos que o backend aceita
+  // em POST /custos-mercado), então aqui a tela abre COMPLETA, para lançar.
+  if (tabId === 'tab-mercado' && window.renderMercado) renderMercado(document.getElementById('tab-mercado'));
   // Matriz — re-mede o offset do cabeçalho sticky (--thead-row1-h). A medida pode
   // ter saído 0 enquanto a aba estava oculta (ex.: troca de posto na Sugestão
   // dispara carregar→ajustarSticky com #tab-matriz display:none). O .active acima
