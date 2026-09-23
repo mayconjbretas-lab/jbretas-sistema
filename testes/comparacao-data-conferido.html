@@ -63,8 +63,27 @@ function nota(t) { linhas.push('     ' + hesc(t)); }
 function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
 function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
-var HOJE = '2026-09-15';   // = data da fixture e do relógio da máquina
-var ALVO = '2026-09-12';
+// ════════ HOJE É O DE VERDADE, NÃO UMA DATA CRAVADA ════════
+// Era '2026-09-15', a data em que o teste foi escrito. O código de produção
+// calcula "hoje" pelo RELÓGIO (cmpHojeISO, em America/Sao_Paulo), então o
+// teste só passava no dia em que nasceu — a partir do dia seguinte ele
+// acusava 6 falhas que não eram defeito nenhum. Um teste que expira é pior
+// que teste nenhum: some no meio do ruído e ninguém olha o dia em que
+// começar a falhar de verdade.
+//
+// MESMA REGRA DO CÓDIGO, e não `new Date().toISOString()`: aquela devolve
+// UTC, e depois das 21h em Brasília daria o dia seguinte — o teste voltaria a
+// falhar, só que uma vez por noite em vez de todo dia.
+function hojeDeVerdade() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+}
+var HOJE = hojeDeVerdade();
+// Os dias de referência passam a ser RELATIVOS a hoje. A fixture é de
+// 12 a 15/09/2026 e continua fixa (ela é um retrato do banco), mas os dias
+// que o teste PEDE são clonados a partir dela — ver clonarDiaPara abaixo.
+// isoMenos e declaracao de funcao: sobe por hoisting, entao pode ser
+// usada aqui mesmo estando escrita mais abaixo.
+var ALVO = isoMenos(HOJE, 3);      // um dia qualquer no passado recente
 
 // ── dublês de tela ───────────────────────────────────────────────
 window.exigirSessao = function () { return { id: 'h', nome: 'H', perfil: 'ADM', ti: true }; };
@@ -110,6 +129,10 @@ function backendColetas(url) {
   });
   return { success: true, registros: linhas.slice(0, limite) };
 }
+// '2026-09-08' -> '08/09', para o rótulo do bloco dos dias fundos.
+function brDe(iso) { var p = String(iso).split('-'); return p[2] + '/' + p[1]; }
+// '2026-09-08' -> '08/09/2026', que é como a tela escreve a data escolhida.
+function brCheia(iso) { var p = String(iso).split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
 function isoMenos(iso, n) {
   var p = iso.split('-').map(Number);
   var d = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
@@ -189,12 +212,21 @@ async function rodar() {
   (FIX.coletas.registros || []).forEach(function (r) { porData[r.data] = (porData[r.data] || 0) + 1; });
   nota('fixture: ' + (FIX.coletas.registros || []).length + ' registros · ' + JSON.stringify(porData));
 
-  // Banco do dublê = a fixture + dias FUNDOS clonados de 14/09 (dia completo,
-  // 184 registros). A fixture só tem 12 a 15/09, e sem estes dias o teste de
-  // 08/09 e 08/06 mediria "fixture vazia", não a busca.
+  // Banco do dublê = a fixture + dias clonados de 15/09. A fixture só tem 12 a
+  // 15/09, e sem estes dias os testes de 7 e 99 dias atrás mediriam "fixture
+  // vazia", não a busca.
+  //
+  // CLONA DE 15/09, E NÃO DE 14/09: é o único dia com os 37 postos (o 14/09
+  // tem 36, e 189 registros contra 184 — melhor nos dois critérios). Com o
+  // 14/09 como fonte, o bloco "os 37 cards de hoje" media 36 assim que HOJE
+  // deixava de ser 15/09, que é o dia da fixture.
   BANCO_COL = (FIX.coletas.registros || []).slice();
-  ['2026-09-08','2026-09-07','2026-06-08','2026-06-07'].forEach(function (d) {
-    BANCO_COL = BANCO_COL.concat(clonarDiaPara('14/09/2026', d));
+  // RELATIVOS A HOJE, pelos mesmos motivos do HOJE lá em cima: 7 dias atrás
+  // (e o anterior) e 99 dias atrás (e o anterior) — as duas profundidades que
+  // o bug do teto de 5000 distinguia.
+  [isoMenos(HOJE, 7), isoMenos(HOJE, 8),
+   isoMenos(HOJE, 99), isoMenos(HOJE, 100)].forEach(function (d) {
+    BANCO_COL = BANCO_COL.concat(clonarDiaPara('15/09/2026', d));
   });
   // Enche o intervalo para o corte por quantidade poder MORDER: sem volume
   // entre hoje e o dia fundo, qualquer janela alcançaria 08/06 e o teste não
@@ -202,7 +234,7 @@ async function rodar() {
   for (var k = 1; k <= 60; k++) {
     var dd = isoMenos(HOJE, k);
     if (BANCO_COL.some(function (r) { return r.dataISO === dd; })) continue;
-    BANCO_COL = BANCO_COL.concat(clonarDiaPara('14/09/2026', dd));
+    BANCO_COL = BANCO_COL.concat(clonarDiaPara('15/09/2026', dd));
   }
   nota('banco do dublê: ' + BANCO_COL.length + ' registros · ~184/dia · 60 dias + 08/06');
 
@@ -251,18 +283,19 @@ async function rodar() {
   var cols = chamadasDe('/coletas');
   nota('GET /coletas  →  ' + cols.map(function (c) { return c.url; }).join('  +  '));
   eh(cols.length === 2, 'duas chamadas: o dia e o anterior', cols.length + '', '2');
-  eh(!!cols[0] && /[?&]data=2026-09-12(&|$)/.test(cols[0].url), 'a 1ª pede o DIA ESCOLHIDO', cols[0] && cols[0].url);
-  eh(!!cols[1] && /[?&]data=2026-09-11(&|$)/.test(cols[1].url),
+  eh(!!cols[0] && cols[0].url.indexOf('data=' + ALVO) >= 0,
+     'a 1ª pede o DIA ESCOLHIDO', cols[0] && cols[0].url, 'data=' + ALVO);
+  eh(!!cols[1] && cols[1].url.indexOf('data=' + isoMenos(ALVO, 1)) >= 0,
      'a 2ª pede o dia ANTERIOR (para o registroOntem)', cols[1] && cols[1].url);
   eh(cols.every(function (c) { return c.url.indexOf('limit=') < 0; }),
      'NENHUMA leva limit= (o ?data= não depende dele)',
      cols.map(function (c) { return c.url; }).join(' '));
   var rev = chamadasDe('/coleta-revisao')[0];
   eh(!!rev && rev.url === '/coleta-revisao?data=' + ALVO,
-     'GET /coleta-revisao com data=2026-09-12', rev && rev.url, '/coleta-revisao?data=' + ALVO);
+     'GET /coleta-revisao com data=' + ALVO, rev && rev.url, '/coleta-revisao?data=' + ALVO);
 
   eh(document.getElementById('cmp-data-retro').hidden === false, 'chip âmbar apareceu');
-  eh(document.getElementById('cmp-data-retro').textContent === '12/09/2026',
+  eh(document.getElementById('cmp-data-retro').textContent === brCheia(ALVO),
      'e mostra a data escolhida', document.getElementById('cmp-data-retro').textContent);
 
   // Os dados: nada DEPOIS de 12/09 pode ter sobrado.
@@ -353,8 +386,8 @@ async function rodar() {
   // antiga, 08/06 (99 dias atrás) caía fora do .limit() e voltava VAZIO sem
   // erro. Com ?data= a profundidade deixa de importar.
   var fundos = [
-    { iso: '2026-09-08', rot: '08/09 (7 dias atrás)' },
-    { iso: '2026-06-08', rot: '08/06 (99 dias atrás)' },
+    { iso: isoMenos(HOJE, 7),  rot: brDe(isoMenos(HOJE, 7))  + ' (7 dias atrás)' },
+    { iso: isoMenos(HOJE, 99), rot: brDe(isoMenos(HOJE, 99)) + ' (99 dias atrás)' },
   ];
   for (var fi = 0; fi < fundos.length; fi++) {
     var f = fundos[fi];

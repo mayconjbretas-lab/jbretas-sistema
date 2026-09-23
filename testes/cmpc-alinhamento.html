@@ -78,6 +78,44 @@ window.renderRelatorios = function () {};
 var MOD = (new URLSearchParams(location.search).get("m") === "admin") ? "admin" : "painel-adm";
 document.getElementById("css-mod").rel = "stylesheet";
 document.getElementById("css-mod").href = "/modulos/" + MOD + "/" + MOD + ".css";
+// ════════ A FIXTURE ANDA COM O CALENDÁRIO ════════
+// Ela é um retrato do GET /coletas de 12 a 15/09/2026, e o código de produção
+// calcula "hoje" e "ontem" pelo RELÓGIO (cmpHojeISO). Com as datas paradas,
+// a partir de 16/09/2026 nada na fixture era "hoje" nem "ontem": o filtro
+// "só quem mudou" comparava hoje com ontem e não achava nada, a lista saía
+// vazia e o teste acusava "o card existe → FALHA" todo dia, sem defeito
+// nenhum no código.
+//
+// DESLOCA O BLOCO INTEIRO, preservando as distâncias entre os dias: o último
+// dia da fixture (15/09) vira HOJE, o penúltimo vira ONTEM, e o resto
+// acompanha. É o que mantém "mudou de ontem para hoje" verificável em
+// qualquer data — que é a coisa que estes testes existem para medir.
+function hojeLocalISO() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+}
+function somaDiasISO(iso, n) {
+  var d = new Date(iso + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function brDeISO(iso) { var p = iso.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
+function diasEntre(a, b) {
+  return Math.round((new Date(b + 'T12:00:00Z') - new Date(a + 'T12:00:00Z')) / 86400000);
+}
+// Muta a fixture JÁ CARREGADA, nos dois campos de data que o registro tem
+// (dataISO e data, que o coletas-service lê separadamente).
+function alinharFixtureComHoje(fix) {
+  var regs = (fix && fix.coletas && fix.coletas.registros) || [];
+  if (!regs.length) return null;
+  var ultima = regs.map(function (r) { return r.dataISO; }).sort().pop();
+  var delta = diasEntre(ultima, hojeLocalISO());
+  if (!delta) return { ultima: ultima, delta: 0 };
+  regs.forEach(function (r) {
+    r.dataISO = somaDiasISO(r.dataISO, delta);
+    r.data = brDeISO(r.dataISO);
+  });
+  return { ultima: ultima, delta: delta };
+}
 var FIX = null;
 window.apiFetch = function (url) {
   if (String(url).indexOf('/coletas') === 0) return Promise.resolve(FIX.coletas);
@@ -105,6 +143,12 @@ async function rodar() {
     x.onerror = function () { erro(new Error('fixture não carregou')); };
     x.send();
   });
+  var _al = alinharFixtureComHoje(FIX);
+  if (_al) {
+    nota('fixture deslocada em ' + _al.delta + ' dia(s): o último dia dela (' +
+         _al.ultima + ') virou hoje. Sem isso, "mudou de ontem para hoje" não');
+    nota('teria como acontecer — o código lê o relógio, a fixture não anda.');
+  }
   linhas.push("MÓDULO: " + MOD);
   nota('fixture: ' + (FIX.coletas.registros || []).length + ' registros de /coletas · ' +
        ((FIX.postos.postos || []).length) + ' postos');
