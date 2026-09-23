@@ -82,8 +82,13 @@
             <!-- Filtro do "Acessar como". Não precisa cobrir todo perfil —
                  "Todos" sempre mostra —, mas sem o chip é preciso caçar o
                  usuário na busca. CONCILIACAO entra porque é o perfil novo,
-                 e é dele que se vai precisar entrar para conferir a tela. -->
+                 e é dele que se vai precisar entrar para conferir a tela.
+                 O valor de data-modalidade é comparado CRU com perfis.perfil
+                 (app.js: `u.perfil !== modalidadeAtiva`), então ele vai sem
+                 acento e em maiúscula, como está no banco — o acento fica só
+                 no rótulo. -->
             <button class="ti-chip" data-modalidade="CONCILIACAO" type="button">CONCILIAÇÃO</button>
+            <button class="ti-chip" data-modalidade="CAIXAS" type="button">CAIXAS</button>
           </div>
           <input class="ti-busca" id="ti-busca" type="text" autocomplete="off"
                  placeholder="Buscar por nome ou posto...">
