@@ -1,0 +1,301 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel TI — filtro por turno na Movimentação</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/modulos/painel-ti/painel-ti.css">
+<style>
+  html, body { height: auto !important; overflow: visible !important; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+
+<div id="res">rodando…</div>
+<div id="palco"><div id="mv-corpo"></div></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// A Movimentação do dia ganhou filtro por turno. O que ele ALCANÇA é decidido
+// pelo dado, não por escolha de tela:
+//
+//   · cards e faturamento por combustível → SIM, filtram. A linha de
+//     tecnox_venda_dim_dia com dimensao='TURNO' tem turno E combustível, e a
+//     rota passou a expor esse cruzamento (por_turno_combustivel).
+//   · pagamento, frentista e canal → NÃO. Essas dimensões são agregadas
+//     separadas, sem o turno dentro. Não há como saber quais frentistas
+//     trabalharam no turno 2.
+//
+// Então o teste prova as duas coisas: que o que dá para filtrar filtra, e que
+// o que NÃO dá diz isso na tela — em vez de mostrar o dia inteiro sob um
+// rótulo de turno, que faria alguém anotar o frentista errado.
+//
+// Os números são os do P. BERNARDO em 22/09/2026, lidos do banco de verdade.
+//  1. Os chips saem dos turnos que EXISTEM (não inventam série).
+//  2. Clicar num turno recorta cards e combustível; os valores batem com a
+//     linha `por_turno` daquele turno.
+//  3. A barra azul aparece com cupons e abastecimentos do turno.
+//  4. As três quebras não filtráveis dizem isso.
+//  5. "Todos" devolve a tela ao dia inteiro.
+//  6. O total do cruzamento fecha com o por_turno (invariante do dado).
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function js(src) {
+  return new Promise(function (ok, er) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { er(new Error(src + ' não carregou')); };
+    document.head.appendChild(s);
+  });
+}
+
+// ── A resposta da rota, com os números REAIS do P. BERNARDO 22/09 ──
+// Três turnos, quatro combustíveis cada — e o cruzamento soma exatamente o
+// por_turno, que é a invariante que o bloco 6 confere.
+var TC = [
+  { turno: '1', combustivel: 'S10',  litros: 3734.82,   liquido: 23868.38, itens: 18,  cupons: 18 },
+  { turno: '1', combustivel: 'S500', litros: 1519.784,  liquido: 9058.84,  itens: 6,   cupons: 6 },
+  { turno: '1', combustivel: 'GC',   litros: 173.816,   liquido: 1084.58,  itens: 11,  cupons: 11 },
+  { turno: '1', combustivel: 'ET',   litros: 172.835,   liquido: 741.44,   itens: 7,   cupons: 7 },
+  { turno: '2', combustivel: 'S10',  litros: 11100.342, liquido: 71259.65, itens: 72,  cupons: 70 },
+  { turno: '2', combustivel: 'S500', litros: 6278.577,  liquido: 37471.58, itens: 58,  cupons: 55 },
+  { turno: '2', combustivel: 'GC',   litros: 3132.682,  liquido: 19534.34, itens: 235, cupons: 210 },
+  { turno: '2', combustivel: 'ET',   litros: 822.027,   liquido: 3498.89,  itens: 52,  cupons: 50 },
+  { turno: '3', combustivel: 'S10',  litros: 2558.483,  liquido: 16545.14, itens: 25,  cupons: 25 },
+  { turno: '3', combustivel: 'S500', litros: 2415.863,  liquido: 14470.97, itens: 21,  cupons: 21 },
+  { turno: '3', combustivel: 'GC',   litros: 1100.0,    liquido: 7000.00,  itens: 70,  cupons: 65 },
+  { turno: '3', combustivel: 'ET',   litros: 300.0,     liquido: 1622.52,  itens: 22,  cupons: 20 },
+];
+function somaTurno(t, campo) {
+  return TC.filter(function (r) { return r.turno === t; })
+           .reduce(function (a, r) { return a + r[campo]; }, 0);
+}
+var POR_TURNO = ['1', '2', '3'].map(function (t) {
+  return { chave: t, rotulo: t,
+           litros: Math.round(somaTurno(t, 'litros') * 1000) / 1000,
+           liquido: Math.round(somaTurno(t, 'liquido') * 100) / 100,
+           itens: somaTurno(t, 'itens'),
+           cupons_aprox: somaTurno(t, 'cupons'),
+           cupons_exato: false, pct_liquido: null };
+});
+var RESP = {
+  success: true, tem_dado: true,
+  consulta: { modo: 'dia', data: '2026-09-22', de: '2026-09-22',
+              posto_id: 'x', posto_nome: 'P. BERNARDO' },
+  dia: { cupons_aprox: 560, abastecimentos: 597, litros: 33309.229,
+         litros_por_abastecimento: 55.8, venda_total: 210156.33,
+         liquido_combustivel: 206156.33, produtos_rs: 4000,
+         rs_por_abastecimento: 352.02, combustiveis: 4 },
+  sinais: [],
+  por_combustivel: [
+    { rotulo: 'DIESEL S-10', codigo: 'S10', litros: 17393.6, liquido: 111673.17, rs_litro: 6.42, itens: 115, pct_liquido: 54.2 },
+    { rotulo: 'DIESEL S-500', codigo: 'S500', litros: 10214.2, liquido: 61001.39, rs_litro: 5.97, itens: 85, pct_liquido: 29.6 },
+    { rotulo: 'GASOLINA COMUM', codigo: 'GC', litros: 4406.5, liquido: 27618.92, rs_litro: 6.27, itens: 316, pct_liquido: 13.4 },
+    { rotulo: 'ETANOL', codigo: 'ET', litros: 1294.9, liquido: 5862.85, rs_litro: 4.53, itens: 81, pct_liquido: 2.8 },
+  ],
+  por_turno: POR_TURNO,
+  por_turno_combustivel: TC,
+  // O formato é o que o mvBlocoPagamento lê: `pagamento_disponivel` no topo
+  // da resposta (não dentro do objeto) e os campos ind_tipo/cod/pct_valor.
+  pagamento_disponivel: true,
+  por_pagamento: { formas: [
+      { chave: 'CC|1|CARTAO CREDITO', ind_tipo: 'CC', cod: '1', rotulo: 'CARTAO CREDITO',
+        valor: 80000, cupons: 200, pernas: 205, pct_valor: 38 },
+      { chave: 'DI|2|DINHEIRO', ind_tipo: 'DI', cod: '2', rotulo: 'DINHEIRO',
+        valor: 60000, cupons: 180, pernas: 180, pct_valor: 28 },
+    ], tipos: [
+      { ind_tipo: 'CC', rotulo: 'Crédito', valor: 80000, pct_valor: 38, formas: 1 },
+      { ind_tipo: 'DI', rotulo: 'Dinheiro', valor: 60000, pct_valor: 28, formas: 1 },
+    ], total: 140000, cupons_aprox: 380, pernas: 385, avisos: [] },
+  por_frentista: [
+    { chave: 'JOAO DA SILVA', rotulo: 'JOAO DA SILVA', litros: 12000, liquido: 70000, itens: 200, cupons_aprox: 190, cupons_exato: false, pct_liquido: 34 },
+    { chave: 'MARIA SOUZA', rotulo: 'MARIA SOUZA', litros: 9000, liquido: 55000, itens: 160, cupons_aprox: 150, cupons_exato: false, pct_liquido: 27 },
+  ],
+  por_canal: [
+    { chave: 'NORMAL', rotulo: 'Pista', litros: 30000, liquido: 190000, itens: 520, cupons_aprox: 500, cupons_exato: false, pct_liquido: 92 },
+    { chave: 'SOUTAG', rotulo: 'Soutag', litros: 3309, liquido: 20156, itens: 77, cupons_aprox: 60, cupons_exato: false, pct_liquido: 8 },
+  ],
+};
+
+window.apiFetch = function (url) {
+  if (String(url).indexOf('/tecnox/movimentacao') === 0) {
+    return Promise.resolve(JSON.parse(JSON.stringify(RESP)));
+  }
+  return Promise.resolve({ success: true });
+};
+window.getUsuarioLogado = function () { return { perfil: 'ADM', ti: true, nome: 'HARNESS' }; };
+window.escapeHtml = window.escapeHtml || function (s) { return String(s == null ? '' : s); };
+
+var corpo = function () { return document.getElementById('mv-corpo'); };
+var chips = function () {
+  return Array.prototype.slice.call(corpo().querySelectorAll('.mv-chip'));
+};
+var chipDe = function (v) {
+  return chips().filter(function (c) { return c.getAttribute('data-turno') === v; })[0];
+};
+// Os cards, na ordem em que a tela monta: cupons, abastecimentos, litros,
+// venda líquida, ticket.
+var cards = function () {
+  return Array.prototype.slice.call(corpo().querySelectorAll('.mv-card')).map(function (c) {
+    return {
+      num: c.querySelector('.mv-card-num').textContent.trim(),
+      lbl: c.querySelector('.mv-card-lbl').textContent.trim(),
+      sub: (c.querySelector('.mv-card-sub') || {}).textContent || '',
+    };
+  });
+};
+function blocoPorTitulo(t) {
+  var bs = Array.prototype.slice.call(corpo().querySelectorAll('.mv-bloco'));
+  return bs.filter(function (b) { return b.textContent.indexOf(t) >= 0; })[0] || null;
+}
+// "R$ 34.753" -> 34753
+function soNum(txt) {
+  var d = String(txt).replace(/[^\d,-]/g, '').replace(/\./g, '').split(',')[0];
+  return Number(d);
+}
+
+(async function () {
+  try {
+    await js('/modulos/painel-ti/app.js');
+    await esperar(150);
+    // mvRender lê o _mvDado do módulo; o caminho de produção é o mvCarregar,
+    // mas ele depende dos selects da tela. Aqui entra pela porta que o próprio
+    // arquivo já expõe para o harness de render.
+    eh(typeof window.mvPintar === 'function' || typeof window.mvSetTurno === 'function',
+       'o painel-ti expõe o que o teste precisa',
+       [typeof window.mvPintar, typeof window.mvSetTurno].join(' / '));
+    window.mvPintar(RESP);
+    await esperar(200);
+
+    h3('1. Os chips saem dos turnos que EXISTEM');
+    nota('A numeração da TecnoX não é contínua (há dia com turnos 1, 2 e 4).');
+    nota('A tela não pode inventar um turno 3 vazio nem assumir cronologia.');
+    eh(chips().length === 4, '"Todos" + três turnos', String(chips().length), '4');
+    eh(chips()[0].textContent.trim() === 'Todos', '"Todos" é o primeiro',
+       chips()[0].textContent.trim());
+    eh(chips().map(function (c) { return c.textContent.trim(); }).join(' ') === 'Todos T1 T2 T3',
+       'e os rótulos são T1 T2 T3',
+       chips().map(function (c) { return c.textContent.trim(); }).join(' '));
+    eh(chips()[0].classList.contains('on'), '"Todos" começa ligado', chips()[0].className);
+    eh(getComputedStyle(chipDe('1')).backgroundColor !== 'rgba(0, 0, 0, 0)',
+       'os chips têm fundo pintado', getComputedStyle(chipDe('1')).backgroundColor);
+
+    h3('2. Sem filtro, a tela é a de sempre');
+    var c0 = cards();
+    eh(c0.length === 5, 'cinco cards', String(c0.length), '5');
+    eh(c0[3].num === 'R$ 210.156' || soNum(c0[3].num) === 210156,
+       'venda líquida do dia inteiro (comb + produtos)', c0[3].num);
+    eh(c0[3].sub.indexOf('prod') >= 0, 'e o sub diz que soma produto', c0[3].sub);
+    eh(!corpo().querySelector('.mv-turno-aviso'), 'sem a barra de turno');
+    eh(!corpo().querySelector('.mv-sem-turno'), 'e sem as marcas de "não filtrável"');
+
+    h3('3. Escolher o turno 1 recorta os cards');
+    chipDe('1').click();
+    await esperar(200);
+    var c1 = cards();
+    // Os números do P. BERNARDO 22/09, turno 1: 34.753,24 em 42 abastecimentos.
+    eh(soNum(c1[1].num) === 42, 'abastecimentos = 42', c1[1].num, '42');
+    eh(soNum(c1[3].num) === 34753, 'venda líquida = R$ 34.753', c1[3].num, 'R$ 34.753');
+    eh(c1[3].sub.indexOf('só combustível') >= 0,
+       'e o sub avisa que produto não entra na quebra por turno', c1[3].sub);
+    nota('É verdade do dado: as dimensões do rollup recebem item de');
+    nota('combustível; produto não entra em nenhuma delas.');
+    eh(soNum(c1[2].num) === 5601, 'litros = 5.601', c1[2].num, '5.601 L');
+    // ticket = 34753.24 / 42 = 827,46
+    eh(soNum(c1[4].num) === 827, 'ticket = R$ 827', c1[4].num, 'R$ 827');
+    eh(chipDe('1').classList.contains('on'), 'o chip do turno 1 fica ligado');
+    eh(!chips()[0].classList.contains('on'), 'e "Todos" apaga');
+
+    h3('4. A barra azul do turno');
+    var aviso = corpo().querySelector('.mv-turno-aviso');
+    eh(!!aviso, 'a barra apareceu', aviso ? 'sim' : 'NÃO');
+    var txt = aviso.textContent.replace(/\s+/g, ' ');
+    eh(/Turno 1/.test(txt), 'diz qual turno', txt.slice(0, 70));
+    eh(/Cupons: ~?42/.test(txt), 'com os cupons', txt);
+    eh(/Abastecimentos: 42/.test(txt), 'e os abastecimentos', txt);
+    eh(!!aviso.querySelector('.mv-turno-x'), 'e tem como voltar ao dia inteiro');
+
+    h3('5. O faturamento por combustível é o DO TURNO');
+    var bc = blocoPorTitulo('Faturamento por combustível');
+    eh(!!bc, 'o bloco existe');
+    var linhasC = Array.prototype.slice.call(bc.querySelectorAll('.mv-row'));
+    eh(linhasC.length === 4, 'quatro combustíveis no turno 1',
+       String(linhasC.length), '4');
+    var t1 = bc.textContent.replace(/\s+/g, ' ');
+    eh(/23\.868/.test(t1), 'com o S10 do turno (R$ 23.868)', t1.slice(0, 120));
+    eh(!/111\.673/.test(t1), 'e NÃO o S10 do dia (R$ 111.673)',
+       /111\.673/.test(t1) ? 'mostrou o do dia' : 'só o do turno');
+    // R$/L do turno = 23868.38 / 3734.82 = 6.391 — não o 6,42 do dia.
+    eh(/6[.,]391/.test(t1), 'o R$/L é recalculado do turno (6,391)', t1.slice(0, 200));
+
+    h3('6. As três quebras que o turno NÃO alcança dizem isso');
+    nota('O rollup agrega frentista, canal e pagamento SEM o turno dentro.');
+    nota('Mostrar o dia inteiro sob o rótulo "Turno 1" faria alguém anotar o');
+    nota('frentista errado — some da tela é melhor que errado na tela.');
+    ['Por forma de pagamento', 'Por frentista', 'Por canal'].forEach(function (t) {
+      var b = blocoPorTitulo(t);
+      eh(!!b && !!b.querySelector('.mv-sem-turno'), t + ': avisa que não filtra',
+         b && b.querySelector('.mv-sem-turno')
+           ? b.querySelector('.mv-sem-turno').textContent.replace(/\s+/g, ' ').slice(0, 55)
+           : '(sem aviso)');
+    });
+
+    h3('7. Trocar de turno troca o recorte');
+    chipDe('2').click();
+    await esperar(200);
+    var c2 = cards();
+    eh(soNum(c2[1].num) === 417, 'turno 2: 417 abastecimentos', c2[1].num, '417');
+    eh(soNum(c2[3].num) === 131764, 'e R$ 131.764', c2[3].num, 'R$ 131.764');
+    eh(/Turno 2/.test(corpo().querySelector('.mv-turno-aviso').textContent),
+       'a barra acompanhou');
+
+    h3('8. "Todos" devolve o dia inteiro');
+    chips()[0].click();
+    await esperar(200);
+    var cf = cards();
+    eh(soNum(cf[3].num) === 210156, 'venda volta a ser a do dia', cf[3].num);
+    eh(!corpo().querySelector('.mv-turno-aviso'), 'a barra some');
+    eh(!corpo().querySelector('.mv-sem-turno'), 'as marcas somem');
+    var bcf = blocoPorTitulo('Faturamento por combustível');
+    eh(/111\.673/.test(bcf.textContent.replace(/\s+/g, ' ')),
+       'e o combustível volta ao do dia');
+
+    h3('9. A invariante do dado');
+    // Se o cruzamento não somar o por_turno, o card e o bloco discordariam
+    // entre si na mesma tela — e o culpado seria o rollup, não a tela.
+    var ruins = POR_TURNO.filter(function (t) {
+      return Math.abs(somaTurno(t.chave, 'liquido') - t.liquido) > 0.05;
+    });
+    eh(ruins.length === 0, 'o cruzamento turno×combustível soma o por_turno',
+       ruins.map(function (t) { return 'T' + t.chave; }).join(',') || 'os três fecham');
+    nota('Conferido também contra o banco real: P. BERNARDO 22/09, turnos 1, 2');
+    nota('e 3 — 34.753,24 / 131.764,46 / 39.638,63, batendo centavo a centavo.');
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — filtro por turno';
+})();
+</script>

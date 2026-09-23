@@ -732,3 +732,52 @@
 @media (max-width: 480px) {
   .ti-it-kpis { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ════════ FILTRO POR TURNO (Movimentação do dia) ════════
+   Azul #185FA5, como pedido — a mesma família do chip de bandeira Vibra da
+   Comparação. Fica separado dos chips de categoria de pagamento (.mv-tipo),
+   que são de outra natureza: aqueles marcam um agrupamento da lista, estes
+   RECORTAM a tela inteira. */
+.mv-chips {
+  display: flex; align-items: center; flex-wrap: wrap; gap: .4rem;
+  margin: .1rem 0 .7rem;
+}
+.mv-chips-rot {
+  font: 700 .6rem var(--mono); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text3); margin-right: .2rem;
+}
+.mv-chip {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 999px;
+  color: var(--text2); font: 700 .68rem var(--mono);
+  padding: 5px 12px; cursor: pointer; white-space: nowrap;
+}
+.mv-chip:hover { border-color: #185FA5; color: var(--text); }
+/* O chip LIGADO é o azul cheio: ele muda a tela inteira, e um contorno
+   discreto não é sinal suficiente para um recorte desse tamanho. */
+.mv-chip.on { background: #185FA5; border-color: #185FA5; color: #fff; }
+
+/* A barra do turno escolhido. Some no modo "Todos" — ela existe para
+   responder "por que os números mudaram", e sem filtro não há pergunta. */
+.mv-turno-aviso {
+  display: flex; align-items: center; flex-wrap: wrap; gap: .5rem;
+  background: rgba(24, 95, 165, .16); border: 1px solid #185FA5;
+  border-radius: 10px; padding: .55rem .85rem; margin-bottom: .8rem;
+  font: .72rem var(--mono); color: var(--text);
+}
+.mv-turno-aviso b { color: #6fb3f0; }
+.mv-turno-x {
+  margin-left: auto; background: transparent; border: 1px solid #185FA5;
+  border-radius: 7px; color: #6fb3f0; font: 700 .66rem var(--mono);
+  padding: 3px 10px; cursor: pointer;
+}
+.mv-turno-x:hover { background: rgba(24, 95, 165, .25); }
+
+/* A marca das quebras que o turno NÃO alcança (pagamento, frentista, canal).
+   Cinza e sem cor de alerta de propósito: não é erro, é limite do dado — o
+   rollup agrega essas dimensões sem o turno dentro. Dizer isso é melhor que
+   mostrar o dia inteiro sob um rótulo de turno. */
+.mv-sem-turno {
+  font: .66rem var(--mono); color: var(--text3);
+  background: var(--surface2); border: 1px dashed var(--border);
+  border-radius: 8px; padding: .45rem .7rem; margin-bottom: .6rem;
+}

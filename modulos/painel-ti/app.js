@@ -1240,6 +1240,12 @@ async function mvCarregar() {
   mvMsg('', '');
   el.innerHTML = '<div class="empty-state">Carregando…</div>';
   try {
+    // O TURNO ESCOLHIDO NÃO SOBREVIVE À TROCA DE POSTO OU DATA: "turno 2" do
+    // P. BERNARDO de ontem não é o mesmo evento que o "turno 2" de outro
+    // posto hoje — e o dia seguinte pode nem ter turno 2. Manter a seleção
+    // mostraria um recorte que a pessoa não pediu, ou um chip aceso sem
+    // dado atrás.
+    _mvTurno = '';
     _mvDado = await apiFetch('/tecnox/movimentacao?posto_id=' + encodeURIComponent(posto_id) + qs);
     mvRender();
   } catch (err) {
@@ -1250,6 +1256,92 @@ async function mvCarregar() {
     _mvCarregando = false;
   }
 }
+
+// ════════════════════════════════════════════════════════════════
+// FILTRO POR TURNO
+//
+// O QUE DÁ PARA FILTRAR, E POR QUÊ SÓ ISSO. Cada dimensão de
+// tecnox_venda_dim_dia é agregada INDEPENDENTE: a linha de TURNO tem turno +
+// combustível, a de FRENTISTA tem só o nome, a de CANAL só o canal, a de
+// PAGAMENTO só a forma. Não existe, no rollup, o cruzamento turno×frentista,
+// turno×canal ou turno×pagamento — e não dá para deduzi-lo somando as
+// quebras.
+//
+// Então o filtro alcança os CARDS e o FATURAMENTO POR COMBUSTÍVEL (que vêm do
+// `por_turno_combustivel` que a rota passou a devolver, do mesmo dado que já
+// estava na tabela), e as outras três quebras dizem que não são filtráveis.
+//
+// MOSTRAR O DIA INTEIRO SOB UM RÓTULO DE TURNO SERIA MENTIR NA TELA — alguém
+// leria "Turno 2" e anotaria o frentista errado. Some da tela é melhor que
+// errado na tela.
+//
+// Para destravá-las, o rollup precisaria emitir uma dimensão cruzada (ex.:
+// chave 'TURNO|FRENTISTA'), o que mexe no CHECK de tecnox_venda_dim_dia e
+// pede backfill dos dias já coletados.
+let _mvTurno = '';          // '' = Todos; senão a chave do turno
+
+// A venda do turno é SÓ COMBUSTÍVEL. As dimensões recebem item de
+// combustível (ver addDim no rollup-vendas.js); produto não entra em nenhuma.
+// Por isso o card de venda do turno não soma produtos — e a tela diz isso.
+function mvTurnoLinhas(d) {
+  if (!_mvTurno) return [];
+  return (d.por_turno_combustivel || []).filter(r => String(r.turno) === _mvTurno);
+}
+function mvTurnoAtual(d) {
+  return (d.por_turno || []).find(t => String(t.chave) === _mvTurno) || null;
+}
+
+// Os chips. Saem do por_turno — só os turnos que EXISTEM no dia/período, na
+// ordem que a rota já definiu (número antes de não-número; ela não inventa
+// turno que não houve nem assume cronologia).
+function mvChipsTurno(d) {
+  const turnos = d.por_turno || [];
+  if (!turnos.length) return '';
+  const chip = (valor, rotulo, titulo) =>
+    '<button type="button" class="mv-chip' + (_mvTurno === valor ? ' on' : '') + '"' +
+      ' data-turno="' + escapeHtml(valor) + '" onclick="mvSetTurno(\'' +
+      escapeHtml(String(valor).replace(/'/g, '')) + '\')"' +
+      (titulo ? ' title="' + escapeHtml(titulo) + '"' : '') +
+      ' aria-pressed="' + (_mvTurno === valor ? 'true' : 'false') + '">' +
+      escapeHtml(rotulo) + '</button>';
+  return '<div class="mv-chips" id="mv-chips">' +
+    '<span class="mv-chips-rot">Turno</span>' +
+    chip('', 'Todos', 'Sem filtro — o dia inteiro') +
+    turnos.map(t => chip(String(t.chave), 'T' + t.chave,
+      'R$ ' + mvInt(t.liquido) + ' · ' + mvInt(t.itens) + ' abastecimentos')).join('') +
+  '</div>';
+}
+
+// A barra azul do turno escolhido. `cupons_aprox` vem com til porque o rollup
+// conta cupom distinto POR COMBUSTÍVEL: um cupom de GC+ET conta duas vezes.
+// É a mesma ressalva do card de cupons do dia, e some quando o turno tocou um
+// combustível só.
+function mvAvisoTurno(d) {
+  if (!_mvTurno) return '';
+  const t = mvTurnoAtual(d);
+  if (!t) return '';
+  const cup = t.cupons_exato ? mvInt(t.cupons_aprox) : '~' + mvInt(t.cupons_aprox);
+  return '<div class="mv-turno-aviso">' +
+    '<b>Turno ' + escapeHtml(t.chave) + '</b> — mostrando apenas este turno. ' +
+    'Cupons: ' + cup + ' · Abastecimentos: ' + mvInt(t.itens) +
+    '<button type="button" class="mv-turno-x" onclick="mvSetTurno(\'\')">' +
+    'ver o dia inteiro</button></div>';
+}
+
+// Marca de quebra que o turno não alcança. Some no modo "Todos".
+function mvNaoFiltravel() {
+  return _mvTurno
+    ? '<div class="mv-sem-turno">Sem recorte por turno — o rollup agrega esta ' +
+      'quebra separada, sem o turno dentro. Os números abaixo são do dia inteiro.</div>'
+    : '';
+}
+
+window.mvSetTurno = function (v) {
+  const novo = String(v == null ? '' : v);
+  if (novo === _mvTurno) return;
+  _mvTurno = novo;
+  mvRender();
+};
 
 function mvRender() {
   const el = document.getElementById('mv-corpo'); if (!el) return;
@@ -1284,7 +1376,8 @@ function mvRender() {
         : '')
       : '') + '</div>';
 
-  el.innerHTML = escopo + mvSinais(d) + mvCards(d) + mvBlocoComb(d) + mvBlocoTurno(d) +
+  el.innerHTML = escopo + mvChipsTurno(d) + mvAvisoTurno(d) +
+                 mvSinais(d) + mvCards(d) + mvBlocoComb(d) + mvBlocoTurno(d) +
                  mvBlocoPagamento(d) + mvBlocoFrentista(d) + mvBlocoCanal(d);
 }
 
@@ -1362,21 +1455,48 @@ function mvDataBR(iso) {
 // (exato) para a diferença entre os dois ficar visível em vez de virar
 // pergunta. Ver o bloco de contagem em GET /tecnox/movimentacao.
 function mvCards(d) {
-  const dia = d.dia;
+  // COM TURNO ESCOLHIDO, os cinco cards falam do turno. Os números saem do
+  // `por_turno` (litros, líquido, itens, cupons) e do cruzamento por
+  // combustível — não há nada a recalcular, só a escolher a fonte.
+  //
+  // O QUE MUDA DE SIGNIFICADO, e a tela diz: a venda do turno é SÓ
+  // COMBUSTÍVEL. As dimensões do rollup recebem item de combustível; produto
+  // não entra em nenhuma delas. No dia inteiro o card soma comb + produtos;
+  // no turno não há produto para somar.
+  const t = mvTurnoAtual(d);
+  const dia = t ? {
+    cupons_aprox: t.cupons_aprox,
+    cupons_exato: t.cupons_exato,
+    abastecimentos: t.itens,
+    litros: t.litros,
+    litros_por_abastecimento: t.itens > 0 ? t.litros / t.itens : 0,
+    venda_total: t.liquido,
+    liquido_combustivel: t.liquido,
+    produtos_rs: null,
+    rs_por_abastecimento: t.itens > 0 ? t.liquido / t.itens : null,
+  } : d.dia;
   const card = (num, lbl, sub, cls) =>
     '<div class="mv-card"><div class="mv-card-num' + (cls ? ' ' + cls : '') + '">' + num + '</div>' +
     '<div class="mv-card-lbl">' + escapeHtml(lbl) + '</div>' +
     (sub ? '<div class="mv-card-sub">' + escapeHtml(sub) + '</div>' : '') + '</div>';
 
-  const cupons = dia.cupons_aprox == null
-    ? card('—', 'cupons', 'sem forma de pgto no dia')
-    : card('~' + mvInt(dia.cupons_aprox), 'cupons', 'aprox. · soma por forma', 'aprox');
+  // No TURNO a contagem de cupons vem da própria dimensão, e o til só
+  // aparece quando o turno tocou mais de um combustível (o mesmo
+  // `cupons_exato` que o bloco Por turno já usa).
+  const cupons = t
+    ? (t.cupons_exato
+        ? card(mvInt(dia.cupons_aprox), 'cupons', 'do turno · um combustível só')
+        : card('~' + mvInt(dia.cupons_aprox), 'cupons', 'aprox. · turno com vários combustíveis', 'aprox'))
+    : (dia.cupons_aprox == null
+        ? card('—', 'cupons', 'sem forma de pgto no dia')
+        : card('~' + mvInt(dia.cupons_aprox), 'cupons', 'aprox. · soma por forma', 'aprox'));
 
   const cards = cupons +
     card(mvInt(dia.abastecimentos), 'abastecimentos', 'itens de combustível') +
     card(mvInt(dia.litros) + ' L', 'litros', mvInt(dia.litros_por_abastecimento) + ' L por abast.') +
     card(mvBRL0(dia.venda_total), 'venda líquida',
-         'comb ' + mvBRL0(dia.liquido_combustivel) + ' + prod ' + mvBRL0(dia.produtos_rs)) +
+         t ? 'só combustível — produto não entra na quebra por turno'
+           : 'comb ' + mvBRL0(dia.liquido_combustivel) + ' + prod ' + mvBRL0(dia.produtos_rs)) +
     card(txBRL(dia.rs_por_abastecimento), 'R$ / abast.', 'ticket médio');
 
   // A nota explica o til UMA vez, aqui. O card sozinho não ensina por que o
@@ -1439,6 +1559,25 @@ function mvSinaisPeriodo(s) {
 
 // ── Faturamento por combustível ──
 function mvBlocoComb(d) {
+  // COM TURNO: as linhas vêm do cruzamento turno×combustível, que a rota
+  // passou a devolver. O R$/L é recalculado do próprio recorte (líquido ÷
+  // litros) — usar o do dia aqui mostraria o preço médio de outro conjunto de
+  // abastecimentos.
+  const doTurno = mvTurnoLinhas(d);
+  if (doTurno.length) {
+    const total = doTurno.reduce((a, r) => a + r.liquido, 0);
+    const linhasT = doTurno.map(c => mvRow(c.combustivel, null, [
+      mvMet(mvInt(c.litros), 'L'),
+      mvMet(mvBRL0(c.liquido), '', 'rs'),
+      mvMet(c.litros > 0 ? (c.liquido / c.litros).toFixed(3) : '—', 'R$/L'),
+      mvMet(mvInt(c.itens), 'ab'),
+      mvMet(total > 0 ? mvPct(c.liquido / total * 100) : '—', ''),
+    ], total > 0 ? c.liquido / total * 100 : null)).join('');
+    return mvBloco('Faturamento por combustível',
+      doTurno.length + ' no turno ' + d.por_turno.find(t => String(t.chave) === _mvTurno).chave,
+      'L = litros · R$/L = líquido ÷ litros DESTE turno · ab = abastecimentos · % do líquido do turno',
+      linhasT);
+  }
   const linhas = d.por_combustivel.map(c => mvRow(c.rotulo, c.codigo, [
     mvMet(mvInt(c.litros), 'L'),
     mvMet(mvBRL0(c.liquido), '', 'rs'),
@@ -1532,7 +1671,7 @@ function mvBlocoPagamento(d) {
   return mvBloco('Por forma de pagamento', p.formas.length + ' formas · ' + p.tipos.length + ' categorias',
     'Sem coluna de litros: pagamento paga o cupom inteiro e o rollup <b>não rateia litro</b> entre as pernas. ' +
     'cup = cupons que usaram a forma (exato) · pernas = nº de pagamentos',
-    '<div class="mv-tipos">' + chips + '</div>' + linhas, avisos.join(''));
+    mvNaoFiltravel() + '<div class="mv-tipos">' + chips + '</div>' + linhas, avisos.join(''));
 }
 
 // ── Quebra por frentista ──
@@ -1576,7 +1715,7 @@ function mvBlocoFrentista(d) {
     : '';
   return mvBloco('Por frentista', todos.length + ' frentistas',
     'ab = abastecimentos · cup = cupons (<b>~</b> = aproximado) · % do líquido de combustível',
-    linhas, mais + nota);
+    mvNaoFiltravel() + linhas, mais + nota);
 }
 
 // ── Quebra por canal ──
@@ -1600,7 +1739,7 @@ function mvBlocoCanal(d) {
     'são forma de pagamento, e estão na quebra acima.</div>';
   return mvBloco('Por canal', d.por_canal.length + ' canais',
     'ab = abastecimentos · cup = cupons (<b>~</b> = aproximado) · % do líquido de combustível',
-    linhas, nota);
+    mvNaoFiltravel() + linhas, nota);
 }
 
 function txRenderHistorico() {
