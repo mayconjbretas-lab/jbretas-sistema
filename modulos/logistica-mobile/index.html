@@ -15,6 +15,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/shared/jbretas-favicon-32.png">
 <link rel="stylesheet" href="../../shared/css/base.css?v=202609231200">
 <link rel="stylesheet" href="../../shared/css/matriz.css?v=202609231200">
+<link rel="stylesheet" href="../../shared/css/comparacao.css?v=202609231200">
 <link rel="stylesheet" href="logistica-mobile.css?v=202609231200">
 <!-- FABs da Medição (🧮 Calculadora / 📋 Pedido final) — shared, sem fork. -->
 <link rel="stylesheet" href="../../shared/css/medicao-fabs.css?v=202609231200">
@@ -84,6 +85,12 @@
       </div>
     </section>
     <section class="scr" id="s-precos">
+      <!-- Comparação de preços do dia (shared/js/comparacao-logistica.js).
+           MESMO id do desktop (#sl-comparacao) porque é o MESMO módulo: ele
+           procura esse id, se inicializa sozinho e recarrega de 5 em 5 min.
+           Fica ACIMA das solicitações, na mesma ordem do desktop — primeiro o
+           que os vizinhos estão cobrando, depois o que se vai pedir. -->
+      <div id="sl-comparacao"></div>
       <!-- Aba de aprovação de preços — renderizada por
            window.solicitacoesLogistica.montarEm() (shared/js/solicitacoes-logistica.js) -->
       <div id="mb-precos"></div>
@@ -154,6 +161,14 @@
 <script src="../../shared/js/mascara-litros.js?v=202609231200"></script>
 <script src="../../shared/js/grade-card.js?v=202609231200"></script>
 <script src="../../shared/js/pedido-editor.js?v=202609231200"></script>
+<!-- A comparação de preços, na mesma ordem do desktop: o mapa dos postos, o
+     serviço que lê as coletas, o card e, por último, a tela — que depende dos
+     três. Os mesmos arquivos, sem fork: o que muda no mobile é só a largura,
+     e disso quem cuida é o CSS. -->
+<script src="../../shared/js/postos-mapa.js?v=202609231200"></script>
+<script src="../../shared/js/coletas-service.js?v=202609231200"></script>
+<script src="../../shared/js/comparacao-card.js?v=202609231200"></script>
+<script src="../../shared/js/comparacao-logistica.js?v=202609231200"></script>
 <script src="sugestao-mobile.js?v=202609231200"></script>
 <script src="app.js?v=202609231200"></script>
 </body>

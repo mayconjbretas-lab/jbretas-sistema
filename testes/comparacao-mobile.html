@@ -1,0 +1,219 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparação de preços no mobile da Logística</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<style>
+  html, body { height: auto !important; overflow: visible !important; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  /* O palco imita a largura de um aparelho. O CSS de produção entra pelos
+     dois <link> abaixo, na MESMA ordem do index.html do mobile — a ordem
+     importa: as regras do logistica-mobile.css sobrepõem as do shared. */
+  #palco { border:1px dashed var(--border); margin:10px 0; width:375px; padding:8px; }
+</style>
+<link rel="stylesheet" href="/shared/css/comparacao.css">
+<link rel="stylesheet" href="/modulos/logistica-mobile/logistica-mobile.css">
+
+<div id="res">rodando…</div>
+<div id="palco"><div id="sl-comparacao"></div></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// O logistica-mobile não tinha a comparação de preços — ela existia só no
+// desktop. Não foi feito um fork: o mesmo shared/js/comparacao-logistica.js
+// monta nos dois, no MESMO id (#sl-comparacao), e o que muda no celular é
+// só o CSS.
+//
+//  1. O módulo de produção monta no host do mobile, com os cards, a busca,
+//     os chips de bandeira e os quatro cartões de resumo — o mesmo visual.
+//  2. A 375px a grade fica em UMA coluna.
+//  3. A busca e os chips continuam funcionando (os mesmos do desktop).
+//  4. Nada rola na horizontal.
+//  5. O index.html do mobile carrega os quatro arquivos na ordem certa e
+//     tem o host — é o que liga tudo, e é o que quebraria em silêncio.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function js(src) {
+  return new Promise(function (ok, er) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { er(new Error(src + ' não carregou')); };
+    document.head.appendChild(s);
+  });
+}
+function baixar(u) {
+  return new Promise(function (ok, er) {
+    var x = new XMLHttpRequest();
+    x.open('GET', u);
+    x.onload = function () { ok(x.responseText); };
+    x.onerror = function () { er(new Error(u + ' não carregou')); };
+    x.send();
+  });
+}
+
+// ── A fonte, dublada no ponto certo ─────────────────────────────
+// buscarComparacaoDoDia é o que o coletas-service expõe; trocá-la depois de
+// carregar o arquivo real deixa o resto do caminho (card, grade, filtros)
+// exatamente como em produção.
+function dado(gc, concs) {
+  return {
+    proprio: { GC: gc, GA: gc + 0.30, ET: 4.59, S10: null, S500: null,
+               foto: null, hora: '08:00:00' },
+    proprioDesatualizado: false, diferencial_ga: 0.30,
+    concorrentes: concs.map(function (c, i) {
+      return { nome: c, desatualizado: false, registroOntem: null,
+               registro: { GC: gc + (i ? 0.10 : -0.10), GA: null, ET: null,
+                           S10: null, S500: null, foto: null, hora: '08:10' } };
+    }),
+  };
+}
+var FALSO = {
+  'ARAPONGA': dado(6.19, ['ALAMO', 'TREVINHO']),
+  'AVIVA':    dado(6.29, ['SHELL CENTRO']),
+  'BRUNA':    dado(6.09, ['POSTO X', 'POSTO Y']),
+};
+var POSTOS_DB = [
+  { nome: 'P. ARAPONGA', bandeira: 'IPIRANGA' },
+  { nome: 'P. AVIVA',    bandeira: 'VIBRA' },
+  { nome: 'P. BRUNA',    bandeira: 'IPIRANGA' },
+];
+window.apiFetch = function (url) {
+  if (String(url).indexOf('/postos') === 0) {
+    return Promise.resolve({ success: true, postos: POSTOS_DB });
+  }
+  return Promise.resolve({ success: true, linhas: [] });
+};
+window.getUsuarioLogado = function () { return { perfil: 'LOGISTICA' }; };
+
+var host = function () { return document.getElementById('sl-comparacao'); };
+var cards = function () {
+  return Array.prototype.slice.call(host().querySelectorAll('.cl-card'));
+};
+var visiveis = function () {
+  return cards().filter(function (c) { return !c.classList.contains('cl-oculto'); });
+};
+
+(async function () {
+  try {
+    // ── 5. o index.html do mobile ──
+    // Feito ANTES de tudo: é a ligação que faz a tela existir no aparelho, e
+    // é a que some sem ninguém perceber (o resto continua funcionando).
+    h3('5. O index.html do mobile carrega a comparação');
+    var html = await baixar('/modulos/logistica-mobile/index.html');
+    eh(/id="sl-comparacao"/.test(html), 'tem o host #sl-comparacao');
+    var ordem = ['postos-mapa.js', 'coletas-service.js', 'comparacao-card.js',
+                 'comparacao-logistica.js'];
+    // Só as tags <script src=>: o nome do arquivo aparece TAMBÉM no comentário
+    // que explica o host, e um indexOf cru acharia o comentário primeiro.
+    var pos = ordem.map(function (a) { return html.indexOf('<script src="../../shared/js/' + a); });
+    eh(pos.every(function (p) { return p > 0; }), 'carrega os quatro arquivos',
+       ordem.filter(function (a, i) { return pos[i] < 0; }).join(', ') || 'todos');
+    eh(pos[0] < pos[1] && pos[1] < pos[2] && pos[2] < pos[3],
+       'na ordem certa (a tela depende dos três anteriores)', pos.join(' < '));
+    eh(/comparacao\.css/.test(html), 'e o CSS da comparação');
+    eh(html.indexOf('id="sl-comparacao"') < html.indexOf('id="mb-precos"'),
+       'o host fica ACIMA das solicitações, como no desktop');
+
+    // ── monta com o módulo de produção ──
+    await js('/shared/js/postos-mapa.js');
+    await js('/shared/js/coletas-service.js');
+    await js('/shared/js/comparacao-card.js');
+    window.buscarComparacaoDoDia = function () { return Promise.resolve(FALSO); };
+    window.cmpAplicarRevisoes = function (c) { return Promise.resolve(c); };
+    await js('/shared/js/comparacao-logistica.js');
+    await esperar(400);
+
+    h3('1. O mesmo visual do desktop, montado pelo mesmo módulo');
+    // A GRADE MOSTRA A REDE INTEIRA, não só quem tem coleta: é o
+    // comportamento do módulo desde que os 37 postos passaram a virar card
+    // (quem não tem dado diz "sem coleta no período"). O mobile herda isso
+    // junto, porque é o mesmo arquivo.
+    eh(cards().length === MAP_POSTOS.length, 'um card por posto da rede',
+       String(cards().length), String(MAP_POSTOS.length));
+    var comDado = cards().filter(function (c) { return !!c.querySelector('.cl-tab'); });
+    eh(comDado.length === 3, 'e os três com coleta trazem a tabela',
+       String(comDado.length), '3');
+    eh(!!host().querySelector('[data-busca]'), 'campo de busca');
+    var chips = Array.prototype.slice.call(host().querySelectorAll('[data-chip]'))
+      .map(function (c) { return c.textContent.trim(); });
+    eh(chips.length >= 3, 'chips de bandeira', chips.join(' · '));
+    eh(host().querySelectorAll('.cl-kpi').length === 4, 'os quatro cartões de resumo',
+       String(host().querySelectorAll('.cl-kpi').length), '4');
+    eh(!!host().querySelector('.cl-tab'), 'e a tabela dentro do card');
+    eh(/Sem coleta no per/.test(host().textContent),
+       'e quem não tem coleta diz isso, em vez de sumir');
+
+    h3('2. A 375px, UMA coluna');
+    var rail = host().querySelector('.cl-rail');
+    var cols = getComputedStyle(rail).gridTemplateColumns.split(' ').length;
+    eh(cols === 1, 'uma coluna só', String(cols), '1');
+    nota('O minmax(340px) do shared já daria uma, mas num aparelho de 400px');
+    nota('ela cabe justa — cravar 1fr tira a chance de a grade decidir por duas.');
+
+    h3('3. Busca e chips continuam funcionando');
+    var inp = host().querySelector('[data-busca]');
+    inp.value = 'aviva';
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    await esperar(60);
+    eh(visiveis().length === 1, 'a busca filtra', String(visiveis().length), '1');
+    eh(visiveis()[0].textContent.indexOf('P. AVIVA') >= 0, 'o card certo',
+       visiveis()[0].querySelector('.cl-card-nome').textContent.trim());
+    inp.value = '';
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    await esperar(60);
+    var chipIp = host().querySelector('[data-chip="ipiranga"]');
+    eh(!!chipIp, 'o chip Ipiranga existe', chips.join(' · '));
+    chipIp.click();
+    await esperar(60);
+    eh(visiveis().length === 2, 'o chip filtra', String(visiveis().length), '2');
+    host().querySelector('[data-chip=""]').click();
+    await esperar(60);
+    eh(visiveis().length === MAP_POSTOS.length, '"Todos" volta a mostrar tudo',
+       String(visiveis().length), String(MAP_POSTOS.length));
+
+    h3('4. Nada rola na horizontal');
+    var palco = document.getElementById('palco');
+    eh(rail.scrollWidth <= rail.clientWidth + 1, 'a grade cabe na largura',
+       rail.scrollWidth + ' <= ' + rail.clientWidth);
+    eh(host().scrollWidth <= host().clientWidth + 1, 'e a seção também',
+       host().scrollWidth + ' <= ' + host().clientWidth);
+    var tab = host().querySelector('.cl-tab');
+    eh(tab.scrollWidth <= tab.parentElement.clientWidth + 1,
+       'a tabela do card não estoura o card',
+       tab.scrollWidth + ' <= ' + tab.parentElement.clientWidth);
+    // 320px é o aparelho mais estreito que ainda se vê em uso.
+    palco.style.width = '320px';
+    await esperar(80);
+    eh(host().scrollWidth <= host().clientWidth + 1, 'e a 320px continua cabendo',
+       host().scrollWidth + ' <= ' + host().clientWidth);
+    palco.style.width = '375px';
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — Comparação mobile';
+})();
+</script>

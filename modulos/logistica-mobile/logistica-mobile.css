@@ -442,3 +442,26 @@ body {
 .mbsug-delta { font-family: var(--mono); font-size: .6rem; font-weight: 700; white-space: nowrap; }
 .mbsug-delta.pos { color: var(--ok); }
 .mbsug-delta.neg { color: var(--danger); }
+
+/* ════════ COMPARAÇÃO DE PREÇOS NO MOBILE ════════
+   A tela é a MESMA do desktop (shared/js/comparacao-logistica.js) e o CSS
+   dela vem do shared/css/comparacao.css. Aqui só o que a largura exige.
+
+   UMA COLUNA, CRAVADA. A grade do shared é
+   `repeat(auto-fill, minmax(340px, 1fr))`, que já daria uma coluna em tela
+   estreita — mas num aparelho de 400px ela cabe justa, e o card da
+   comparação tem uma tabela de cinco colunas dentro. Cravar 1fr aqui tira a
+   chance de a grade decidir por duas e espremer a tabela.
+
+   O RESTO NÃO MUDA: busca, chips de bandeira, os quatro cartões de resumo e
+   os badges são os do desktop. Os cartões de resumo já são
+   `auto-fit, minmax(128px, 1fr)`, que vira dois e dois sozinho. */
+#sl-comparacao { padding: 0 0 .6rem; }
+#sl-comparacao .cl-rail { grid-template-columns: 1fr; }
+/* O campo de busca ocupa a linha inteira e os chips descem para a de baixo:
+   lado a lado num aparelho estreito sobra um campo de 90px, onde não cabe
+   nem "ARAPONGA". */
+#sl-comparacao .cl-busca { flex: 1 1 100%; }
+/* Alvo de toque: os chips do desktop têm 4px de altura de padding, que no
+   dedo vira um alvo de ~22px — abaixo do mínimo confortável. */
+#sl-comparacao .cl-chip { padding: 7px 12px; }

@@ -1,0 +1,216 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparação — lightbox contínuo entre postos</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/shared/css/comparacao.css">
+<style>
+  html, body { height: auto; overflow: visible; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:10px; margin:12px 0; }
+</style>
+
+<div id="res">rodando…</div>
+<div id="palco"><div id="sl-comparacao"></div></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// O lightbox das fotos navegava dentro do MESMO card: a última foto de um
+// posto voltava para a primeira dele, e quem confere a rua inteira tinha de
+// fechar, rolar e reabrir uma vez por posto.
+//
+//  1. A seta → atravessa os cards, na ORDEM DA TELA:
+//     posto A (nossa) → concorrentes de A → posto B (nossa) → …
+//  2. A seta ← volta na mesma sequência, e a volta é circular.
+//  3. A legenda diz DE QUE POSTO é a foto — sem isso, "ALAMO" não responde
+//     "vizinho de quem?".
+//  4. A ORDEM SEGUE A GRADE: filtrar os cards refaz a sequência, porque ela
+//     sai do DOM e não de uma lista guardada.
+//  5. Com UMA tira só na tela, volta a ser a navegação do card (o escopo é
+//     descoberto subindo o DOM, não cravado num seletor).
+//
+// O card e a tira são os de produção (shared/js/comparacao-card.js).
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  →  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function js(src) {
+  return new Promise(function (ok, er) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { er(new Error(src + ' não carregou')); };
+    document.head.appendChild(s);
+  });
+}
+window.apiFetch = function () { return Promise.resolve({ success: true, linhas: [] }); };
+window.getUsuarioLogado = function () { return { perfil: 'LOGISTICA' }; };
+
+// Três postos, cada um com a nossa foto e dois concorrentes.
+function dadoDe(nome, concs) {
+  return {
+    proprio: { GC: 6.19, GA: 6.49, ET: 4.59, S10: null, S500: null,
+               foto: 'https://x/' + nome + '-nossa.jpg', hora: '08:00:00' },
+    proprioDesatualizado: false, diferencial_ga: 0.30,
+    concorrentes: concs.map(function (c) {
+      return { nome: c, desatualizado: false, registroOntem: null,
+               registro: { GC: 6.09, GA: null, ET: null, S10: null, S500: null,
+                           foto: 'https://x/' + nome + '-' + c + '.jpg', hora: '08:1' } };
+    }),
+  };
+}
+var POSTOS = [
+  { k: 'ARAPONGA', ap: 'P. ARAPONGA', concs: ['ALAMO', 'TREVINHO'] },
+  { k: 'AVIVA',    ap: 'P. AVIVA',    concs: ['SHELL CENTRO', 'IPIRANGA SUL'] },
+  { k: 'BRUNA',    ap: 'P. BRUNA',    concs: ['POSTO X'] },
+];
+
+var lb = function () { return document.querySelector('.cmpf-lightbox'); };
+var legenda = function () {
+  var c = lb() && lb().querySelector('.cmpf-lb-fig figcaption');
+  return c ? c.textContent.trim() : '(sem lightbox)';
+};
+var srcAtual = function () {
+  var i = lb() && lb().querySelector('.cmpf-lb-fig img');
+  return i ? i.getAttribute('src') : '';
+};
+var fotos = function () {
+  return Array.prototype.slice.call(document.querySelectorAll('#palco .cmpf-fotos img'));
+};
+
+(async function () {
+  try {
+    await js('/shared/js/postos-mapa.js');
+    await js('/shared/js/comparacao-card.js');
+
+    // Monta a grade como a Logística monta: um .cl-card por posto, cada um
+    // com a tira de fotos do cmpFotosHtml de produção.
+    var host = document.getElementById('sl-comparacao');
+    host.innerHTML = '<div class="cl-rail">' + POSTOS.map(function (p) {
+      return '<div class="cl-card" data-posto="' + p.k + '">' +
+        '<div class="cl-card-hd"><span class="cl-card-nome">' + p.ap + '</span></div>' +
+        cmpFotosHtml({ k: p.k, ap: p.ap }, dadoDe(p.k, p.concs)) +
+      '</div>';
+    }).join('') + '</div>';
+    await esperar(120);
+
+    h3('0. A grade montou com as três tiras');
+    eh(document.querySelectorAll('#palco .cmpf-fotos').length === 3,
+       'três tiras de fotos', String(document.querySelectorAll('#palco .cmpf-fotos').length), '3');
+    eh(fotos().length === 8, 'oito fotos no total (3+3+2)', String(fotos().length), '8');
+    eh(fotos()[0].getAttribute('data-posto') === 'P. ARAPONGA',
+       'cada miniatura sabe de que card é', fotos()[0].getAttribute('data-posto'));
+    eh(fotos()[1].getAttribute('data-posto') === 'P. ARAPONGA',
+       'inclusive a do concorrente', fotos()[1].getAttribute('data-posto'));
+
+    h3('1. A seta → atravessa os cards, na ordem da tela');
+    nota('Era aqui que a última foto de um posto voltava para a primeira dele.');
+    fotos()[0].click();                     // abre na nossa do ARAPONGA
+    await esperar(120);
+    eh(!!lb(), 'o lightbox abriu');
+    var sequencia = [legenda()];
+    for (var i = 0; i < 7; i++) { cmpNavFoto(1); sequencia.push(legenda()); }
+    var esperada = [
+      'P. ARAPONGA', 'ALAMO', 'TREVINHO',
+      'P. AVIVA', 'SHELL CENTRO', 'IPIRANGA SUL',
+      'P. BRUNA', 'POSTO X',
+    ];
+    var ok = esperada.every(function (e, k) { return sequencia[k].indexOf(e) >= 0; });
+    eh(ok, 'a sequência percorre os três postos',
+       sequencia.map(function (x) { return x.split(' · ')[0]; }).join(' → '));
+    eh(sequencia[2].indexOf('TREVINHO') >= 0 && sequencia[3].indexOf('P. AVIVA') >= 0,
+       'do último concorrente de um posto vai para o NOSSO do próximo',
+       sequencia[2] + '  →  ' + sequencia[3]);
+
+    h3('2. A volta é circular, e a ← desanda a mesma sequência');
+    cmpNavFoto(1);
+    eh(legenda().indexOf('P. ARAPONGA') >= 0, 'depois da última, volta à primeira',
+       legenda());
+    cmpNavFoto(-1);
+    eh(legenda().indexOf('POSTO X') >= 0, 'e a ← volta para a última', legenda());
+    cmpNavFoto(-1);
+    eh(legenda().indexOf('P. BRUNA') >= 0, 'seguindo de trás para a frente', legenda());
+
+    h3('3. A legenda diz de que posto é a foto');
+    nota('"ALAMO" sozinho não responde "vizinho de quem?".');
+    cmpFecharFoto();
+    fotos()[1].click();                     // concorrente do ARAPONGA
+    await esperar(120);
+    eh(legenda().indexOf('P. ARAPONGA · ALAMO') === 0,
+       'concorrente: posto do card na frente', legenda(), 'P. ARAPONGA · ALAMO …');
+    cmpFecharFoto();
+    fotos()[0].click();
+    await esperar(120);
+    eh(legenda().indexOf('🏠 P. ARAPONGA') === 0,
+       'a NOSSA não repete o nome — a etiqueta já o traz', legenda());
+
+    h3('4. A ordem segue a grade: filtrar refaz a sequência');
+    // É o que a lista sair do DOM garante: esconder um card tira as fotos
+    // dele do percurso, sem ninguém sincronizar nada.
+    cmpFecharFoto();
+    document.querySelector('.cl-card[data-posto="AVIVA"]').style.display = 'none';
+    document.querySelector('.cl-card[data-posto="AVIVA"]')
+      .querySelectorAll('.cmpf-fotos').forEach(function (t) { t.remove(); });
+    await esperar(60);
+    fotos()[2].click();                     // TREVINHO, último do ARAPONGA
+    await esperar(120);
+    eh(legenda().indexOf('TREVINHO') >= 0, 'abriu na última do ARAPONGA', legenda());
+    cmpNavFoto(1);
+    eh(legenda().indexOf('P. BRUNA') >= 0,
+       'a próxima agora é a BRUNA — a AVIVA saiu do percurso', legenda());
+
+    h3('5. Com uma tira só, é a navegação do card');
+    // O escopo é descoberto subindo o DOM: sem um segundo card, ele para no
+    // body e a lista é a daquele card — o comportamento de antes.
+    cmpFecharFoto();
+    // A GRADE SAI DA TELA PRIMEIRO. "Uma tira só" é uma tela que tem uma tira
+    // só — deixar a grade montada e acrescentar um card ao lado é outra
+    // situação (duas listas na mesma página), que não existe no sistema e
+    // sobre a qual o código não promete nada.
+    document.getElementById('sl-comparacao').innerHTML = '';
+    await esperar(60);
+    var soUm = document.createElement('div');
+    soUm.id = 'palco-solo';
+    soUm.innerHTML = '<div class="cl-card">' +
+      cmpFotosHtml({ k: 'SOLO', ap: 'P. SOLO' }, dadoDe('SOLO', ['VIZINHO'])) + '</div>';
+    document.body.appendChild(soUm);
+    await esperar(60);
+    var imgsSolo = soUm.querySelectorAll('.cmpf-fotos img');
+    eh(imgsSolo.length === 2, 'o card solo tem duas fotos', String(imgsSolo.length), '2');
+    imgsSolo[0].click();
+    await esperar(120);
+    eh(legenda().indexOf('P. SOLO') >= 0, 'abriu na nossa', legenda());
+    cmpNavFoto(1);
+    eh(legenda().indexOf('VIZINHO') >= 0, 'anda para o concorrente', legenda());
+    cmpNavFoto(1);
+    eh(legenda().indexOf('P. SOLO') >= 0, 'e volta — não escapa para outro card',
+       legenda());
+    cmpFecharFoto();
+    soUm.remove();
+  } catch (e) {
+    falhas++;
+    linhas.push('<span class="bad">EXCEÇÃO</span> ' + hesc(e && e.message) + '\n' + hesc(e && e.stack));
+  }
+  linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                             : '<span class="ok">tudo passou</span>'));
+  pintar();
+  document.title = (falhas ? falhas + ' FALHA(S)' : 'TUDO PASSOU') + ' — Lightbox contínuo';
+})();
+</script>

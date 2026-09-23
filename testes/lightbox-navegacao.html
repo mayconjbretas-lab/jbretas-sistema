@@ -73,8 +73,16 @@ var DADO = {
     { nome: 'AUTO POSTO SANTA RITA', registro: { foto: F4, hora: '07:41:07' } },
   ],
 };
-// Card de UMA foto só: prova que a seta não aparece onde não há para onde ir.
-var DADO_SOLO = { proprio: { foto: F1, hora: '07:12:00' }, concorrentes: [] };
+// Card de UMA foto só. Ele existe para provar a travessia ENTRE cards: com a
+// navegação contínua, a última foto do 1º card leva à foto dele, e a dele
+// volta para a 1ª do 1º card.
+//
+// FOTO PRÓPRIA (F5), e não a F1 como antes: com a mesma URL nos dois cards
+// não dá para distinguir "deu a volta para o outro card" de "não saiu do
+// lugar" — os dois mostrariam F1.
+var F5 = foto(5, '#6a2b8a');
+var POSTO_SOLO = { k: 'solo', ap: 'P. SOLO' };
+var DADO_SOLO = { proprio: { foto: F5, hora: '09:05:00' }, concorrentes: [] };
 
 // ── helpers de interação ─────────────────────────────────────────
 function lb()      { return document.querySelector('.cmpf-lightbox'); }
@@ -84,7 +92,9 @@ function lbSrc()   { var i = lbImg(); return i ? i.getAttribute('src') : null; }
 function lbTexto() { var c = lbCap(); return c ? c.textContent : null; }
 function qualFoto(src) {
   return src === F1 ? 'foto 1 (própria)' : src === F2 ? 'foto 2' :
-         src === F3 ? 'foto 3' : src === F4 ? 'foto 4' : '(desconhecida: ' + String(src).slice(0, 24) + ')';
+         src === F3 ? 'foto 3' : src === F4 ? 'foto 4' :
+         src === F5 ? 'foto 5 (a do card solo)' :
+         '(desconhecida: ' + String(src).slice(0, 24) + ')';
 }
 function tecla(k) {
   // keydown no document: é onde o cmpAbrirFoto liga o listener.
@@ -95,11 +105,13 @@ function tecla(k) {
 var palco = document.getElementById('palco');
 palco.innerHTML =
   '<div class="cmpc-card" data-posto="araponga">' + cmpFotosHtml(POSTO, DADO) + '</div>' +
-  '<div class="cmpc-card" data-posto="solo">'     + cmpFotosHtml(POSTO, DADO_SOLO) + '</div>';
+  '<div class="cmpc-card" data-posto="solo">'     + cmpFotosHtml(POSTO_SOLO, DADO_SOLO) + '</div>';
 var tiras = palco.querySelectorAll('.cmpf-fotos');
 var minis = tiras[0].querySelectorAll('img');
 
 h3('0. A tira do card (código de produção)');
+nota('A navegação do lightbox ATRAVESSA os cards desde 23/09/2026: a ordem é');
+nota('a da tela, e a legenda passou a dizer de que posto é cada foto.');
 eh(tiras.length === 2, 'os dois cards montaram a faixa', tiras.length + ' faixas');
 eh(minis.length === 4, 'P. ARAPONGA tem 4 miniaturas (própria + 3)', minis.length);
 eh(minis[0].closest('figure').classList.contains('meu'), 'a 1ª é a PRÓPRIA (.meu)');
@@ -122,32 +134,55 @@ h3('1. Abrir a 2ª foto do P. ARAPONGA');
 minis[1].click();
 eh(!!lb(), 'lightbox abriu');
 eh(lbSrc() === F2, 'abriu NA 2ª foto (não na 1ª)', qualFoto(lbSrc()), 'foto 2');
-eh(lbTexto() === 'SKY 2 · coletado 07:20', 'legenda da 2ª', lbTexto());
+// O NOME DO POSTO DO CARD ENTRA NA LEGENDA. Com a navegação atravessando
+// cards, "SKY 2" sozinho não responde "vizinho de quem?" — e era a única
+// coisa que faltava para saber onde se está na sequência.
+eh(lbTexto() === 'ARAPONGA · SKY 2 · coletado 07:20', 'legenda da 2ª, com o posto do card',
+   lbTexto(), 'ARAPONGA · SKY 2 · coletado 07:20');
 eh(!!lb().querySelector('.cmpf-lb-nav.ant') && !!lb().querySelector('.cmpf-lb-nav.prox'),
    'as duas setas existem');
 
 h3('2. → vai à 3ª');
 tecla('ArrowRight');
 eh(lbSrc() === F3, 'seta direita avançou', qualFoto(lbSrc()), 'foto 3');
-eh(lbTexto() === 'PETROSUL · coletado 07:34', 'legenda acompanhou', lbTexto());
+eh(lbTexto() === 'ARAPONGA · PETROSUL · coletado 07:34', 'legenda acompanhou', lbTexto());
 
 h3('3. ← volta à 2ª');
 tecla('ArrowLeft');
 eh(lbSrc() === F2, 'seta esquerda voltou', qualFoto(lbSrc()), 'foto 2');
-eh(lbTexto() === 'SKY 2 · coletado 07:20', 'legenda voltou junto', lbTexto());
+eh(lbTexto() === 'ARAPONGA · SKY 2 · coletado 07:20', 'legenda voltou junto', lbTexto());
 
-h3('4. ← na 1ª dá a volta para a última (circular)');
+h3('4. A sequência ATRAVESSA os cards, e a volta é circular');
+// ════════ ISTO ERA O CONTRÁRIO ATÉ 23/09/2026 ════════
+// A navegação ficava dentro do MESMO card: da 1ª para trás caía na 4ª do
+// próprio ARAPONGA. Quem confere a rua toda tinha de fechar, rolar até o
+// próximo posto e abrir de novo, uma vez por posto. Agora o percurso é o da
+// TELA, na ordem dos cards.
 tecla('ArrowLeft');
 eh(lbSrc() === F1, 'chegou na 1ª, a própria', qualFoto(lbSrc()), 'foto 1');
 eh(lbTexto() === '🏠 ARAPONGA · coletado 07:12',
-   'e a própria mantém o 🏠 na legenda do lightbox', lbTexto());
+   'e a própria NÃO repete o nome — a etiqueta já o traz', lbTexto());
 tecla('ArrowLeft');
-eh(lbSrc() === F4, 'da 1ª para trás caiu na ÚLTIMA', qualFoto(lbSrc()), 'foto 4');
-eh(lbTexto() === 'AUTO POSTO SANTA RITA · coletado 07:41', 'legenda da última', lbTexto());
+eh(lbSrc() === F5, 'da 1ª para trás vai para a última foto da TELA (card solo)',
+   qualFoto(lbSrc()), 'foto 5 (a do card solo)');
+eh(lbTexto() === '🏠 P. SOLO · coletado 09:05', 'com a legenda do outro posto', lbTexto());
 tecla('ArrowRight');
-eh(lbSrc() === F1, 'e da última para frente volta à 1ª', qualFoto(lbSrc()), 'foto 1');
+eh(lbSrc() === F1, 'e dela para frente volta à 1ª do primeiro card',
+   qualFoto(lbSrc()), 'foto 1');
+// O caminho de ida: última do ARAPONGA → a do card solo.
+tecla('ArrowLeft'); tecla('ArrowRight');   // volta ao F1
+for (var _i = 0; _i < 3; _i++) tecla('ArrowRight');
+eh(lbSrc() === F4, 'andando para frente chega à última do ARAPONGA',
+   qualFoto(lbSrc()), 'foto 4');
+eh(lbTexto() === 'ARAPONGA · AUTO POSTO SANTA RITA · coletado 07:41',
+   'legenda da última do card', lbTexto());
+tecla('ArrowRight');
+eh(lbSrc() === F5, 'e a próxima é o NOSSO posto do card seguinte',
+   qualFoto(lbSrc()), 'foto 5 (a do card solo)');
+tecla('ArrowLeft'); tecla('ArrowLeft'); tecla('ArrowLeft'); tecla('ArrowLeft');
 
 h3('5. As setas do mouse fazem o mesmo');
+eh(lbSrc() === F1, '(partindo da 1ª)', qualFoto(lbSrc()), 'foto 1');
 lb().querySelector('.cmpf-lb-nav.prox').click();
 eh(lbSrc() === F2, 'clique em › avançou', qualFoto(lbSrc()), 'foto 2');
 eh(!!lb(), 'e NÃO fechou o lightbox');
@@ -167,14 +202,19 @@ eh(!lb(), 'lightbox fechou');
 tecla('ArrowRight');
 eh(!lb(), 'e a seta depois de fechado não reabre nada');
 
-h3('8. Foto única não ganha seta');
+h3('8. O card de UMA foto entra na sequência dos outros');
+// Antes ele abria sem seta nenhuma: a lista era a do próprio card, e com uma
+// foto não havia para onde ir. Agora a lista é a da TELA, então o card de uma
+// foto é só mais um ponto do percurso — que é justamente o que se quer de uma
+// navegação contínua.
 var solo = tiras[1].querySelectorAll('img');
 eh(solo.length === 1, 'o card solo tem 1 miniatura', solo.length);
 solo[0].click();
 eh(!!lb(), 'lightbox abriu');
-eh(!lb().querySelector('.cmpf-lb-nav'), 'nenhuma seta injetada');
+eh(lbSrc() === F5, 'na foto dele', qualFoto(lbSrc()), 'foto 5 (a do card solo)');
+eh(!!lb().querySelector('.cmpf-lb-nav'), 'COM setas, porque há outro card na tela');
 tecla('ArrowRight');
-eh(lbSrc() === F1, 'e a seta do teclado não muda nada', qualFoto(lbSrc()), 'foto 1');
+eh(lbSrc() === F1, 'e a seta leva ao primeiro card', qualFoto(lbSrc()), 'foto 1');
 tecla('Escape');
 
 h3('9. Fallback: chamada direta, sem tira de origem');
@@ -183,6 +223,8 @@ eh(!!lb(), 'abre mesmo sem 3º argumento (compatibilidade)');
 eh(lbSrc() === F3, 'mostra a foto pedida', qualFoto(lbSrc()), 'foto 3');
 eh(lbTexto() === 'SOLTA · coletado 09:00', 'com a legenda do 2º argumento', lbTexto());
 eh(!lb().querySelector('.cmpf-lb-nav'), 'e sem setas, porque não há lista');
+nota('Chamada direta não tem tira de origem: não há DOM de onde tirar o');
+nota('percurso, e uma seta que só desse voltas em si mesma seria promessa vazia.');
 tecla('Escape');
 
 linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'

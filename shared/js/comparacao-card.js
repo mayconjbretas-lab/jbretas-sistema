@@ -538,14 +538,19 @@ function cmpFlashCheck(k, f) {
   // saber que aquela coleta veio sem prova, não ver um buraco decorado.
   function cmpFotosHtml(posto, dado) {
     const itens = [];
+    // O NOME DO POSTO DO CARD vai em TODAS as miniaturas, inclusive nas dos
+    // concorrentes. Na tira ele é óbvio (a foto está dentro do card); no
+    // lightbox, que agora atravessa postos, é a única coisa que diz em que
+    // bloco se está — "ALAMO" sozinho não responde "vizinho de quem?".
+    const doCard = posto && posto.ap ? posto.ap : '';
     const fotoPropria = dado && dado.proprio && dado.proprio.foto;
     if (fotoPropria && fotoPropria !== '-') {
-      itens.push(mini(fotoPropria, '🏠 ' + posto.ap, posto.ap, dado.proprio.hora, true));
+      itens.push(mini(fotoPropria, '🏠 ' + posto.ap, posto.ap, dado.proprio.hora, true, doCard));
     }
     ((dado && dado.concorrentes) || []).forEach(c => {
       const f = c.registro && c.registro.foto;
       if (!f || f === '-') return;
-      itens.push(mini(f, c.nome, c.nome, c.registro.hora, false));
+      itens.push(mini(f, c.nome, c.nome, c.registro.hora, false, doCard));
     });
     if (!itens.length) {
       return '<div class="cmpf-fotos cmpf-vazia">Sem fotos nesta coleta</div>';
@@ -561,7 +566,7 @@ function cmpFlashCheck(k, f) {
   // onclick INLINE, e não delegação: é o mesmo padrão do lápis, e poupa
   // cada tela de ligar um listener no container certo. A aspa simples na
   // URL vira %27 antes de entrar no atributo (mesma defesa do csZoom).
-  function mini(url, etiqueta, nome, hora, ehMeu) {
+  function mini(url, etiqueta, nome, hora, ehMeu, postoDoCard) {
     // HH:MM, sem os segundos. O `hora` do GET /coletas vem 'HH:MM:SS' e o
     // ':00' do fim não diz nada a quem confere foto — só rouba largura na
     // legenda do lightbox, onde o nome do posto já é longo. slice e não
@@ -577,6 +582,7 @@ function cmpFlashCheck(k, f) {
     return '<figure class="' + (ehMeu ? 'meu' : 'conc') + '">' +
       '<img loading="lazy" src="' + at(url) + '" alt="' + at(etiqueta) + '"' +
         ' data-legenda="' + at(legendaLb) + '"' +
+        ' data-posto="' + at(postoDoCard || '') + '"' +
         ' onclick="cmpAbrirFoto(&#39;' + at(u) + '&#39;,&#39;' + at(legenda) + '&#39;,this)">' +
       '<figcaption>' + at(etiqueta) + '</figcaption>' +
     '</figure>';
@@ -588,19 +594,43 @@ function cmpFlashCheck(k, f) {
   // revisão de coleta. As SETAS também não fecham: são filhas do fundo, e o
   // handler trata a seta ANTES de testar o fundo.
   //
-  // Navegação dentro do MESMO card. A lista sai da .cmpf-fotos de origem — o
-  // DOM que a própria tela já montou — e não de um parâmetro novo: assim
-  // painel-adm, admin e Logística ganham as setas sem uma linha a mais em
-  // cada um, porque os três montam a tira pelo mesmo cmpFotosHtml, que é quem
-  // passa o elemento clicado. Sem tira (chamada direta, sem 3º argumento) cai
-  // em lista de 1 e nenhuma seta aparece.
+  // ════════ A NAVEGAÇÃO ATRAVESSA OS CARDS ════════
+  // Era dentro do MESMO card: chegar na última foto de um posto e a seta
+  // voltava para a primeira dele. Quem confere a rua inteira tinha de fechar,
+  // rolar até o próximo posto e abrir de novo, uma vez por posto.
+  //
+  // Agora a sequência é a da TELA: Araponga (nossa) → concorrente → …→ Aviva
+  // (nossa) → concorrente → … A ordem sai do DOM, que já está na ordem dos
+  // cards, então ordenar a grade (alfabética, por bandeira, filtrada) reordena
+  // o lightbox junto, sem ninguém sincronizar nada.
+  //
+  // O ESCOPO É DESCOBERTO, NÃO CRAVADO: sobe do card até o primeiro ancestral
+  // que contém MAIS DE UMA tira. Assim o mesmo código serve a .cl-rail da
+  // Logística, à grade do painel-adm e à do admin, sem conhecer o seletor de
+  // nenhum. Se só houver uma tira na tela (card aberto sozinho, mobile de um
+  // posto), o laço chega ao body e a lista é a daquele card — o comportamento
+  // de antes.
+  //
+  // A LISTA É TIRADA NO CLIQUE, não guardada: redesenhos (recarga de 5 min,
+  // filtro) trocam o DOM, e uma lista velha apontaria para nós que não
+  // existem mais. Enquanto o lightbox está aberto ela é estável, que é o que
+  // importa.
   let _lbFotos = [];
   let _lbIdx   = 0;
+
+  function lbEscopo(tira) {
+    let el = tira.parentElement;
+    while (el && el !== document.body) {
+      if (el.querySelectorAll('.cmpf-fotos').length > 1) return el;
+      el = el.parentElement;
+    }
+    return document.body;
+  }
 
   function lbDaTira(origem) {
     const tira = (origem && origem.closest) ? origem.closest('.cmpf-fotos') : null;
     if (!tira) return null;
-    const imgs = [].slice.call(tira.querySelectorAll('img'));
+    const imgs = [].slice.call(lbEscopo(tira).querySelectorAll('.cmpf-fotos img'));
     if (!imgs.length) return null;
     return {
       // alt como reserva: miniatura de HTML antigo em cache não tem
@@ -608,9 +638,19 @@ function cmpFlashCheck(k, f) {
       lista: imgs.map(im => ({
         url: im.getAttribute('src'),
         legenda: im.getAttribute('data-legenda') || im.getAttribute('alt') || '',
+        posto: im.getAttribute('data-posto') || '',
       })),
       idx: Math.max(0, imgs.indexOf(origem)),
     };
+  }
+
+  // "P. ARAPONGA · ALAMO · coletado 08:31" — o posto do card na frente.
+  // A NOSSA foto não repete o nome: a etiqueta dela já é "🏠 P. ARAPONGA".
+  function lbLegenda(f) {
+    if (!f) return '';
+    const base = f.legenda || '';
+    if (!f.posto || base.indexOf('🏠') === 0 || base.indexOf(f.posto) === 0) return base;
+    return f.posto + ' · ' + base;
   }
 
   // Repinta src/alt/legenda no MESMO <img> em vez de remontar o lightbox:
@@ -621,8 +661,9 @@ function cmpFlashCheck(k, f) {
     if (!cx || !f) return;
     const im  = cx.querySelector('.cmpf-lb-fig img');
     const cap = cx.querySelector('.cmpf-lb-fig figcaption');
-    if (im)  { im.setAttribute('src', f.url); im.setAttribute('alt', f.legenda); }
-    if (cap) { cap.textContent = f.legenda; }   // textContent: nada a escapar
+    const txt = lbLegenda(f);
+    if (im)  { im.setAttribute('src', f.url); im.setAttribute('alt', txt); }
+    if (cap) { cap.textContent = txt; }   // textContent: nada a escapar
   }
 
   // CIRCULAR: da última vai para a primeira e vice-versa. Com 3 a 5 fotos por
@@ -638,7 +679,7 @@ function cmpFlashCheck(k, f) {
     cmpFecharFoto();
     const tira = lbDaTira(origem);
     _lbFotos = tira ? tira.lista
-                    : [{ url: String(url), legenda: String(legenda == null ? '' : legenda) }];
+                    : [{ url: String(url), legenda: String(legenda == null ? '' : legenda), posto: '' }];
     _lbIdx   = tira ? tira.idx : 0;
     const cx = document.createElement('div');
     cx.className = 'cmpf-lightbox';
