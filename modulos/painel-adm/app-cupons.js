@@ -1711,7 +1711,7 @@
       '<button type="button" class="ap-cbtn ap-sg-imp" onclick="__apSgAbrir()"' +
         (ocupado ? ' disabled' : '') + '>' +
         (ocupado ? (_sgPasso || 'Lendo a planilha…') : 'Importar planilha Soutag') + '</button>' +
-      '<input type="file" id="ap-sg-file" accept=".xlsx,.xls" hidden onchange="__apSgArquivo(this)">' +
+      '<input type="file" id="ap-sg-file" accept=".xls,.xlsx,.csv" hidden onchange="__apSgArquivo(this)">' +
       // Recarregar sem importar: a tabela é compartilhada, e outra pessoa pode
       // ter subido uma planilha enquanto esta tela estava aberta.
       '<button type="button" class="ap-atalho" onclick="__apSgRecarregar()"' +
@@ -1931,12 +1931,18 @@
   window.__apSgArquivo = async function (input) {
     var file = input && input.files && input.files[0];
     if (!file) return;
-    // O SheetJS lê os dois formatos (xlsx é ZIP/OOXML, xls é BIFF/OLE2), e o
-    // XLSX.read decide pelos bytes, não pela extensão. O guard acompanha o
-    // accept do input: os dois aceitando o mesmo par, senão o picker deixaria
-    // escolher um arquivo que o código recusa na linha seguinte.
-    if (!/\.xlsx?$/i.test(file.name)) {
-      _sgErro = 'Selecione uma planilha do Excel (.xlsx ou .xls).'; pintar(); return;
+    // O SheetJS lê os três formatos (xlsx é ZIP/OOXML, xls é BIFF/OLE2, csv é
+    // texto), e o XLSX.read decide pelos bytes, não pela extensão. O guard
+    // acompanha o accept do input: os dois aceitando o mesmo trio, senão o
+    // picker deixaria escolher um arquivo que o código recusa na linha seguinte.
+    //
+    // O .csv ENTROU PORQUE O ARQUIVO DO PORTAL SOUTAG JÁ É UM: ele chega com
+    // extensão .xls e por dentro é CSV de ponto-e-vírgula (ver o bloco de
+    // lerPlanilha). Quem renomeia para .csv — ou baixa de um portal que nomeia
+    // certo — batia no guard e não conseguia importar um arquivo que o parser
+    // já lia sem alteração nenhuma.
+    if (!/\.(xlsx?|csv)$/i.test(file.name)) {
+      _sgErro = 'Selecione uma planilha (.xls, .xlsx ou .csv).'; pintar(); return;
     }
     // TRÊS PASSOS, e cada um aparece no botão: ler o .xlsx, GRAVAR e comparar.
     // Antes era um só (ler), e a planilha morria na aba. O passo do meio é o
