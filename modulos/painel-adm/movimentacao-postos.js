@@ -449,16 +449,26 @@
   }
 
   // ── Carga ────────────────────────────────────────────────────────
-  async function carregar() {
+  // seVazio: dia de reserva. Se o período pedido voltar SEM POSTO NENHUM, busca
+  // esse dia na mesma carga e o adota — sem pintar o "Sem dado" no meio. Só a
+  // abertura da tela usa (hoje, com ontem de reserva); erro não cai na reserva.
+  async function carregar(seVazio) {
     _carregando = true; _erro = ''; pintar();
     // Trocar o período duas vezes depressa dispara duas buscas; sem o selo a
     // PRIMEIRA resposta a chegar pinta, e ela pode ser a do período antigo.
     var meu = ++_seq;
     try {
-      var url = '/tecnox/movimentacao-postos?inicio=' + encodeURIComponent(_inicio) +
-                '&fim=' + encodeURIComponent(_fim);
-      var r = await apiFetch(url);
+      var buscar = function () {
+        return apiFetch('/tecnox/movimentacao-postos?inicio=' + encodeURIComponent(_inicio) +
+                        '&fim=' + encodeURIComponent(_fim));
+      };
+      var r = await buscar();
       if (meu !== _seq) return;
+      if (seVazio && !(r && r.postos && r.postos.length)) {
+        _inicio = seVazio; _fim = seVazio;
+        r = await buscar();
+        if (meu !== _seq) return;
+      }
       _dados = r;
     } catch (e) {
       if (meu !== _seq) return;
@@ -1467,9 +1477,13 @@
     _sec = sec;
     if (!_pronto || !sec.querySelector('#mp-corpo')) montarShell(sec);
     if (!_inicio || !_fim) {
-      var ontem = somaDias(hojeISO(), -1);
-      _inicio = ontem; _fim = ontem;     // padrão ao abrir: ontem
-      carregar();
+      // PADRÃO AO ABRIR: HOJE, com ontem de reserva. A tela é "Movimentação
+      // do dia"; o dia corrente só tem dado depois de um rollup do dia (botão
+      // ou agendamento) — antes disso a carga cai em ontem sozinha, em vez de
+      // abrir em branco. hojeISO() é a data LOCAL (getDate), não toISOString.
+      var hoje = hojeISO();
+      _inicio = hoje; _fim = hoje;
+      carregar(somaDias(hoje, -1));
       return;
     }
     pintar();     // reabertura: não refaz a chamada

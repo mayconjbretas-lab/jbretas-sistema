@@ -521,6 +521,14 @@ html, body { height: 100%; overflow: hidden; }
 .mp-p-det .mp-det-linha b.mp-v-99 { color: #854F0B; }
 .mp-p-det .mp-det-linha b.mp-v-lucro { color: #0F6E56; }
 .mp-p-det .mp-det-linha b.mp-v-zero { color: var(--tx3); }
+/* TEMA CLARO, SÓ DENTRO DO DETALHE DO POSTO: os dois cinzas descem um nível
+   (--tx3 vira o --tx2 do claro, --tx2 vira o --tx). Medido em 24/09/2026 no
+   #faf7f0: rótulos e quantidades em 5,5:1, texto das linhas em 8,0:1 — passava
+   no AA, mas em mono de 11px e peso 400 lia desbotado ao lado da linha do
+   posto, que é --tx em 700. Fica 8,0:1 e 16:1. Redefinir o TOKEN no escopo, e
+   não cor por classe, pega todo filho do detalhe (seções, linhas, produtos) e
+   nada fora dele. O escuro não casa o seletor e segue como estava. */
+html[data-theme="light"] .mp-p-det { --tx3: #434b66; --tx2: #141a30; }
 .mp-det-sep { font-family: var(--mono); font-size: .6rem; text-transform: uppercase; letter-spacing: .05em;
   color: var(--tx3); margin: .5rem 0 .2rem; border-top: 1px solid var(--bd); padding-top: .4rem; }
 /* "Produtos vendidos", última seção do detalhe do posto. width:0 +
