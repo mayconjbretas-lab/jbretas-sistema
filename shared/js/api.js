@@ -83,7 +83,13 @@ async function apiFetch(path, options = {}, _jaTentouRefresh = false) {
 
   const json = await resp.json().catch(() => ({}));
   if (!resp.ok) {
-    throw new Error(json.erro || `Erro ${resp.status}`);
+    // status e dados vão PENDURADOS no Error, sem mudar a mensagem: quem só lê
+    // err.message continua igual, e quem precisa distinguir um caso (o 409 da
+    // trava do rollup, por exemplo) não tem de adivinhar pelo texto.
+    const err = new Error(json.erro || `Erro ${resp.status}`);
+    err.status = resp.status;
+    err.dados = json;
+    throw err;
   }
   return json;
 }

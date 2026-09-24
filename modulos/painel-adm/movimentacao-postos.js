@@ -615,6 +615,7 @@
     _roll = { fase: 'rodando', di: 0, nd: nd, i: 0, n: n, nome: '',
               feitos: 0, total: total, ok: 0, falhas: [] };
     rollPintar();
+    varre:
     for (var t = 0; t < nd; t++) {
       _roll.di = t + 1;
       for (var k = 0; k < n; k++) {
@@ -632,18 +633,29 @@
           else _roll.falhas.push(rollQuem(postos[k], dias[t]) + ': ' +
             ((((r || {}).detalhe || [])[0] || {}).erro || 'não fechou'));
         } catch (e) {
+          // 409 = TRAVA: outro rollup (o cron do dia, o noturno) está
+          // regravando esta data. PARA A VARREDURA em vez de seguir: os postos
+          // seguintes levariam o mesmo 409, um por um, e a barra diria
+          // "0/37" como se tudo tivesse falhado. Nada foi tocado neste par.
+          if (e && e.status === 409) {
+            _roll.travado = { msg: e.message, trava: (e.dados && e.dados.trava) || null };
+            break varre;
+          }
           _roll.falhas.push(rollQuem(postos[k], dias[t]) + ': ' + ((e && e.message) ? e.message : 'falhou'));
         }
         _roll.feitos++;
       }
     }
     _roll.fase = 'fim';
+    if (_roll.travado && window.console) console.warn('Atualizar rollup — parou: ' + _roll.travado.msg);
     rollPintar();
     // O MOTIVO de cada falha vai para o title do botao e para o console: a
     // tela nao ganha area nova, e "515/518" sem o porque nao serve para agir.
     if (_roll.falhas.length && window.console) console.warn('Atualizar rollup — falhas:\n' + _roll.falhas.join('\n'));
     carregar();     // o pintar() dele redesenha a barra com o ✓ ainda de pe
-    setTimeout(function () { _roll = null; pintar(); }, 5000);
+    // Travado fica 10s, e nao 5: a frase e mais longa, e e o unico lugar onde
+    // a pessoa descobre por que o clique nao fez nada.
+    setTimeout(function () { _roll = null; pintar(); }, _roll.travado ? 10000 : 5000);
   };
   // O DIA ENTRA NO MOTIVO DA FALHA. Com um dia so ele era obvio; com 14, uma
   // lista de "P. ITAPOA: timeout" repetida quatro vezes nao diria em quais
@@ -727,6 +739,14 @@
   }
   function rollTexto() {
     if (!_roll) return '⟳ Atualizar rollup';
+    if (_roll.fase === 'fim' && _roll.travado) {
+      // Curto no rotulo; a frase inteira da API vai no title (rollTitulo).
+      var tv = _roll.travado.trava;
+      var desde = (tv && tv.inicio) ? ' desde ' + new Date(tv.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+      var qual = (tv && tv.tipo === 'dia') ? 'do dia ' : (tv && tv.tipo ? tv.tipo + ' ' : '');
+      return '⏸ Rollup ' + qual + 'em curso' + desde +
+        (_roll.ok ? ' · ' + _roll.ok + '/' + _roll.total + ' feitos' : '');
+    }
     if (_roll.fase === 'fim') return 'Atualizado ✓ ' + _roll.ok + '/' + _roll.total;
     // O nome cortado em 16: "P. LOURA EMPREENDIMENTOS" dobrava a largura do
     // botao no meio do laco e empurrava a barra de filtros.
@@ -747,12 +767,18 @@
     return 'linear-gradient(to right, ' + ROLL_PREENCHE + ' ' + pct + '%, ' +
            'rgba(0,0,0,0) ' + pct + '%)';
   }
+  // Title do botao: a frase inteira do 409 (quando travou) e o motivo de cada
+  // falha. Uma funcao so para o htmlRoll e o rollPintar nao divergirem.
+  function rollTitulo() {
+    if (!_roll) return '';
+    return [].concat(_roll.travado ? [_roll.travado.msg] : [], _roll.falhas).join(' | ');
+  }
   function htmlRoll() {
     if (!ehAdmAqui()) return '';
     var g = rollGradiente();
     return '<button type="button" id="mp-roll" class="mp-roll' + (_roll ? ' mp-roll-on' : '') + '"' +
       (_roll ? ' disabled aria-busy="true"' : '') +
-      ((_roll && _roll.falhas.length) ? ' title="' + esc(_roll.falhas.join(' | ')) + '"' : '') +
+      (rollTitulo() ? ' title="' + esc(rollTitulo()) + '"' : '') +
       (g ? ' style="background-image:' + g + '"' : '') +
       ' onclick="__mpRollup()">' + esc(rollTexto()) + '</button>';
   }
@@ -765,7 +791,7 @@
     btn.className = 'mp-roll' + (_roll ? ' mp-roll-on' : '');
     btn.disabled = !!_roll;
     if (_roll) btn.setAttribute('aria-busy', 'true'); else btn.removeAttribute('aria-busy');
-    if (_roll && _roll.falhas.length) btn.title = _roll.falhas.join(' | ');
+    if (rollTitulo()) btn.title = rollTitulo();
     else btn.removeAttribute('title');
     btn.style.backgroundImage = rollGradiente();
   }

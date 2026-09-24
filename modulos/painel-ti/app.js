@@ -693,11 +693,45 @@ function txAoAbrir() {
 }
 
 // ════════════════════════════════════════════════════════════════
-// SAÚDE DO ROLLUP NOTURNO — lê GET /rollup/execucoes.
-// O veredito (ok / alerta / sem_rodada) vem PRONTO da API: a mesma regra
+// SAÚDE DO ROLLUP — lê GET /rollup/execucoes. DOIS BLOCOS: o noturno (dia
+// anterior, cron das 03h) e o do dia (dia corrente, cron das 05h/12h/18h).
+// Cada um com o SEU veredito — o noturno não some por causa das rodadas do dia.
+// O veredito vem PRONTO da API (regra em rollup-saude.js): a mesma regra
 // serviria um alerta por push depois, e duas cópias dela divergiriam na
 // primeira mudança. Aqui só se pinta o que o servidor decidiu.
+//
+// CORES: vermelho só para o que pede ação (alerta, sem_rodada). 'rodando' e
+// 'nao_configurado' são NEUTROS — a rodada das 03h às 03h04 não é falha, e o
+// bloco do dia antes de o serviço existir no Railway não é alarme.
 // ════════════════════════════════════════════════════════════════
+const RX_ESTADO = {
+  ok:              { cor: 'var(--ok)',     icone: '✅', titulo: 'Em dia' },
+  rodando:         { cor: 'var(--text3)',  icone: '⏳', titulo: 'Rodando agora' },
+  nao_configurado: { cor: 'var(--text3)',  icone: '⚪', titulo: 'Ainda não configurado' },
+  sem_rodada:      { cor: 'var(--danger)', icone: '🚨', titulo: 'NÃO rodou' },
+  alerta:          { cor: 'var(--danger)', icone: '⚠️', titulo: 'Rodou com falha' },
+};
+function rxBloco(rotulo, sub, s) {
+  s = s || {};
+  const e = RX_ESTADO[s.estado] || RX_ESTADO.alerta;   // estado desconhecido não passa por verde
+  const quando = s.horas_desde_ultima == null ? '' : ' · há ' + s.horas_desde_ultima + 'h';
+  return '<div style="flex:1 1 16rem;min-width:0;display:flex;gap:.6rem;align-items:flex-start;padding:.7rem .8rem;border-radius:8px;' +
+    'border-left:3px solid ' + e.cor + ';background:color-mix(in srgb,' + e.cor + ' 10%,transparent)">' +
+      '<span style="font-size:1.1rem;line-height:1.2">' + e.icone + '</span>' +
+      '<div style="min-width:0">' +
+        '<div style="font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">' +
+          escapeHtml(rotulo) + ' <span style="text-transform:none;letter-spacing:0">(' + escapeHtml(sub) + ')</span></div>' +
+        '<div style="font-weight:600;color:' + e.cor + '">' + escapeHtml(e.titulo + quando) + '</div>' +
+        '<div style="font-size:.78rem;color:var(--text2);margin-top:.15rem">' + escapeHtml(s.motivo || '') + '</div>' +
+      '</div>' +
+    '</div>';
+}
+// Linha sem fim com sinal de vida recente está RODANDO, não morta. 5 min é o
+// TRAVA_VIVO_MIN do rollup-saude.js da API — mexer lá, mexer aqui.
+function rxViva(e) {
+  return !e.fim && e.vivo_em && (Date.now() - new Date(e.vivo_em).getTime()) < 5 * 60000;
+}
+const RX_TIPO = { noturno: 'noturno', dia: 'do dia', manual: 'manual' };
 async function rxCarregar() {
   const elS = document.getElementById('rx-saude');
   const elR = document.getElementById('rx-reincidentes');
@@ -708,24 +742,15 @@ async function rxCarregar() {
     const resp = await apiFetch('/rollup/execucoes?limite=14');
     const s = resp.saude || {}, execs = resp.execucoes || [], reinc = resp.reincidentes || [];
 
-    const cor = s.estado === 'ok' ? 'var(--ok)' : 'var(--danger)';
-    const icone = s.estado === 'ok' ? '✅' : (s.estado === 'sem_rodada' ? '🚨' : '⚠️');
-    const titulo = s.estado === 'ok' ? 'Rollup em dia'
-                 : s.estado === 'sem_rodada' ? 'O rollup NÃO rodou'
-                 : 'Rollup rodou com falha';
+    // API anterior aos dois blocos devolvia só o noturno, no topo de `saude`.
+    const noturno = s.noturno || s;
+    elS.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:.6rem">' +
+      rxBloco('Rollup noturno', 'dia anterior, 03h', noturno) +
+      (s.dia ? rxBloco('Rollup do dia', 'hoje, 05h · 12h · 18h', s.dia) : '') +
+    '</div>';
 
-    elS.innerHTML =
-      '<div style="display:flex;gap:.6rem;align-items:flex-start;padding:.7rem .8rem;border-radius:8px;' +
-      'border-left:3px solid ' + cor + ';background:color-mix(in srgb,' + cor + ' 10%,transparent)">' +
-        '<span style="font-size:1.1rem;line-height:1.2">' + icone + '</span>' +
-        '<div>' +
-          '<div style="font-weight:600;color:' + cor + '">' + escapeHtml(titulo) + '</div>' +
-          '<div style="font-size:.78rem;color:var(--text2);margin-top:.15rem">' + escapeHtml(s.motivo || '') + '</div>' +
-        '</div>' +
-      '</div>';
-
-    if (elQ) elQ.textContent = s.horas_desde_ultima == null ? 'nunca rodou'
-      : ('há ' + s.horas_desde_ultima + 'h');
+    if (elQ) elQ.textContent = noturno.horas_desde_ultima == null ? 'noturno: nunca rodou'
+      : ('noturno há ' + noturno.horas_desde_ultima + 'h');
 
     // Reincidentes: posto que falhou em mais de uma das 14 rodadas. Um posto que
     // trava toda semana aparece como "1 posto" em cada noite isolada e some no
@@ -747,14 +772,19 @@ async function rxCarregar() {
       '<div style="margin-top:.8rem;overflow-x:auto">' +
         '<table style="width:100%;border-collapse:collapse;font-size:.76rem">' +
         '<thead><tr style="color:var(--text3);text-align:left">' +
-          ['quando', 'janela', 'ok', 'falha', 'sem venda', 'recuperados']
+          ['quando', 'tipo', 'janela', 'ok', 'falha', 'sem venda', 'recuperados']
             .map(h => '<th style="padding:.3rem .5rem;font-weight:500">' + h + '</th>').join('') +
         '</tr></thead><tbody>' +
         execs.map(e => {
-          const morreu = !e.fim;
+          const rodando = rxViva(e);
+          const morreu = !e.fim && !rodando;
+          const pulada = Array.isArray(e.falhas) && e.falhas.some(f => f && f.pulada);
           return '<tr style="border-top:1px solid var(--border)">' +
             '<td style="padding:.3rem .5rem;font-family:var(--mono)">' + escapeHtml(txDataHora(e.inicio)) +
-              (morreu ? ' <span style="color:var(--danger)">(não fechou)</span>' : '') + '</td>' +
+              (rodando ? ' <span style="color:var(--text3)">(rodando)</span>' : '') +
+              (morreu ? ' <span style="color:var(--danger)">(não fechou)</span>' : '') +
+              (pulada ? ' <span style="color:var(--danger)">(pulada)</span>' : '') + '</td>' +
+            '<td style="padding:.3rem .5rem;color:var(--text3)">' + escapeHtml(RX_TIPO[e.tipo] || e.tipo || '—') + '</td>' +
             '<td style="padding:.3rem .5rem;font-family:var(--mono);color:var(--text3)">' +
               escapeHtml(String(e.data_de)) + ' .. ' + escapeHtml(String(e.data_ate)) + '</td>' +
             '<td style="padding:.3rem .5rem;font-family:var(--mono)">' + (e.pares_ok || 0) + '/' + (e.pares_alvo || 0) + '</td>' +
@@ -1194,7 +1224,12 @@ async function mvAtualizarRollup() {
         (falhou.map(function (d) { return d.posto + ' — ' + d.erro; }).join(' | ') || 'motivo não informado') };
     }
   } catch (err) {
-    fim = { tipo: 'erro', txt: 'Falha ao atualizar o rollup: ' + (err.message || err) };
+    // 409 = a trava: já há um rollup (cron do dia, noturno ou outro clique)
+    // regravando esta data. Não é falha — nada foi tocado —, e a mensagem da
+    // API já diz qual rollup e desde quando.
+    fim = (err && err.status === 409)
+      ? { tipo: 'erro', txt: 'Não atualizado: ' + err.message + '. Nada foi regravado.' }
+      : { tipo: 'erro', txt: 'Falha ao atualizar o rollup: ' + (err.message || err) };
   } finally {
     _mvRollando = false;
     if (btn) { btn.disabled = false; btn.textContent = 'Atualizar rollup'; }
