@@ -555,11 +555,19 @@
     _cardAberto = null; _postoAberto = null;
     carregar();
   };
-  // UM PAR POSTO x DIA POR CHAMADA, em serie. A rota aceita posto_id nulo
-  // para varrer a rede inteira numa requisicao so, mas aquilo sao ~17min de
-  // HTTP aberto por dia: morre no proxy antes de responder e ninguem sabe
-  // quanto andou. Em serie, cada chamada dura ~27s, o progresso e real e um
-  // par que falha nao leva os outros.
+  // UM LOTE DE 3 POSTOS POR CHAMADA, as chamadas em serie. A rota aceita
+  // posto_id nulo para varrer a rede inteira numa requisicao so, mas aquilo
+  // sao ~9min de HTTP aberto por dia: morre no proxy antes de responder e
+  // ninguem sabe quanto andou. Com lotes, cada chamada dura ~40s, o progresso
+  // e real e um par que falha nao leva os outros.
+  //
+  // QUEM PARALELIZA E O SERVIDOR, NAO ESTE LACO. A rota roda os 3 postos do
+  // lote num pool de 3 — o mesmo do cron noturno. Disparar 3 chamadas de 1
+  // posto daqui pareceria equivalente e NAO e: a rota tem um rate limit de 30
+  // requisicoes por 15 min (os ultimos postos levariam 429) e uma trava que
+  // nao distingue duas chamadas do proprio botao (a 2a levaria 409 da 1a).
+  // Em lote sao 13 chamadas em vez de 37, uma de cada vez, e as duas
+  // protecoes continuam valendo sem afrouxar nada.
   //
   // DIA POR FORA, POSTO POR DENTRO. A ordem importa para quem esta olhando:
   // assim cada dia fica INTEIRO antes do proximo comecar, e interromper no
@@ -577,6 +585,39 @@
   // vendeu em algum dia do periodo e recoletado em TODOS eles — inclusive nos
   // dias em que estava fechado, onde a TecnoX devolve 0 cupons e o rollup
   // grava um dia vazio, que e o que ele ja faz no cron.
+  // O MESMO 3 do PARALELO_BOTAO da rota e do --paralelo do script. Mudar aqui
+  // sem mudar la nao acelera nada: o lote so alimenta o pool, quem decide
+  // quantos correm juntos e o servidor. Os dois numeros andam no mesmo commit.
+  var ROLL_LOTE = 3;
+  // Quantas vezes insistir num lote que levou 429. Com 13 chamadas por dia o
+  // teto de 30/15min nao deveria ser alcancado; isto e cinto para a varredura
+  // de varios dias, onde sao 13 x nd chamadas.
+  var ROLL_TENT_429 = 3;
+
+  function rollLotes(arr, n) {
+    var out = [];
+    for (var i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+    return out;
+  }
+  // "P. BOMBOM +2" — o lote inteiro nao cabe no rotulo do botao, e o primeiro
+  // nome ja situa onde a varredura esta.
+  function rollNomeLote(lote) {
+    var n1 = (lote[0] && lote[0].posto_nome) || '';
+    return lote.length > 1 ? n1 + ' +' + (lote.length - 1) : n1;
+  }
+  // Espera do 429 com contagem no botao. Sem isto a varredura fica parada
+  // varios minutos com o rotulo de "Atualizando", e quem olha conclui que
+  // travou. `retry_apos` vem no corpo da resposta da API.
+  async function rollEsperar(seg) {
+    var s = Math.max(1, Math.min(300, Math.ceil(seg || 0) || 60));
+    for (; s > 0; s--) {
+      _roll.espera = s;
+      rollPintar();
+      await new Promise(function (ok) { setTimeout(ok, 1000); });
+    }
+    _roll.espera = 0;
+    rollPintar();
+  }
   function rollDias(de, ate) {
     var out = [];
     // Comparacao de string serve para ISO, e o teto de 62 dias e o MAX_DIAS
@@ -599,7 +640,12 @@
     // cupons) — quase tudo esperando a TecnoX paginar. O numero sai da CONTA e
     // nao cravado: com meia rede no filtro, ou com 14 dias em vez de um, um
     // aviso fixo estaria errado por varias vezes.
-    var min = Math.max(1, Math.round(total * 27 / 60));
+    //
+    // DIVIDIDO PELO LOTE: os 3 postos do lote esperam a TecnoX ao MESMO tempo
+    // no servidor, entao o lote custa o tempo de um posto, nao de tres. Sem a
+    // divisao o aviso pediria 3x mais tempo do que a varredura leva, e o teto
+    // de 90 min mandaria a frase para horas cedo demais.
+    var min = Math.max(1, Math.round(total * 27 / 60 / ROLL_LOTE));
     // ACIMA DE UMA HORA E MEIA O NUMERO EM MINUTOS PARA DE INFORMAR: "~233
     // min" nao se sente, "3,9 h" se sente. E e justamente nesse tamanho que a
     // pessoa precisa sentir antes de confirmar.
@@ -613,37 +659,75 @@
         ' dias × ' + n + ' postos, ' + prazo + '.';
     if (!window.confirm(pergunta)) return;
     _roll = { fase: 'rodando', di: 0, nd: nd, i: 0, n: n, nome: '',
-              feitos: 0, total: total, ok: 0, falhas: [] };
+              feitos: 0, total: total, ok: 0, falhas: [], espera: 0 };
     rollPintar();
+    var lotes = rollLotes(postos, ROLL_LOTE);
     varre:
     for (var t = 0; t < nd; t++) {
       _roll.di = t + 1;
-      for (var k = 0; k < n; k++) {
-        _roll.i = k + 1;
-        _roll.nome = postos[k].posto_nome || '';
+      var feitosNoDia = 0;
+      for (var k = 0; k < lotes.length; k++) {
+        var lote = lotes[k];
+        // O contador anda ATE o fim do lote em curso: "6/37" com 3 postos
+        // rodando e mais honesto que "4/37", que sugeriria que dois nem
+        // comecaram.
+        _roll.i = feitosNoDia + lote.length;
+        _roll.nome = rollNomeLote(lote);
         rollPintar();
-        try {
-          var r = await apiFetch('/tecnox/rollup-dia', {
-            method: 'POST',
-            body: JSON.stringify({ data: dias[t], posto_id: postos[k].posto_id }),
-          });
-          // A rota responde 200 com ok:false quando o posto nao reconcilia:
-          // isso e falha daquele par, nao da varredura.
-          if (r && r.ok) _roll.ok++;
-          else _roll.falhas.push(rollQuem(postos[k], dias[t]) + ': ' +
-            ((((r || {}).detalhe || [])[0] || {}).erro || 'não fechou'));
-        } catch (e) {
-          // 409 = TRAVA: outro rollup (o cron do dia, o noturno) está
-          // regravando esta data. PARA A VARREDURA em vez de seguir: os postos
-          // seguintes levariam o mesmo 409, um por um, e a barra diria
-          // "0/37" como se tudo tivesse falhado. Nada foi tocado neste par.
-          if (e && e.status === 409) {
-            _roll.travado = { msg: e.message, trava: (e.dados && e.dados.trava) || null };
-            break varre;
+
+        var r = null, parou = false, erroLote = null;
+        for (var tent = 1; tent <= ROLL_TENT_429; tent++) {
+          try {
+            r = await apiFetch('/tecnox/rollup-dia', {
+              method: 'POST',
+              body: JSON.stringify({
+                data: dias[t],
+                posto_ids: lote.map(function (p) { return p.posto_id; }),
+              }),
+            });
+            erroLote = null;
+            break;
+          } catch (e) {
+            // 409 = TRAVA: outro rollup (o cron do dia, o noturno) está
+            // regravando esta data. PARA A VARREDURA em vez de seguir: os
+            // lotes seguintes levariam o mesmo 409, um por um, e a barra
+            // diria "0/37" como se tudo tivesse falhado. Nada foi tocado
+            // neste lote.
+            if (e && e.status === 409) {
+              _roll.travado = { msg: e.message, trava: (e.dados && e.dados.trava) || null };
+              parou = true;
+              break;
+            }
+            erroLote = (e && e.message) ? e.message : 'falhou';
+            // 429 = RATE LIMIT, e nao falha: o trabalho nao foi feito e PODE
+            // ser feito daqui a pouco. Antes virava falha na lista e os 3
+            // postos do lote ficavam por atualizar sem ninguem saber que
+            // bastava esperar. Espera o `retry_apos` que a API mandou e
+            // repete o MESMO lote.
+            if (e && e.status === 429 && tent < ROLL_TENT_429) {
+              await rollEsperar((e.dados && Number(e.dados.retry_apos)) || 60);
+              continue;
+            }
+            r = null;
+            break;
           }
-          _roll.falhas.push(rollQuem(postos[k], dias[t]) + ': ' + ((e && e.message) ? e.message : 'falhou'));
         }
-        _roll.feitos++;
+        if (parou) break varre;
+
+        // A rota responde 200 com ok:false quando algum posto nao reconcilia:
+        // isso e falha daquele par, nao da varredura. O detalhe vem por posto,
+        // entao um lote parcialmente bom conta certo os dois lados.
+        var porId = {};
+        ((r && r.detalhe) || []).forEach(function (d) { porId[d.posto_id] = d; });
+        lote.forEach(function (p) {
+          var d = porId[p.posto_id];
+          if (d && d.ok) _roll.ok++;
+          else _roll.falhas.push(rollQuem(p, dias[t]) + ': ' +
+            ((d && d.erro) || erroLote || 'não fechou'));
+        });
+
+        feitosNoDia += lote.length;
+        _roll.feitos += lote.length;
       }
     }
     _roll.fase = 'fim';
@@ -748,6 +832,9 @@
         (_roll.ok ? ' · ' + _roll.ok + '/' + _roll.total + ' feitos' : '');
     }
     if (_roll.fase === 'fim') return 'Atualizado ✓ ' + _roll.ok + '/' + _roll.total;
+    // ESPERANDO O RATE LIMIT. Sem isto o botao diria "Atualizando" por
+    // minutos sem nada acontecer, e quem olha conclui que travou.
+    if (_roll.espera) return '⏳ Limite da API · retoma em ' + _roll.espera + 's';
     // O nome cortado em 16: "P. LOURA EMPREENDIMENTOS" dobrava a largura do
     // botao no meio do laco e empurrava a barra de filtros.
     var quem = cortarNome(_roll.nome, 16);

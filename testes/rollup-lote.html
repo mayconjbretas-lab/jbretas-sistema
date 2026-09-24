@@ -1,0 +1,281 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Movimentação — "Atualizar rollup" em lotes de 3</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+<style>
+  html, body { height: auto !important; overflow: visible !important; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// O botão "Atualizar rollup" varria 37 postos em 37 chamadas de 1 posto, em
+// série: 25 a 37 min. Agora manda LOTES de 3 e a rota paraleliza no servidor.
+//
+// O PARALELISMO NÃO PODE SER DAQUI, e é isso que o desenho protege:
+//   · limiterTecnoxPesado = 30 requisições / 15 min / usuário. Três chamadas
+//     simultâneas de 1 posto encaixariam os 37 numa janela só e os últimos
+//     levariam 429.
+//   · filtroTrava não exclui tipo 'botao'. A 2ª chamada simultânea enxergaria
+//     a linha de rollup_execucoes que a 1ª abriu para a MESMA data e levaria
+//     409 — o botão travando contra si mesmo.
+// Em lote são 13 chamadas, uma de cada vez: as duas proteções continuam de pé
+// sem ter sido afrouxadas, e o botão passa a fazer MENOS chamadas que antes.
+//
+//  1. Fatiamento: 37 postos viram 13 chamadas, a última com o resto.
+//  2. O corpo manda posto_ids (lista), não posto_id.
+//  3. A estimativa do confirm() é dividida por 3.
+//  4. Um posto com ok:false dentro de um lote bom conta como falha SÓ ele.
+//  5. 429 espera o retry_apos e REPETE o mesmo lote (não vira falha).
+//  6. 409 continua parando a varredura inteira.
+//  7. Multi-dia: dia por fora, e cada dia fecha antes do próximo começar.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  &rarr;  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function js(src) {
+  return new Promise(function (ok, er) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { er(new Error(src + ' nao carregou')); };
+    document.head.appendChild(s);
+  });
+}
+
+// ── 37 postos, como a rede ──────────────────────────────────────
+var POSTOS = [];
+for (var i = 1; i <= 37; i++) {
+  POSTOS.push({ posto_id: 'p' + i, posto_nome: 'P. POSTO ' + i,
+                cupons: 100, litros: 1000, liquido: 6000, itens: 100 });
+}
+
+// ── O dublê da API ──────────────────────────────────────────────
+// `chamadas` guarda o corpo de cada POST /tecnox/rollup-dia: é sobre ele que
+// os blocos 1, 2 e 7 fazem as contas.
+var chamadas = [];
+var roteiro = null;      // function(corpo, n) -> resposta, ou lança
+function erroApi(msg, status, dados) {
+  var e = new Error(msg); e.status = status; e.dados = dados || {}; return e;
+}
+function okLote(corpo, quaisFalham) {
+  var ids = corpo.posto_ids || [corpo.posto_id];
+  var det = ids.map(function (id) {
+    var ruim = (quaisFalham || []).indexOf(id) >= 0;
+    return { posto_id: id, posto: 'P. POSTO ' + id.slice(1),
+             ok: !ruim, erro: ruim ? 'nao reconcilia' : undefined,
+             cupons: 10, litros: 100, liquido_comb: 600, itens: 10, linhas: 5 };
+  });
+  return { ok: det.every(function (d) { return d.ok; }), data: corpo.data,
+           parcial: false, postos_pedidos: det.length,
+           postos_ok: det.filter(function (d) { return d.ok; }).length,
+           detalhe: det };
+}
+window.apiFetch = function (url, opt) {
+  var u = String(url);
+  if (u.indexOf('/tecnox/movimentacao-postos') === 0) {
+    return Promise.resolve({ success: true, postos: POSTOS,
+      total: { cupons: 3700, litros: 37000, liquido: 222000, itens: 3700 } });
+  }
+  if (u === '/tecnox/rollup-dia') {
+    var corpo = JSON.parse(opt.body);
+    chamadas.push(corpo);
+    try { return Promise.resolve(roteiro(corpo, chamadas.length)); }
+    catch (e) { return Promise.reject(e); }
+  }
+  return Promise.resolve({ success: true });
+};
+window.getUsuarioLogado = function () { return { perfil: 'ADM', nome: 'HARNESS' }; };
+window.escapeHtml = window.escapeHtml || function (s) { return String(s == null ? '' : s); };
+
+// O confirm() é o que mostra a estimativa: guardo a frase em vez de deixar
+// abrir caixa (que travaria o teste).
+var perguntas = [];
+window.confirm = function (msg) { perguntas.push(msg); return true; };
+
+function botao() { return document.getElementById('mp-roll'); }
+function zerar() { chamadas = []; perguntas = []; }
+
+(async function () {
+  try {
+    await js('/modulos/painel-adm/movimentacao-postos.js');
+    var palco = document.getElementById('palco');
+    window.renderMovPostos(palco);
+    await esperar(400);
+
+    eh(typeof window.__mpRollup === 'function', 'o modulo expoe __mpRollup',
+       typeof window.__mpRollup);
+    eh(!!botao(), 'o botao existe para ADM');
+
+    // ── 1 e 2 ────────────────────────────────────────────────────
+    h3('1. Fatiamento: 37 postos = 13 chamadas');
+    nota('13 x 3 = 39, entao a ultima chamada leva 1 posto, nao 3.');
+    zerar();
+    roteiro = function (c) { return okLote(c); };
+    await window.__mpRollup();
+    await esperar(50);
+
+    eh(chamadas.length === 13, '37 postos em 13 chamadas',
+       String(chamadas.length), '13');
+    nota('Em serie eram 37 chamadas. O limiter de 30/15min fica MAIS folgado,');
+    nota('nao mais apertado — o botao pressiona menos a API que antes.');
+    var tamanhos = chamadas.map(function (c) { return c.posto_ids.length; });
+    eh(tamanhos.slice(0, 12).every(function (t) { return t === 3; }),
+       'as 12 primeiras levam 3 postos', tamanhos.join(','));
+    eh(tamanhos[12] === 1, 'a ultima leva o resto (1)', String(tamanhos[12]), '1');
+    var vistos = [];
+    chamadas.forEach(function (c) { vistos = vistos.concat(c.posto_ids); });
+    eh(vistos.length === 37 && new Set(vistos).size === 37,
+       'os 37 postos entraram, sem repetir nem faltar',
+       vistos.length + ' ids, ' + new Set(vistos).size + ' distintos');
+    eh(vistos.join(',') === POSTOS.map(function (p) { return p.posto_id; }).join(','),
+       'e na ORDEM que a tela mostra');
+
+    h3('2. O corpo manda posto_ids, nao posto_id');
+    nota('posto_id continua valido na rota (chamada direta), mas a tela usa a lista.');
+    eh(Array.isArray(chamadas[0].posto_ids), 'posto_ids e lista',
+       JSON.stringify(chamadas[0].posto_ids));
+    eh(chamadas[0].posto_id === undefined, 'posto_id nao vai junto',
+       String(chamadas[0].posto_id));
+    eh(/^\d{4}-\d{2}-\d{2}$/.test(chamadas[0].data), 'a data vai no formato da rota',
+       chamadas[0].data);
+
+    h3('3. A estimativa do confirm() e dividida por 3');
+    nota('27s por posto / 3 do lote: 37 postos = ~6 min, nao 17.');
+    var m = (perguntas[0] || '').match(/~(\d+) min/);
+    var estimado = m ? Number(m[1]) : -1;
+    eh(estimado === Math.round(37 * 27 / 60 / 3),
+       'pede ~' + Math.round(37 * 27 / 60 / 3) + ' min', String(estimado));
+    eh(estimado < 17, 'e nao os ~17 min da varredura em serie', String(estimado));
+
+    // ── 4 ────────────────────────────────────────────────────────
+    // O ✓ fica 5s de pe e `_roll` so e limpo depois; chamar __mpRollup antes
+    // disso e no-op (`if (_roll) return`). Sem esta espera o bloco assertava o
+    // rotulo da varredura ANTERIOR e passava por engano — foi o que aconteceu
+    // na primeira versao deste teste.
+    await esperar(5300);
+    h3('4. Um posto ruim dentro de um lote bom conta so ele');
+    nota('A rota responde 200 com ok:false por posto; o lote nao e tudo-ou-nada.');
+    zerar();
+    roteiro = function (c) { return okLote(c, ['p5']); };
+    await window.__mpRollup();
+    await esperar(50);
+    // Guarda contra o no-op: sem isto uma varredura que nem comecou passaria
+    // lendo o rotulo velho.
+    eh(chamadas.length === 13, 'a varredura rodou mesmo (13 chamadas)',
+       String(chamadas.length), '13');
+    var txt = botao().textContent;
+    eh(/36\/37/.test(txt), 'o botao fecha em 36/37', txt);
+    eh(/P\. POSTO 5/.test(botao().title || ''), 'e o motivo nomeia o posto 5',
+       botao().title);
+    eh((botao().title || '').split('|').length === 1,
+       'um so motivo, nao o lote inteiro', botao().title);
+    await esperar(5300);   // o check some em 5s
+
+    // ── 5 ────────────────────────────────────────────────────────
+    h3('5. 429 espera o retry_apos e REPETE o mesmo lote');
+    nota('Antes virava falha na lista: 3 postos ficavam por atualizar e a');
+    nota('mensagem nao dizia que bastava esperar.');
+    nota('O retry e a MESMA chamada autenticada de novo — nao pula validacao,');
+    nota('nao muda credencial, e o servidor decide se aceita ou 429 de novo.');
+    zerar();
+    var bateu429 = 0;
+    roteiro = function (c, n) {
+      if (n === 2 && bateu429 === 0) {
+        bateu429++;
+        throw erroApi('Muitas consultas TecnoX pesadas em pouco tempo. Tente em 1s.',
+                      429, { retry_apos: 1 });
+      }
+      return okLote(c);
+    };
+    var t0 = Date.now();
+    await window.__mpRollup();
+    var gasto = Date.now() - t0;
+    eh(bateu429 === 1, 'o 429 aconteceu uma vez', String(bateu429));
+    eh(chamadas.length === 14, '13 lotes + 1 repeticao', String(chamadas.length), '14');
+    eh(JSON.stringify(chamadas[1].posto_ids) === JSON.stringify(chamadas[2].posto_ids),
+       'a repeticao e do MESMO lote', JSON.stringify(chamadas[2].posto_ids));
+    eh(/37\/37/.test(botao().textContent), 'e a varredura fecha 37/37 mesmo assim',
+       botao().textContent);
+    eh(gasto >= 1000, 'esperou de verdade (retry_apos = 1s)', gasto + 'ms');
+    await esperar(5300);
+
+    // ── 6 ────────────────────────────────────────────────────────
+    h3('6. 409 continua parando a varredura inteira');
+    nota('E a trava do cron. Seguir daria 409 lote a lote e a barra diria 0/37');
+    nota('como se tudo tivesse falhado — quando nada foi tocado.');
+    zerar();
+    roteiro = function (c, n) {
+      if (n === 3) throw erroApi('rollup do dia em curso desde 4h cobrindo 2026-09-24',
+                                 409, { trava: { id: 1, tipo: 'dia', inicio: new Date().toISOString() } });
+      return okLote(c);
+    };
+    await window.__mpRollup();
+    await esperar(50);
+    eh(chamadas.length === 3, 'parou na 3a chamada', String(chamadas.length), '3');
+    eh(/em curso/.test(botao().textContent), 'o botao diz que travou',
+       botao().textContent);
+    eh(/6 feitos|6\/37/.test(botao().textContent), 'e mostra os 6 ja feitos',
+       botao().textContent);
+    await esperar(10300);   // o aviso de travado fica 10s
+
+    // ── 7 ────────────────────────────────────────────────────────
+    h3('7. Multi-dia: dia por fora, cada dia inteiro antes do proximo');
+    nota('Interromper deixa dias completos atras e so o ultimo pela metade.');
+    // Rede reduzida a 7 postos para o teste ficar curto.
+    var guardados = POSTOS.splice(7);
+    roteiro = function (c) { return okLote(c); };
+    var campos = palco.querySelectorAll('.mp-datas input[type=date]');
+    eh(campos.length >= 2, 'a tela tem os dois campos de data', String(campos.length));
+    campos[0].value = '2026-09-20';
+    campos[0].dispatchEvent(new Event('change', { bubbles: true }));
+    await esperar(200);
+    campos[1].value = '2026-09-21';
+    campos[1].dispatchEvent(new Event('change', { bubbles: true }));
+    await esperar(300);
+    zerar();
+    await window.__mpRollup();
+    await esperar(50);
+    var datas = chamadas.map(function (c) { return c.data; });
+    eh(chamadas.length === 6, '2 dias x 7 postos = 3 lotes por dia',
+       String(chamadas.length), '6');
+    eh(datas.slice(0, 3).join(',') === '2026-09-20,2026-09-20,2026-09-20',
+       'o dia 20 fecha inteiro primeiro', datas.slice(0, 3).join(','));
+    eh(datas.slice(3).join(',') === '2026-09-21,2026-09-21,2026-09-21',
+       'e so entao comeca o 21', datas.slice(3).join(','));
+    eh(datas.join(',') === datas.slice().sort().join(','), 'sem intercalar os dias');
+    POSTOS.push.apply(POSTOS, guardados);
+
+    linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                               : '<span class="ok">tudo passou</span>'));
+  } catch (e) {
+    falhas++;
+    linhas.push('\n<span class="bad">ERRO: ' + hesc(e && e.message) + '</span>');
+    linhas.push(hesc((e && e.stack) || ''));
+  }
+  pintar();
+})();
+</script>

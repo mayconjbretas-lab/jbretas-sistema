@@ -78,7 +78,15 @@ async function apiFetch(path, options = {}, _jaTentouRefresh = false) {
     const seg = Number(j.retry_apos) || 0;
     const espera = seg <= 0 ? ''
       : (seg >= 60 ? ` Tente em ${Math.ceil(seg / 60)} min.` : ` Tente em ${seg}s.`);
-    throw new Error((j.erro || 'Muitas requisições. Aguarde um instante.') + espera);
+    // status e dados PENDURADOS, como no bloco genérico logo abaixo. A
+    // mensagem não muda uma vírgula, então quem só lê err.message continua
+    // idêntico; quem precisa ESPERAR e tentar de novo (a varredura do
+    // "Atualizar rollup") consegue distinguir 429 de falha de verdade e ler
+    // `retry_apos` em vez de garimpar o número dentro do texto.
+    const err429 = new Error((j.erro || 'Muitas requisições. Aguarde um instante.') + espera);
+    err429.status = 429;
+    err429.dados = j;
+    throw err429;
   }
 
   const json = await resp.json().catch(() => ({}));
