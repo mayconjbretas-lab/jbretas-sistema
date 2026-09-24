@@ -51,6 +51,8 @@
   var _filtro = { SOUTAG: false, '99': false };   // nenhum ligado = modo pista
   var _cardAberto = null;    // 'total' | 'abast' | 'SOUTAG' | '99' | null
   var _postoAberto = null;   // posto_id
+  var _prodAberto = false;   // seção "Produtos vendidos" do posto aberto
+  var _prodOrdem = 'valor';  // 'valor' | 'az'
   // null = botao parado. { fase, i, n, nome, ok, falhas } enquanto roda e
   // nos 5s do ✓ depois. Ver __mpRollup().
   var _roll = null;
@@ -646,6 +648,15 @@
   };
   window.__mpPosto = function (id) {
     _postoAberto = (_postoAberto === id) ? null : id;
+    _prodAberto = false;   // "Produtos vendidos" sempre abre FECHADA
+    pintar();
+  };
+  window.__mpProdutos = function () {
+    _prodAberto = !_prodAberto;
+    pintar();
+  };
+  window.__mpProdOrdem = function (o) {
+    _prodOrdem = o;
     pintar();
   };
 
@@ -1177,6 +1188,73 @@
     '</div>';
   }
 
+  // ════════ PRODUTOS VENDIDOS (fim do detalhe do posto) ════════
+  // Fonte: produto.itens da rota, de tecnox_venda_produto_dia — o rollup,
+  // então vale para o dia corrente também (não espera o .xls de categoria).
+  //
+  // CADA LINHA É UMA DESCRIÇÃO COMO VEIO DA TECNOX. O ARLA a granel e o ARLA
+  // em galão ficam separados; quantidade de linhas diferentes nunca é somada
+  // nem convertida. Total e subtotais são R$, sempre.
+  //
+  // SEMPRE O MEDIDO: lê de `_dados`, não de `_vista`. A projeção multiplica
+  // o faturamento de produto (e o escalarBloco descarta a lista), e projetar
+  // um produto vendido duas vezes no mês inventaria venda.
+  //
+  // UNIDADE: fracionário é litro (granel); inteiro é unidade. "GRANEL" na
+  // descrição é litro sempre — 20,000 L somados no período não viram "20 un".
+  function htmlProdutos(p) {
+    var med = null;
+    var ps = (_dados && _dados.postos) || [];
+    for (var i = 0; i < ps.length; i++) if (ps[i].posto_id === p.posto_id) { med = ps[i]; break; }
+    var pr = (med && med.produto) || {};
+    var itens = pr.itens || [];
+    if (!itens.length) {
+      return '<div class="mp-det-sec mp-prod"><div class="mp-det-rot">Produtos vendidos · sem produto vendido</div></div>';
+    }
+    var cab = 'Produtos vendidos · ' + reais(pr.faturamento || 0) + ' · ' +
+      nf(itens.length, 0) + (itens.length === 1 ? ' item' : ' itens');
+    var h = '<div class="mp-det-sec mp-prod">' +
+      '<button type="button" class="mp-det-rot mp-prod-cab" aria-expanded="' + (_prodAberto ? 'true' : 'false') + '"' +
+        ' onclick="__mpProdutos()"><span class="mp-prod-seta">' + (_prodAberto ? '▾' : '▸') + '</span>' + esc(cab) + '</button>';
+    if (!_prodAberto) return h + '</div>';
+
+    var qtd = function (it) {
+      var q = Number(it.quantidade) || 0;
+      var litro = /GRANEL/i.test(it.descricao) || Math.abs(q - Math.round(q)) > 1e-6;
+      return litro ? nf(q, 1) + ' L' : nf(q, 0) + ' un';
+    };
+    var ordena = function (a, b) {
+      if (_prodOrdem === 'az') return String(a.descricao).localeCompare(String(b.descricao), 'pt-BR', { sensitivity: 'base' });
+      return (Number(b.valor_liquido) || 0) - (Number(a.valor_liquido) || 0);
+    };
+    var bloco = function (rot, subtotal, lista) {
+      if (!lista.length) return '';
+      return '<div class="mp-prod-grupo">' + esc(rot) + ' · ' + reais(subtotal) + '</div>' +
+        lista.slice().sort(ordena).map(function (it) {
+          return '<div class="mp-prod-lin">' +
+            '<span class="mp-prod-nome" title="' + esc(it.descricao) + '">' + esc(it.descricao) + '</span>' +
+            '<span class="mp-prod-q">' + qtd(it) + '</span>' +
+            '<b class="mp-prod-v">' + reais(it.valor_liquido) + '</b>' +
+          '</div>';
+        }).join('');
+    };
+    var lub = itens.filter(function (it) { return String(it.grupo).toUpperCase() === 'LUBRIFICANTE'; });
+    var out = itens.filter(function (it) { return String(it.grupo).toUpperCase() !== 'LUBRIFICANTE'; });
+    var bt = function (o, rot) {
+      return '<button type="button" class="mp-prod-ob' + (_prodOrdem === o ? ' on' : '') + '"' +
+        ' aria-pressed="' + (_prodOrdem === o ? 'true' : 'false') + '"' +
+        ' onclick="__mpProdOrdem(\'' + o + '\')">' + rot + '</button>';
+    };
+    return h + '<div class="mp-prod-corpo">' +
+      // Só quando os OUTROS números do detalhe estão multiplicados. Mês
+      // fechado em projeção (_proj.real) já mostra o medido em tudo.
+      (_proj && !_proj.real ? '<div class="mp-prod-nota">valores medidos, sem projeção</div>' : '') +
+      '<div class="mp-prod-ord">' + bt('valor', 'por R$') + bt('az', 'A-Z') + '</div>' +
+      bloco('Lubrificantes', pr.lubrificante || 0, lub) +
+      bloco('Outros produtos', pr.outros || 0, out) +
+    '</div></div>';
+  }
+
   // ════════ A COLUNA APP É UM NÚMERO SÓ ════════
   // (Soutag + 99) ÷ litros do posto. A quebra por aplicativo saiu da linha e
   // vive no detalhe clicável, que já mostrava Soutag / App 99 / Pista: dois
@@ -1270,6 +1348,7 @@
               (lq !== null ? reais(lq) + (vl > 0 ? '  ·  margem líq. ' + nf(lq / vl * 100, 2) + '%' : '') : '—'),
               'mp-v-lucro'));
         })() : '') +
+        htmlProdutos(p) +
       '</div>';
     }
 

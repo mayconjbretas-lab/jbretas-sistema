@@ -849,6 +849,34 @@ html:not([data-theme="light"]) body::before{
 .mp-p-det .mp-det-linha b.mp-v-zero { color: var(--tx3); }
 .mp-det-sep { font-family: var(--mono); font-size: .6rem; text-transform: uppercase; letter-spacing: .05em;
   color: var(--tx3); margin: .5rem 0 .2rem; border-top: 1px solid var(--bd); padding-top: .4rem; }
+/* "Produtos vendidos", última seção do detalhe do posto. width:0 +
+   min-width:100% tira a seção do cálculo de largura: a .mp-lista é
+   fit-content, e um nome de produto longo alargaria o detalhe inteiro. Assim
+   ela ocupa a largura que as outras seções já definiram, e o nome trunca. */
+.mp-prod { width: 0; min-width: 100%; }
+.mp-prod-cab { display: flex; align-items: center; gap: 6px; width: 100%; margin-bottom: 0;
+  background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.mp-prod-cab:hover { color: var(--tx2); }
+.mp-prod-seta { width: 10px; flex: none; }
+.mp-prod-corpo { margin-top: 8px; }
+.mp-prod-nota { font-family: var(--mono); font-size: .62rem; color: var(--tx3); margin-bottom: 6px; }
+.mp-prod-ord { display: flex; gap: 4px; margin-bottom: 6px; }
+.mp-prod-ob { font-family: var(--mono); font-size: .62rem; padding: 2px 8px; border-radius: 6px;
+  border: 1px solid var(--bd); background: none; color: var(--tx3); cursor: pointer; }
+.mp-prod-ob.on { color: var(--tx); border-color: var(--tx3); }
+.mp-prod-grupo { font-family: var(--mono); font-size: .66rem; color: var(--tx2); font-weight: 700;
+  margin: 8px 0 2px; }
+.mp-prod-lin { display: flex; align-items: baseline; gap: .8rem; padding: 2px 0;
+  font-family: var(--mono); font-size: .7rem; color: var(--tx2); }
+.mp-prod-nome { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-prod-q { flex: none; text-align: right; color: var(--tx3); }
+.mp-prod-v { flex: none; min-width: 6.5em; text-align: right; color: var(--tx); font-weight: 500; }
+/* Mobile: o nome ganha a linha inteira e quantidade · valor descem juntos. */
+@media (max-width: 699px) {
+  .mp-prod-lin { flex-wrap: wrap; gap: 0 .8rem; padding: 4px 0; }
+  .mp-prod-nome { flex: 1 1 100%; }
+  .mp-prod-q { margin-left: auto; }
+}
 
 /* A lista encolhe para a soma das colunas (~777px) em vez de esticar até a
    borda do monitor: com width:100% os números iam parar longe do nome do
