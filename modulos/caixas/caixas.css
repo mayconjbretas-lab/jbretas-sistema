@@ -169,6 +169,9 @@
 .cx-caret { color: var(--text3); font-size: .7rem; margin-right: .4rem; }
 .cx-val { font-family: var(--mono); color: var(--accent); }
 .cx-muted { color: var(--text3); font-style: italic; }
+/* coluna Dif. (operadora − pista): só a cor */
+.cx-dif-neg { color: var(--danger); }
+.cx-dif-pos { color: var(--ok); }
 .cx-prazo { font-family: var(--mono); font-size: .78rem; color: var(--text2); }
 .cx-det td {
   padding: .4rem .7rem .4rem 1.8rem; font-size: .8rem; color: var(--text2);

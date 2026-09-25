@@ -381,11 +381,34 @@ function celulaLancado(itens, { classeValor = 'cx-val', semFonte = AGUARDANDO } 
     ? ' <span class="cx-za-fonte">· dia</span>' : '';
   return `<td class="num ${classeValor}">${moedaBR(soma)}${sufixo}</td>`;
 }
-// Espaço que era a coluna "Banco recebeu": fica VAZIO de propósito. A tabela é
-// width:100% em layout automático — tirar a coluna de verdade redistribuiria a
-// largura dela entre as outras. O cabeçalho invisível reserva a mesma largura.
-const TH_VAGA = `<th class="num" aria-hidden="true"><span style="visibility:hidden">Banco recebeu</span></th>`;
-const TD_VAGA = `<td aria-hidden="true"></td>`;
+// ── Coluna "Dif." (operadora informou − lançado) ────────────────
+// Ocupa o espaço que era "Banco recebeu". A tabela é width:100% em layout
+// automático: o bloco invisível de altura zero com o texto antigo mantém a
+// MESMA largura mínima que o espaçador reservava — "Dif." sozinho encolheria a
+// coluna e redistribuiria a largura entre as outras.
+const TH_DIF = `<th class="num">Dif.<span class="cx-za-fonte cx-th-nota">operadora − pista</span>` +
+  `<span aria-hidden="true" style="display:block;height:0;overflow:hidden;visibility:hidden">Banco recebeu</span></th>`;
+const TD_SEM_DIF = `<td class="num">—</td>`;   // linhas âmbar (sem coleta / não classificado)
+// Soma do Lançado como NÚMERO, ou null quando a célula não mostra número
+// (sem rollup = "aguardando"; nenhum item = "—").
+function somaLancado(itens) {
+  if (itens === null || !itens.length) return null;
+  return itens.reduce((s, i) => s + (Number(i.valor) || 0), 0);
+}
+// Célula Dif. Só calcula quando os DOIS lados são número. Numa aba de turno com
+// Lançado do dia inteiro (fonte PAGAMENTO) comparar seria dia contra turno:
+// "—" com o motivo no title.
+function celulaDif(informou, itens) {
+  const lanc = somaLancado(itens);
+  if (typeof informou !== 'number' || lanc === null) return TD_SEM_DIF;
+  if (ESPELHO.lancado_fonte === 'PAGAMENTO' && TURNO_ATIVO !== DIA)
+    return `<td class="num" title="Lançado é do dia inteiro; compare na aba Dia inteiro">—</td>`;
+  const dif = Math.round((informou - lanc) * 100) / 100;
+  if (dif === 0) return `<td class="num cx-muted">${moedaBR(0)}</td>`;
+  return dif < 0
+    ? `<td class="num cx-dif-neg">−${moedaBR(-dif)}</td>`
+    : `<td class="num cx-dif-pos">+${moedaBR(dif)}</td>`;
+}
 
 function renderZonaB() {
   const lanc = lancadoDoTurno();              // null = sem rollup
@@ -410,7 +433,7 @@ function renderZonaB() {
           <th>Operadora</th>
           <th class="num">Lançado<span class="cx-za-fonte cx-th-nota">pista · TecnoX</span></th>
           <th class="num">Operadora informou<span class="cx-za-fonte cx-th-nota">portal · Glint</span></th>
-          ${TH_VAGA}<th class="cen">Prazo</th>
+          ${TH_DIF}<th class="cen">Prazo</th>
         </tr></thead><tbody>`;
 
   // (adquirente|categoria) já cobertos por uma linha de caixa_operadora — as
@@ -429,7 +452,7 @@ function renderZonaB() {
             <span class="cx-op">${esc(g.operadora)}</span> · ${esc(g.tipo)}</td>
         ${celulaLancado(doGrupo)}
         <td class="num cx-val">${moedaBR(g.valor)}</td>
-        ${TD_VAGA}
+        ${celulaDif(g.valor, doGrupo)}
         <td class="cen cx-prazo">${esc(prazoDe(g.operadora, g.tipo))}</td>
       </tr>`;
     if (aberto) {
@@ -452,7 +475,7 @@ function renderZonaB() {
             <td>${esc(band)} · ${esc(mod)}</td>
             ${celulaLancado(daFilha)}
             <td class="num cx-val">${moedaBR(d.valor)}</td>
-            ${TD_VAGA}
+            ${celulaDif(d.valor, daFilha)}
             <td class="cen">—</td>
           </tr>`;
       }
@@ -469,7 +492,7 @@ function renderZonaB() {
         <td><span class="cx-op">${esc(o.nome)}</span></td>
         ${celulaLancado(daOp, { classeValor: '', semFonte: 'sem coleta' })}
         <td class="num">sem coleta</td>
-        ${TD_VAGA}
+        ${TD_SEM_DIF}
         <td class="cen cx-prazo">${esc(o.prazo || '—')}</td>
       </tr>`;
   }
@@ -493,7 +516,7 @@ function renderZonaB() {
           <td><span class="cx-op">${esc(n.adq)}</span> · ${esc(n.cat.toLowerCase())}</td>
           ${celulaLancado(n.itens, { classeValor: '' })}
           <td class="num">sem coleta</td>
-          ${TD_VAGA}
+          ${TD_SEM_DIF}
           <td class="cen cx-prazo">—</td>
         </tr>`;
     }
@@ -505,7 +528,7 @@ function renderZonaB() {
         <td><span class="cx-op">${esc(nome)}</span></td>
         ${celulaLancado(filtra(i => i.categoria === cat))}
         <td class="num">—</td>
-        ${TD_VAGA}
+        ${celulaDif(null, filtra(i => i.categoria === cat))}
         <td class="cen">—</td>
       </tr>`;
   }
@@ -520,7 +543,7 @@ function renderZonaB() {
         <td><span class="cx-op">Não classificado</span></td>
         ${celulaLancado(semClasse, { classeValor: '' })}
         <td class="num">sem coleta</td>
-        ${TD_VAGA}
+        ${TD_SEM_DIF}
         <td class="cen cx-prazo">—</td>
       </tr>`;
   }
