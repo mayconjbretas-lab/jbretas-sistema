@@ -13,22 +13,25 @@ const USUARIO = exigirSessao(['CAIXAS', 'ADM']);
 
 // ── Constantes editáveis (mapa fixo no topo do arquivo) ─────────
 // Prazo de repasse por operadora|modalidade. Sem match → "—".
+// A operadora é comparada pela chaveOperadora() (sem espaço, sem acento, sem
+// "CARD" no fim): 'VALE CARD' aqui casa com 'VALECARD' de caixa_operadora.
 const PRAZOS = {
-  'GETNET|pix':     'D+1',
-  'GETNET|cartao':  'D+30',
-  'GETNET|voucher': 'D+30',
-  'ALELO':          'D+45',
-  'ECX':            'D+45',
-  'VALE CARD':      'D+45',
+  'GETNET|pix':        'D+1',
+  'GETNET|cartao':     'D+30',
+  'GETNET|voucher':    'D+30',
+  'ALELO':             'D+45',
+  'ECX':               'D+45',
+  'VALE CARD|voucher': 'D+30',   // o portal paga no mesmo dia do mês seguinte
 };
 // Operadoras conhecidas que AINDA não têm coleta — aparecem como linhas âmbar
 // "sem coleta" para deixar visível o que o módulo ainda não cobre. Não inventa
 // valor nenhum; o prazo vem do mapa acima.
+// `nome` é o RÓTULO exibido; a comparação com caixa_operadora usa chaveOperadora(nome).
 // `casa` diz quais itens do Lançado (TecnoX) pertencem à linha.
 const OPERADORAS_SEM_COLETA = [
   { nome: 'ALELO',     prazo: 'D+45', casa: i => semAcento(i.bandeira) === 'ALELO' },
   { nome: 'ECX CARD',  prazo: 'D+45', casa: i => semAcento(i.adquirente) === 'ECX' },
-  { nome: 'VALE CARD', prazo: 'D+45', casa: i => semAcento(i.adquirente) === 'VALECARD' },
+  { nome: 'VALE CARD', prazo: 'D+30', casa: i => semAcento(i.adquirente) === 'VALECARD' },
 ];
 const AGUARDANDO = 'aguardando';
 
@@ -85,11 +88,23 @@ function normalizarGlint(l) {
     categoria:  TIPO_CATEGORIA[String(l.tipo || '').toLowerCase().trim()] || null,
   };
 }
+// Chave de comparação de OPERADORA: sem acento, sem espaço e sem "CARD" no fim.
+// Assim 'VALE CARD' = 'VALECARD' = 'VALE' e 'ECX CARD' = 'ECX' — o rótulo da tela
+// e o nome que o Glint grava em caixa_operadora deixam de precisar ser idênticos.
+function chaveOperadora(s) {
+  const k = semAcento(s).replace(/\s+/g, '');
+  return (k.length > 4 && k.endsWith('CARD')) ? k.slice(0, -4) : k;
+}
 function turnoLabel(t) { return Number(t) === 0 ? 'Sem turno' : 'Turno ' + t; }
+// PRAZOS reindexado pela chave normalizada (montado uma vez)
+const PRAZOS_POR_CHAVE = Object.fromEntries(Object.entries(PRAZOS).map(([k, v]) => {
+  const [op, tp] = k.split('|');
+  return [chaveOperadora(op) + (tp ? '|' + tp : ''), v];
+}));
 function prazoDe(operadora, tipo) {
-  const op = String(operadora || '').toUpperCase().trim();
+  const op = chaveOperadora(operadora);
   const tp = String(tipo || '').toLowerCase().trim();
-  return PRAZOS[op + '|' + tp] || PRAZOS[op] || '—';
+  return PRAZOS_POR_CHAVE[op + '|' + tp] || PRAZOS_POR_CHAVE[op] || '—';
 }
 // Data de "ontem" (D-1) no fuso de Brasília, independente do fuso do aparelho.
 function ontemBrasiliaISO() {
@@ -367,7 +382,7 @@ function renderZonaB() {
     g.itens.push(l);
   }
   const chaves = Object.keys(grupos).sort();
-  const opsPresentes = new Set(Object.values(grupos).map(g => String(g.operadora).toUpperCase().trim()));
+  const opsPresentes = new Set(Object.values(grupos).map(g => chaveOperadora(g.operadora)));
 
   let html = `<section class="cx-zona">
       <h3 class="cx-zona-tit">Onde o erro se esconde</h3>
@@ -428,7 +443,7 @@ function renderZonaB() {
   // operadoras conhecidas SEM coleta (âmbar) — só as que não aparecem no dado
   const jaMostrados = new Set();   // itens contados numa linha sem coleta
   for (const o of OPERADORAS_SEM_COLETA) {
-    if (opsPresentes.has(o.nome.toUpperCase().trim())) continue;
+    if (opsPresentes.has(chaveOperadora(o.nome))) continue;
     const daOp = filtra(o.casa);
     (daOp || []).forEach(i => jaMostrados.add(i));
     html += `<tr class="cx-semcoleta">
@@ -466,7 +481,7 @@ function renderZonaB() {
   }
 
   // linhas FIXAS (sempre presentes): pra onde a diferença costuma ser empurrada
-  for (const [nome, cat] of [['Dinheiro / sangria', 'DINHEIRO'], ['Nota a prazo', 'PRAZO']]) {
+  for (const [nome, cat] of [['Dinheiro (cupons)', 'DINHEIRO'], ['Nota a prazo', 'PRAZO']]) {
     html += `<tr class="cx-fixa">
         <td><span class="cx-op">${esc(nome)}</span></td>
         ${celulaLancado(filtra(i => i.categoria === cat))}
