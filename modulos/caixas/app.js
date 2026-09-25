@@ -63,7 +63,7 @@ const TIPO_CATEGORIA = {         // tipo Glint → categoria TecnoX
 let PENDENCIAS = null;        // resposta de /caixa/pendencias (carteira + chips)
 let ESPELHO = null;           // resposta de /caixa/espelho (posto+data selecionados)
 let POSTO_ATUAL = '';         // posto_id selecionado
-let TURNO_ATIVO = null;       // turno selecionado (0..3) — sempre um turno real
+let TURNO_ATIVO = null;       // turno selecionado (0..3) ou DIA ('DIA' = o dia inteiro)
 const EXPANDIDOS = new Set(); // chaves operadora|tipo expandidas na Zona B
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -258,8 +258,8 @@ async function carregarEspelho() {
     alvo.innerHTML = '<div class="cx-vazio">Sem coleta para esta data.</div>';
     return;
   }
-  // mantém o turno se ainda existir; senão vai pro primeiro
-  if (TURNO_ATIVO === null || !turnos.some(t => Number(t) === Number(TURNO_ATIVO))) {
+  // mantém o turno se ainda existir (DIA sempre existe); senão vai pro primeiro
+  if (TURNO_ATIVO === null || (TURNO_ATIVO !== DIA && !turnos.some(t => Number(t) === Number(TURNO_ATIVO)))) {
     TURNO_ATIVO = turnos[0];
   }
   // 3) aviso de dia parcial
@@ -280,6 +280,9 @@ async function carregarEspelho() {
 // da TecnoX não diz quais turnos o posto opera. ESPELHO.turnos fica intocado:
 // a conferência continua sendo montada só dele.
 const TURNOS_FIXOS = [0, 1, 2, 3];
+// Aba "Dia inteiro": à direita das de turno, sempre que houver dado de algum
+// lado. Soma TODOS os turnos dos dois lados; a conferência continua por turno.
+const DIA = 'DIA';
 function turnosDaTela() {
   if (!ESPELHO) return [];
   if (ESPELHO.turnos && ESPELHO.turnos.length) return ESPELHO.turnos;
@@ -290,22 +293,35 @@ function confDoTurno(t) {
   return ESPELHO.conferencia.find(c => Number(c.turno) === Number(t)) || null;
 }
 function renderTabs() {
-  document.getElementById('cx-tabs').innerHTML = turnosDaTela().map(t => {
-    const on = Number(t) === Number(TURNO_ATIVO) ? ' active' : '';
+  const turnos = turnosDaTela();
+  document.getElementById('cx-tabs').innerHTML = turnos.map(t => {
+    const on = TURNO_ATIVO !== DIA && Number(t) === Number(TURNO_ATIVO) ? ' active' : '';
     const c = confDoTurno(t);
     const check = c && c.conferido ? ' <span class="cx-tab-check">✓</span>' : '';
     return `<button class="cx-tab${on}" onclick="selecionarTurno('${t}')">${esc(turnoLabel(t))}${check}</button>`;
-  }).join('');
+  }).join('') + (turnos.length
+    ? `<button class="cx-tab${TURNO_ATIVO === DIA ? ' active' : ''}" onclick="selecionarTurno('${DIA}')">Dia inteiro</button>`
+    : '');
 }
 function selecionarTurno(t) {
-  TURNO_ATIVO = Number(t);
+  TURNO_ATIVO = t === DIA ? DIA : Number(t);
   EXPANDIDOS.clear();
   renderTabs();
   renderConteudo();
 }
+// Linhas de caixa_operadora da aba. No DIA, somadas entre os turnos pela chave
+// operadora/tipo/bandeira/modalidade — grupos e filhas saem do dia todo.
 function linhasDoTurno() {
   if (!ESPELHO || !ESPELHO.linhas) return [];
-  return ESPELHO.linhas.filter(l => Number(l.turno) === Number(TURNO_ATIVO));
+  if (TURNO_ATIVO !== DIA) return ESPELHO.linhas.filter(l => Number(l.turno) === Number(TURNO_ATIVO));
+  const soma = new Map();
+  for (const l of ESPELHO.linhas) {
+    const k = [l.operadora, l.tipo, l.bandeira, l.modalidade].join('|');
+    const a = soma.get(k) || soma.set(k, { ...l, turno: DIA, qtd: 0, valor: 0 }).get(k);
+    a.qtd += Number(l.qtd || 0);
+    a.valor += Number(l.valor || 0);
+  }
+  return [...soma.values()];
 }
 
 // ── Conteúdo: Zona A + Zona B + Ações ───────────────────────────
@@ -347,6 +363,7 @@ function renderZonaA() {
 function lancadoDoTurno() {
   if (!ESPELHO || !ESPELHO.lancado_fonte) return null;
   const itens = ESPELHO.lancado || [];
+  if (TURNO_ATIVO === DIA) return itens;      // dia inteiro: tudo, qualquer fonte
   if (ESPELHO.lancado_fonte !== 'TURNO_PAGAMENTO') return itens;
   const t = Number(TURNO_ATIVO);
   return itens.filter(i => t === 0
@@ -359,7 +376,9 @@ function celulaLancado(itens, { classeValor = 'cx-val', semFonte = AGUARDANDO } 
   if (itens === null) return `<td class="num cx-muted">${esc(semFonte)}</td>`;
   if (!itens.length) return `<td class="num">—</td>`;
   const soma = itens.reduce((s, i) => s + (Number(i.valor) || 0), 0);
-  const sufixo = ESPELHO.lancado_fonte === 'PAGAMENTO' ? ' <span class="cx-za-fonte">· dia</span>' : '';
+  // " · dia" só nas abas de turno: na aba Dia inteiro os dois lados já são o dia
+  const sufixo = ESPELHO.lancado_fonte === 'PAGAMENTO' && TURNO_ATIVO !== DIA
+    ? ' <span class="cx-za-fonte">· dia</span>' : '';
   return `<td class="num ${classeValor}">${moedaBR(soma)}${sufixo}</td>`;
 }
 // Espaço que era a coluna "Banco recebeu": fica VAZIO de propósito. A tabela é
@@ -516,10 +535,13 @@ function toggleGrupo(chave) {
 
 // ── 7) AÇÕES (rodapé) ───────────────────────────────────────────
 function renderAcoes() {
-  const c = confDoTurno(TURNO_ATIVO);
+  const c = TURNO_ATIVO === DIA ? null : confDoTurno(TURNO_ATIVO);
   const conferido = !!(c && c.conferido);
   let principal;
-  if (conferido) {
+  if (TURNO_ATIVO === DIA) {
+    // conferência é gravada por turno (posto+data+turno): no dia inteiro não há o que marcar
+    principal = `<button class="cx-btn cx-btn-marcar" disabled title="Conferência é por turno">Marcar turno conferido</button>`;
+  } else if (conferido) {
     const quem = c.conferido_por_nome || 'alguém';
     const quando = formatDataHora(c.conferido_em);
     principal = `<div class="cx-acao-info">Conferido por <strong>${esc(quem)}</strong>${quando ? ' em ' + esc(quando) : ''}</div>
@@ -534,7 +556,7 @@ function renderAcoes() {
 }
 
 async function marcarTurno() {
-  if (!POSTO_ATUAL || TURNO_ATIVO === null) return;
+  if (!POSTO_ATUAL || TURNO_ATIVO === null || TURNO_ATIVO === DIA) return;
   try {
     await apiFetch('/caixa/conferir', {
       method: 'POST',
@@ -546,7 +568,7 @@ async function marcarTurno() {
   }
 }
 async function desmarcarTurno() {
-  if (!POSTO_ATUAL || TURNO_ATIVO === null) return;
+  if (!POSTO_ATUAL || TURNO_ATIVO === null || TURNO_ATIVO === DIA) return;
   try {
     await apiFetch('/caixa/desconferir', {
       method: 'POST',
