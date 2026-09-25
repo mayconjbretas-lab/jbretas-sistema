@@ -1,0 +1,310 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mercado — cor do valor e ponteiro pelo SINAL</title>
+<link rel="stylesheet" href="/shared/css/base.css">
+<link rel="stylesheet" href="/modulos/painel-adm/painel-adm.css">
+<style>
+  html, body { height: auto !important; overflow: visible !important; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--text);
+         font-family:var(--mono); font-size:12px; line-height:1.7; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--danger); font-weight:700; }
+  h3   { font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+         color:var(--text2); margin:16px 0 4px; }
+  #res { white-space:pre-wrap; }
+  #palco { border:1px dashed var(--border); padding:8px; margin:10px 0; }
+</style>
+
+<div id="res">rodando…</div>
+<div id="palco"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// O QUE ESTE TESTE PROVA
+//
+// A cor do valor e o angulo do ponteiro usavam Math.abs(cent) contra as
+// faixas do arco. Isso pintava de VERMELHO o melhor caso possivel: com o S10
+// a 6,1085 contra referencia 6,65 sao +54,2¢ a meu favor, o modulo 54,2
+// passava dos 15¢ da faixa vermelha, e o ponteiro ia para o fim do arco.
+//
+// A regra agora le o SINAL:
+//   cent > 0 (sou mais barato)  -> verde,  ponteiro em 0 (180deg, esquerda)
+//   cent = 0 (empate)           -> cinza,  ponteiro em 0
+//   cent < 0 (referencia melhor)-> vermelho, ponteiro na MESMA escala de antes
+//
+// `cent` = centavos(vB, vA) = valor do select "Com" menos o do "Comparar".
+// Com "Comparar" = minha bandeira e "Com" = Menor do dia, isso e
+// referencia - meu preco: positivo = sou mais barato. E o sinal que a tela
+// ja exibia; o que mudou foi so quem decide a cor e o angulo.
+//
+//  1. O caso do relato: +54,2¢ fica VERDE e o ponteiro no inicio.
+//  2. Estando mais caro, vermelho e o ponteiro na escala de sempre.
+//  3. Empate: cinza (--tx2) e ponteiro no inicio.
+//  4. O AMBAR sumiu do valor — nem 12¢ a favor nem 12¢ contra o produzem.
+//  5. O ARCO nao mudou: as tres faixas seguem verde/ambar/vermelho nos
+//     mesmos angulos, e os ticks 0/10/15/25+ continuam onde estavam.
+//  6. O sinal (+/-) e a formatacao dos numeros nao mudaram.
+//  7. A legenda e a nova.
+//  8. O ZERO ARREDONDADO. 5,2404 contra 5,24 sao 0,04 centavos brutos, que a
+//     tela exibe como "0,0". A cor tem de ser CINZA nos dois sentidos —
+//     decidir pelo bruto pintava de verde (ou vermelho) um numero que a tela
+//     mostra como zero. O SINAL le o mesmo arredondado: sem isso a tela
+//     mostrava "+0,0" em cinza — o sinal dizendo uma coisa e o numero outra.
+// ════════════════════════════════════════════════════════════════
+var linhas = [], falhas = 0;
+function h3(t) { linhas.push('\n<h3>' + t + '</h3>'); }
+function hesc(s) { return String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function eh(cond, rot, obtido, esperado) {
+  if (!cond) falhas++;
+  linhas.push((cond ? '<span class="ok">OK  </span>' : '<span class="bad">FALHA</span>') +
+    ' ' + hesc(rot) + (obtido === undefined ? '' : '  &rarr;  ' + hesc(obtido) +
+      (esperado === undefined ? '' : '   (esperado ' + hesc(esperado) + ')')));
+}
+function nota(t) { linhas.push('     ' + hesc(t)); }
+function pintar() { document.getElementById('res').innerHTML = linhas.join('\n'); }
+function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function js(src) {
+  return new Promise(function (ok, er) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = function () { er(new Error(src + ' nao carregou')); };
+    document.head.appendChild(s);
+  });
+}
+
+// ── A resposta de /mercado-dashboard ────────────────────────────
+// Quatro combustiveis, cada um com um caso:
+//   S10  meu 6,1085 x ref 6,6500  -> +54,2¢  sou MUITO mais barato (o relato)
+//   GC   meu 6,0000 x ref 5,8800  -> -12,0¢  estou mais caro, faixa do ambar
+//   ET   meu 4,5000 x ref 4,5000  ->   0,0¢  empate
+//   S500 meu 5,8000 x ref 5,9200  -> +12,0¢  sou mais barato, faixa do ambar
+// Os dois de 12¢ existem para provar que o ambar saiu do VALOR: um a favor e
+// um contra, ambos dentro da faixa 10-15 que antes pintava de ambar.
+var MEU = { GC: 6.0000, ET: 4.5000, S10: 6.1085, S500: 5.8000 };
+var REF = { GC: 5.8800, ET: 4.5000, S10: 6.6500, S500: 5.9200 };
+var COMBS = ['GC', 'ET', 'S10', 'S500'];
+
+var combustiveis = {};
+COMBS.forEach(function (cb) {
+  var series = {};
+  series['__B__IPIRANGA'] = [MEU[cb]];
+  series['__MENOR__']     = [REF[cb]];
+  series['BRANCA UM']     = [REF[cb]];
+  combustiveis[cb] = {
+    series: series, datas: ['2026-09-25'], ultimo_idx: 0,
+    ultima_data: '2026-09-25',
+    ranking: [{ id: 'BRANCA UM', nome: 'BRANCA UM', preco: REF[cb], tipo: 'distribuidora' },
+              { id: '__B__IPIRANGA', nome: 'IPIRANGA', preco: MEU[cb], tipo: 'bandeira' }],
+  };
+});
+var RESP = {
+  success: true, dias: 30,
+  combustiveis: combustiveis,
+  derivadas: [{ id: '__MENOR__', nome: 'Menor do dia' },
+              { id: '__MEDIA3__', nome: 'Média das 3 menores' },
+              { id: '__MEDIATODAS__', nome: 'Média de todas' }],
+  bandeiras: [{ id: '__B__IPIRANGA', nome: 'IPIRANGA' }],
+};
+
+window.apiFetch = function (url) {
+  var u = String(url);
+  if (u.indexOf('/mercado-dashboard') === 0) return Promise.resolve(RESP);
+  if (u.indexOf('/custos-mercado') === 0) {
+    return Promise.resolve({ success: true, combustiveis: COMBS,
+                             distribuidoras: ['BRANCA UM'], grade: {} });
+  }
+  return Promise.resolve({ success: true });
+};
+window.getUsuarioLogado = function () { return { perfil: 'ADM', nome: 'HARNESS' }; };
+
+var palco = function () { return document.getElementById('palco'); };
+// Os cards saem na ordem do backend (GC ET S10 S500).
+function cardDe(cb) {
+  var i = COMBS.indexOf(cb);
+  return palco().querySelectorAll('.mrc-gcard')[i] || null;
+}
+function valorDe(cb) {
+  var c = cardDe(cb); return c ? c.querySelector('.mrc-g-val') : null;
+}
+// A cor chega como var(--ok) no style inline; o computado devolve rgb. Comparo
+// contra o que o proprio tema resolve, em vez de cravar hex — assim o teste
+// nao quebra quando o tema mudar de tom.
+function corToken(nome) {
+  var d = document.createElement('div');
+  d.style.color = 'var(' + nome + ')';
+  palco().appendChild(d);
+  var c = getComputedStyle(d).color;
+  d.remove();
+  return c;
+}
+function corDe(cb) {
+  var v = valorDe(cb); return v ? getComputedStyle(v).color : '';
+}
+// O ponteiro e a <line> do SVG; x2/y2 dizem para onde ele aponta. O centro e
+// (135,130), entao x2 < 135 e esquerda e x2 > 135 e direita.
+function ponteiro(cb) {
+  var c = cardDe(cb); if (!c) return null;
+  var l = c.querySelector('svg line');
+  return l ? { x: Number(l.getAttribute('x2')), y: Number(l.getAttribute('y2')) } : null;
+}
+
+(async function () {
+  try {
+    await js('/modulos/painel-adm/mercado.js');
+    eh(typeof window.renderMercado === 'function', 'o modulo expoe renderMercado');
+    window.renderMercado(palco());
+    await esperar(500);
+
+    // A dupla do relato: "Comparar" = minha bandeira, "Com" = Menor do dia.
+    // E assim que cent vira referencia - meu.
+    window.__mrcCmp('a', '__B__IPIRANGA');
+    window.__mrcCmp('b', '__MENOR__');
+    await esperar(300);
+
+    eh(!!cardDe('S10'), 'os 4 cards renderizaram',
+       String(palco().querySelectorAll('.mrc-gcard').length), '4');
+
+    var VERDE   = corToken('--ok');
+    var VERMELHO= corToken('--danger');
+    var AMBAR   = corToken('--warning');
+    var CINZA   = corToken('--text2');
+
+    h3('1. O caso do relato: S10 +54,2¢ fica VERDE');
+    nota('meu 6,1085 x referencia 6,6500 — sou 54 centavos mais barato.');
+    nota('Antes: vermelho, porque |54,2| passa dos 15¢ da faixa.');
+    eh(/\+\s*54,2¢/.test(valorDe('S10').textContent.replace(/\s+/g, ' ')),
+       'o valor exibido continua +54,2¢', valorDe('S10').textContent);
+    eh(corDe('S10') === VERDE, 'e a cor e o verde do arco',
+       corDe('S10'), VERDE);
+    eh(corDe('S10') !== VERMELHO, 'e NAO o vermelho de antes');
+    var pS10 = ponteiro('S10');
+    eh(pS10 && pS10.x < 135, 'o ponteiro aponta para a ESQUERDA (posicao 0)',
+       'x2=' + (pS10 && pS10.x));
+    eh(pS10 && Math.abs(pS10.y - 130) < 1, 'e na horizontal (180deg exatos)',
+       'y2=' + (pS10 && pS10.y));
+
+    h3('2. Estando mais caro: vermelho, ponteiro na escala de sempre');
+    nota('GC meu 6,0000 x referencia 5,8800 = -12,0¢.');
+    eh(/−\s*12,0¢/.test(valorDe('GC').textContent.replace(/\s+/g, ' ')),
+       'o valor exibido e −12,0¢', valorDe('GC').textContent);
+    eh(corDe('GC') === VERMELHO, 'a cor e vermelha', corDe('GC'), VERMELHO);
+    var pGC = ponteiro('GC');
+    // 12¢ de 25 = 48% do arco -> 180 - 86,4 = 93,6deg, um pouco a esquerda do topo.
+    eh(pGC && pGC.x < 135 && pGC.y < 120,
+       'o ponteiro subiu no arco, proporcional aos 12¢',
+       'x2=' + (pGC && pGC.x) + ' y2=' + (pGC && pGC.y));
+    eh(pGC && pS10 && pGC.y < pS10.y,
+       'e esta mais alto que o do caso verde (que ficou em 0)');
+
+    h3('3. Empate: cinza e ponteiro no inicio');
+    nota('ET meu 4,5000 x referencia 4,5000 = 0,0¢.');
+    eh(corDe('ET') === CINZA, 'a cor e a de texto secundario', corDe('ET'), CINZA);
+    eh(corDe('ET') !== VERDE && corDe('ET') !== VERMELHO,
+       'nem verde nem vermelho');
+    var pET = ponteiro('ET');
+    eh(pET && pET.x < 135 && Math.abs(pET.y - 130) < 1,
+       'ponteiro em 0, como no caso verde', 'x2=' + (pET && pET.x));
+
+    h3('4. O AMBAR sumiu do VALOR');
+    nota('S500 +12,0¢ (a favor) e GC −12,0¢ (contra): os dois caem na faixa');
+    nota('10–15¢ que antes pintava de ambar. Agora um e verde e o outro vermelho.');
+    eh(corDe('S500') === VERDE, 'S500 +12¢ e verde, nao ambar', corDe('S500'));
+    eh(corDe('GC') === VERMELHO, 'GC −12¢ e vermelho, nao ambar', corDe('GC'));
+    var nenhumAmbar = COMBS.every(function (cb) { return corDe(cb) !== AMBAR; });
+    eh(nenhumAmbar, 'nenhum dos 4 valores usa o ambar');
+
+    h3('5. O ARCO nao mudou');
+    nota('As tres faixas e os quatro ticks continuam exatamente como estavam.');
+    var svg = cardDe('S10').querySelector('svg');
+    var paths = svg.querySelectorAll('path');
+    eh(paths.length === 3, 'tres faixas desenhadas', String(paths.length), '3');
+    var traco = Array.prototype.map.call(paths, function (p) { return p.getAttribute('stroke'); });
+    eh(traco.join(',') === 'var(--ok),var(--wn),var(--dg)',
+       'verde, ambar e vermelho, nesta ordem', traco.join(','));
+    eh(Array.prototype.every.call(paths, function (p) { return p.getAttribute('stroke-width') === '17'; }),
+       'e com a mesma espessura de sempre (17)');
+    var ticks = Array.prototype.map.call(svg.querySelectorAll('text'), function (t) { return t.textContent; });
+    eh(ticks.join(' ') === '0 10 15 25+', 'os ticks sao 0 10 15 25+', ticks.join(' '));
+    eh(svg.getAttribute('viewBox') === '0 0 270 150',
+       'e o viewBox nao mudou (layout intacto)', svg.getAttribute('viewBox'));
+
+    h3('6. Sinal e formatacao intactos');
+    eh(/^\+/.test(valorDe('S10').textContent.trim()), 'positivo leva +');
+    eh(/^−/.test(valorDe('GC').textContent.trim()), 'negativo leva − (menos tipografico)');
+    eh(!/^[+−]/.test(valorDe('ET').textContent.trim()), 'empate nao leva sinal',
+       valorDe('ET').textContent.trim());
+    eh(/¢$/.test(valorDe('S10').textContent.trim()), 'e o sufixo ¢ continua');
+    eh(/,\d¢$/.test(valorDe('S10').textContent.trim()),
+       'com uma casa decimal, virgula BR', valorDe('S10').textContent.trim());
+
+    h3('7. A legenda nova');
+    var nota_ = palco().querySelector('.mrc-cmp-nota');
+    var txt = nota_ ? nota_.textContent.replace(/\s+/g, ' ').trim() : '';
+    eh(/Verde = seu preço é o mais barato/.test(txt), 'fala do verde', txt);
+    eh(/Vermelho = a referência está mais barata que você/.test(txt), 'fala do vermelho');
+    eh(/Cinza = empate\.$/.test(txt), 'e termina no cinza');
+    eh(!/âmbar/.test(txt), 'e nao menciona mais o ambar');
+    eh(/Vale para os 4 combustíveis abaixo/.test(txt),
+       'mantendo a contagem (dinamica, 4 hoje)');
+
+    h3('8. O zero arredondado: 0,04 centavos e empate na tela');
+    nota('centavos() da 2 casas, fmtCent mostra 1. 0,04 vira "0,0" na tela,');
+    nota('entao a cor tem de ser a do empate — nos DOIS sentidos.');
+    // GC vira -0,04 (referencia abaixo do meu) e ET vira +0,04.
+    // Mexo na fixture e repinto pelo mesmo caminho que o seletor usa.
+    RESP.combustiveis.GC.series['__B__IPIRANGA'] = [5.2404];
+    RESP.combustiveis.GC.series['__MENOR__']     = [5.2400];
+    RESP.combustiveis.ET.series['__B__IPIRANGA'] = [5.2400];
+    RESP.combustiveis.ET.series['__MENOR__']     = [5.2404];
+    window.__mrcCmp('b', '__MENOR__');
+    await esperar(300);
+
+    nota('— o lado negativo (a referencia 0,04 mais barata) —');
+    eh(/0,0¢/.test(valorDe('GC').textContent), 'GC exibe 0,0',
+       valorDe('GC').textContent);
+    eh(corDe('GC') === CINZA, 'e a cor e CINZA, nao vermelha',
+       corDe('GC'), CINZA);
+    var pGC2 = ponteiro('GC');
+    eh(pGC2 && pGC2.x < 135 && Math.abs(pGC2.y - 130) < 1,
+       'ponteiro no inicio do arco', 'x2=' + (pGC2 && pGC2.x) + ' y2=' + (pGC2 && pGC2.y));
+
+    nota('— o lado positivo (eu 0,04 mais barato) —');
+    eh(/0,0¢/.test(valorDe('ET').textContent), 'ET exibe 0,0',
+       valorDe('ET').textContent);
+    eh(corDe('ET') === CINZA, 'e a cor e CINZA, nao verde',
+       corDe('ET'), CINZA);
+    var pET2 = ponteiro('ET');
+    eh(pET2 && pET2.x < 135 && Math.abs(pET2.y - 130) < 1,
+       'ponteiro no inicio do arco', 'x2=' + (pET2 && pET2.x));
+
+    nota('O SINAL TAMBEM LE O ARREDONDADO. Vindo do bruto, saia "+0,0" — o');
+    nota('sinal afirmando vantagem que o numero ao lado negava, e em cinza.');
+    eh(valorDe('ET').textContent.trim() === '0,0¢',
+       'o lado positivo sai SEM sinal', valorDe('ET').textContent.trim(), '0,0¢');
+    eh(valorDe('GC').textContent.trim() === '0,0¢',
+       'o lado negativo tambem', valorDe('GC').textContent.trim(), '0,0¢');
+    eh(!/[+−]/.test(valorDe('ET').textContent + valorDe('GC').textContent),
+       'nenhum dos dois leva + ou −');
+
+    nota('E 0,05 ainda arredonda para 0,1 e volta a ter cor:');
+    RESP.combustiveis.S500.series['__B__IPIRANGA'] = [5.2400];
+    RESP.combustiveis.S500.series['__MENOR__']     = [5.2405];
+    window.__mrcCmp('b', '__MENOR__');
+    await esperar(300);
+    eh(valorDe('S500').textContent.trim() === '+0,1¢',
+       'S500 exibe +0,1¢, COM o sinal de volta',
+       valorDe('S500').textContent.trim(), '+0,1¢');
+    eh(corDe('S500') === VERDE, 'e volta a ser verde', corDe('S500'), VERDE);
+
+    linhas.push('\n' + (falhas ? '<span class="bad">' + falhas + ' FALHA(S)</span>'
+                               : '<span class="ok">tudo passou</span>'));
+  } catch (e) {
+    falhas++;
+    linhas.push('\n<span class="bad">ERRO: ' + hesc(e && e.message) + '</span>');
+    linhas.push(hesc((e && e.stack) || ''));
+  }
+  pintar();
+})();
+</script>

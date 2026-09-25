@@ -385,7 +385,7 @@
 
   // ── Shells ───────────────────────────────────────────────────────
   // DOIS shells, UM núcleo. Tudo abaixo dos shells (carregarPainel, opcoesHtml,
-  // entidadesGlobais, gaugeCard, gaugeHtml, rankHtml, corFaixa, centavos, os
+  // entidadesGlobais, gaugeCard, gaugeHtml, rankHtml, corValor, centavos, os
   // handlers e o estado) é compartilhado sem uma linha duplicada — o que muda é
   // só QUAIS blocos entram no DOM.
 
@@ -707,11 +707,45 @@
   }
 
   // ── Termômetro (SVG puro, sem lib) ───────────────────────────────
-  function corFaixa(cent) {
-    const a = Math.abs(cent);
-    if (a <= FAIXA_OK)  return 'var(--ok)';
-    if (a <= FAIXA_ATN) return 'var(--wn)';
-    return 'var(--dg)';
+  // COR DO VALOR E DO PONTEIRO — PELO SINAL, NAO PELO MODULO.
+  //
+  // Era `Math.abs(cent)` contra as faixas do arco, e isso pintava de vermelho
+  // justamente o melhor caso: S10 meu 6,1085 contra referencia 6,65 da +54,2¢
+  // (sou 54 centavos mais barato), o modulo 54,2 passava dos 15¢ da faixa
+  // vermelha e a tela dizia que eu estava mal. O sinal carregava a informacao
+  // toda e estava sendo jogado fora antes da comparacao.
+  //
+  // `cent` e referencia - meu preco, entao POSITIVO = sou mais barato. Tres
+  // estados, e so tres: melhor, empate, pior.
+  //
+  // O AMBAR SAI DO VALOR de proposito. Ele existe no ARCO para graduar o
+  // quanto estou mais caro, e continua la; no valor ele dizia "esta ruim, mas
+  // nem tanto" — uma terceira categoria que ninguem pediu e que confunde com
+  // o empate. Ficar mais barato nao tem meio-termo: ou estou, ou nao estou.
+  //
+  // DECIDE PELO NUMERO QUE ESTA NA TELA, nao pelo bruto. `cent` tem 2 casas
+  // (centavos() arredonda) e a tela mostra 1 (fmtCent): 5,2404 contra 5,24 da
+  // 0,04¢ de diferenca bruta, que a tela exibe como "0,0¢". Decidindo pelo
+  // bruto, aquele 0,04 e > 0 e o valor saia VERDE — um zero pintado de verde,
+  // afirmando vantagem que a propria tela nao mostra.
+  //
+  // O ARREDONDAMENTO SAI DO PROPRIO fmtCent, e nao de um Math.round paralelo:
+  // duas implementacoes de "arredonda para 1 casa" divergem em algum caso de
+  // borda (0,15 em binario e 0,1499999...), e a divergencia apareceria
+  // exatamente como o bug que isto conserta. Passando pelo formatador, cor,
+  // ponteiro e numero nao TEM como discordar — e a mesma conta.
+  //
+  // O sinal vem do bruto, como na exibicao (fmtCent recebe o modulo e o sinal
+  // e decidido fora). Entao -0,04 volta -0, que nao e > 0 nem < 0: empate.
+  function centArred(cent) {
+    const mag = Number(String(fmtCent(Math.abs(cent))).replace(',', '.')) || 0;
+    return cent < 0 ? -mag : mag;
+  }
+  function corValor(cent) {
+    const c = centArred(cent);
+    if (c > 0) return 'var(--ok)';   // sou mais barato
+    if (c < 0) return 'var(--dg)';   // a referencia esta mais barata
+    return 'var(--tx2)';             // empate
   }
   function ptArco(cx, cy, r, ang) {
     const rad = ang * Math.PI / 180;
@@ -748,8 +782,18 @@
     // mais cara, que é a leitura que interessa.
     const cent = centavos(vB, vA);
     const cx = 135, cy = 130, R = 96, W = 17;
-    const ponta = ptArco(cx, cy, R - W - 8, angDe(Math.abs(cent)));
-    const cor = corFaixa(cent);
+    // PONTEIRO SO ANDA QUANDO ESTOU MAIS CARO. Estar mais barato e o melhor
+    // caso e nao tem gradacao que interesse aqui: 5¢ ou 50¢ abaixo da
+    // referencia sao a mesma noticia boa, e mandar o ponteiro para o fim do
+    // arco por causa dos 50¢ dizia o contrario do que aconteceu.
+    //
+    // Estando mais caro, a escala e a MESMA de antes — |cent| contra
+    // GAUGE_MAX, com o clamp de angDe. Nada de angulo mudou desse lado.
+    // A DECISAO usa o valor arredondado, pelo mesmo motivo da cor — ponteiro
+    // em 0 com o valor vermelho seria a mesma contradicao ao contrario. A
+    // MAGNITUDE segue sendo |cent| bruto: a escala do arco nao mudou.
+    const ponta = ptArco(cx, cy, R - W - 8, angDe(centArred(cent) < 0 ? Math.abs(cent) : 0));
+    const cor = corValor(cent);
     const tick = (v, txt) => {
       const p = ptArco(cx, cy, R + 13, angDe(v));
       return '<text x="' + p[0].toFixed(1) + '" y="' + (p[1] + 3).toFixed(1) + '" fill="var(--tx3)" ' +
@@ -770,7 +814,11 @@
     // repetiria 5 vezes a mesma frase — quem compara com quem já está nos dois
     // seletores do topo. rotuloEnt (não nomeEnt) nos nomes dos preços: sem a
     // marca ·minha·, mercado e bandeira RIO BRANCO ficariam idênticos.
-    const sinal = (cent > 0 ? '+' : (cent < 0 ? '−' : ''));
+    // SINAL PELO ARREDONDADO, como a cor e o ponteiro. Vindo do bruto, uma
+    // diferenca de 0,04¢ saia "+0,0¢": o sinal afirmava uma vantagem que o
+    // numero ao lado dele negava, e em cinza — tres elementos, duas
+    // historias. Agora os tres leem o mesmo valor.
+    const sinal = (centArred(cent) > 0 ? '+' : (centArred(cent) < 0 ? '−' : ''));
     return '<div class="mrc-gauge-wrap">' +
       '<div class="mrc-gauge">' + svg + '</div>' +
       '<div class="mrc-g-val" style="color:' + cor + '">' +
@@ -921,7 +969,8 @@
         // Contagem dinâmica: a lista de combustíveis vem do backend, então o
         // texto não pode dizer "cinco" fixo (o GA saiu em 26/08).
         '<div class="mrc-cmp-nota">Vale para os ' + nComb + ' combustíveis abaixo. ' +
-          'Verde até ' + FAIXA_OK + '¢ · âmbar ' + FAIXA_OK + '–' + FAIXA_ATN + '¢ · vermelho acima de ' + FAIXA_ATN + '¢.</div>' +
+          'Verde = seu preço é o mais barato · Vermelho = a referência está mais barata que você · ' +
+          'Cinza = empate.</div>' +
       '</div>' +
       // Um velocímetro por combustível, na ordem do backend (GC ET S10 S500).
       '<div class="mrc-gauges">' +
