@@ -152,6 +152,15 @@
   padding: .55rem .7rem; border-bottom: 1px solid var(--border); white-space: nowrap;
 }
 .cx-tabela th.num, .cx-tabela td.num { text-align: right; }
+/* nota de fonte sob o título da coluna (pista · TecnoX / portal · Glint).
+   Bloco de LARGURA ZERO encostado à direita e transbordando para a esquerda
+   (direction: rtl): o texto aparece, mas não entra na conta da largura da
+   coluna — as colunas ficam exatamente como estavam. */
+.cx-th-nota {
+  display: block; width: 0; margin-left: auto; direction: rtl;
+  white-space: nowrap; text-transform: none; letter-spacing: 0; font-weight: 400;
+  margin-top: .15rem;
+}
 .cx-tabela th.cen, .cx-tabela td.cen { text-align: center; }
 .cx-grupo { cursor: pointer; border-bottom: 1px solid var(--border); }
 .cx-grupo:hover { background: var(--accent-dim2); }

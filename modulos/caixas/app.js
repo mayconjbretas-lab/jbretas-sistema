@@ -24,12 +24,37 @@ const PRAZOS = {
 // Operadoras conhecidas que AINDA não têm coleta — aparecem como linhas âmbar
 // "sem coleta" para deixar visível o que o módulo ainda não cobre. Não inventa
 // valor nenhum; o prazo vem do mapa acima.
+// `casa` diz quais itens do Lançado (TecnoX) pertencem à linha.
 const OPERADORAS_SEM_COLETA = [
-  { nome: 'ALELO',     prazo: 'D+45' },
-  { nome: 'ECX CARD',  prazo: 'D+45' },
-  { nome: 'VALE CARD', prazo: 'D+45' },
+  { nome: 'ALELO',     prazo: 'D+45', casa: i => semAcento(i.bandeira) === 'ALELO' },
+  { nome: 'ECX CARD',  prazo: 'D+45', casa: i => semAcento(i.adquirente) === 'ECX' },
+  { nome: 'VALE CARD', prazo: 'D+45', casa: i => semAcento(i.adquirente) === 'VALECARD' },
 ];
 const AGUARDANDO = 'aguardando';
+
+// ── De-para Glint → TecnoX (para casar Lançado com Operadora informou) ──
+// caixa_operadora (Glint) e forma_pagamento_tecnox (TecnoX) escrevem a mesma
+// coisa de jeitos diferentes. Compara em MAIÚSCULAS e SEM ACENTO; o que não
+// está no mapa passa como veio e simplesmente não casa (vira "—").
+const NORM_BANDEIRA = {          // bandeira Glint → bandeira TecnoX
+  'MASTERCARD':    'MASTER',
+  'VISA':          'VISA',
+  'ELO':           'ELO',
+  'AMEX':          'AMEX',
+  'SODEXO':        'PLUXEE',     // Sodexo virou Pluxee; a TecnoX já grava PLUXEE
+  'VR BENEFICIOS': 'VR',
+  'TICKET':        'TICKET',
+};
+const NORM_MODALIDADE = {        // modalidade Glint → modalidade TecnoX
+  'CREDITO': 'CREDITO',
+  'DEBITO':  'DEBITO',
+  'VOUCHER': 'VOUCHER',
+};
+const TIPO_CATEGORIA = {         // tipo Glint → categoria TecnoX
+  cartao:  'CARTAO',
+  pix:     'PIX',
+  voucher: 'FROTA',
+};
 
 // ── Estado ──────────────────────────────────────────────────────
 let PENDENCIAS = null;        // resposta de /caixa/pendencias (carteira + chips)
@@ -47,6 +72,19 @@ function moedaBR(v) {
   return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function numBR(v) { return Number(v || 0).toLocaleString('pt-BR'); }
+function semAcento(s) {
+  return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+}
+// Linha de caixa_operadora (Glint) no vocabulário da TecnoX. Função pura.
+function normalizarGlint(l) {
+  const b = semAcento(l.bandeira), m = semAcento(l.modalidade);
+  return {
+    adquirente: semAcento(l.operadora) || null,
+    bandeira:   b ? (NORM_BANDEIRA[b] || b) : null,
+    modalidade: m ? (NORM_MODALIDADE[m] || m) : null,
+    categoria:  TIPO_CATEGORIA[String(l.tipo || '').toLowerCase().trim()] || null,
+  };
+}
 function turnoLabel(t) { return Number(t) === 0 ? 'Sem turno' : 'Turno ' + t; }
 function prazoDe(operadora, tipo) {
   const op = String(operadora || '').toUpperCase().trim();
@@ -197,14 +235,17 @@ async function carregarEspelho() {
   }
   EXPANDIDOS.clear();
 
-  if (!ESPELHO.turnos || !ESPELHO.turnos.length) {
+  // "Sem coleta" só quando os DOIS lados estão vazios: nem Glint
+  // (caixa_operadora) nem TecnoX (lancado).
+  const turnos = turnosDaTela();
+  if (!turnos.length) {
     document.getElementById('cx-tabs').innerHTML = '';
     alvo.innerHTML = '<div class="cx-vazio">Sem coleta para esta data.</div>';
     return;
   }
   // mantém o turno se ainda existir; senão vai pro primeiro
-  if (TURNO_ATIVO === null || !ESPELHO.turnos.some(t => Number(t) === Number(TURNO_ATIVO))) {
-    TURNO_ATIVO = ESPELHO.turnos[0];
+  if (TURNO_ATIVO === null || !turnos.some(t => Number(t) === Number(TURNO_ATIVO))) {
+    TURNO_ATIVO = turnos[0];
   }
   // 3) aviso de dia parcial
   const banner = document.getElementById('cx-parcial');
@@ -219,12 +260,22 @@ async function carregarEspelho() {
 }
 
 // ── 4) ABAS DE TURNO (dinâmicas; check discreto no turno conferido) ─
+// Com linha de caixa_operadora, as abas são os turnos DISTINTOS dela (como
+// sempre foi). Sem Glint mas com Lançado, abas fixas Sem turno/1/2/3 — o dado
+// da TecnoX não diz quais turnos o posto opera. ESPELHO.turnos fica intocado:
+// a conferência continua sendo montada só dele.
+const TURNOS_FIXOS = [0, 1, 2, 3];
+function turnosDaTela() {
+  if (!ESPELHO) return [];
+  if (ESPELHO.turnos && ESPELHO.turnos.length) return ESPELHO.turnos;
+  return (ESPELHO.lancado && ESPELHO.lancado.length) ? TURNOS_FIXOS : [];
+}
 function confDoTurno(t) {
   if (!ESPELHO || !ESPELHO.conferencia) return null;
   return ESPELHO.conferencia.find(c => Number(c.turno) === Number(t)) || null;
 }
 function renderTabs() {
-  document.getElementById('cx-tabs').innerHTML = ESPELHO.turnos.map(t => {
+  document.getElementById('cx-tabs').innerHTML = turnosDaTela().map(t => {
     const on = Number(t) === Number(TURNO_ATIVO) ? ' active' : '';
     const c = confDoTurno(t);
     const check = c && c.conferido ? ' <span class="cx-tab-check">✓</span>' : '';
@@ -271,7 +322,40 @@ function renderZonaA() {
 }
 
 // ── 6) ZONA B — "ONDE O ERRO SE ESCONDE" ────────────────────────
+// LANÇADO = o que a pista passou na TecnoX (ESPELHO.lancado, do rollup).
+//   lancado_fonte 'TURNO_PAGAMENTO' → só os itens do turno da aba ("Sem
+//     turno" = turno null ou 0);
+//   'PAGAMENTO' → o rollup só tem o DIA: todos os itens em qualquer aba, com
+//     " · dia" ao lado do valor para ninguém ler como número do turno;
+//   null → dia sem rollup: continua "aguardando".
+// Devolve null quando não há fonte (quem chama mostra o placeholder).
+function lancadoDoTurno() {
+  if (!ESPELHO || !ESPELHO.lancado_fonte) return null;
+  const itens = ESPELHO.lancado || [];
+  if (ESPELHO.lancado_fonte !== 'TURNO_PAGAMENTO') return itens;
+  const t = Number(TURNO_ATIVO);
+  return itens.filter(i => t === 0
+    ? (i.turno == null || Number(i.turno) === 0)
+    : (i.turno != null && Number(i.turno) === t));
+}
+// Célula "Lançado" para um conjunto de itens. `semFonte` = o que mostrar
+// quando o dia não tem rollup (o placeholder que a linha já mostrava).
+function celulaLancado(itens, { classeValor = 'cx-val', semFonte = AGUARDANDO } = {}) {
+  if (itens === null) return `<td class="num cx-muted">${esc(semFonte)}</td>`;
+  if (!itens.length) return `<td class="num">—</td>`;
+  const soma = itens.reduce((s, i) => s + (Number(i.valor) || 0), 0);
+  const sufixo = ESPELHO.lancado_fonte === 'PAGAMENTO' ? ' <span class="cx-za-fonte">· dia</span>' : '';
+  return `<td class="num ${classeValor}">${moedaBR(soma)}${sufixo}</td>`;
+}
+// Espaço que era a coluna "Banco recebeu": fica VAZIO de propósito. A tabela é
+// width:100% em layout automático — tirar a coluna de verdade redistribuiria a
+// largura dela entre as outras. O cabeçalho invisível reserva a mesma largura.
+const TH_VAGA = `<th class="num" aria-hidden="true"><span style="visibility:hidden">Banco recebeu</span></th>`;
+const TD_VAGA = `<td aria-hidden="true"></td>`;
+
 function renderZonaB() {
+  const lanc = lancadoDoTurno();              // null = sem rollup
+  const filtra = (f) => lanc === null ? null : lanc.filter(f);
   const linhas = linhasDoTurno();
   // grupos reais por operadora|tipo (dado de caixa_operadora)
   const grupos = {};
@@ -289,20 +373,29 @@ function renderZonaB() {
       <h3 class="cx-zona-tit">Onde o erro se esconde</h3>
       <div class="cx-tab-wrap"><table class="cx-tabela">
         <thead><tr>
-          <th>Operadora</th><th class="num">Lançado</th><th class="num">Operadora informou</th>
-          <th class="num">Banco recebeu</th><th class="cen">Prazo</th>
+          <th>Operadora</th>
+          <th class="num">Lançado<span class="cx-za-fonte cx-th-nota">pista · TecnoX</span></th>
+          <th class="num">Operadora informou<span class="cx-za-fonte cx-th-nota">portal · Glint</span></th>
+          ${TH_VAGA}<th class="cen">Prazo</th>
         </tr></thead><tbody>`;
+
+  // (adquirente|categoria) já cobertos por uma linha de caixa_operadora — as
+  // linhas novas lá embaixo são só para o que sobrar fora delas.
+  const cobertos = new Set();
 
   // linhas reais (com expansão por bandeira+modalidade)
   for (const chave of chaves) {
     const g = grupos[chave];
     const aberto = EXPANDIDOS.has(chave);
+    const ng = normalizarGlint(g);
+    cobertos.add(ng.adquirente + '|' + ng.categoria);
+    const doGrupo = filtra(i => semAcento(i.adquirente) === ng.adquirente && i.categoria === ng.categoria);
     html += `<tr class="cx-grupo" onclick="toggleGrupo('${esc(chave)}')">
         <td><span class="cx-caret">${aberto ? '▾' : '▸'}</span>
             <span class="cx-op">${esc(g.operadora)}</span> · ${esc(g.tipo)}</td>
-        <td class="num cx-muted">${AGUARDANDO}</td>
+        ${celulaLancado(doGrupo)}
         <td class="num cx-val">${moedaBR(g.valor)}</td>
-        <td class="num cx-muted">${AGUARDANDO}</td>
+        ${TD_VAGA}
         <td class="cen cx-prazo">${esc(prazoDe(g.operadora, g.tipo))}</td>
       </tr>`;
     if (aberto) {
@@ -312,11 +405,20 @@ function renderZonaB() {
       for (const d of det) {
         const band = d.bandeira || '(sem bandeira)';
         const mod = d.modalidade || '(sem modalidade)';
+        const nd = normalizarGlint(d);
+        // MODALIDADE CURINGA: só se exige igualdade quando OS DOIS lados têm
+        // modalidade. Pix do Glint vem sem modalidade; voucher da TecnoX também.
+        const daFilha = filtra(i => {
+          const mi = semAcento(i.modalidade) || null;
+          return semAcento(i.adquirente) === nd.adquirente &&
+            (semAcento(i.bandeira) || null) === nd.bandeira &&
+            (mi === null || nd.modalidade === null || mi === nd.modalidade);
+        });
         html += `<tr class="cx-det">
             <td>${esc(band)} · ${esc(mod)}</td>
-            <td class="num cx-muted">${AGUARDANDO}</td>
+            ${celulaLancado(daFilha)}
             <td class="num cx-val">${moedaBR(d.valor)}</td>
-            <td class="num cx-muted">${AGUARDANDO}</td>
+            ${TD_VAGA}
             <td class="cen">—</td>
           </tr>`;
       }
@@ -324,25 +426,68 @@ function renderZonaB() {
   }
 
   // operadoras conhecidas SEM coleta (âmbar) — só as que não aparecem no dado
+  const jaMostrados = new Set();   // itens contados numa linha sem coleta
   for (const o of OPERADORAS_SEM_COLETA) {
     if (opsPresentes.has(o.nome.toUpperCase().trim())) continue;
+    const daOp = filtra(o.casa);
+    (daOp || []).forEach(i => jaMostrados.add(i));
     html += `<tr class="cx-semcoleta">
         <td><span class="cx-op">${esc(o.nome)}</span></td>
+        ${celulaLancado(daOp, { classeValor: '', semFonte: 'sem coleta' })}
         <td class="num">sem coleta</td>
-        <td class="num">sem coleta</td>
-        <td class="num">sem coleta</td>
+        ${TD_VAGA}
         <td class="cen cx-prazo">${esc(o.prazo || '—')}</td>
       </tr>`;
   }
 
+  // adquirentes que só a TecnoX viu (âmbar, sem coleta): uma linha por
+  // adquirente · categoria que não tem linha de caixa_operadora. Item já
+  // contado numa linha sem coleta acima não entra de novo (ALELO via CIELO).
+  // APP (Soutag, Premmia, Ame) não tem adquirente: a chave é a BANDEIRA, e o
+  // Glint nunca cobre APP. APP sem bandeira vai para "Não classificado".
+  if (lanc !== null) {
+    const novas = new Map();
+    for (const i of lanc) {
+      if (!['CARTAO', 'PIX', 'FROTA', 'APP'].includes(i.categoria) || jaMostrados.has(i)) continue;
+      const adq = semAcento(i.categoria === 'APP' ? i.bandeira : i.adquirente);
+      if (!adq || cobertos.has(adq + '|' + i.categoria)) continue;
+      const k = adq + '|' + i.categoria;
+      (novas.get(k) || novas.set(k, { adq, cat: i.categoria, itens: [] }).get(k)).itens.push(i);
+    }
+    for (const n of [...novas.values()].sort((a, b) => (a.adq + a.cat).localeCompare(b.adq + b.cat))) {
+      html += `<tr class="cx-semcoleta">
+          <td><span class="cx-op">${esc(n.adq)}</span> · ${esc(n.cat.toLowerCase())}</td>
+          ${celulaLancado(n.itens, { classeValor: '' })}
+          <td class="num">sem coleta</td>
+          ${TD_VAGA}
+          <td class="cen cx-prazo">—</td>
+        </tr>`;
+    }
+  }
+
   // linhas FIXAS (sempre presentes): pra onde a diferença costuma ser empurrada
-  for (const nome of ['Dinheiro / sangria', 'Nota a prazo']) {
+  for (const [nome, cat] of [['Dinheiro / sangria', 'DINHEIRO'], ['Nota a prazo', 'PRAZO']]) {
     html += `<tr class="cx-fixa">
         <td><span class="cx-op">${esc(nome)}</span></td>
-        <td class="num cx-muted">${AGUARDANDO}</td>
+        ${celulaLancado(filtra(i => i.categoria === cat))}
         <td class="num">—</td>
-        <td class="num">—</td>
+        ${TD_VAGA}
         <td class="cen">—</td>
+      </tr>`;
+  }
+
+  // "Não classificado": forma que o de-para ainda não sabe o que é. Só aparece
+  // se houver; o title lista cada uma para quem for classificar.
+  const semClasse = filtra(i => i.categoria === 'A_CLASSIFICAR' || i.categoria === 'OUTRO' ||
+    (i.categoria === 'APP' && !semAcento(i.bandeira))) || [];
+  if (semClasse.length) {
+    const tip = semClasse.map(i => `${i.cod_forma} ${i.desc_forma}: ${moedaBR(i.valor)}`).join('\n');
+    html += `<tr class="cx-semcoleta" title="${esc(tip)}">
+        <td><span class="cx-op">Não classificado</span></td>
+        ${celulaLancado(semClasse, { classeValor: '' })}
+        <td class="num">sem coleta</td>
+        ${TD_VAGA}
+        <td class="cen cx-prazo">—</td>
       </tr>`;
   }
 
