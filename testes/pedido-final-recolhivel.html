@@ -264,24 +264,57 @@ async function animou() {
     eh(alturaAcoes() > 10, 'e os botões também', alturaAcoes() + 'px');
     eh(faixa().querySelectorAll('.fx-bloco').length === 5, 'com os 5 cards de novo');
 
-    h3('8. "Todos os postos": sem seta, nada recolhe');
+    // ════════ A REDE PASSOU A RECOLHER TAMBÉM ════════
+    // ATÉ 25/09/2026 ESTE BLOCO ASSEGURAVA O CONTRÁRIO: "Todos os postos" não
+    // tinha seta e nada recolhia, com a justificativa de que o bloco da rede é
+    // o resumo que justifica a tela. A decisão mudou — o pedido é o mesmo
+    // gesto nas duas vistas —, e o que PRESERVA aquela justificativa é a
+    // sub-linha: na rede ela fica FORA do corpo animado e continua visível
+    // recolhida, então o bloco fechado ainda diz de quantos postos é o total.
+    // Reescrito de propósito, não por regressão.
+    h3('8. "Todos os postos": recolhe também, escondendo SÓ os cards');
     POSTO_ATUAL = '';
     await atualizarFaixa();
     await esperar(200);
     eh(/PEDIDO FINAL — REDE/.test(faixa().textContent), 'o bloco vira o da REDE',
        (faixa().querySelector('.fx-title') || {}).textContent);
-    eh(!toggle(), 'sem seta nenhuma', toggle() ? 'tem seta' : 'sem seta');
-    eh(!faixa().classList.contains('fx-recolhida'), 'e sem a classe de recolhido');
-    eh(alturaAcoes() > 10, 'os botões de folha aparecem normalmente', alturaAcoes() + 'px');
-    nota('Na rede o bloco é o resumo que justifica a tela — não há o que recolher.');
+    eh(!!toggle(), 'agora TEM seta');
+    var totRede = 200000 + 40000 + 120000 + 60000;
+    eh(new RegExp(fmtNum(totRede).replace('.', '\.') + ' L').test(toggle().textContent),
+       'com o TOTAL DA REDE ao lado', toggle().textContent.trim());
+    eh(!!faixa().querySelector('.fx-sub'), 'a sub-linha existe');
+    eh(!corpo().querySelector('.fx-sub'),
+       'e ela fica FORA do corpo animado (é o que a mantém visível)');
+    eh(!!corpo().querySelector('.fx-blocos'), 'o corpo animado leva só os cards');
+
+    h3('8b. Recolhido na rede: cards somem, o resto fica');
+    var subAntes = faixa().querySelector('.fx-sub').textContent.trim();
+    toggle().click();
+    await animou();
+    eh(seta() === '▸', 'a seta vira ▸', seta(), '▸');
+    eh(alturaCorpo() === 0, 'os cards vão a altura ZERO', alturaCorpo() + 'px', '0px');
+    var sub8 = faixa().querySelector('.fx-sub');
+    eh(!!sub8 && Math.round(sub8.getBoundingClientRect().height) > 5,
+       'a linha "N postos com pedido · data" CONTINUA visível',
+       sub8 ? Math.round(sub8.getBoundingClientRect().height) + 'px' : 'sumiu');
+    eh(sub8.textContent.trim() === subAntes, 'com o mesmo texto de antes', sub8.textContent.trim());
+    eh(!!faixa().querySelector('.fx-data'), 'o seletor de data continua lá');
+    eh(/PEDIDO FINAL — REDE/.test(faixa().textContent), 'e o cabeçalho também');
+    eh(alturaAcoes() > 10,
+       'os botões "Folhas da rede" NÃO somem (só somem no posto)', alturaAcoes() + 'px');
+    toggle().click();
+    await animou();
+    eh(alturaCorpo() > 40, 'e expandir devolve os cards', alturaCorpo() + 'px');
 
     h3('9. Voltar ao posto com o estado de antes');
     // Estava EXPANDIDO quando saímos do posto (passo 7), e é assim que tem de
-    // voltar: a vista de rede não mexe no estado do posto.
+    // voltar: passar pela rede expandido não mexe no estado.
     POSTO_ATUAL = 'P. ALEX';
     await atualizarFaixa();
     await esperar(200);
     eh(!!toggle() && seta() === '▾', 'volta expandido, como estava', seta(), '▾');
+    eh(!!corpo().querySelector('.fx-sub'),
+       'e no posto a sub-linha volta para DENTRO do corpo (vista intacta)');
     // E recolhido sobrevive à ida e volta pela rede.
     toggle().click();
     await animou();
@@ -293,6 +326,9 @@ async function animou() {
     await esperar(200);
     eh(faixa().classList.contains('fx-recolhida') && seta() === '▸',
        'e recolhido sobrevive a passar pela vista de rede', seta(), '▸');
+    eh(alturaCorpo() === 0, 'com o corpo do posto em zero', alturaCorpo() + 'px', '0px');
+    eh(alturaAcoes() === 0, 'e os botões de folha escondidos, como no posto',
+       alturaAcoes() + 'px', '0px');
 
     h3('10. O input de data NÃO recolhe o bloco');
     // Ele fica dentro da linha clicável; sem o stopPropagation, escolher uma

@@ -286,7 +286,7 @@ html, body { height: 100%; overflow: hidden; }
   border-radius: 12px; padding: .8rem 1rem; margin-bottom: 1rem;
 }
 .fx-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-/* ════════ CABEÇALHO RECOLHÍVEL (só com posto selecionado) ════════
+/* ════════ CABEÇALHO RECOLHÍVEL ════════
    A linha inteira é o alvo do clique, não só a seta: é o gesto que a pessoa
    tenta primeiro, e uma seta de 12px é alvo pequeno demais para uma ação
    usada o tempo todo. O <input type="date"> dentro dela para a propagação no
@@ -329,7 +329,14 @@ html, body { height: 100%; overflow: hidden; }
 }
 .fx-recolhida .fx-corpo { max-height: 0; opacity: 0; }
 /* margin-bottom da sub-linha zerado no recolhido: sem isso ele sobra como
-   um vão de 11px sob o cabeçalho, com o corpo já em altura zero. */
+   um vão de 11px sob o cabeçalho, com o corpo já em altura zero.
+
+   VALE PARA AS DUAS VISTAS, e o efeito é diferente em cada uma de propósito.
+   No posto a sub-linha está DENTRO do corpo e some junto — zerar a margem só
+   tira o vão. Na rede ela fica FORA do corpo e continua visível; ali o zero
+   encosta a linha no padding de baixo do cartão, que é o espaçamento certo
+   para ela quando é o último elemento. Nenhum dos dois muda o estado
+   EXPANDIDO, que é o que já está em produção. */
 .fx-recolhida .fx-sub { margin-bottom: 0; }
 
 /* Os botões de folha (#matriz-acoes) somem junto — eles pertencem ao bloco,

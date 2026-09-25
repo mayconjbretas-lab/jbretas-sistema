@@ -622,7 +622,7 @@ function voltarAosCards() {
   atualizarFaixa();   // restaura a faixa de escopo (REDE/bandeira) + re-renderiza a grade
 }
 
-// ════════ O BLOCO DE PEDIDO FINAL RECOLHE (só no posto) ════════
+// ════════ O BLOCO DE PEDIDO FINAL RECOLHE ════════
 // Ele ocupa a faixa inteira do topo — cabeçalho, sub-linha, os cards de cada
 // combustível e os dois botões de folha — e quem está conferindo a matriz de
 // um posto passa a maior parte do tempo olhando a TABELA, não o pedido. Com
@@ -634,8 +634,19 @@ function voltarAosCards() {
 // esconderia o pedido de quem abrisse a tela semanas depois sem lembrar de
 // tê-la marcado.
 //
-// SÓ NO POSTO. Em "Todos os postos" o bloco fala da REDE inteira e é o
-// resumo que justifica a tela; ali não há seta e nada recolhe (item 6).
+// NAS DUAS VISTAS, com uma diferença no QUE some:
+//
+//   · posto  — recolhe o corpo inteiro (sub-linha + cards) e leva os botões
+//              de folha junto. É o comportamento original.
+//   · rede   — recolhe SÓ a linha dos cards. O "35 postos com pedido · data"
+//              fica, porque na rede ele é o resumo que justifica a tela: sem
+//              ele, o bloco recolhido não diria de quantos postos é o total
+//              que está ali do lado. Os botões de folha também ficam.
+//
+// UM ESTADO SÓ para as duas, e não um por vista: quem recolheu o bloco quer
+// a tabela maior, e isso não muda porque trocou de escopo. A consequência é
+// que recolher no posto e voltar para a rede traz a rede recolhida — que é o
+// que "recolhi o pedido final" quer dizer.
 let _faixaRecolhida = false;
 
 // Os dois botões de folha vivem em #matriz-acoes, que é IRMÃO da faixa (quem
@@ -716,18 +727,28 @@ function renderFaixa(host, titulo, dataISO, resp) {
   const blocos = cods.map(k => bloco(k, pc[k])).join('');
   const total = (resp && resp.total) || 0;   // total vem da rota
   const n = (resp && resp.postos_com_pedido) || 0;
-  // Recolhível SÓ com posto selecionado (item 6). O `total` no cabeçalho é o
-  // que sinaliza isso para o faixaHead.
-  const recolhivel = !!POSTO_ATUAL;
-  host.classList.toggle('fx-recolhida', recolhivel && _faixaRecolhida);
+  host.classList.toggle('fx-recolhida', _faixaRecolhida);
+
+  const sub = '<div class="fx-sub">' + n + ' postos com pedido · ' + fmtDataBR(dataISO) + '</div>';
+  // NA REDE A SUB-LINHA SAI DO CORPO, e é só isso que separa as duas vistas.
+  // Quem anima é o `.fx-corpo` (max-height → 0), então o que fica FORA dele
+  // continua visível com o bloco recolhido. Nenhuma regra de CSS nova, nenhum
+  // segundo botão, nenhuma segunda função de toggle: a diferença é de onde a
+  // linha mora no DOM.
+  //
+  // NO POSTO o HTML segue idêntico ao de antes, token por token — a sub-linha
+  // dentro do corpo, na mesma ordem. Era o requisito de a vista do posto não
+  // mudar nada.
+  const soCards = !POSTO_ATUAL;
   host.innerHTML =
-    faixaHead(titulo, dataISO, recolhivel ? { total } : null) +
-    // O CORPO É UM WRAPPER NOVO e nada dentro dele mudou: a sub-linha e os
-    // cards são os mesmos, na mesma ordem. Ele existe só para haver UM
-    // elemento cuja altura anima — animar dois irmãos separados daria dois
-    // tempos ligeiramente diferentes e um solavanco no meio.
+    faixaHead(titulo, dataISO, { total }) +
+    (soCards ? sub : '') +
+    // O CORPO É UM WRAPPER e nada dentro dele mudou: os cards são os mesmos,
+    // na mesma ordem. Ele existe só para haver UM elemento cuja altura anima
+    // — animar dois irmãos separados daria dois tempos ligeiramente
+    // diferentes e um solavanco no meio.
     '<div class="fx-corpo">' +
-      '<div class="fx-sub">' + n + ' postos com pedido · ' + fmtDataBR(dataISO) + '</div>' +
+      (soCards ? '' : sub) +
       '<div class="fx-blocos">' + blocos +
         '<div class="fx-bloco fx-bloco-total"><div class="fx-bl-lbl">TOTAL</div>' +
           '<div class="fx-bl-val">' + fmtNum(total) + '</div></div>' +
